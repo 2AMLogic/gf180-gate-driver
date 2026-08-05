@@ -5,7 +5,8 @@ A high-voltage gate driver on the
 agents driving [klayout-tools](https://github.com/2AMLogic/klayout-tools) and
 the open-source xschem + ngspice analog flow.
 
-**Status: just opened, specification phase.** Nothing is designed yet.
+**Status: spec ratified, pre-schematic.** See [Target
+specification](#target-specification) below.
 
 **Built agent-native.** Every specification, decision record, testbench, and
 line of documentation here is produced by AI agents working from a ratified
@@ -31,26 +32,17 @@ produces much useful work. A gate driver exercises the same device flavors
 without that risk, belongs to a real mature-node category (motor and power
 control), and carries no standards-body entanglement.
 
-## Target specification (DRAFT — engineering to ratify, see issue #1)
+## Target specification
 
-| Parameter | Target | Stretch |
-|---|---|---|
-| Supply | 5 V drive rail, 3.3 V logic input | 6 V |
-| Configuration | low-side driver | high-side / half-bridge |
-| Peak drive current | ≥ 0.5 A source / sink | 1 A |
-| Propagation delay | < 50 ns | < 25 ns |
-| Rise / fall into 1 nF | < 50 ns | — |
-| Shoot-through protection | dead-time control | adaptive |
-| Signoff | DRC + LVS clean | — |
-
-Every number above is provisional and exists to be argued with during
-ratification. Cross-domain level shifting between the 3.3 V logic and the
-5 V drive rail is the design's central problem — say so in the spec rather
-than discovering it in layout.
+See [`spec/gate-driver.md`](spec/gate-driver.md), ratified 2026-08-05 —
+device flavors (with PDK electrical specs cited), low-side-only
+configuration, drive strength and reference load, level-shifter topology,
+and protection scope, each recorded as a decision with alternatives
+considered.
 
 Maturity ladder: spec ratified → schematic simulated across PVT → layout
 DRC/LVS-clean → post-layout re-verification → shuttle seat → measured
-silicon. **Current position: pre-spec.**
+silicon. **Current position: spec ratified, pre-schematic.**
 
 ## Repo layout
 
