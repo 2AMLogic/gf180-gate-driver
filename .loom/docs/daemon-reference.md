@@ -183,7 +183,7 @@ authoritative routing rule.
 All tools live in `mcp-loom/src/tools/sweeps.ts`. Each tool name maps
 1:1 to an IPC `Request` variant.
 
-### `dispatch_sweep` (Phase A)
+### `dispatch_sweep`
 
 Spawn a `/loom:sweep` child via the daemon's registry. The daemon shells
 out to `defaults/scripts/spawn-claude.sh` for token rotation and detaches
@@ -191,8 +191,14 @@ the child. Returns the `sweep_id`, child PID, token-account name, and
 per-sweep log path.
 
 Inputs:
-- `kind` (required) — `{"Issue": <N>}` or `{"PrSet": [<N>, ...]}`. Phase
-  A only fully implements `Issue`; `PrSet` is rejected by the registry.
+- `kind` (required) — `{"Issue": <N>}` (spawns `/loom:sweep <N> --claim-owned
+  <N>`, the full Curator/Builder/Judge/Doctor/Merge lifecycle for one issue)
+  or `{"PrSet": [<n1>, <n2>, ...]}` (Mode C, issue #5342 — spawns
+  `/loom:sweep --prs <n1> <n2> ...`, driving Judge/Doctor -> Judge/Merge for
+  an existing PR set without re-running Curator/Builder). `PrSet` claims no
+  issue and no `loom:building` label; each PR is claimed with its own
+  `.loom/locks/pr-<N>/` lock, distinct from `Issue` dispatch's
+  `.loom/locks/issue-<N>/`.
 - `idempotency_key` (optional) — dedup key. Running sweeps with the same
   key return the existing `sweep_id` without spawning a new child.
 - `model` (optional, issue #3477 Phase 1) — Claude model for the spawned
@@ -552,6 +558,56 @@ untouched; only the in-memory tracking + reaper + watchdog go away, so the sweep
 finishes normally but its terminal state becomes unobservable via IPC after the
 deregister — an accepted consequence of an explicit operator `workspace remove`.
 
+## Delegated daemon administration (`daemon.delegatedTo`, #5345)
+
+On a host with several registered workspaces, the daemon is host-global
+(one binary, one socket, one `~/.loom/workspaces.json`), but every
+consumer repo still carries the full daemon-*administration* CLI surface
+— `workspace add/set-priority/remove` and `tokens bootstrap` all happily
+mutate that host-global state from whatever repo they run in. A repo can
+opt out of that by declaring, in its own effective config (any tier
+resolved by `config_resolver::resolve_effective_config`):
+
+```json
+{ "daemon": { "delegatedTo": "/Users/rwalters/GitHub/2am" } }
+```
+
+Read via the single accessor `config_resolver::daemon_delegated_to(repo_root)`.
+**Default-off**: with no `daemon.delegatedTo` key present (every repo's
+config prior to this feature), every command below behaves exactly as
+before.
+
+**What is gated** (refuses with a message naming the delegate repo on
+stderr, non-zero exit):
+
+- `loom-daemon workspace add|set-priority|remove` — gated on the
+  **invoking** repo (resolved from cwd, `repo_root::resolve_repo_root(".")`
+  — the same resolution `calibrate`/`tokens select` already use).
+- `loom-daemon tokens bootstrap --workspace <path>` — gated on the
+  `--workspace` **target**, not cwd.
+- The `workspace_unregistered` dispatch error's recovery hint
+  (`DaemonError::workspace_unregistered`, surfaced when an explicit
+  `workspace_root`/`--workspace` names an unregistered path) — checked
+  against the **target** root's own delegation, not the invoker's, so it
+  points at the delegate repo instead of suggesting `workspace add` be run
+  locally.
+
+**What is explicitly not gated** (client/read-only actions, unaffected by
+`daemon.delegatedTo`):
+
+- `loom-daemon workspace list` (read-only).
+- `loom-daemon tokens select` (read-only, on the spawn hot path).
+- `mcp__loom__dispatch_sweep`, `list_sweeps`, `get_sweep_status`,
+  `subscribe_to_events`, `cancel_sweep` — every daemon-*client* action.
+- `loom-daemon start|stop|update`/`launchctl`/`systemd` wrappers (shell
+  scripts around `.loom/bin/loom`, not a `loom-daemon` subcommand — no
+  single entry point to intercept) and `.loom/config.json`
+  `autonomous.*` toggles (raw file edits, not a command) — both are
+  advisory-documentation-only under this key, not enforced gates.
+
+No bypass flag exists — the gate always reads the invoking/target repo's
+own effective config.
+
 ## Fleet — operator-triggered multi-host worker fanout (`fleet`, #4340)
 
 The `fleet` subcommand family is the operator-triggered path for running loom
@@ -566,6 +622,21 @@ auto-elastic (no queue-depth/cost-cap triggers — deferred until the manual
 command has mileage).
 
 ### `fleet add-worker <ssh-host> --repo <owner/name> [--repo …]` (#4341)
+
+**Supported platform: Linux (Debian/Ubuntu) targets only** (#5395). Every step
+below is built on `apt-get` and `systemd --user`, so before the plan is built
+the command probes `uname -s` on the target over the same SSH connection and
+**refuses a non-Linux host up front** — naming the platform (e.g. `mac-mini is
+macOS (Darwin), but fleet add-worker supports Linux targets only`) rather than
+failing opaquely partway through `base-deps`. Nothing on the host is touched by
+that refusal. There is **no macOS/launchd path**: a Mac is onboarded by hand —
+run `fleet add-worker <ssh-host> --repo <owner/name> --dry-run` (it never
+contacts the host, so it works while pointed at a Mac) to print the ordered plan
+as a manual checklist, then apply each step's intent with the platform
+equivalents (Homebrew for `apt-get`, a `launchd` LaunchAgent for the
+`systemd --user` unit + `loginctl enable-linger`, `launchctl kickstart -k` for
+`systemctl --user restart`). A hand-built Mac is **not** in `~/.loom/fleet.json`
+unless you add it, so `fleet status`/`fleet drain` will not see it.
 
 Takes a reachable, already-provisioned host to "daemon running, workspace
 registered, tokens ranked, dispatch verified" in one **idempotent** command over
@@ -665,7 +736,9 @@ only over ssh stdin — never a command line, never a logged rendered script. A
 supplied secret is `StepStdin { secret: true }`, redacted in dry-run output and
 `Debug`.
 
-`--dry-run` prints the full ordered plan without contacting the host. On a
+`--dry-run` prints the full ordered plan without contacting the host — which
+means it also skips the platform probe above (host contact), so it prints the
+plan plus a reminder that a real run is Linux-only. On a
 successful run each worker is recorded (dedup on the SSH alias) in a machine-level
 **fleet registry** at `~/.loom/fleet.json` (`LOOM_FLEET_PATH` override) — the
 inventory the siblings `fleet status` (#4342) and `fleet drain` (#4343)
@@ -4299,7 +4372,13 @@ Either way the JSON block is the same shape as the example above:
 ```
 
 Remember `onIdle` is **inert unless the work finder is enabled** for that root,
-and that `LOOM_ROLE_RUNNER` (env) outranks all four config tiers.
+and that `LOOM_ROLE_RUNNER` (env) outranks all four config tiers. To verify a
+root's `onIdle` roles are actually firing rather than merely configured, run
+[`check-onidle-status.sh`](../scripts/check-onidle-status.sh) — it cross-checks
+the config against the daemon log's `idle edge … firing idle-triggered <role>
+run` line. See [onidle-phase3-finding.md](onidle-phase3-finding.md) for this
+repo's own onIdle activation history and the Epic #5038 Phase 3 Class-3-residue
+finding.
 
 **2. Sync the repo's labels.** The whole coordination protocol is label-based, so
 a repo with no `loom:*` labels cannot hold a queue — a Curator that tries to apply
@@ -4655,7 +4734,52 @@ loop is not reusable as the reporter). It has three cooperating parts:
    Each run compares intent (marker present?) against reality (daemon loaded +
    alive? heartbeat fresh?) and, on divergence, appends a loud line to
    `<loom_dir>/logs/daemon-watchdog.log` and stderr (which launchd/systemd both
-   capture into the same log via the rendered job/unit's stdout/stderr redirect).
+   capture into the same log via the rendered job/unit's stdout/stderr redirect)
+   — **and, since #5391, recovers**: see "The watchdog recovers, it is not a
+   report-only detector" below.
+
+**The watchdog recovers, it is not a report-only detector (#5391).** Through
+#5118 the only automatic remediation was two deliberately narrow gates
+(#4232 launchd / #4862 systemd) covering ONE signature: "job loaded + down +
+last exit 0". Every other confirmed outage — a genuine crash, a booted-out job,
+a dead pid with an unreachable socket — printed `Recover with:
+loom-daemon-start.sh` and stopped there. One fleet host logged **252 such
+`[DIVERGENCE]` lines in eight days**, including a continuous **1h40m** outage
+that ended only because a human went looking. A detector that prints the exact
+recovery command every five minutes and never runs it is, operationally, close
+to no watchdog at all.
+
+The naive fix (restart on every down tick) is worse: pointed at a genuinely
+broken binary it becomes a restart loop that burns tokens and hides the fault.
+So the policy is the middle path — **recover, bounded, then escalate loudly**:
+
+| Bound | Behavior | Knob (default) |
+|-------|----------|----------------|
+| Attempt budget | at most N recovery attempts **per outage episode**, tallied durably across ticks | `LOOM_WATCHDOG_RECOVER_MAX_ATTEMPTS` (`5`) |
+| Backoff | attempt N waits `base × 2^(N-1)` since the last attempt; ticks inside the window report but do not re-run | `LOOM_WATCHDOG_RECOVER_BACKOFF_SECS` (`60`), capped by `LOOM_WATCHDOG_RECOVER_BACKOFF_CAP_SECS` (`1800`) |
+| Circuit breaker | once the budget is spent it **latches open** — no further automatic attempts until a tick observes a healthy daemon, or `<loom_dir>/.watchdog-recovery-state` is deleted | — |
+| Never revives a stop | an operator-stop exit signature (launchd `last exit status` 143/130/-15/-2; systemd `ExecMainCode=killed` + TERM/INT) is reported, never restarted | — |
+| Escalation | on breaker trip (or when recovery is structurally impossible and the outage has run N consecutive ticks) files **one** forge issue via `create-issue.sh`, deduped by `<loom_dir>/.watchdog-outage-escalated` | `LOOM_WATCHDOG_ESCALATE` (on) |
+
+What it runs is the sibling `loom-daemon-start.sh` — the command the divergence
+line always named — replaying **only** the allowlisted autonomy flags the last
+start persisted to `<state home>/.daemon.flags` (#3968), so the FLAGS-OFF/opt-in
+contract cannot widen across an unattended recovery, inside a hard
+`LOOM_WATCHDOG_RECOVER_TIMEOUT_SECS` (120) budget so a wedged start cannot wedge
+the tick. **An episode ends only when a tick observes a healthy daemon** — that,
+not elapsed time, is what clears the tally, the backoff clock and the escalation
+sentinel, so a daemon that flaps back up gets a full fresh budget while one that
+stays down does not.
+
+Recovery can be turned off with `LOOM_WATCHDOG_AUTO_RECOVER=0`, in which case
+the watchdog **says so in its own DIVERGENCE text** ("REPORT-ONLY … DETECTION,
+not self-healing") — an operator must never be able to read "watchdog job
+installed" as "this host self-heals". The same explicit wording fires when no
+`loom-daemon-start.sh` is resolvable beside the watchdog.
+
+The confirmed-hang path (#4398, a wedged-but-alive daemon) stays report-only and
+is unchanged: the only real fix there is killing the process, which would equally
+kill a daemon under heavy legitimate load.
 
 | File | Env override | Config key | Default |
 |------|--------------|-----------|---------|
@@ -4670,6 +4794,27 @@ loop is not reusable as the reporter). It has three cooperating parts:
 | confirmed-hang threshold (#4398) | `LOOM_WATCHDOG_IPC_PROBE_FAIL_THRESHOLD` | — | `3` consecutive ticks |
 | IPC probe startup grace (#4398) | `LOOM_WATCHDOG_IPC_PROBE_GRACE_SECS` | — | `LOOM_DAEMON_STARTUP_GRACE_SECS`, else `90` |
 | pid file path (#5118) | `LOOM_PID_FILE` | — | the start script's `<state home>/.daemon.pid`, exported into the daemon **and** watchdog job/unit |
+| auto-recovery on/off (#5391) | `LOOM_WATCHDOG_AUTO_RECOVER` | — | on |
+| recovery attempt budget (#5391) | `LOOM_WATCHDOG_RECOVER_MAX_ATTEMPTS` | — | `5` per outage episode |
+| recovery backoff base / cap (#5391) | `LOOM_WATCHDOG_RECOVER_BACKOFF_SECS` / `..._CAP_SECS` | — | `60` / `1800` |
+| recovery command budget (#5391) | `LOOM_WATCHDOG_RECOVER_TIMEOUT_SECS` | — | `120` |
+| recovery command override (#5391) | `LOOM_WATCHDOG_RECOVER_CMD` | — | sibling `loom-daemon-start.sh` + allowlisted `.daemon.flags` |
+| outage escalation on/off (#5391) | `LOOM_WATCHDOG_ESCALATE` | — | on (one deduped `create-issue.sh` filing per episode) |
+| provisioning-guard on/off (#5405) | `LOOM_WATCHDOG_PROVISIONING_GUARD` | `autonomous.watchdogProvisioningGuard.enabled` | `true` (on) |
+| provisioning-guard cadence (#5405) | `LOOM_WATCHDOG_PROVISIONING_GUARD_INTERVAL_SECS` | `autonomous.watchdogProvisioningGuard.intervalSecs` | `600` (10 min) |
+
+**Watchdog-provisioning guard (#5405).** The watchdog job/timer above is
+provisioned by `loom-daemon-start.sh` — but only when that script is *re-run*
+(an operator by hand, `fleet add-worker`, or `loom-daemon-update.sh`'s
+non-launchd restart). A host provisioned before #5343 that simply keeps running
+never gets healed, since #5391's recovery re-runs the start script *from the
+watchdog* — which an unprotected host does not have. The daemon closes that gap
+itself: a default-on periodic loop (`watchdog_provisioning_guard.rs`) re-invokes
+`loom-daemon-start.sh --heal-watchdog-only` every cadence — a narrow entry point
+that runs **only** `heal_watchdog_provisioning_gap()` (#5343, reused verbatim)
+and never reaches the daemon-start path, so it can never disturb the running
+daemon or start a second one. Cheap when idle: it does a single `autonomy-desired`
+marker read per tick and only spawns the script when the marker is present.
 
 **Why an interval timer, not a resident process or `KeepAlive`/`Restart=`.** The
 reporter must itself be supervised, but a long-lived resident watchdog just moves
@@ -4916,7 +5061,7 @@ change:
 
 | State (`--json` `state`) | Human phrase | Meaning |
 |--------------------------|--------------|---------|
-| `protected` | `protected` | autonomy-desired marker present **and** the watchdog job/timer is provisioned |
+| `protected` | `protected` | autonomy-desired marker present **and** the watchdog job/timer is provisioned — i.e. a confirmed death is detected AND (since #5391, unless `LOOM_WATCHDOG_AUTO_RECOVER=0`) auto-recovered under a bounded-retry circuit breaker, escalating to a forge issue if the budget is spent |
 | `no-marker` | `unprotected — no autonomy-desired marker` | no marker: crash protection is DISARMED — the watchdog fires on cadence but logs `[OK] … nothing to check` (the #4331 state) |
 | `watchdog-not-provisioned` | `watchdog job not provisioned` | marker present, but no watchdog launchd job / systemd timer is scheduled — nothing will ever notice a future death |
 | `unknown` | `unknown` | marker present but the provisioning probe could not answer (no `launchctl`/`systemctl`, or an unreachable `systemctl --user` bus) — a degradation, never a false verdict |
@@ -5344,8 +5489,9 @@ loom-daemon restart          # send RestartDaemon over the IPC socket
   a fresh read of the on-disk plist file** (see "Changing daemon environment
   variables" immediately below — this is not the widening-safe guarantee it
   sounds like for a hand-edited plist). In-flight sweeps survive (they are
-  independent detached processes the daemon never cancels on shutdown).
-  Observable signature: a **new pid**.
+  independent detached processes the daemon never cancels on shutdown) — **this
+  is true on launchd only**, see "The two supervisors disagree about in-flight
+  work" below. Observable signature: a **new pid**.
 - **Supervision proof:** `loom-daemon-start.sh` bakes `LOOM_DAEMON_SUPERVISOR=launchd`
   into the plist, and the daemon ends its process for a restart **only** when that
   var is present. On an unsupervised host (nohup / Linux / `--foreground`) it
@@ -5356,6 +5502,95 @@ loom-daemon restart          # send RestartDaemon over the IPC socket
   the `exec` (Option 2) and detached-helper (Option 3) alternatives were rejected,
   and the Curator's exit-code-race finding — is in
   `docs/design/supervised-restart-primitive.md`.
+
+#### The two supervisors disagree about in-flight work (#5119)
+
+**"In-flight sweeps survive" is a launchd fact, not a property of the
+primitive.** The same exit-0 means opposite things per supervisor, and the ack
+now says which one you are on:
+
+| | launchd | systemd `--user` |
+|---|---|---|
+| Who owns the daemon's children | nobody — they reparent to pid 1 | the **unit's cgroup** |
+| A plain `restart`'s effect on them | they keep running (orphaned from the registry, but alive) | the stop job **terminates them** |
+| Ack wording | `In-flight sweeps survive by design …` | `WARNING: in-flight sweeps and role runs do NOT survive on systemd …` + the live `N sweep(s)` count + a pointer to `--drain` |
+
+On systemd, `KillMode=mixed` (#4862, in the canonical unit) makes that
+termination an immediate SIGKILL of the leftover cgroup members right after the
+main process exits; an older `KillMode=control-group` unit instead SIGTERMs the
+whole cgroup and SIGKILLs at `TimeoutStopSec`, which additionally sets
+`Result=timeout` — and **`Restart=on-success` does not match `Result=timeout`**,
+so the relaunch never fires and the host is left daemonless in `failed`. That is
+the 2026-08-03 loom-worker-1 outage: three role runs plus a sweep killed, and
+~4 minutes with no dispatch until an operator ran `reset-failed && start`.
+
+Both the IPC ack and the daemon's own journal line are composed by the **single**
+`ipc::restart_scheduled_message(supervisor, in_flight)` — there is exactly one
+place this wording lives, so the reply an operator reads and the line the journal
+records can never drift apart (a journal that said "sweeps survive" on a host
+whose cgroup had just been reaped is how the 2026-08-03 incident stayed invisible
+for four minutes).
+
+Use `loom-daemon restart --drain` (below) whenever in-flight sweeps must
+actually finish. It is the *only* variant that preserves them on both
+supervisors.
+
+#### Post-restart relaunch verification + self-heal (#5119)
+
+`loom-daemon restart` no longer trusts its own ack. After a `scheduled: true`
+reply it:
+
+1. Polls the supervisor's own pid source (`systemctl --user show -p MainPID` /
+   `launchctl print`) for a **new, live** pid — `LOOM_DAEMON_RESTART_POLL_SECS`
+   (default `30`), interval `LOOM_DAEMON_RESTART_POLL_INTERVAL` (default `1`,
+   fractional allowed). A `MainPID=0`, an unchanged pid, or a changed-but-dead
+   pid never counts as a relaunch.
+2. If the supervisor did not relaunch, dumps its status as a diagnostic and
+   self-heals, bounded by `LOOM_DAEMON_RESTART_KICKSTART_POLL_SECS` (default
+   `15`):
+   - **systemd** — only when `ActiveState=failed` is confirmed:
+     `systemctl --user reset-failed <unit> && systemctl --user start <unit>`.
+     Any other state refuses to guess (a unit still `activating`/`deactivating`
+     would be raced by a `start`).
+   - **launchd** — a **plain** `launchctl kickstart <service>`, never `-k`, so a
+     job that *did* relaunch during the poll race window is never killed (#4232).
+3. Prints the verdict: relaunched on its own, RECOVERED by the self-heal, or
+   `RELAUNCH NOT CONFIRMED` (the host may be daemonless, with the manual
+   escalation command).
+
+Before scheduling anything on systemd it also warns when the **live** unit still
+carries `KillMode=control-group` — a plain restart never re-renders the unit
+file, so a host provisioned before #4862 keeps the broken shape indefinitely;
+`loom-daemon-update.sh --relaunch` re-renders it.
+
+**The exit code is deliberately unchanged**: it still means "the running daemon
+accepted the request", because `loom-daemon-update.sh` and `scripts/loom`'s
+`restart` both branch on exactly that (a non-zero sends them down a
+refused-restart path whose diagnosis would be wrong). The verification result is
+reported on stderr — and the self-heal has already run by the time it prints.
+Set `LOOM_DAEMON_RESTART_VERIFY=0` to skip verification entirely;
+`loom-daemon-update.sh` keeps its own richer #4232/#4950 verification and
+remains the authority on the update path's exit status.
+
+**Residual (documented, bounded): an in-cgroup caller cannot self-heal.** The
+verification runs in the *invoking* process. When `loom-daemon restart` is
+invoked from **inside the daemon's own systemd cgroup** (most notably the
+daemon's autonomous self-update loop), systemd's stop job signals that caller
+too, so it may be killed before it can poll or recover. This is not new — the
+identical limit applies to `loom-daemon-update.sh`'s own #4950 self-heal for the
+same reason — and it is covered out-of-band by `loom-daemon-watchdog.sh`, which
+runs from its **own** systemd timer/cgroup and applies the same `reset-failed &&
+start` remediation. An operator-invoked restart (an SSH shell, a fleet script) is
+outside the cgroup and self-heals in-band, which is the case this issue's
+incident actually had.
+
+**Why not `Restart=always`.** It looks like it would fix the `failed`-state trap,
+but it inverts the exit-code contract the whole primitive rests on:
+`EXIT_SHUTDOWN` (143, an explicit "stay down") and `EXIT_SIGINT` (130) would
+start relaunching the daemon an operator deliberately stopped. `Restart=on-success`
+plus `KillMode=mixed` plus this self-heal keeps both properties. Raising
+`TimeoutStopSec` was likewise rejected — it lengthens the outage instead of
+preventing it.
 
 #### Changing daemon environment variables (#4995)
 
@@ -5395,6 +5630,45 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rjwalters.loom-daemo
 
 Both make launchd re-read the plist file, which a plain `restart` never does.
 
+#### Env keys carried forward across a re-render (#4522, #5344)
+
+`loom-daemon-start.sh` re-renders the launchd plist / systemd unit from
+**this invocation's own environment** every time it runs — the operator's
+exported `LOOM_*` / `GH_TOKEN` / `GITEA_TOKEN` / `FORGE_TOKEN` vars, plus a
+few hardcoded values (`PATH`, `HOME`, `LOOM_DAEMON_SUPERVISOR`). A
+watchdog-triggered restart, an automated re-render, or a bare re-run from a
+different shell can run with a **narrower** env than whatever originally
+produced the currently-installed unit/plist.
+
+**Default behavior (#5344): every env key present in the installed
+unit/plist is carried forward into the re-render, even when this
+invocation's own env no longer has it.** The re-render can only ever be
+**equal to or wider** than the installed file — never narrower — unless the
+operator explicitly says otherwise. A key this invocation's env is missing
+still prints a `WARNING:` naming it (and, for `LOOM_SAFEHOUSE_*` keys, a
+migration hint pointing at the `safehouse` block in `.loom/config.json` +
+`--from-config`, #4353) so the drift is visible even though the value
+survives.
+
+**`--force-env` inverts this**: it acknowledges an *intentional* narrowing
+and lets the re-render actually drop whatever keys this invocation's env is
+missing, with no warning. Use it when you deliberately want a leaner
+unit/plist than what is currently installed (e.g. removing a var for good).
+
+```bash
+./.loom/scripts/cli/loom-daemon-start.sh              # default: preserves installed env keys
+./.loom/scripts/cli/loom-daemon-start.sh --force-env   # intentional narrowing: drops missing keys
+```
+
+To intentionally remove an env key for good, pass `--force-env` once from a
+shell that does **not** export it (so nothing carries it forward), then omit
+`--force-env` on every subsequent normal re-render/restart.
+
+This is symmetric across macOS (`launchd` `EnvironmentVariables`) and Linux
+(`systemd --user` `Environment=` lines) — both install call sites route
+through the same `warn_dropped_env_keys` merge. `--print-plist`/`--print-unit`
+(read-only inspection, no side effects) preview the same merged result.
+
 #### Scheduled drain-and-restart (`--drain`, #4090)
 
 A plain `loom-daemon restart` exits immediately: on launchd, in-flight sweeps
@@ -5419,11 +5693,27 @@ loom-daemon restart --abort-drain                 # cancel an in-progress drain,
   managed workspace, not just the primary) and exits `EXIT_RESTART` for the launchd
   relaunch only once it reaches **zero** — so `list_sweeps` after the relaunch is
   consistent with reality and there are **no orphans**.
+- **Explicit dispatch is also paused (#5340).** The three autonomous producers
+  above read the flag in-process, but `Request::DispatchSweep` — the request type
+  behind both the `loom-daemon dispatch` CLI and the MCP `dispatch_sweep` tool —
+  used to bypass it entirely: an external caller (a still-running MCP client, a
+  script, another host) could keep admitting brand-new sweeps throughout a drain
+  window, which was enough on its own to keep the in-flight count from ever
+  reaching zero, independent of whether the sweeps present at drain-start were
+  simply long-running. Fixed by gating `DispatchSweep` on the same flag
+  (`drain_dispatch_refusal` in `loom-daemon/src/ipc.rs`) before it ever reaches the
+  registry; `--force`/`force: true` still overrides for an operator who
+  deliberately wants a dispatch to land during a drain.
 - **Fail-safe timeout:** reaching `--timeout` without `--force-after-timeout`
   **refuses** the restart (clears the drain flag, resumes dispatch, stays up) and
   reports the reason via `loom-daemon status` — it never silently restarts or
   silently gives up. `--force-after-timeout` opts into cancelling the stragglers
-  via the existing `cancel_sweep` path, then restarts.
+  via the existing `cancel_sweep` path, then restarts. The refusal note (rendered
+  as `Drain: not draining (last: …)`) names the exact local retry —
+  `loom-daemon restart --drain --force-after-timeout --timeout <secs>` — so an
+  operator is never left guessing at a nonexistent bare `drain` subcommand or the
+  unrelated `fleet drain <ssh_host>` remote worker-decommission command (#5340;
+  see "`fleet drain`" above — same word, different command, different host).
 - **Supervision proof is checked up front (AC5):** on an unsupervised host the
   request is refused **before** dispatch is paused (`accepted: false`), so a caller
   can detect nothing happened and no silent outage is introduced.
@@ -5437,6 +5727,31 @@ loom-daemon restart --abort-drain                 # cancel an in-progress drain,
   afterward; the four `daemon.drain.*` events (above) narrate the transitions on
   the event bus. **Cannot be used for its own first roll** — see the rollout note
   below.
+- **Supervised stop/start vs. a full wait-for-zero drain (#5340).** These are two
+  different tools for two different situations, not a strict "drain is always
+  safer" hierarchy:
+  - **Supervised stop/start** (`loom-daemon-stop.sh --restarting` +
+    `loom-daemon-start.sh`, or `loom-daemon-update.sh` on launchd's default path)
+    does **not** wait for in-flight sweeps and does **not** pause new dispatch
+    first — it just stops the process. On **launchd** this is safe for the
+    in-flight set: sweep children are independent, reparent to `pid 1`, survive
+    the daemon restart by design, and `SweepRegistry::reconstruct` re-admits them
+    on the next start (see "sweeps survive, they are not drained" above) — no
+    work is lost, only some drain-window telemetry (#5084). This is the right
+    choice when you need to roll a binary now and are on launchd.
+  - **A full `restart --drain`** is required whenever that reconciliation-on-start
+    safety net does not apply: **on systemd**, where sweep/role children live in
+    the daemon's own cgroup and a plain stop **kills** them (#5119) — no
+    reconciliation possible, because there is nothing left to reconcile; and on
+    **any** supervisor when you specifically want zero new dispatch admitted
+    during the roll (a drain's whole purpose), not just survival of whatever
+    happened to be in flight at the moment of the stop.
+  - The default `--timeout` (1800s) is a generic fail-safe, not a per-repo tuned
+    value — a host whose sweep lifecycle (Curator→Builder→Judge→Doctor→Merge)
+    regularly runs longer than 30 minutes under backlog should pass an explicit
+    `--timeout` rather than rely on the default, and should not read a timeout
+    refusal on that host as evidence of an admission-gating bug on its own (see
+    the explicit-dispatch fix above for the gap that historically *was* a bug).
 
 ### Self-update (rebuild + provision + restart, #3968)
 
@@ -5769,6 +6084,40 @@ release-tarball install — even when it ends up installing a prebuilt release
 artifact rather than rebuilding (see
 [Artifact-based self-update](#artifact-based-self-update-epic-4990-phase-3-5020)).
 
+**Running-vs-disk build staleness (#5341) — a distinct comparison from the
+`Self-update:` line above.** The `Self-update:` line answers "would rebuilding
+right now produce something different?" (this binary's baked-in commit vs. the
+**source checkout's** HEAD). It does NOT answer "is the long-running daemon
+PROCESS I'm talking to the same build as the file on disk?" — and those two
+can disagree: rebuilding the disk binary without restarting the daemon leaves
+an OLDER process still running behind a NEWER file. Because `--version` and
+every fresh `loom-daemon status` invocation exec the on-disk binary, both
+historically reported the disk build even when querying a stale running
+daemon — the daemon silently misreported its own currency, and every routine
+staleness check (including `Self-update:` itself, run from the same on-disk
+binary) passed. On `loom-worker-1` (2026-08-04) this was invisible except by
+comparing `ps -o lstart` (process start time, ~25h old) against the disk
+binary's `stat` mtime (~1h old) by hand.
+
+`loom-daemon status` (human and `--json`) now prints a `Build: …` line,
+unflagged, in the same block as `Protection:` / `Observability:` — comparing
+the **running daemon process's** build (sourced over IPC from the process
+itself, never re-read from disk) against **this CLI invocation's own**
+compile-time build (which, because it is a fresh exec of the on-disk binary,
+IS the disk build):
+
+```
+Build:         STALE — running 5111b74a (built 2026-08-03T02:09:51Z), disk 3f5132a5 (built 2026-08-04T01:00:12Z) — restart to roll: ./.loom/scripts/cli/loom-daemon-stop.sh && ./.loom/scripts/cli/loom-daemon-start.sh
+```
+
+`--json` carries the same facts under `daemon_build`
+(`running_commit`/`running_built_at`/`disk_commit`/`disk_built_at`/`stale`).
+`--version` itself is **not** fixed by this — it is clap's own built-in flag,
+answered before any subcommand logic (and therefore any IPC round-trip) runs,
+and it is also the only way to inspect a binary before a daemon is even
+started — so it necessarily continues to report the ON-DISK build only; use
+`loom-daemon status` when you need the running process's own build.
+
 ### Autonomous self-update loop (#4055)
 
 Phase 3 of #4017 closes the self-repair cycle end to end: when enabled, the
@@ -5869,7 +6218,6 @@ and
   "observability": {
     "enabled": false,
     "endpoint": "https://ingest.example.com/v1/telemetry",
-    "ingestKeyFile": "/etc/loom/observability-ingest.key",
     "batchSize": 50,
     "flushIntervalSecs": 30,
     "queueCapacity": 2000
@@ -5882,14 +6230,26 @@ Precedence is **env > config > default**, same convention as every other
 `LOOM_OBSERVABILITY_ENDPOINT` / `LOOM_OBSERVABILITY_INGEST_KEY_FILE` /
 `LOOM_OBSERVABILITY_BATCH_SIZE` / `LOOM_OBSERVABILITY_FLUSH_INTERVAL_SECS` /
 `LOOM_OBSERVABILITY_QUEUE_CAPACITY` override the matching config key, which
-overrides the built-in default (`false` / *(none)* / *(none)* / `50` / `30` /
-`2000`). The **ingest key is never inline in config** — `ingestKeyFile` names
-a path the daemon reads once at startup; the key contents never appear in a
-log line or error message (only the *path* does), and requests authenticate
-via an `Authorization: Bearer <key>` header. `loom-daemon` refuses to export
-(logs a `WARN` and skips both background tasks) when enabled without a
-resolvable `endpoint` or a readable, non-empty `ingestKeyFile` — treated the
-same as "not configured", not a startup failure.
+overrides the built-in default (`false` / *(none)* / `$HOME/.loom/observability/ingest.key`
+/ `50` / `30` / `2000`). The **ingest key is never inline in config** —
+`ingestKeyFile` names a path the daemon reads once at startup; the key
+contents never appear in a log line or error message (only the *path* does),
+and requests authenticate via an `Authorization: Bearer <key>` header.
+`loom-daemon` refuses to export (logs a `WARN` and skips both background
+tasks) when enabled without a resolvable `endpoint` or a readable, non-empty
+`ingestKeyFile` — treated the same as "not configured", not a startup
+failure.
+
+`ingestKeyFile` is deliberately **excluded** from the example above and must
+never be committed to a shared `.loom/config.json`: it is the one key in this
+block that is host-specific by definition, and its default already resolves
+per-host (`$HOME/.loom/observability/ingest.key`) with zero config needed. A
+host that commits an explicit value bakes in that host's own home directory
+for every other host that shares the config file — issue #5336, where a
+macOS path landed unreadable on a Linux worker. A non-default path belongs in
+the gitignored `.loom-local/local.json` override tier or
+`$LOOM_OBSERVABILITY_INGEST_KEY_FILE`, never the committed file. Full
+guidance: [`.loom/docs/observability.md`](observability.md) §1.
 
 ### Architecture
 
