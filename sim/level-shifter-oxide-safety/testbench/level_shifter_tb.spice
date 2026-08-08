@@ -1,0 +1,33 @@
+* level-shifter-oxide-safety -- testbench stimulus fragment.
+*
+* DUT (harness "dut", see tb.json): design/netlist/level_shifter.spice --
+* the cascode/clamped level shifter cell (spec/gate-driver.md sec4), a FLAT
+* netlist fragment (no .subckt wrapper -- see that file's header), so every
+* internal node (inb, na, nb, nca, ncb, nbuf1) is directly probeable here,
+* not just the six external pins.
+*
+* Ties GND_LOGIC and GND_DRV to the same node (decision record 0001,
+* Decision 1: "both pins are the same electrical reference node by design
+* intent... tied together with minimal impedance close to the device (star
+* point)") -- modeled here as a milliohm-scale tie, not a literal short, so
+* the two pins remain electrically distinguishable in the netlist the way a
+* real board-level star point would be.
+*
+* IN is driven by an ideal pulse source referenced to GND_LOGIC, swinging
+* the full vlogic_val rail (0 -> vlogic_val), exercising both edges twice
+* inside the 200 ns transient window.
+*
+* Output load: this cell's OUT feeds issue #6's output-stage pre-driver
+* input gate. #6 has not landed as of this record (see
+* design/level-shifter-partition.md and this experiment's record for the
+* assumption note) -- 20 fF is a placeholder representative pre-driver
+* input gate capacitance, not a measured #6 number; revisit once #6 lands.
+
+vsup_logic vdd_logic  0         dc {vlogic_val}
+vsup_drv   vdd_drv    0         dc {vdrv_val}
+vgnd_logic gnd_logic  0         dc 0
+rgndtie    gnd_logic  gnd_drv   1m
+
+vin  in  gnd_logic pulse(0 {vlogic_val} 20n 0.5n 0.5n 40n 80n)
+
+cload out gnd_drv 20f
