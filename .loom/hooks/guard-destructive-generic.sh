@@ -3764,6 +3764,108 @@ extract_write_targets() {
     }'
 }
 
+# =============================================================================
+# extract_git_clean_fd_targets() — segment-parsed target extraction for
+# `git clean -fd`-family invocations (gf180-gate-driver#15).
+#
+# Emits one "<cwd>\x1f<target>" line (TAB-free, US separator 0x1f — mirrors
+# extract_write_targets()'s SEP convention) per non-flag path argument of every
+# recognized `git clean -fd*` invocation, or a single "<cwd>\x1f@BARE@" line
+# for an invocation with NO path arguments (a bare `-fd` clean). Reuses the
+# SAME `cd`-tracking (`curcwd`) as extract_write_targets(), so a
+# `cd <worktree> && git clean -fd ...` or multi-line
+# `cd <worktree>\ngit clean -fd ...` script (the shape every observed
+# guard-decisions.log firing actually took) resolves relative targets against
+# the tracked cwd, not this hook's own session cwd.
+#
+# This function only EXTRACTS; it makes no allow/ask decision (filesystem
+# lookups like the `.loom-managed` sentinel walk are done by its caller in
+# plain bash, mirroring the RM-scope / write-confinement blocks above).
+#
+# Matching is intentionally as narrow as the substring pattern it replaces in
+# ASK_PATTERNS: only a segment whose first three tokens are exactly
+# `git clean -fd*` (mirroring the literal "git clean -fd" substring the old
+# entry required) is recognized as a clean invocation — `git clean -df`, a
+# split `-f -d`, or a flag between `clean` and `-fd` are NOT recognized here,
+# exactly as they were never recognized by the pattern this replaces.
+# Under-matching here only means such a shape is not narrowed at all (falls
+# through with no targets emitted, so the caller's pre-check grep — which
+# uses the SAME literal substring — never even calls this function for it);
+# it can never cause a genuine `-fd` invocation this function DOES recognize
+# to report the wrong target list.
+# =============================================================================
+extract_git_clean_fd_targets() {
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKWS_AWK"'
+    BEGIN {
+        SEP = sprintf("%c", 31)
+        curcwd = startcwd
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        $0 = qsplit(buf)
+        wbuf = mask_ws($0)
+        n = split($0, segs, "\n")
+        split(wbuf, wsegs, "\n")
+        for (i = 1; i <= n; i++) {
+            seg = segs[i]
+            origlen = length(seg)
+            sub(/^[ \t]+/, "", seg)
+            sub(/^sudo[ \t]+/, "", seg)
+            sub(/^[ \t]+/, "", seg)
+            if (seg == "") continue
+            stripped = origlen - length(seg)
+            wseg = substr(wsegs[i], stripped + 1)
+            m = split(wseg, toks, /[ \t]+/)
+            if (m < 1) continue
+            for (j = 1; j <= m; j++) toks[j] = unmask_ws(toks[j])
+
+            if (toks[1] == "cd") {
+                if (m >= 2 && toks[2] != "" && toks[2] != "-") {
+                    cdarg = expand_cd_arg(toks[2], home)
+                    cdclass = strip_cd_quoting(cdarg)
+                    if (cdclass ~ /^\//) {
+                        curcwd = cdarg
+                    } else if (curcwd != "") {
+                        curcwd = curcwd "/" cdarg
+                    }
+                }
+                continue
+            }
+
+            if (m >= 3 && toks[1] == "git" && toks[2] == "clean" && toks[3] ~ /^-fd/) {
+                nf = 0
+                delete nfargs
+                for (j = 4; j <= m; j++) {
+                    if (toks[j] == "") continue
+                    # A real (or qsplit-mangled) redirection operator ends the
+                    # argument list -- everything from here on is shell
+                    # syntax, never a git-clean target. `>`/`>>`/`<` are
+                    # untouched by qsplit() and arrive as their own or an
+                    # attached token (`>file`, `2>>file`); a bare fd-dup
+                    # (`2>&1`) is a case qsplit() cannot fully preserve here
+                    # (it treats a lone `&` as a background-operator segment
+                    # split, same accepted limitation the other qsplit-based
+                    # parsers in this file share), leaving a dangling `2>`
+                    # trailing token in THIS segment -- caught by the same
+                    # pattern. Stopping here (not just skipping the one
+                    # token) is what actually matters: a token AFTER a real
+                    # operator is a redirect destination, not a clean target,
+                    # and must never be resolved/checked as one.
+                    if (toks[j] ~ /^[0-9]*(>>?|<<?)/) break
+                    if (toks[j] ~ /^-/) continue
+                    nf++
+                    nfargs[nf] = toks[j]
+                }
+                if (nf == 0) {
+                    print curcwd SEP "@BARE@"
+                } else {
+                    for (j = 1; j <= nf; j++) print curcwd SEP nfargs[j]
+                }
+            }
+        }
+    }'
+}
+
 normalize_abs_path() {
     # Lexically normalize an ABSOLUTE path without touching the filesystem:
     #   - collapse duplicate slashes    (//etc        -> /etc)
@@ -4465,7 +4567,20 @@ ASK_PATTERNS=(
     # string, so a mid-quote prose mention such as `echo "… gh pr close …"` still
     # matches on its leading space — an accepted limitation shared with the
     # ALWAYS_BLOCK tier; command-word segment classification is #3757's scope.)
-    '(^|[;&|[:space:]])git clean -fd'
+    #
+    # NOTE: `git clean -fd` is NOT in this ungated array (gf180-gate-driver#15).
+    # It used to live here as a plain substring entry — every invocation asks,
+    # no matter how narrowly scoped — but every observed firing in practice
+    # (.loom/logs/guard-decisions.log) was an agent cleaning generated ngspice
+    # working-directory artifacts under its OWN worktree's `sim/` tree, never a
+    # bare `-fd`, never the repo root, never `records/`. In a headless run an
+    # unanswered ask blocks exactly like a deny, so every one of those scoped
+    # cleanups stalled work. It is now handled by the segment-parsed,
+    # scope-aware GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST block below (after
+    # the systemctl ask block) — mirrors the #5214 systemctl_ask_reason() fix
+    # shape: still asks for a bare `-fd`, a target outside the invoking
+    # worktree's `sim/` tree, or any target touching `records/`; only a fully
+    # sim/**-confined, records/-free invocation skips the ask.
     '(^|[;&|[:space:]])git checkout \.'
     '(^|[;&|[:space:]])git restore \.'
 
@@ -4601,6 +4716,111 @@ systemctl_ask_reason() {
 _SYSTEMCTL_ASK=$(systemctl_ask_reason "$COMMAND_NO_COMMENT" | head -1)
 if [[ -n "$_SYSTEMCTL_ASK" ]]; then
     ask "Command requires confirmation: $COMMAND" "ask:$_SYSTEMCTL_ASK"
+fi
+
+# =============================================================================
+# GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST (gf180-gate-driver#15)
+#
+# See the removed-entry comment in ASK_PATTERNS above for the motivating
+# guard-decisions.log evidence. extract_git_clean_fd_targets() (defined near
+# extract_write_targets() above) resolves every `git clean -fd*` invocation in
+# the command to its cwd-tracked (cd-prefix-aware) target paths. EVERY such
+# invocation must satisfy ALL of the following for the ask to be skipped:
+#   1. not bare — at least one path argument (a bare `-fd` always asks)
+#   2. the invocation's cwd resolves inside a REAL Loom-managed worktree — a
+#      `.loom-managed` sentinel walk-up, same convention as
+#      _in_any_managed_worktree() above — never the primary checkout
+#   3. the resolved target sits strictly UNDER that worktree's own `sim/`
+#      subtree (not the bare `sim` dir itself — cleaning `sim/` whole would
+#      sweep `records/` along with the generated corners/netlist-snapshots/
+#      .work artifacts it holds)
+#   4. the resolved target does not touch a `records/` path segment — the
+#      tracked, append-only evidence directories (sim/*/records/*.md) stay
+#      untouched by clean regardless of worktree/sim scoping
+#
+# Any invocation failing ANY of these still asks — identical to the
+# pre-existing behavior for that shape — and the allow is skipped entirely
+# (falls through to the ordinary ask below) unless EVERY `git clean -fd*`
+# invocation in the command passes. This block only ever chooses to ask or
+# fall through to the SAME ask the removed ASK_PATTERNS entry always
+# produced; it never denies.
+#
+# Gated by the SAME literal substring pre-check the removed ASK_PATTERNS entry
+# used, scanned against COMMAND_ASK_SCAN, so a mention of the phrase inside a
+# quoted --body/-m/--title/--notes/--comment value (already redacted there)
+# does not spuriously trigger the segment parse.
+# =============================================================================
+if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|[:space:]])git clean -fd'; then
+    _GC_ASK=1
+    _GC_TARGETS=$(extract_git_clean_fd_targets "$COMMAND_ASK_SCAN" "$CWD" | head -50)
+    if [[ -n "$_GC_TARGETS" ]]; then
+        _GC_ASK=""
+        while IFS=$'\037' read -r _gccwd _gctarget; do
+            [[ -z "$_gccwd" && -z "$_gctarget" ]] && continue
+
+            # Bare invocation (no path args) always asks.
+            if [[ -z "$_gctarget" || "$_gctarget" == "@BARE@" ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            # cwd must be a real, absolute, resolvable path to reason about
+            # confinement at all — anything else fails closed (asks).
+            if [[ -z "$_gccwd" || "$_gccwd" != /* ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            _gcabs=""
+            if [[ "$_gctarget" = /* ]]; then
+                _gcabs="$_gctarget"
+            else
+                _gcabs="$_gccwd/$_gctarget"
+            fi
+            _gcabs=$(normalize_abs_path "$_gcabs")
+
+            # Own worktree only — walk up from the invocation's CWD (never the
+            # target itself, which need not exist) for a real .loom-managed
+            # sentinel, mirroring _in_any_managed_worktree()'s walk above.
+            _gcwtroot=""
+            _gcwalk=$(normalize_abs_path "$_gccwd")
+            if [[ ! -d "$_gcwalk" ]]; then
+                _gcwalk="${_gcwalk%/*}"
+                [[ -z "$_gcwalk" ]] && _gcwalk="/"
+            fi
+            _gcdepth=0
+            while [[ $_gcdepth -lt 64 ]]; do
+                if [[ -f "$_gcwalk/.loom-managed" ]]; then
+                    _gcwtroot="$_gcwalk"
+                    break
+                fi
+                [[ "$_gcwalk" == "/" ]] && break
+                _gcwalk="${_gcwalk%/*}"
+                [[ -z "$_gcwalk" ]] && _gcwalk="/"
+                _gcdepth=$((_gcdepth + 1))
+            done
+            if [[ -z "$_gcwtroot" ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            # Strictly under <worktree>/sim/ — the bare sim dir itself does
+            # not qualify (would sweep records/ along with it).
+            case "$_gcabs" in
+                "$_gcwtroot/sim"/*) : ;;
+                *) _GC_ASK=1; break ;;
+            esac
+
+            # Never records/ — evidence stays untouched by clean regardless.
+            case "$_gcabs" in
+                */records|*/records/*) _GC_ASK=1; break ;;
+            esac
+        done <<< "$_GC_TARGETS"
+    fi
+
+    if [[ -n "$_GC_ASK" ]]; then
+        ask "Command requires confirmation: $COMMAND" "ask:(^|[;&|[:space:]])git clean -fd"
+    fi
 fi
 
 # =============================================================================
