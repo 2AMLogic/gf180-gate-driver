@@ -1,0 +1,93 @@
+name: CI
+
+# Green/red gate for every PR and every push to main. Everything in this file
+# is headless and PDK-free: it runs on a bare ubuntu runner with nothing but
+# python3 (stdlib) and shellcheck, so a PR is never blocked on downloading a
+# ~1 GB PDK or on building xschem.
+#
+# | Self-check                                   | Needs        | Runs in       |
+# |----------------------------------------------|--------------|----------------|
+# | `.github/scripts/lint.sh`                     | python3      | `lint` (here)  |
+# | evidence-record format + append-only          | python3+git  | `lint` (here)  |
+# | testbench manifests load (`--list`)           | python3      | `test` (here)  |
+#
+# Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
+# the gf180mcu PDK, neither of which belongs on the pull_request path (a
+# multi-GB PDK fetch should not gate every PR). `--check-env` is exercised
+# here but its exit code is not gated on, since this runner never has the
+# PDK installed -- it is expected to report "PDK: MISSING" with the install
+# hint, which is the documented, correct behavior (sim/harness/README.md),
+# not a bug. `sim/` results are append-only evidence (CLAUDE.md) produced
+# deliberately by a human or agent, never minted by a CI robot.
+#
+# Evidence-record *format* linting (the schema in sim/README.md) is step 4 of
+# `.github/scripts/lint.sh` -- CI does not mint evidence, but it does check the
+# shape of the evidence a PR adds, and enforces the append-only rule against
+# the merge base.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (shellcheck + syntax + evidence records)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The append-only evidence check (lint step 4/4) diffs against
+          # `git merge-base origin/main HEAD`. The default depth-1 checkout has
+          # neither origin/main nor enough history for a merge base, which would
+          # silently downgrade that check to a SKIP -- hence full history.
+          fetch-depth: 0
+
+      - name: Lint
+        # --require-shellcheck: shellcheck is preinstalled on GitHub's ubuntu
+        # runner images, so a missing binary here means the image changed and
+        # the shell scripts silently stopped being linted -- fail instead.
+        # --require-append-only: same argument for the merge base -- if it stops
+        # resolving, fail loudly instead of passing on a skipped check.
+        # Same script `npm run lint` runs locally.
+        run: .github/scripts/lint.sh --require-shellcheck --require-append-only
+
+  test:
+    name: Harness self-test (no PDK)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # The harness is stdlib-only (sim/harness/README.md: python3 >= 3.9,
+          # no venv, no packages), so there is nothing to install and no
+          # dependency matrix to sweep -- one modern interpreter is the check.
+          python-version: '3.12'
+
+      - name: Testbench manifests load
+        # `--list` deliberately keeps listing after a bad manifest, printing
+        # `!!` instead of exiting non-zero, so grep for that marker: a malformed
+        # tb.json must fail the PR, not surface at simulation time.
+        run: |
+          set -euo pipefail
+          out="$(python3 sim/run_corners.py --list)"
+          echo "$out"
+          if grep -q '!!' <<<"$out"; then
+            echo "::error::a testbench manifest failed to load (see the '!!' line above)"
+            exit 1
+          fi
+
+      - name: Environment check (informational -- no PDK on this runner)
+        # sim/harness/README.md's documented contract: --check-env exits 3
+        # and prints an actionable install hint when the PDK is absent. That
+        # is not a CI failure; the PDK-required sweep runs on a developer or
+        # agent box with the PDK installed (sim/env.sh, --check-env).
+        run: python3 sim/run_corners.py --check-env || true
