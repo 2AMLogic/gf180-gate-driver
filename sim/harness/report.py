@@ -28,6 +28,7 @@ import datetime as _dt
 import getpass
 import platform
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -427,13 +428,25 @@ def _corner_matrix_lines(record: dict) -> list[str]:
         + ", ".join(f"{v:.2f} V" for v in grid["supplies_v"].get(rail["name"], []))
         for rail in grid["rails"]
     ]
+    if grid["rails"]:
+        grid_desc = (
+            f"  - {grid['points']} point grid (process x temperature x tied "
+            f"two-rail supply point -- see sim/README.md), {grid['points_ok']} completed"
+        )
+    else:
+        # No declared rails: a device-level testbench with no circuit supply
+        # to sweep (sim/README.md's `nosupply` convention -- see
+        # corners.tied_supply_grid). Nothing to name in rail_lines either.
+        grid_desc = (
+            f"  - {grid['points']} point grid (process x temperature, "
+            f"`nosupply` -- see sim/README.md), {grid['points_ok']} completed"
+        )
     lines = [
         "- **Corner matrix run**:",
         "  - Process: " + ", ".join(c["name"] for c in grid["corners"]),
         "  - Temperature: " + ", ".join(f"{t:g} °C" for t in grid["temperatures_c"]),
         *rail_lines,
-        f"  - {grid['points']} point grid (process x temperature x tied "
-        f"two-rail supply point -- see sim/README.md), {grid['points_ok']} completed",
+        grid_desc,
     ]
     if record["matrix"]["full"]:
         lines.append(
@@ -601,4 +614,93 @@ def write_record(record: dict, experiment_dir: Path) -> Path:
             f"{path} already exists; records are append-only -- mint a new record-id"
         )
     path.write_text(render_record(record, experiment_dir.name))
+    return path
+
+
+# --------------------------------------------------------------------------
+# Device-level (nosupply) evidence plumbing.
+#
+# Ported from `2AMLogic/gf180-bandgap` (sim/harness/report.py). A
+# `sim/device-*/run_*.py` experiment does not go through the `tb.json`
+# single-grid contract the functions above serve (it sweeps DC tables and
+# interpolates at a current/geometry criterion), so it composes and runs its
+# own deck. What it shares with the grid-contract experiments is the
+# *evidence* plumbing: the corner-log comment header, where a corner log is
+# written, and freezing the deck as this record's netlist snapshot. Those
+# live here, next to `write_netlist_snapshot` / `write_record`, so the
+# evidence layout `sim/README.md` ratifies has exactly one implementation.
+#
+# The `device_` naming follows `corners.device_corner_id`: it marks the
+# two-terminal, `nosupply` device-testbench flavour of the same convention.
+# --------------------------------------------------------------------------
+
+
+def device_log_header(
+    pdk: Pdk,
+    deck: Path,
+    section: str,
+    temp_c: float,
+    record: str,
+    stamp: _dt.datetime,
+    ngspice: str,
+) -> str:
+    """Provenance banner prepended to a device-level corner log.
+
+    ``supply`` is fixed at ``n/a`` because a device-level testbench has no
+    supply rail to sweep -- the same fact ``corners.device_corner_id`` spells
+    ``nosupply`` in the corner-id.
+    """
+    return (
+        "* ====================================================================\n"
+        f"* record-id : {record}\n"
+        f"* testbench : {deck.name}\n"
+        f"* corner    : {section}\n"
+        f"* temp      : {temp_c:g} C\n"
+        "* supply    : n/a (no supply rail in this device-level testbench)\n"
+        f"* pdk       : {pdk.variant} ({pdk.path})\n"
+        f"* ngspice   : {ngspice}\n"
+        f"* run (UTC) : {stamp:%Y-%m-%dT%H:%M:%SZ}\n"
+        "* ====================================================================\n"
+    )
+
+
+def write_device_corner_log(
+    corners_dir: Path, record: str, cid: str, header: str, log: str
+) -> Path:
+    """Write ``corners/<record-id>/<corner-id>.log`` -- raw ngspice output."""
+    out_dir = corners_dir / record
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{cid}.log"
+    path.write_text(header + log, encoding="utf-8")
+    return path
+
+
+def write_device_netlist_snapshot(snapshot_dir: Path, record: str, deck: Path) -> Path:
+    """Freeze ``deck`` as ``netlist-snapshots/<record-id>.spice``.
+
+    A device testbench is a single self-contained file with no separate DUT to
+    fold in, so unlike :func:`write_netlist_snapshot` this is a verbatim copy.
+    """
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    path = snapshot_dir / f"{record}.spice"
+    shutil.copyfile(deck, path)
+    return path
+
+
+def device_write_record(records_dir: Path, record: str, body: str) -> Path:
+    """Write ``records/<record-id>.md``, refusing to overwrite (append-only).
+
+    Unlike :func:`write_record`, which renders a structured ``dict`` via
+    :func:`render_record` for the ``tb.json``/``PvtPoint``-grid record model,
+    the ``device-*`` experiments compose their own pre-rendered markdown
+    ``body`` string and just need an append-only-guarded string writer.
+    """
+    records_dir.mkdir(parents=True, exist_ok=True)
+    path = records_dir / f"{record}.md"
+    if path.exists():
+        raise RecordExists(
+            f"refusing to overwrite existing record {path} -- sim/ is append-only; "
+            "a re-run must mint a new record ID"
+        )
+    path.write_text(body, encoding="utf-8")
     return path

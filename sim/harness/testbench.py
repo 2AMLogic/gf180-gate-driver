@@ -68,17 +68,26 @@ FORBIDDEN_DUT_DIRECTIVES = (".control", ".endc", ".end", ".lib", ".temp")
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _parse_rails(manifest_rails: dict | None) -> tuple[Rail, ...]:
+def _parse_rails(manifest: dict) -> tuple[Rail, ...]:
     """``{"vlogic": {"nominal_v": 3.3, "tolerance": 0.1}, ...}`` -> ``Rail`` tuple.
 
     Preserves the manifest's own key order (Python dicts and ``json.loads``
     both do) since that order becomes the ``<rail><volts>v-...`` token order
-    in every corner-id this testbench produces. Falls back to this repo's
-    two default rails (``corners.DEFAULT_RAILS``) when a manifest does not
-    declare ``rails`` at all.
+    in every corner-id this testbench produces.
+
+    A manifest with **no** ``rails`` key at all falls back to this repo's two
+    default rails (``corners.DEFAULT_RAILS``). A manifest that declares
+    ``"rails": {}`` **explicitly** opts into zero rails -- a device-level
+    testbench with no circuit supply to sweep, per ``sim/README.md``'s
+    ``nosupply`` convention (``corners.tied_supply_grid(())`` /
+    ``corners.NO_SUPPLY``) -- so the two cases must be told apart by key
+    *presence*, not by truthiness of the value.
     """
-    if not manifest_rails:
+    if "rails" not in manifest:
         return DEFAULT_RAILS
+    manifest_rails = manifest["rails"]
+    if not manifest_rails:
+        return ()
     rails = []
     for name, spec in manifest_rails.items():
         rails.append(
@@ -250,7 +259,7 @@ def load(directory: str | Path, dut: str | Path | None = None) -> Testbench:
     dut_value = dut if dut is not None else manifest.get("dut")
     dut_path = resolve_dut(dut_value, directory) if dut_value else None
 
-    rails = _parse_rails(manifest.get("rails"))
+    rails = _parse_rails(manifest)
     for rail in rails:
         if not rail.name.replace("_", "").isalnum() or not rail.name.islower():
             raise ValueError(

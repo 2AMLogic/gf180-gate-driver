@@ -177,6 +177,17 @@ point). A rail's `name` becomes both the corner-id token and the ngspice
 `.param` prefix the generated deck exposes, so it must be lowercase
 alphanumeric/underscore.
 
+A manifest may instead declare **`"rails": {}`** — explicitly empty, not
+omitted — to opt a device-level testbench (a bare transistor/resistor/diode
+driven entirely from ideal sources, no circuit supply rail to sweep) out of
+the two-rail axis entirely. `corners.tied_supply_grid` then resolves to a
+single no-supply point and every corner-id in that experiment renders the
+literal `nosupply` supply field (`sim/README.md`'s `nosupply` convention,
+inherited from `2AMLogic/gf180-bandgap`'s device-characterization scripts —
+see `sim/device-mv-fet/testbench/tb.json` for a worked example). Omitting
+`rails` entirely is different from declaring it empty: the former gets this
+repo's two default rails, the latter gets none.
+
 `claim` is the default for the record's **Claim** field — the ratified spec
 line this experiment substantiates. `--claim` overrides it per run.
 

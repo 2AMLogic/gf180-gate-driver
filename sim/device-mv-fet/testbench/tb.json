@@ -1,0 +1,23 @@
+{
+  "name": "device-mv-fet",
+  "description": "gf180mcu medium-voltage MOSFET characterization (nfet/pfet 06v0/05v0/03v3): Vt/Idsat/Ioff/Cgg/Cgd/Ron against the PDK's own published electrical-spec tables. This manifest lets sim/run_corners.py run the same fragment as a generic representative check (Idsat/Ioff at the nfet_06v0 bias point, for --list/--check-env discovery); the authoritative evidence record -- full Vt/Idsat/Ioff/Cgg/Cgd/Ron extraction over the PVT grid, plus the spec Sec 2.2/Sec 7 findings -- is produced by run_device_mv_fet.py, which drives sim/harness's library (pdk.py, corners.py, report.py) directly because DC-sweep-plus-interpolation and BSIM op-point-capacitance extraction do not fit a single tb.json op-point grid.",
+  "claim": "spec/gate-driver.md#25-device-flavor-decision -- see design/device-characterization.md and run_device_mv_fet.py's records/ output for the full comparison; this manifest's own generic-CLI run reports raw Idsat/Ioff at the nfet_06v0 bias point only.",
+  "netlist": "tb_device_mv_fet.spice",
+  "rails": {},
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "analyses": ["op"],
+  "subset_reason": "No supply rail: every DUT is a bare transistor biased from ideal sources, so the +/-10% supply axis has nothing to sweep -- see the 'nosupply' corner-id production in sim/README.md (rails declared empty). run_device_mv_fet.py's own records/ output uses that convention directly (corner-ids like ff_-40c_nosupply, via corners.device_corner_id); this generic-CLI run collapses the (already-absent) supply axis the same way.",
+  "measure": {
+    "idsat_n06_ua": "-i(Vdis_n06)*1e6",
+    "ioff_n06_pa": "-i(Vdio_n06)*1e12"
+  },
+  "checks": {
+    "idsat_n06_ua": {
+      "min": 3000,
+      "max": 8000,
+      "min_spread_pct": 1.0,
+      "description": "sanity range for nfet_06v0 10/0.7 Idsat at |Vgs|=|Vds|=6V; the spread floor proves the MOS .lib sections and .temp actually change the bias point"
+    }
+  }
+}
