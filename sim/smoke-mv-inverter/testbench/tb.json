@@ -1,0 +1,31 @@
+{
+  "name": "smoke-mv-inverter",
+  "description": "Harness acceptance test: two-rail plumbing + a thick-oxide (nfet_06v0/pfet_06v0) inverter. Not a design deliverable.",
+  "claim": "None — harness self-verification, not a spec claim. Proves the two-rail PVT plumbing (parameter substitution on both vlogic and vdrv, .lib corner sections reaching the thick-oxide 06v0 device family, .temp) actually takes effect, so later records against ratified spec lines (spec/gate-driver.md) can be trusted.",
+  "netlist": "smoke_mv_inverter.spice",
+  "corners": ["mos"],
+  "measure": {
+    "vdiv_ratio": "v(ndiv)/v(vlogic)",
+    "vout_ratio": "v(vout)/v(vdrv)",
+    "vbias_drv": "v(nbias_drv)"
+  },
+  "checks": {
+    "vdiv_ratio": {
+      "min": 0.4999,
+      "max": 0.5001,
+      "max_spread_pct": 0.001,
+      "description": "ideal divider is exactly vlogic/2 -- proves vlogic_val plumbing and measurement parsing"
+    },
+    "vout_ratio": {
+      "min": 0.99,
+      "max": 1.0001,
+      "description": "thick-oxide inverter output pulled to vdrv through the PMOS -- proves vdrv_val plumbing on the 06v0 device family"
+    },
+    "vbias_drv": {
+      "min": 0.6,
+      "max": 1.4,
+      "min_spread_pct": 3.0,
+      "description": "diode-connected nfet_06v0 Vgs at fixed current; the spread floor proves .lib/.temp actually reach the 06v0 device family, not just 03v3"
+    }
+  }
+}

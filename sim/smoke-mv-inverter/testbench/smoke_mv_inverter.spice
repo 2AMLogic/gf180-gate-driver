@@ -1,0 +1,42 @@
+* smoke-mv-inverter -- harness acceptance testbench (NOT a design deliverable)
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the gf180mcu
+* models, the corner .lib sections, .temp, the .control block and .end.
+* Parameters provided by the harness (see sim/harness/README.md): one
+* <rail>_val / <rail>_nom pair per declared rail -- this testbench's
+* manifest uses the repo default two rails, so vlogic_val/vlogic_nom and
+* vdrv_val/vdrv_nom -- plus temp_c.
+*
+* Two deliberately independent branches, each proving a different piece of
+* the two-rail harness is wired up:
+*
+*   1. ideal resistive divider off vlogic -> proves vlogic_val parameter
+*      plumbing and measurement parsing; PVT-invariant by construction.
+*   2. a thick-oxide (nfet_06v0/pfet_06v0) CMOS inverter powered from vdrv,
+*      plus a diode-connected nfet_06v0 forced at a fixed current -> proves
+*      vdrv_val plumbing on the actual thick-oxide device family this
+*      design's drive rail uses (spec/gate-driver.md §2.5), and that the
+*      .lib corner sections and .temp actually reach that device family
+*      (nfet_06v0's Vgs at fixed current is corner- and temperature-
+*      sensitive; see sim/harness/corners.py's module docstring for how the
+*      corner .lib sections skew it).
+*
+* Both branches run at every point of the tied two-rail PVT grid, so one
+* record demonstrates the harness sweeping both rails together.
+
+vsup_logic vlogic 0 dc {vlogic_val}
+vsup_drv   vdrv   0 dc {vdrv_val}
+
+* --- 1. ideal divider off vlogic: exactly vlogic/2 at every corner/temp/rail
+Rtop vlogic ndiv 100k
+Rbot ndiv 0   100k
+
+* --- 2a. thick-oxide CMOS inverter, input tied low (deterministic pull to
+* vdrv through the PMOS; the off NMOS supplies the leakage path op needs to
+* converge). Default W/L from the PDK's nfet_06v0/pfet_06v0 subcircuits.
+XM1 vout 0 vdrv vdrv pfet_06v0
+XM2 vout 0 0    0    nfet_06v0
+
+* --- 2b. diode-connected nfet_06v0, forced 50 uA -- the corner/temp probe
+Iq 0 nbias_drv dc 50u
+XM3 nbias_drv nbias_drv 0 0 nfet_06v0
