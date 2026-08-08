@@ -4737,6 +4737,9 @@ fi
 #   4. the resolved target does not touch a `records/` path segment — the
 #      tracked, append-only evidence directories (sim/*/records/*.md) stay
 #      untouched by clean regardless of worktree/sim scoping
+#   5. the command's total extracted target count fits within
+#      _GC_TARGET_CAP, so EVERY target could actually be checked — a longer
+#      list is not scanned to completion and therefore asks (fail safe)
 #
 # Any invocation failing ANY of these still asks — identical to the
 # pre-existing behavior for that shape — and the allow is skipped entirely
@@ -4752,10 +4755,26 @@ fi
 # =============================================================================
 if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|[:space:]])git clean -fd'; then
     _GC_ASK=1
-    _GC_TARGETS=$(extract_git_clean_fd_targets "$COMMAND_ASK_SCAN" "$CWD" | head -50)
+    # Target-count bound, FAIL-SAFE (PR #19 review). EVERY extracted target
+    # must be checked before the ask can be skipped, so the bound must never
+    # silently drop targets: a plain `| head -N` would let a violating target
+    # at position N+1 go unseen and turn the "no violation found" default into
+    # an ALLOW (reproduced: 60 confined sim/** args + a 61st records/ arg
+    # wrongly allowed under the old `head -50`). Instead read up to CAP+1
+    # lines: if the extra line is present the list exceeded the bound, and a
+    # pathological invocation we refuse to scan in full falls back to the
+    # ordinary ask rather than being allowed on a partial scan.
+    _GC_TARGET_CAP=500
+    _GC_TARGETS=$(extract_git_clean_fd_targets "$COMMAND_ASK_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
     if [[ -n "$_GC_TARGETS" ]]; then
         _GC_ASK=""
-        while IFS=$'\037' read -r _gccwd _gctarget; do
+        if [[ $(printf '%s\n' "$_GC_TARGETS" | wc -l) -gt "$_GC_TARGET_CAP" ]]; then
+            # More targets than the bound allows us to fully verify — the
+            # extracted list may be truncated, so confinement cannot be
+            # proven for all of them. Fail safe: ask.
+            _GC_ASK=1
+        fi
+        while [[ -z "$_GC_ASK" ]] && IFS=$'\037' read -r _gccwd _gctarget; do
             [[ -z "$_gccwd" && -z "$_gctarget" ]] && continue
 
             # Bare invocation (no path args) always asks.

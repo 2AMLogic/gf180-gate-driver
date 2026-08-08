@@ -26,6 +26,11 @@
 #   - a `cd <worktree> && …` prefix resolves against the cd target -> allow
 #   - the exact multi-line `cd <worktree>\ngit clean -fdn …` shape
 #     observed in .loom/logs/guard-decisions.log                 -> allow
+#   - a violating target BEYOND any target-count bound           -> ask
+#     (regression: `head -N` truncation of the extracted target list
+#      silently dropped later targets, turning "no violation seen"
+#      into an ALLOW — PR #19 review)
+#   - a target list larger than the scan bound fails safe        -> ask
 #   - fail-open contract preserved: exit is always 0
 #
 # Exit 0 = all pass, 1 = fail.
@@ -184,6 +189,54 @@ assert_decision \
     "git clean -fdn sim/.work 2>&1 | head -20" \
     "$WT" \
     "allow"
+
+# --- Target-count bound must FAIL SAFE, never truncate silently (PR #19) -----
+# The scope check flips its default to "allow unless a violation is seen" as
+# soon as any target is extracted, so a bound that DROPS later targets turns a
+# violating argument past the cutoff into a silent ALLOW. The original wiring
+# capped extraction with `| head -50`; these cases pin the contract that a
+# violation ANYWHERE in the full argument list still asks, regardless of how
+# many arguments precede it.
+gen_confined_targets() {
+    local n="$1" i out=""
+    for ((i = 0; i < n; i++)); do
+        out+=" sim/device-mv-fet/corners/run-$i"
+    done
+    printf '%s' "$out"
+}
+
+assert_decision \
+    "many confined targets (well past the old 50 cap) still allows" \
+    "git clean -fd$(gen_confined_targets 120)" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "records/ target at position 61 (past the old 50 cap) still asks" \
+    "git clean -fd$(gen_confined_targets 60) sim/device-mv-fet/records/" \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "worktree-escaping target at position 121 still asks" \
+    "git clean -fd$(gen_confined_targets 120) ../../etc" \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "records/ target as the LAST of a very long argument list still asks" \
+    "git clean -fd$(gen_confined_targets 400) sim/device-mv-fet/records/summary.md" \
+    "$WT" \
+    "ask"
+
+# Beyond the bound the target list can no longer be verified in full, so the
+# guard must fall back to the ordinary ask (fail safe) rather than allow on a
+# partial scan — even when every visible target is confined.
+assert_decision \
+    "target list exceeding the scan bound fails safe (asks)" \
+    "git clean -fd$(gen_confined_targets 800)" \
+    "$WT" \
+    "ask"
 
 echo
 echo "== Summary: $PASS/$TOTAL passed =="
