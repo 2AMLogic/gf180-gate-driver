@@ -3344,14 +3344,44 @@ extract_write_targets() {
     # lands in the main checkout). Fail-closed by construction: this function
     # can only ever REPLACE a token with a value it actually proved, never
     # make one disappear.
-    function resolve_var(tok,   vname, rest, vv) {
-        if (substr(tok, 1, 1) != "$") return tok
-        if (match(tok, /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
-            vname = substr(tok, RSTART + 2, RLENGTH - 3)
-            rest = substr(tok, RSTART + RLENGTH)
-        } else if (match(tok, /^\$[A-Za-z_][A-Za-z0-9_]*/)) {
-            vname = substr(tok, RSTART + 1, RLENGTH - 1)
-            rest = substr(tok, RSTART + RLENGTH)
+    #
+    # QUOTED WRITE TARGETS (#17 fix): qsplit() leaves a quoted token with
+    # its surrounding quote characters attached (`"$WORKTREE_ABS/design/x.sch"`,
+    # literal leading `"`), so a naive `substr(tok, 1, 1) != "$"` check never
+    # fires for the quoted form of a bare variable reference -- only the
+    # unquoted `$VAR/path` spelling resolved, even though quoting a variable
+    # reference is the generally-recommended-safe shell idiom. Strip a
+    # DOUBLE-quote pair (only) from around tok before the `$`-prefix check,
+    # mirroring the shell-accuracy model this file already uses elsewhere
+    # (mark_expandable_dollars()/_scan_token_quoting() above): a real shell
+    # DOES expand `$VAR` inside double quotes, but NEVER inside single quotes
+    # -- a single-quoted target of literal shape DOLLAR-A-SLASH-evil really is
+    # a relative path to a file literally named DOLLAR-A, not a reference to
+    # variable A (the same distinction documented at the unresolved-`$`
+    # classification block below, #4921).
+    # So a SINGLE-quoted token is deliberately left untouched here and falls
+    # through unresolved exactly as it did before this fix -- widening
+    # resolution to single-quoted tokens would be a real bypass, not a false-
+    # positive fix. This only widens what can be RESOLVED, never what is
+    # returned on failure -- every failure path below still returns the
+    # original (quotes-included) `tok`, so an unresolvable or non-worktree
+    # target is exactly as fail-closed as before.
+    function resolve_var(tok,   vname, rest, vv, qc1, qc2, inner) {
+        inner = tok
+        if (length(tok) >= 2) {
+            qc1 = substr(tok, 1, 1)
+            qc2 = substr(tok, length(tok), 1)
+            if (qc1 == DQ && qc2 == DQ) {
+                inner = substr(tok, 2, length(tok) - 2)
+            }
+        }
+        if (substr(inner, 1, 1) != "$") return tok
+        if (match(inner, /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
+            vname = substr(inner, RSTART + 2, RLENGTH - 3)
+            rest = substr(inner, RSTART + RLENGTH)
+        } else if (match(inner, /^\$[A-Za-z_][A-Za-z0-9_]*/)) {
+            vname = substr(inner, RSTART + 1, RLENGTH - 1)
+            rest = substr(inner, RSTART + RLENGTH)
         } else {
             # `$(...)`, `${VAR:-x}`, `$1`, … — not a bare variable reference.
             return tok
@@ -3362,6 +3392,9 @@ extract_write_targets() {
         # assignment this single-pass resolver does not follow) stays
         # unresolved rather than being guessed.
         if (vv == "" || substr(vv, 1, 1) == "$") return tok
+        # `rest` was computed against `inner`, which already has the
+        # trailing quote (if any) stripped off, so the resolved value comes
+        # back unquoted -- identical shape to the unquoted-input case below.
         return vv rest
     }
     # Record a single `NAME=value` word into varmap (value optionally wrapped
