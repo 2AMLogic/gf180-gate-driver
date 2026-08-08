@@ -1,0 +1,37 @@
+v {xschem version=3.4.7 file_version=1.2
+* level_shifter symbol -- hierarchical-cell symbol for design/level_shifter.sch.
+* Per design/README.md, this symbol lives beside its schematic (not under
+* design/symbols/) so xschem descends into level_shifter.sch when this symbol
+* is placed in a parent schematic.
+* Pin order (fixed by the "B" line order below, becomes @pinlist / the
+* .subckt port order when instantiated from a parent): in vdd_logic
+* gnd_logic vdd_drv gnd_drv out -- matches spec/decision-records/0001
+* Decision 1's port table order (IN, VDD_LOGIC, GND_LOGIC, VDD_DRV, GND_DRV,
+* OUT). See design/level-shifter-partition.md.
+}
+G {}
+K {type=subcircuit
+format="@name @pinlist level_shifter"
+template="name=x1"
+}
+V {}
+S {}
+E {}
+L 4 -20 -40 20 -40 {}
+L 4 -20 40 20 40 {}
+L 4 -20 -40 -20 40 {}
+L 4 20 -40 20 40 {}
+B 5 -32.5 -2.5 -27.5 2.5 {name=in dir=in}
+B 5 -12.5 -52.5 -7.5 -47.5 {name=vdd_logic dir=in}
+B 5 7.5 -52.5 12.5 -47.5 {name=gnd_logic dir=in}
+B 5 -12.5 47.5 -7.5 52.5 {name=vdd_drv dir=in}
+B 5 7.5 47.5 12.5 52.5 {name=gnd_drv dir=in}
+B 5 27.5 -2.5 32.5 2.5 {name=out dir=out}
+T {@name} 0 0 0 0 0.2 0.2 {}
+T {level_shifter} 0 -10 0 0 0.2 0.2 {}
+T {IN} -35 -8 0 1 0.15 0.15 {layer=7}
+T {OUT} 35 -8 2 1 0.15 0.15 {layer=7}
+T {VDD_LOGIC} -22 -55 0 1 0.15 0.15 {layer=7}
+T {GND_LOGIC} 2 -55 0 1 0.15 0.15 {layer=7}
+T {VDD_DRV} -20 55 0 0 0.15 0.15 {layer=7}
+T {GND_DRV} 4 55 0 0 0.15 0.15 {layer=7}
