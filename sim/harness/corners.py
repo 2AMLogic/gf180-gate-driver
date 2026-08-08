@@ -61,6 +61,11 @@ from dataclasses import dataclass, field
 DEFAULT_TEMPERATURES_C: tuple[float, ...] = (-40.0, 27.0, 125.0)
 DEFAULT_SUPPLY_TOLERANCE: float = 0.10  # +/-10 %
 
+#: The corner-id grammar's literal supply token for a testbench with no
+#: supply rail to sweep -- see ``sim/README.md`` and ``PvtPoint.corner_id`` /
+#: ``tied_supply_grid`` below. Matches ``evidence_lint.NO_SUPPLY``.
+NO_SUPPLY = "nosupply"
+
 
 def _bundle(mos: str, bjt: str, diode: str, res: str, moscap: str, mimcap: str) -> tuple[str, ...]:
     return (mos, res, bjt, diode, moscap, mimcap)
@@ -215,7 +220,16 @@ def tied_supply_grid(rails: tuple[Rail, ...] | list[Rail]) -> list[dict[str, flo
     sim/README.md -- see the module docstring for the rationale. All rails
     must produce the same number of points (3, or 1 if a rail's tolerance is
     0) to be tied this way.
+
+    A testbench that declares **no rails at all** (``rails: {}`` in its
+    manifest -- the ``tb.json``/``PvtPoint``-grid path's equivalent of a
+    device-level ``sim/device-*/run_*.py`` script's ``nosupply`` corner-id,
+    see ``sim/README.md``) resolves to a single point with no supplies:
+    ``PvtPoint.corner_id`` then renders the literal ``nosupply`` supply
+    field instead of an empty one.
     """
+    if not rails:
+        return [{}]
     per_rail = [supply_points(r.nominal_v, r.tolerance) for r in rails]
     lengths = {len(p) for p in per_rail}
     if len(lengths) != 1:
@@ -265,11 +279,13 @@ class PvtPoint:
         for a named node -- e.g. ``nwell2p97v``) joined by ``-`` so the whole
         field stays the single underscore-free token the corner-id grammar
         expects: e.g. ``tt_27c_vlogic3p30v-vdrv5p00v``. Extended here to
-        multiple rails, per sim/README.md.
+        multiple rails, per sim/README.md. A testbench with no declared
+        rails (``tied_supply_grid(())`` above) renders the literal
+        ``nosupply`` token instead of an empty field.
         """
         supply_field = "-".join(
             f"{name}{_format_rail_volts(value)}v" for name, value in self.supplies.items()
-        )
+        ) or NO_SUPPLY
         return f"{self.corner.name}_{self.temp_c:g}c_{supply_field}"
 
     def as_dict(self) -> dict:
@@ -303,3 +319,29 @@ def build_grid(
         )
     ]
     return points
+
+
+# --- device-level (nosupply) testbenches -------------------------------------
+#
+# Ported from `2AMLogic/gf180-bandgap` (sim/harness/corners.py). A device-level
+# testbench (a bare transistor/resistor/diode driven from ideal sources, no
+# circuit supply rail) does not fit `PvtPoint`/`tied_supply_grid`/`build_grid`
+# above -- those always name a *bundle* corner (`tt`, `ss`, ...) and always
+# carry this repo's two named rails. A device-level testbench instead selects
+# a single `.lib` section by name (`typical`, `ff`, `res_ss`, ...) and usually
+# has no supply node at all -- `sim/README.md`'s corner-id grammar spells that
+# with the literal supply token `nosupply`. This helper factors that naming
+# rule out so every `sim/device-*/` testbench mints ids the same way instead
+# of each reimplementing it (see `sim/device-mv-fet/run_device_mv_fet.py`).
+
+
+def device_corner_id(section: str, temp_c: float, supply: str = "nosupply") -> str:
+    """``<section>_<temp>c_<supply>`` -- the corner-id grammar's two-terminal
+    device-testbench form documented in ``sim/README.md``.
+
+    ``supply`` may also carry a named auxiliary sweep node instead of the
+    literal ``nosupply`` (e.g. a well-tie sensitivity sweep outside the main
+    PVT grid), which is why it is a parameter rather than hardcoded.
+    """
+    temp = f"{temp_c:g}".replace(".", "p")
+    return f"{section}_{temp}c_{supply}"

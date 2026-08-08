@@ -1,0 +1,227 @@
+* tb_device_mv_fet.spice -- gf180mcu medium-voltage MOSFET characterization
+* (issue #5). GENERATED layout (mechanically repetitive per-device bias
+* networks) -- see sim/device-mv-fet/run_device_mv_fet.py for the analysis
+* control block and extraction. Regenerate by hand if a device/bias changes;
+* this file is not produced by a build step, it is the checked-in fragment.
+*
+* Devices under test, at the PDK's own published test geometry
+* (docs/analog/spice/elec_specs tables 1.0/2.0/3.0, google/gf180mcu-pdk):
+*   n06: nfet_06v0 W/L = 10/0.7 um
+*   p06: pfet_06v0 W/L = 10/0.55 um
+*   n05: nfet_05v0 W/L = 10/0.6 um
+*   p05: pfet_05v0 W/L = 10/0.5 um
+*   n33: nfet_03v3 W/L = 10/0.28 um
+*   p33: pfet_03v3 W/L = 10/0.28 um
+*
+* Three independent bias networks per device, all sharing this one fragment
+* (one ngspice invocation per PVT corner covers every quantity):
+*   VT_<suf>  -- linear-region Vt sweep: Vds=50 mV fixed, Vgs swept 0..vmax
+*                via a shared normalized control node `vfrac` (0..1) so one
+*                `.dc vfrac` analysis sweeps all six devices at once, each
+*                scaled to its own family's DC gate ceiling (spec/gate-driver.md
+*                Sec 2.3) rather than one shared absolute voltage.
+*   IS_<suf>  -- Idsat/Cgg/Cgd bias point: |Vgs|=|Vds|=Vidsat (the PDK table's
+*                own saturation Idsat condition), fixed DC, read via `.op`.
+*   IO_<suf>  -- Ioff bias point: Vgs=0, |Vds|=Vioff (the PDK table's own
+*                subthreshold-leakage condition), fixed DC, read via `.op`.
+*   OC_<suf>_<ratio> -- output characteristic Id(Vds): Vgs held at ratio x
+*                vidsat (0.75/0.90/1.00), Vds swept 0..vmax via a second shared
+*                normalized control node `vfracds`, for an on-resistance read
+*                at each Vgs (issue #6's sizing input).
+*
+* Every NMOS has source=bulk=0 (Vsb=0); every PMOS has source=bulk tied to a
+* fixed local `vdd_<suf>` node at that family's own vmax (Vsb=0 too), gate/
+* drain referenced down from there -- the standard four-terminal Vsb=0
+* characterization condition the PDK's own elec-spec tables assume.
+
+.param
++ w_n06=10u l_n06=0.7u
++ w_p06=10u l_p06=0.55u
++ w_n05=10u l_n05=0.6u
++ w_p05=10u l_p05=0.5u
++ w_n33=10u l_n33=0.28u
++ w_p33=10u l_p33=0.28u
+.param
++ vmax_n06=6.6
++ vmax_p06=6.6
++ vmax_n05=5.5
++ vmax_p05=5.5
++ vmax_n33=3.63
++ vmax_p33=3.63
+.param
++ vidsat_n06=6
++ vidsat_p06=6
++ vidsat_n05=5
++ vidsat_p05=5
++ vidsat_n33=3.3
++ vidsat_p33=3.3
+.param
++ vioff_n06=6.6
++ vioff_p06=6.6
++ vioff_n05=5.5
++ vioff_p05=5.5
++ vioff_n33=3.63
++ vioff_p33=3.63
+
+* ---- Section A: linear-region Vt sweep (Vds = 50 mV, Vsb = 0) ----------
+Vfrac vfrac 0 dc 0
+Bgvt_n06 gvt_n06 0 V = 'vmax_n06 * v(vfrac)'
+Vdvt_n06 dvt_n06 0 dc 0.05
+Xvt_n06 dvt_n06 gvt_n06 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vsvt_p06 svt_p06 0 dc {vmax_p06}
+Bgvt_p06 gvt_p06 0 V = 'vmax_p06 * (1 - v(vfrac))'
+Vdvt_p06 dvt_p06 0 dc 'vmax_p06 - 0.05'
+Xvt_p06 dvt_p06 gvt_p06 svt_p06 svt_p06 pfet_06v0 w={w_p06} l={l_p06}
+
+Bgvt_n05 gvt_n05 0 V = 'vmax_n05 * v(vfrac)'
+Vdvt_n05 dvt_n05 0 dc 0.05
+Xvt_n05 dvt_n05 gvt_n05 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vsvt_p05 svt_p05 0 dc {vmax_p05}
+Bgvt_p05 gvt_p05 0 V = 'vmax_p05 * (1 - v(vfrac))'
+Vdvt_p05 dvt_p05 0 dc 'vmax_p05 - 0.05'
+Xvt_p05 dvt_p05 gvt_p05 svt_p05 svt_p05 pfet_05v0 w={w_p05} l={l_p05}
+
+Bgvt_n33 gvt_n33 0 V = 'vmax_n33 * v(vfrac)'
+Vdvt_n33 dvt_n33 0 dc 0.05
+Xvt_n33 dvt_n33 gvt_n33 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vsvt_p33 svt_p33 0 dc {vmax_p33}
+Bgvt_p33 gvt_p33 0 V = 'vmax_p33 * (1 - v(vfrac))'
+Vdvt_p33 dvt_p33 0 dc 'vmax_p33 - 0.05'
+Xvt_p33 dvt_p33 gvt_p33 svt_p33 svt_p33 pfet_03v3 w={w_p33} l={l_p33}
+
+* ---- Section B: |Vgs|=|Vds|=Vidsat bias point (Idsat, Cgg, Cgd) ---------
+Vgis_n06 gis_n06 0 dc {vidsat_n06}
+Vdis_n06 dis_n06 0 dc {vidsat_n06}
+Xis_n06 dis_n06 gis_n06 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgis_p06 gis_p06 0 dc '-1 * vidsat_p06'
+Vdis_p06 dis_p06 0 dc '-1 * vidsat_p06'
+Xis_p06 dis_p06 gis_p06 0 0 pfet_06v0 w={w_p06} l={l_p06}
+
+Vgis_n05 gis_n05 0 dc {vidsat_n05}
+Vdis_n05 dis_n05 0 dc {vidsat_n05}
+Xis_n05 dis_n05 gis_n05 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vgis_p05 gis_p05 0 dc '-1 * vidsat_p05'
+Vdis_p05 dis_p05 0 dc '-1 * vidsat_p05'
+Xis_p05 dis_p05 gis_p05 0 0 pfet_05v0 w={w_p05} l={l_p05}
+
+Vgis_n33 gis_n33 0 dc {vidsat_n33}
+Vdis_n33 dis_n33 0 dc {vidsat_n33}
+Xis_n33 dis_n33 gis_n33 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vgis_p33 gis_p33 0 dc '-1 * vidsat_p33'
+Vdis_p33 dis_p33 0 dc '-1 * vidsat_p33'
+Xis_p33 dis_p33 gis_p33 0 0 pfet_03v3 w={w_p33} l={l_p33}
+
+* ---- Section B2: Vgs=0, |Vds|=Vioff bias point (subthreshold Ioff) ------
+Vgio_n06 gio_n06 0 dc 0
+Vdio_n06 dio_n06 0 dc {vioff_n06}
+Xio_n06 dio_n06 gio_n06 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgio_p06 gio_p06 0 dc 0
+Vdio_p06 dio_p06 0 dc '-1 * vioff_p06'
+Xio_p06 dio_p06 gio_p06 0 0 pfet_06v0 w={w_p06} l={l_p06}
+
+Vgio_n05 gio_n05 0 dc 0
+Vdio_n05 dio_n05 0 dc {vioff_n05}
+Xio_n05 dio_n05 gio_n05 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vgio_p05 gio_p05 0 dc 0
+Vdio_p05 dio_p05 0 dc '-1 * vioff_p05'
+Xio_p05 dio_p05 gio_p05 0 0 pfet_05v0 w={w_p05} l={l_p05}
+
+Vgio_n33 gio_n33 0 dc 0
+Vdio_n33 dio_n33 0 dc {vioff_n33}
+Xio_n33 dio_n33 gio_n33 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vgio_p33 gio_p33 0 dc 0
+Vdio_p33 dio_p33 0 dc '-1 * vioff_p33'
+Xio_p33 dio_p33 gio_p33 0 0 pfet_03v3 w={w_p33} l={l_p33}
+
+* ---- Section C: Id(Vds) output characteristic at 3 Vgs ratios ----------
+Vfracds vfracds 0 dc 0
+Vgoc_n06_r75 goc_n06_r75 0 dc '0.75 * vidsat_n06'
+Bdoc_n06_r75 doc_n06_r75 0 V = 'vmax_n06 * v(vfracds)'
+Xoc_n06_r75 doc_n06_r75 goc_n06_r75 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgoc_n06_r90 goc_n06_r90 0 dc '0.9 * vidsat_n06'
+Bdoc_n06_r90 doc_n06_r90 0 V = 'vmax_n06 * v(vfracds)'
+Xoc_n06_r90 doc_n06_r90 goc_n06_r90 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgoc_n06_r100 goc_n06_r100 0 dc '1 * vidsat_n06'
+Bdoc_n06_r100 doc_n06_r100 0 V = 'vmax_n06 * v(vfracds)'
+Xoc_n06_r100 doc_n06_r100 goc_n06_r100 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vsoc_p06_r75 soc_p06_r75 0 dc {vmax_p06}
+Vgoc_p06_r75 goc_p06_r75 0 dc 'vmax_p06 - 0.75 * vidsat_p06'
+Bdoc_p06_r75 doc_p06_r75 0 V = 'vmax_p06 * (1 - v(vfracds))'
+Xoc_p06_r75 doc_p06_r75 goc_p06_r75 soc_p06_r75 soc_p06_r75 pfet_06v0 w={w_p06} l={l_p06}
+
+Vsoc_p06_r90 soc_p06_r90 0 dc {vmax_p06}
+Vgoc_p06_r90 goc_p06_r90 0 dc 'vmax_p06 - 0.9 * vidsat_p06'
+Bdoc_p06_r90 doc_p06_r90 0 V = 'vmax_p06 * (1 - v(vfracds))'
+Xoc_p06_r90 doc_p06_r90 goc_p06_r90 soc_p06_r90 soc_p06_r90 pfet_06v0 w={w_p06} l={l_p06}
+
+Vsoc_p06_r100 soc_p06_r100 0 dc {vmax_p06}
+Vgoc_p06_r100 goc_p06_r100 0 dc 'vmax_p06 - 1 * vidsat_p06'
+Bdoc_p06_r100 doc_p06_r100 0 V = 'vmax_p06 * (1 - v(vfracds))'
+Xoc_p06_r100 doc_p06_r100 goc_p06_r100 soc_p06_r100 soc_p06_r100 pfet_06v0 w={w_p06} l={l_p06}
+
+Vgoc_n05_r75 goc_n05_r75 0 dc '0.75 * vidsat_n05'
+Bdoc_n05_r75 doc_n05_r75 0 V = 'vmax_n05 * v(vfracds)'
+Xoc_n05_r75 doc_n05_r75 goc_n05_r75 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vgoc_n05_r90 goc_n05_r90 0 dc '0.9 * vidsat_n05'
+Bdoc_n05_r90 doc_n05_r90 0 V = 'vmax_n05 * v(vfracds)'
+Xoc_n05_r90 doc_n05_r90 goc_n05_r90 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vgoc_n05_r100 goc_n05_r100 0 dc '1 * vidsat_n05'
+Bdoc_n05_r100 doc_n05_r100 0 V = 'vmax_n05 * v(vfracds)'
+Xoc_n05_r100 doc_n05_r100 goc_n05_r100 0 0 nfet_05v0 w={w_n05} l={l_n05}
+
+Vsoc_p05_r75 soc_p05_r75 0 dc {vmax_p05}
+Vgoc_p05_r75 goc_p05_r75 0 dc 'vmax_p05 - 0.75 * vidsat_p05'
+Bdoc_p05_r75 doc_p05_r75 0 V = 'vmax_p05 * (1 - v(vfracds))'
+Xoc_p05_r75 doc_p05_r75 goc_p05_r75 soc_p05_r75 soc_p05_r75 pfet_05v0 w={w_p05} l={l_p05}
+
+Vsoc_p05_r90 soc_p05_r90 0 dc {vmax_p05}
+Vgoc_p05_r90 goc_p05_r90 0 dc 'vmax_p05 - 0.9 * vidsat_p05'
+Bdoc_p05_r90 doc_p05_r90 0 V = 'vmax_p05 * (1 - v(vfracds))'
+Xoc_p05_r90 doc_p05_r90 goc_p05_r90 soc_p05_r90 soc_p05_r90 pfet_05v0 w={w_p05} l={l_p05}
+
+Vsoc_p05_r100 soc_p05_r100 0 dc {vmax_p05}
+Vgoc_p05_r100 goc_p05_r100 0 dc 'vmax_p05 - 1 * vidsat_p05'
+Bdoc_p05_r100 doc_p05_r100 0 V = 'vmax_p05 * (1 - v(vfracds))'
+Xoc_p05_r100 doc_p05_r100 goc_p05_r100 soc_p05_r100 soc_p05_r100 pfet_05v0 w={w_p05} l={l_p05}
+
+Vgoc_n33_r75 goc_n33_r75 0 dc '0.75 * vidsat_n33'
+Bdoc_n33_r75 doc_n33_r75 0 V = 'vmax_n33 * v(vfracds)'
+Xoc_n33_r75 doc_n33_r75 goc_n33_r75 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vgoc_n33_r90 goc_n33_r90 0 dc '0.9 * vidsat_n33'
+Bdoc_n33_r90 doc_n33_r90 0 V = 'vmax_n33 * v(vfracds)'
+Xoc_n33_r90 doc_n33_r90 goc_n33_r90 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vgoc_n33_r100 goc_n33_r100 0 dc '1 * vidsat_n33'
+Bdoc_n33_r100 doc_n33_r100 0 V = 'vmax_n33 * v(vfracds)'
+Xoc_n33_r100 doc_n33_r100 goc_n33_r100 0 0 nfet_03v3 w={w_n33} l={l_n33}
+
+Vsoc_p33_r75 soc_p33_r75 0 dc {vmax_p33}
+Vgoc_p33_r75 goc_p33_r75 0 dc 'vmax_p33 - 0.75 * vidsat_p33'
+Bdoc_p33_r75 doc_p33_r75 0 V = 'vmax_p33 * (1 - v(vfracds))'
+Xoc_p33_r75 doc_p33_r75 goc_p33_r75 soc_p33_r75 soc_p33_r75 pfet_03v3 w={w_p33} l={l_p33}
+
+Vsoc_p33_r90 soc_p33_r90 0 dc {vmax_p33}
+Vgoc_p33_r90 goc_p33_r90 0 dc 'vmax_p33 - 0.9 * vidsat_p33'
+Bdoc_p33_r90 doc_p33_r90 0 V = 'vmax_p33 * (1 - v(vfracds))'
+Xoc_p33_r90 doc_p33_r90 goc_p33_r90 soc_p33_r90 soc_p33_r90 pfet_03v3 w={w_p33} l={l_p33}
+
+Vsoc_p33_r100 soc_p33_r100 0 dc {vmax_p33}
+Vgoc_p33_r100 goc_p33_r100 0 dc 'vmax_p33 - 1 * vidsat_p33'
+Bdoc_p33_r100 doc_p33_r100 0 V = 'vmax_p33 * (1 - v(vfracds))'
+Xoc_p33_r100 doc_p33_r100 goc_p33_r100 soc_p33_r100 soc_p33_r100 pfet_03v3 w={w_p33} l={l_p33}
+
