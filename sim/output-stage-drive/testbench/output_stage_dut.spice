@@ -1,0 +1,42 @@
+* output_stage_dut.spice -- DUT fragment for sim/output-stage-drive/
+*
+* Derived from design/netlist/output_stage.spice (xschem-generated from
+* design/output_stage.sch) by stripping the trailing `.end` directive (the
+* harness's DUT fragment rule, sim/harness/README.md: a DUT file may not
+* carry .control/.endc/.end/.lib/.temp) and the machine-local `sch_path`
+* comment xschem prepends. NOT hand-edited beyond that -- regenerate from
+* design/netlist/output_stage.spice if the schematic changes:
+*   tail -n +2 design/netlist/output_stage.spice | grep -v '^\.end$' \
+*     > sim/output-stage-drive/testbench/output_stage_dut.spice
+* (then re-add this header).
+*
+**.subckt output_stage VDD_DRV IN_DRV OUT GND_DRV
+*.ipin IN_DRV
+*.ipin VDD_DRV
+*.ipin GND_DRV
+*.opin OUT
+XMP1 n1 IN_DRV VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=4.4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN1 n1 IN_DRV GND_DRV GND_DRV nfet_06v0 L=0.70u W=2.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 n2 n1 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=18.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN2 n2 n1 GND_DRV GND_DRV nfet_06v0 L=0.70u W=8.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP3 n3 n2 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=73.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN3 n3 n2 GND_DRV GND_DRV nfet_06v0 L=0.70u W=33.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP4 n4 n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=30
+XMN4 n4 n3 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=14
+XMP5 n5 n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=122
+XMN5 n5 n4 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=55
+XMP6 OUT n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=500
+XMN6 OUT n5 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=220
+**.ends

@@ -1,0 +1,29 @@
+v {xschem version=3.4.7 file_version=1.2
+
+* output_stage -- low-side gate-driver output stage (issue #6)
+* Hierarchical symbol for design/output_stage.sch, auto-generated from the
+* schematic's ipin/opin instances with
+* `awk -f <xschem>/make_sym.awk 300 output_stage.sch` per design/README.md's
+* "hierarchical schematic-cell symbols must live next to their .sch" rule.
+* Regenerate (do not hand-edit pin geometry) if output_stage.sch's port list
+* changes.
+}
+K {type=subcircuit
+format="@name @pinlist @symname"
+template="name=x1"
+}
+T {@symname} -72 -6 0 0 0.3 0.3 {}
+T {@name} 285 -42 0 0 0.2 0.2 {}
+P 4 5 280 -30 -280 -30 -280 30 280 30 280 -30 {}
+B 5 -302.5 -22.5 -297.5 -17.5 {name=VDD_DRV dir=in}
+L 4 -300 -20 -280 -20 {}
+T {VDD_DRV} -275 -24 0 0 0.2 0.2 {}
+B 5 -302.5 -2.5 -297.5 2.5 {name=IN_DRV dir=in}
+L 4 -300 0 -280 0 {}
+T {IN_DRV} -275 -4 0 0 0.2 0.2 {}
+B 5 297.5 -22.5 302.5 -17.5 {name=OUT dir=out}
+L 4 280 -20 300 -20 {}
+T {OUT} 275 -24 0 1 0.2 0.2 {}
+B 5 -302.5 17.5 -297.5 22.5 {name=GND_DRV dir=in}
+L 4 -300 20 -280 20 {}
+T {GND_DRV} -275 16 0 0 0.2 0.2 {}
