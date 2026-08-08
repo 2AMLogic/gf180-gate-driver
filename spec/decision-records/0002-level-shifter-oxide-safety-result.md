@@ -18,7 +18,7 @@ verified rather than asserted.
 `sim/level-shifter-oxide-safety/` (the testbench and evidence trail) were
 built for this issue. The full mandated PVT matrix (5 process corners × 3
 temperatures × the tied two-rail supply grid, 60 points) ran clean —
-`sim/level-shifter-oxide-safety/records/20260808-051514-61e0c25.md` — no
+`sim/level-shifter-oxide-safety/records/20260808-051839-f3ec3e2.md` — no
 convergence failures, no simulator errors, only two ngspice convergence aids
 added to the testbench manifest (`gmin=1e-9`, `method=gear` — standard
 robustness options for a circuit containing a fast positive-feedback latch
@@ -106,6 +106,5 @@ measurement being narrowed, or the PDK's duty-cycle TDDB overshoot allowance
   numerically exceeds its own nominal supply value.
 - This record does not change `sim/level-shifter-oxide-safety/`'s use as
   ongoing evidence: a mitigation attempt gets its own new record-id via
-  `--supersedes 20260808-051514-61e0c25` (or its clean-tree successor, if
-  one is minted before this lands), per the append-only convention in
+  `--supersedes 20260808-051839-f3ec3e2`, per the append-only convention in
   `sim/README.md`.
