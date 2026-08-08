@@ -11,6 +11,17 @@
   "runtimes": {
     "default": "claude"
   },
+  "autonomous": {
+    "roleRunner": {
+      "enabled": true,
+      "onIdle": [
+        "auditor"
+      ]
+    },
+    "workFinder": {
+      "enabled": true
+    }
+  },
   "safehouse": {
     "enabled": false,
     "socket": null,
