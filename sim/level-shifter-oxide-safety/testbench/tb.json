@@ -1,0 +1,57 @@
+{
+  "name": "level-shifter-oxide-safety",
+  "description": "Cascode/clamped level shifter (spec/gate-driver.md sec4): transient thin-oxide gate-to-any-node excursion, functional correctness, and propagation delay across the full PVT matrix including the 6V stretch drive rail.",
+  "claim": "spec/gate-driver.md#4-level-shifter-topology-33-v-logic--56-v-drive-rail; spec/gate-driver.md#23-dc-gate-voltage-ceiling-thin-oxide-vs-thick-oxide",
+  "netlist": "level_shifter_tb.spice",
+  "dut": "design/netlist/level_shifter.spice",
+  "stretch": true,
+  "options": ["gmin=1e-9", "method=gear"],
+  "analyses": [
+    "tran 20p 200n",
+    "let dq1 = abs(v(in)-v(inb))",
+    "let dq2 = abs(v(in)-v(gnd_logic))",
+    "let dq3 = abs(v(in)-v(vdd_logic))",
+    "let dq4 = abs(v(in)-v(na))",
+    "let dq5 = abs(v(inb)-v(nb))",
+    "let dq6 = abs(v(inb)-v(gnd_logic))",
+    "meas tran mq1 max dq1",
+    "meas tran mq2 max dq2",
+    "meas tran mq3 max dq3",
+    "meas tran mq4 max dq4",
+    "meas tran mq5 max dq5",
+    "meas tran mq6 max dq6",
+    "let thinox_worst = max(max(max(mq1,mq2),max(mq3,mq4)),max(mq5,mq6))",
+    "meas tran na_peak max v(na)",
+    "meas tran nb_peak max v(nb)",
+    "meas tran t_plh trig v(in) val=1.65 rise=1 targ v(out) val=2.5 rise=1",
+    "meas tran t_phl trig v(in) val=1.65 fall=1 targ v(out) val=2.5 fall=1",
+    "meas tran vout_hi_abs find v(out) at=59n",
+    "meas tran vout_lo_abs find v(out) at=19n",
+    "meas tran vdrv_now find v(vdd_drv) at=59n",
+    "let outhi_ratio = vout_hi_abs/vdrv_now",
+    "let outlo_ratio = vout_lo_abs/vdrv_now"
+  ],
+  "measure": {
+    "vgate_thinox_max": "thinox_worst",
+    "vna_peak": "na_peak",
+    "vnb_peak": "nb_peak",
+    "t_plh_ns": "t_plh*1e9",
+    "t_phl_ns": "t_phl*1e9",
+    "vout_hi_ratio": "outhi_ratio",
+    "vout_lo_ratio": "outlo_ratio"
+  },
+  "checks": {
+    "vgate_thinox_max": {
+      "max": 3.63,
+      "description": "spec sec2.3: no thin-oxide gate-to-any-node DC/transient excursion may exceed 3.63V, at any instant, any corner -- the sec4 topology's central claim."
+    },
+    "vout_hi_ratio": {
+      "min": 0.95,
+      "description": "IN held high (t=59ns, mid-pulse) -> OUT must track VDD_DRV (non-inverting, decision record 0001 Decision 3)."
+    },
+    "vout_lo_ratio": {
+      "max": 0.05,
+      "description": "IN held low (t=19ns, pre-edge) -> OUT must sit near GND_DRV (non-inverting, off state)."
+    }
+  }
+}

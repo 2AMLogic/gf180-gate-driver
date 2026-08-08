@@ -1,0 +1,51 @@
+* level_shifter.spice -- xschem-generated netlist fragment
+* Source: design/level_shifter.sch (xschem -x -n -s, gf180mcuD)
+* Cascode/clamped 3.3V-logic -> 5V/6V-drive-rail level shifter (spec/gate-driver.md sec4).
+* External nodes (spec/decision-records/0001, Decision 1 port list):
+*   in         -- IN  (3.3V logic input, thin-oxide domain)
+*   vdd_logic  -- VDD_LOGIC (3.3V logic supply)
+*   gnd_logic  -- GND_LOGIC (3.3V logic return)
+*   vdd_drv    -- VDD_DRV (5V/6V drive-rail supply)
+*   gnd_drv    -- GND_DRV (drive-rail return)
+*   out        -- OUT (drive-rail-referenced logic output, non-inverting)
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1) -- tie them together in
+* any testbench that instantiates this fragment.
+* This is a netlist FRAGMENT: devices only, no .include/.lib/.temp/.control/.end
+* (design/README.md) -- a testbench supplies models, corners, temp and sources.
+* See design/level-shifter-partition.md for the device-by-device domain/DNWELL
+* partition table and the cascode-bias derivation.
+
+** sch_path: /home/ubuntu/GitHub/gf180-gate-driver/.loom/worktrees/issue-7/design/level_shifter.sch
+**.subckt level_shifter in vdd_logic gnd_logic vdd_drv gnd_drv out
+*.ipin in
+*.ipin vdd_logic
+*.ipin gnd_logic
+*.ipin vdd_drv
+*.ipin gnd_drv
+*.opin out
+XMNINV inb in gnd_logic gnd_logic nfet_03v3 L=0.28u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV inb in vdd_logic vdd_logic pfet_03v3 L=0.28u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNPDA na in gnd_logic gnd_logic nfet_03v3 L=0.28u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNPDB nb inb gnd_logic gnd_logic nfet_03v3 L=0.28u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNCASA nca vdd_logic na gnd_drv nfet_06v0 L=0.7u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNCASB ncb vdd_logic nb gnd_drv nfet_06v0 L=0.7u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPLATA nca ncb vdd_drv vdd_drv pfet_06v0 L=0.55u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPLATB ncb nca vdd_drv vdd_drv pfet_06v0 L=0.55u W=3u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPBUF1 nbuf1 ncb vdd_drv vdd_drv pfet_06v0 L=0.55u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNBUF1 nbuf1 ncb gnd_drv gnd_drv nfet_06v0 L=0.7u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPBUF2 out nbuf1 vdd_drv vdd_drv pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNBUF2 out nbuf1 gnd_drv gnd_drv nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+**.ends
