@@ -1,0 +1,42 @@
+* output-stage-drive -- stimulus + reference load for design/output_stage.sch
+* (issue #6), substantiating spec/gate-driver.md Sec.3's drive targets.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the
+* gf180mcu models, the corner .lib sections, .temp, this experiment's DUT
+* fragment (output_stage_dut.spice, .include'd ahead of this file -- see
+* tb.json's "dut" key), the .control block and .end.
+*
+* This testbench declares a SINGLE custom rail, `vdrv` (the output stage
+* has no 3.3V-domain devices at all -- spec Sec.2.5, every device in this
+* cell is nfet_06v0/pfet_06v0 -- so this repo's default second rail,
+* vlogic, does not apply here; see tb.json's "rails" override and
+* sim/README.md's own note that a testbench may declare a custom rail set).
+* The harness hands this fragment, per sim/harness/README.md:
+*   vdrv_val   this PVT point's VDD_DRV supply (nominal, +-tol, or the 6V
+*              stretch point)
+*   vdrv_nom   vdrv's nominal supply (5.0V), for ratio-style measurements
+*   temp_c     temperature for this PVT point (also applied via .temp)
+*
+* IN_DRV is driven as an idealized, already-level-shifted, rail-referenced
+* logic signal (spec's own framing for this cell's input -- issue #6: "this
+* cell's input is a drive-rail-referenced logic signal, not the 3.3V
+* input"). The 1ns 0-100% edge rate is a testbench assumption representing
+* a reasonably fast level-shifter output; the level shifter's own edge rate
+* and any additional delay it contributes are issue #7's concern, not
+* measured here -- see design/output-stage-sizing.md's propagation-delay
+* budget split.
+
+vsup_drv VDD_DRV 0 dc {vdrv_val}
+vgnd_drv GND_DRV 0 dc 0
+
+* IN_DRV: idealized rail-to-rail pulse. Starts low (0V) so the DUT settles
+* to a well-defined DC operating point (OUT low, non-inverting 6-stage
+* chain) before the first transient edge.
+vin IN_DRV 0 pulse(0 {vdrv_val} 20n 1n 1n 100n 300n)
+
+* 1 nF reference load (spec Sec.3), measured through a 0V ammeter so the
+* load current (source = positive, sink = negative) is directly probeable
+* as i(vimeas) without relying on a simulator-specific capacitor-current
+* accessor.
+vimeas OUT outcap 0
+cload outcap 0 1n
