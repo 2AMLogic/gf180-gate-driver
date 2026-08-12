@@ -5,7 +5,7 @@ A high-voltage gate driver on the
 agents driving [klayout-tools](https://github.com/2AMLogic/klayout-tools) and
 the open-source xschem + ngspice analog flow.
 
-**Status: spec ratified, pre-schematic.** See [Target
+**Status: spec ratified, schematic capture underway.** See [Target
 specification](#target-specification) below.
 
 **Built agent-native.** Every specification, decision record, testbench, and
@@ -42,7 +42,9 @@ considered.
 
 Maturity ladder: spec ratified → schematic simulated across PVT → layout
 DRC/LVS-clean → post-layout re-verification → shuttle seat → measured
-silicon. **Current position: spec ratified, pre-schematic.**
+silicon. **Current position: spec ratified, schematic capture underway**
+(level shifter and low-side output stage captured and sized; full-schematic
+PVT corner simulation has not yet started).
 
 ## Repo layout
 
