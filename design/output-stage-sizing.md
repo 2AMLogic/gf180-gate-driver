@@ -303,6 +303,18 @@ native characterization point, per the precedent in decision record 0003,
 or require a cascode/clamp on this cell's final stage) to a follow-up
 issue, not decided unilaterally here.
 
+**Update, post-#24 resolution**: issue #24 investigated a clamp/cascode
+mitigation and found it disproportionate — this node drives the cell's
+largest, most delay-critical devices (§2 above), so an added device is
+expected to cost more of the already-tight 6 V-stretch delay budget (§5/§6)
+than the analogous, rejected clamp attempt in decision record 0003 cost
+that (lower-stakes) case, to close a smaller gap. [Decision record
+0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md)
+formally narrows `spec/gate-driver.md` §5's overvoltage-protection claim
+with a second documented, bounded exception instead — §2.3's 6.0 V ceiling
+number itself is unchanged, and this cell's design/evidence trail is
+unchanged (no new `sim/output-stage-drive/` record required).
+
 ## 5. Propagation-delay budget split (issue #6's explicit ask)
 
 Total propagation-delay budget from spec §3: **< 50 ns nominal, < 25 ns
@@ -397,6 +409,18 @@ relaxing the target here. It is recorded in
 [decision record 0004](../spec/decision-records/0004-output-stage-gate-ceiling-result.md),
 which defers the resolution (mitigate with a clamp/cascode, or formally
 narrow the §2.3 claim for this cell) to a follow-up issue.
+
+**Resolved by issue #24**:
+[decision record 0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md)
+formally narrows `spec/gate-driver.md` §5's overvoltage-protection claim
+with a second documented, bounded exception for this cell's internal taper
+nodes (`n1`…`n5`), scoped to exactly this measured excursion (6 V stretch
+rail only, ≤ 53.8 mV, all 15 process×temperature points) — a clamp/cascode
+mitigation was investigated and rejected as disproportionate (this node
+drives the cell's largest, most delay-critical devices, unlike the
+lower-stakes analogous case in decision record 0003). §2.3's 6.0 V ceiling
+number itself is unchanged, and this record (§6) remains the unmodified,
+authoritative evidence trail for this cell — no new PVT run was required.
 
 ## 7. Cross-conduction / shoot-through (captured, no spec limit)
 
