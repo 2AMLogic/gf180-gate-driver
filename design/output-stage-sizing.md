@@ -273,26 +273,35 @@ gate at one rail, source/drain/bulk at the other).
 | Nominal +10% | 5.50 V | 5.50 V | **+0.50 V** |
 | 6 V stretch | 6.00 V | 6.00 V | **0.00 V** |
 
-**Finding**: at the 6 V stretch rail, this topology's worst-case `|Vgs|`
-reaches **exactly** the adopted 6.0 V ceiling — not exceeding it, but with
-**zero**, not positive, margin. This is not a sizing defect fixable by
-choosing different widths; it is topological, inherent to *any*
-non-cascoded rail-to-rail thick-oxide push-pull stage swinging the full 6 V
-stretch rail. It is also, not coincidentally, exactly the PDK's own
-characterization bias point for the `nfet_06v0`/`pfet_06v0` 6V0 corner
-(elec_specs_2.html tests `Idsat` at `|Vgs|=|Vds|=6V` — see §1.1) — operating
-this device flavor at `Vgs=6V` is its intended, characterized full-scale
-operating point, not an excursion beyond it.
+**Analytical finding**: at the 6 V stretch rail, this topology's worst-case
+`|Vgs|` reaches **exactly** the adopted 6.0 V ceiling by this quasi-static
+bound — not exceeding it, but with **zero**, not positive, margin. This is
+not a sizing defect fixable by choosing different widths; it is
+topological, inherent to *any* non-cascoded rail-to-rail thick-oxide
+push-pull stage swinging the full 6 V stretch rail. It is also, not
+coincidentally, exactly the PDK's own characterization bias point for the
+`nfet_06v0`/`pfet_06v0` 6V0 corner (elec_specs_2.html tests `Idsat` at
+`|Vgs|=|Vds|=6V` — see §1.1) — operating this device flavor at `Vgs=6V` is
+its intended, characterized full-scale operating point, not an excursion
+beyond it.
+
+**Measured finding (§6): worse than the analytical bound, not equal to
+it.** The §6 transient simulation shows this quasi-static bound does not
+hold exactly — a gate-capacitance/Miller-coupling transient pushes the
+worst internal taper node (`n5`) to 6.0538 V at `ss_27c_vdrv6p00v`, **53.8
+mV past** the ceiling, at every one of the 15 PVT points on the 6 V stretch
+rail. See §6 for the full result and
+[decision record 0004](../spec/decision-records/0004-output-stage-gate-ceiling-result.md)
+for the ratified analysis.
 
 Per issue #6's explicit instruction ("If a §3 target proves unreachable, do
 not relax it — record the shortfall in the sim record and open a
 decision-record issue instead"), this shortfall is **not** resolved here.
-It is recorded as-is (§5's record) and a decision-record issue is filed
-recommending the spec either (a) accept exactly-6.0V/zero-margin as
-compliant for this specific device flavor at its native characterization
-point, since the ceiling is not exceeded, or (b) require a cascode/clamp on
-this cell's final stage too if strict positive margin is mandatory at the
-stretch rail — deferred to that record, not decided unilaterally here.
+Decision record 0004 records it as measured and defers the resolution
+(accept a documented exception for this specific device flavor at its
+native characterization point, per the precedent in decision record 0003,
+or require a cascode/clamp on this cell's final stage) to a follow-up
+issue, not decided unilaterally here.
 
 ## 5. Propagation-delay budget split (issue #6's explicit ask)
 
@@ -327,10 +336,67 @@ PVT-corner transient simulation results (rise/fall time, peak
 source/sink current, propagation delay, cross-conduction current, energy
 per edge, worst-case node voltages) are recorded in
 `sim/output-stage-drive/records/`, per `sim/README.md`'s append-only
-evidence convention. **Placeholder — filled in from the harness run; see
-the linked record for the actual, current numbers**, summarized here:
+evidence convention. Full 60-point PVT grid (5 process corners × 3
+temperatures × 4 tied-supply points, including the 6 V stretch rail), see
+[`sim/output-stage-drive/records/20260812-064304-03699ea.md`](../sim/output-stage-drive/records/20260812-064304-03699ea.md)
+for the complete per-corner table.
 
-<!-- SIZING_DOC_RESULTS_PLACEHOLDER -->
+**Drive strength (§3, acceptance criteria)** — met at every PVT point:
+
+| Measurement | Worst case | Value | Target |
+|---|---|---|---|
+| Peak source current | `ss_125c_vdrv4p50v` | 0.5877 A | ≥ 0.5 A |
+| Peak sink current | `ss_125c_vdrv4p50v` | 0.5737 A | ≥ 0.5 A |
+| 10–90 % rise time | `ss_125c_vdrv4p50v` | 8.36 ns | < 50 ns |
+| 10–90 % fall time | `ss_125c_vdrv4p50v` | 7.53 ns | < 50 ns |
+
+**Propagation delay (§5 budget)** — met against this cell's own allocation
+at every point, including the 6 V stretch corners:
+
+| Rail | Worst `tpdlh`/`tpdhl` | Corner | Allocation |
+|---|---|---|---|
+| Nominal ±10 % (4.5/5.0/5.5 V) | 5.78 ns / 5.88 ns | `ss_125c_vdrv4p50v` | ≤ 20 ns |
+| 6 V stretch | 4.56 ns / 5.01 ns | `ss_125c_vdrv6p00v` | ≤ 10 ns |
+
+**Cross-conduction / energy per edge (§7, no spec limit)**:
+
+| Measurement | Worst case | Value |
+|---|---|---|
+| Peak shoot-through, rising edge | `ff_-40c_vdrv6p00v` | 0.319 A |
+| Peak shoot-through, falling edge | `tt_-40c_vdrv6p00v` | 0.0229 A |
+| Energy per edge | `ss_125c_vdrv6p00v` | 18.6 nJ |
+
+**§2.3 gate-ceiling (§4's analytical bound) — FAILS the positive-margin
+acceptance criterion, confirmed by transient simulation.** §4's quasi-static
+convex-hull argument bounds worst-case `|Vgs|` at exactly `VDD_DRV`, with
+zero margin at the 6 V stretch rail. The measured transient result is
+worse than that analytical bound, not merely equal to it: **every one of
+the 15 PVT points at the 6 V stretch rail** (all 5 process corners × all 3
+temperatures — a consistent, corner-tracking pattern, not simulation noise)
+shows at least one internal taper node (`n1`…`n5`) transiently exceeding
+6.0 V:
+
+| Node | Global worst case | Corner | Margin to 6.0 V ceiling |
+|---|---|---|---|
+| `n5` | 6.0538 V | `ss_27c_vdrv6p00v` | **−53.8 mV** |
+| `n4` | 6.0526 V | `ss_125c_vdrv6p00v` | **−52.6 mV** |
+| `n3` | 6.0518 V | `ss_125c_vdrv6p00v` | −51.8 mV |
+| `n1` | 6.0407 V | `ss_125c_vdrv6p00v` | −40.7 mV |
+| `n2` | 6.0334 V | `ss_125c_vdrv6p00v` | −33.4 mV |
+
+No node exceeds 6.0 V at the 4.5/5.0/5.5 V nominal-tolerance rail points —
+the excursion is confined to the 6 V stretch corners, consistent with §4's
+own topological explanation (a gate-capacitance/Miller-coupling transient on
+top of the quasi-static bound) rather than a sizing defect. This mirrors the
+same excursion shape already ratified in
+[decision record 0002](../spec/decision-records/0002-level-shifter-oxide-safety-result.md)/[0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md)
+for the level shifter's pre-driver inverter.
+
+Per issue #6's explicit instruction, this shortfall is not resolved by
+relaxing the target here. It is recorded in
+[decision record 0004](../spec/decision-records/0004-output-stage-gate-ceiling-result.md),
+which defers the resolution (mitigate with a clamp/cascode, or formally
+narrow the §2.3 claim for this cell) to a follow-up issue.
 
 ## 7. Cross-conduction / shoot-through (captured, no spec limit)
 
