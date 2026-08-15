@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **Issue #51** (closed): Guard decision: rm-scope-outside-repo blocks clearing a stale GitHub App installation-token cache
+- **PR #53**: feat: add invalidate-cache subcommand to github-app-token.sh
 - **Issue #48** (closed): Dedup _fmt(): identical scalar-formatter in cli.py and report.py
 - **PR #49**: fix(guide): reorder WORK_PLAN.md label queries to run immediately before commit
 - **Issue #44** (closed): Guide's WORK_PLAN.md 'PRs Awaiting Review' section missed an already-open PR
