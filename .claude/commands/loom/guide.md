@@ -1572,7 +1572,80 @@ update_work_log() {
 - **Issue #1770** (closed): Stale heartbeat messages from previous phase
 ```
 
-### Step 3: Update WORK_PLAN.md
+### Step 3: Check README.md Staleness
+
+Only update README.md when merged PRs touch architectural files.
+
+```bash
+check_readme_staleness() {
+  # Check recently merged PRs for architectural file changes
+  local arch_patterns="Cargo.toml|package.json|loom-daemon/|loom-api/|install.sh|scripts/install"
+
+  # Get last 10 merged PRs and check their changed files
+  local recent_prs=$("$GH_READ" pr list --state merged --limit 10 --json number,files \
+    --jq "[.[] | select(.files != null) | select([.files[].path] | any(test(\"$arch_patterns\")))] | .[].number")
+
+  if [ -z "$recent_prs" ]; then
+    echo "No recent architectural changes. README.md is current."
+    return 1
+  fi
+
+  echo "Architectural changes detected in PRs: $recent_prs"
+  echo "Review README.md for staleness."
+  # The Guide should read the affected sections of "$DOCS_WT/README.md" and
+  # update them there if needed — never the main checkout's copy.
+  return 0
+}
+```
+
+README updates should be **conservative**: only update sections that are clearly stale. Do not rewrite the entire README.
+
+### Step 4: Update WORK_PLAN.md
+
+**#44 RACE, DO NOT MOVE THIS STEP BACK BEFORE README (Step 3):** PR #43's
+WORK_PLAN.md-regenerating commit (`6c0495b`, 2026-08-15T09:35:22Z) rendered
+"PRs Awaiting Review" as `_None._` even though PR #42 had carried
+`loom:review-requested` again since 09:34:56Z — 26s before the commit. Two
+non-exclusive mechanisms were investigated (not guessed at):
+
+1. **Stale ETag/REST cache read — ruled out by design.** Per
+   `.loom/docs/gh-cached.md` ("ETag/REST cached listings"), the `pr list
+   --label ...` queries below route through loom-daemon's `--cached` path,
+   which issues a live conditional `GET` (`If-None-Match`) to the forge on
+   **every** call — a `304` is only ever returned when the server itself
+   confirms nothing changed since the stored ETag, and any real change (like
+   PR #42's relabel) produces a fresh `200` with current data. There is no
+   code path here that serves a locally-cached body without revalidating
+   against the live server first, so this layer structurally cannot hand back
+   a state older than the moment the query actually executes — regardless of
+   whether the mutation that changed the label was itself issued through the
+   wrapper (see "why writes still use plain `gh`" in that doc). This
+   mechanism does not explain the gap.
+2. **Query-to-commit race — confirmed as the operative mechanism.** Before
+   this fix, the `review=` query lived in what was then "Step 3" (this
+   section), sandwiched between Step 2's own live queries (WORK_LOG.md) and
+   what was then "Step 4"'s README staleness check (itself another `gh pr
+   list` call) — with Step 5's `git commit` only after that. Per "Where This
+   Phase Writes" above, Steps 1-5 run as **separate Bash tool invocations
+   interleaved with Edit tool calls**, not one continuous process, so the
+   wall-clock gap between capturing `$review` here and Step 5's `git commit`
+   line is not bounded by network latency alone — it spans however long the
+   agent takes to write WORK_LOG.md, run the README check, and write
+   WORK_PLAN.md in between. That is easily wide enough for a label to flip,
+   revert, and flip back within it, exactly matching PR #42's observed
+   history (`loom:review-requested` -> `loom:changes-requested` (09:31:58) ->
+   `loom:review-requested` again (09:34:56)) landing inside PR #43's own
+   render-to-commit window.
+
+**Fix:** the label-state queries (and the WORK_PLAN.md write that consumes
+them) now run as the LAST step before Step 5's commit — README staleness
+(Step 3, which never reads the racy PR-label state) moved earlier instead.
+This shrinks the query-to-commit window to "however long Step 5's own
+git add/diff/commit takes" (no network calls), not "however long Steps 3-4
+combined take" — it does not claim to eliminate the race entirely, since the
+commit itself is still a discrete moment in time after the query. No new
+forge read was added: this is a pure reordering, so the per-cycle read cost
+is unchanged.
 
 Regenerate the roadmap from current GitHub label state. Only rewrite if labels
 have changed **and** that change has survived a debounce window since the last
@@ -1816,34 +1889,6 @@ that section is silently deleted on the next tick (and vice versa, the
 comparison mismatches until the file catches up). Adding a section means editing
 `render_plan_body` **and** the committed file in the same change.
 
-### Step 4: Check README.md Staleness
-
-Only update README.md when merged PRs touch architectural files.
-
-```bash
-check_readme_staleness() {
-  # Check recently merged PRs for architectural file changes
-  local arch_patterns="Cargo.toml|package.json|loom-daemon/|loom-api/|install.sh|scripts/install"
-
-  # Get last 10 merged PRs and check their changed files
-  local recent_prs=$("$GH_READ" pr list --state merged --limit 10 --json number,files \
-    --jq "[.[] | select(.files != null) | select([.files[].path] | any(test(\"$arch_patterns\")))] | .[].number")
-
-  if [ -z "$recent_prs" ]; then
-    echo "No recent architectural changes. README.md is current."
-    return 1
-  fi
-
-  echo "Architectural changes detected in PRs: $recent_prs"
-  echo "Review README.md for staleness."
-  # The Guide should read the affected sections of "$DOCS_WT/README.md" and
-  # update them there if needed — never the main checkout's copy.
-  return 0
-}
-```
-
-README updates should be **conservative**: only update sections that are clearly stale. Do not rewrite the entire README.
-
 ### Step 5: Create Bundled Docs PR
 
 If any documents were updated, bundle all changes into a single PR.
@@ -1953,8 +1998,9 @@ Document Maintenance Phase
   │       this phase may write (guards deny the main checkout)
   ├─ Update "$DOCS_WT/WORK_LOG.md" (append new entries; this phase's OWN
   │    docs PRs are filtered out — see the #5454 note in Step 2)
-  ├─ Update "$DOCS_WT/WORK_PLAN.md" (regenerate if labels changed)
   ├─ Check "$DOCS_WT/README.md" staleness (only if architecture changed)
+  ├─ Update "$DOCS_WT/WORK_PLAN.md" (regenerate if labels changed; run last,
+  │    immediately before the commit below — see the #44 note in Step 4)
   ├─ If any changes:
   │    ├─ Commit all document changes (git -C "$DOCS_WT", NOT pushed yet)
   │    ├─ Cross-host recheck: re-run the open-docs-PR search with an
@@ -2011,7 +2057,7 @@ Document Maintenance Phase
   tick, so merging PR N always justifies PR N+1 and the loop never terminates
 - WORK_PLAN is only regenerated when label state actually changes — which
   requires `render_plan_body`'s output and the committed marker region to be
-  comparable byte-for-byte (see the #5413 bug note in Step 3)
+  comparable byte-for-byte (see the #5413 bug note in Step 4)
 - **A WORK_PLAN diff must also survive `LOOM_WORK_PLAN_DEBOUNCE_SECS` (default
   1h) since WORK_PLAN.md was last actually WRITTEN by a merged docs-maintenance
   PR before it is written again** (#5890, refined by #5929 to anchor on a PR
@@ -2023,12 +2069,12 @@ Document Maintenance Phase
   failure mode) an unrelated stream of WORK_LOG-only docs PRs keeps resetting
   the clock and suppresses an overdue WORK_PLAN rewrite indefinitely. A change
   that persists past the window still produces exactly one PR; a change that
-  reverts before the window elapses produces none (see Step 3)
+  reverts before the window elapses produces none (see Step 4)
 - **Hand-written regions of `WORK_PLAN.md` are subject to the same churn
   prevention as the generated region, not exempt from it** (#5930) — the
   "Operator Attention: Merge-Risk-Hold Pileup" call-out that used to live
   above the markers as a hand-appended narrative log is now rendered by
-  `render_plan_body()` (Step 3) as its FIRST generated section, so it rides
+  `render_plan_body()` (Step 4) as its FIRST generated section, so it rides
   the same byte-for-byte comparison and the same `LOOM_WORK_PLAN_DEBOUNCE_SECS`
   gate as Ready/Urgent/etc. Do not
   reintroduce a hand-appended `**Update (... UTC)**:` paragraph for it, or
