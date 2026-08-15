@@ -5,6 +5,9 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **PR #33**: chore(sim): remove dead spec_window helper in run_device_mv_fet.py
+- **Issue #32** (closed): Remove dead spec_window helper in run_device_mv_fet.py
+- **Issue #34** (closed): Remove dead spec_window helper in run_device_mv_fet.py
 - **PR #30**: chore(sim): remove dead _interp_y helper in run_device_mv_fet.py
 - **Issue #29** (closed): Remove dead _interp_y helper in run_device_mv_fet.py
 
