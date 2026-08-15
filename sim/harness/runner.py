@@ -115,8 +115,6 @@ class PointResult:
     measurements: dict[str, float] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)
     seconds: float = 0.0
-    deck: str = ""
-    log: str = ""
     message: str = ""
 
     def as_dict(self) -> dict:
@@ -126,8 +124,6 @@ class PointResult:
                 "status": self.status,
                 "measurements": self.measurements,
                 "seconds": round(self.seconds, 3),
-                "deck": self.deck,
-                "log": self.log,
             }
         )
         if self.missing:
@@ -193,8 +189,6 @@ def run_point(
             point=point,
             status="error",
             seconds=elapsed,
-            deck=deck_path.name,
-            log=log_path.name,
             message=f"ngspice timed out after {timeout_s}s",
         )
     elapsed = time.monotonic() - started
@@ -214,8 +208,6 @@ def run_point(
             measurements=measurements,
             missing=missing,
             seconds=elapsed,
-            deck=deck_path.name,
-            log=log_path.name,
             message=first_error or errors or f"ngspice exit {returncode}, no measurements parsed",
         )
 
@@ -224,8 +216,6 @@ def run_point(
         status="ok",
         measurements=measurements,
         seconds=elapsed,
-        deck=deck_path.name,
-        log=log_path.name,
     )
 
 
