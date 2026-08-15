@@ -50,7 +50,7 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#79**: Remove unused check:all npm script: byte-identical duplicate of check:ci *(hermit)*
 
 ## Epics
 
@@ -67,6 +67,6 @@ _None._
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 0 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
