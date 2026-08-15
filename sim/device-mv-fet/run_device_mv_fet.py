@@ -56,10 +56,6 @@ TEMPS = [-40.0, 27.0, 125.0]
 # Sec "Methodology").
 VT_ICRIT_DENSITY = 100e-9
 
-# Output-characteristic Vgs levels, expressed as a fraction of the device's
-# own Idsat bias point (see DEVICES' `vidsat`).
-OC_RATIOS = [0.75, 0.90, 1.00]
-
 # name -> (spice model, W um, L um, vmax = DC gate ceiling incl. the PDK's
 # stated overshoot test point (V), vidsat = |Vgs|=|Vds| Idsat bias (V),
 # vioff = |Vds| Ioff bias (V), sign (+1 NMOS / -1 PMOS), published spec
