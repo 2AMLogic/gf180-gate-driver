@@ -6,9 +6,17 @@
 * carry .control/.endc/.end/.lib/.temp) and the machine-local `sch_path`
 * comment xschem prepends. NOT hand-edited beyond that -- regenerate from
 * design/netlist/output_stage.spice if the schematic changes:
-*   tail -n +2 design/netlist/output_stage.spice | grep -v '^\.end$' \
+*   grep -v -e '^\*\* sch_path:' -e '^\.end$' design/netlist/output_stage.spice \
 *     > sim/output-stage-drive/testbench/output_stage_dut.spice
 * (then re-add this header).
+*
+* Both filters match on line *content*, not line number. The committed
+* design/netlist/output_stage.spice no longer carries the `sch_path` line
+* (stripped at the source, issue #39 / design/README.md), so a positional
+* skip such as `tail -n +2` would now silently drop the first real line
+* (`**.subckt output_stage ...`); the `sch_path` pattern is kept here so the
+* recipe also works when run against a freshly netlisted file that still
+* has it.
 *
 **.subckt output_stage VDD_DRV IN_DRV OUT GND_DRV
 *.ipin IN_DRV
