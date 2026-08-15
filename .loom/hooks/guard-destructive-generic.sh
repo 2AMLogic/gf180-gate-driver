@@ -2137,6 +2137,77 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
     for (i = 2; i <= nl; i++) out = out "\n" lines[i]
     return out
 }
+# True when the heredoc opener at byte offset p in line uses a QUOTED
+# delimiter (`<<'"'"'EOF'"'"'`, `<<"EOF"`, `<<-'"'"'EOF'"'"'`), false for a bare
+# delimiter (`<<EOF`). Mirrors the quote-detection strip_literal_text() own
+# mask_flag_cat_heredocs() already relies on (see its header comment, "the
+# heredoc delimiter is QUOTED ... guarantees the outer shell performs NO
+# expansion on the body") -- a BARE delimiter lets the outer shell perform
+# parameter/command substitution INSIDE the body before the heredoc'"'"'s
+# consumer ever sees it, so a `$(...)`/backtick sitting in such a body may be
+# genuinely LIVE code to the OUTER shell, not merely inert text to whatever
+# reads the heredoc. Assumes heredoc_delim_at() has already validated this as
+# a real opener (delim != "").
+function heredoc_delim_quoted_at(line, p,   start, c, SQ, DQ) {
+    SQ = sprintf("%c", 39)
+    DQ = sprintf("%c", 34)
+    start = p + 2
+    if (substr(line, start, 1) == "-") start++
+    while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
+    c = substr(line, start, 1)
+    return (c == SQ || c == DQ) ? 1 : 0
+}
+# Same closed-block, interpreter-aware detection as mask_heredoc_bodies_selective()
+# above, PLUS one further narrowing (gf180-gate-driver#41): a block whose
+# delimiter is BARE (unquoted, e.g. `<<EOF`) is also left fully visible, not
+# just an interpreter-fed one. An unquoted delimiter means the OUTER shell
+# itself performs `$(...)`/backtick expansion inside the body -- so a body
+# line containing a real command substitution (e.g. `$(git clean -fd .)`) is
+# genuinely live to the outer shell even though nothing ever hands the body
+# to an inner interpreter. Only a heredoc whose delimiter is explicitly
+# quoted (`<<'"'"'EOF'"'"'`/`<<"EOF"`) is provably inert prose to the outer shell,
+# so ONLY those bodies are masked here. This is strictly NARROWER than
+# mask_heredoc_bodies_selective() (every additional case it declines to mask
+# was already left visible by that function too), so reusing it changes
+# nothing for the catastrophic-tier / write-confinement callers, which keep
+# calling the unquoted-delimiter-inclusive original unchanged; this variant
+# is used ONLY for the ASK-tier COMMAND_ASK_SCAN heredoc-masking step.
+function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+    MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
+    nl = split(s, lines, "\n")
+    if (nl == 0) return ""
+    for (i = 1; i <= nl; i++) {
+        line = lines[i]
+        off = 1
+        while (1) {
+            p = index(substr(line, off), "<<")
+            if (p == 0) break
+            p = off + p - 1
+            off = p + 2
+            delim = heredoc_delim_at(line, p)
+            if (delim == "") continue
+            closeat = 0
+            for (j = i + 1; j <= nl; j++) {
+                trimmed = lines[j]
+                sub(/^\t+/, "", trimmed)
+                if (trimmed == delim) { closeat = j; break }
+            }
+            if (closeat == 0) continue
+            if (!is_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
+            }
+            i = closeat            # resume scanning after the delimiter line
+            break
+        }
+    }
+    out = lines[1]
+    for (i = 2; i <= nl; i++) out = out "\n" lines[i]
+    return out
+}
 '
 
 # Parse force-op segments out of a command, emitting one TAB-separated
@@ -2747,6 +2818,88 @@ mask_ask_positional_args() {
     }'
 }
 
+# Mask quoted POSITIONAL arguments to `echo` (gf180-gate-driver#41). A
+# dedicated near-duplicate of mask_ask_positional_args() just above rather
+# than an extra entry in that function's cmdre allowlist -- ASK-tier-ONLY,
+# never shared with COMMAND_GH_API_RAWFIELD_SCAN (the catastrophic-tier
+# consumer of mask_ask_positional_args(), ~line 3264), so this cannot widen
+# any catastrophic check the way growing that shared allowlist would risk.
+#
+# `echo` never executes its own quoted argument -- unlike check-duplicate.sh
+# (a specific known script), that is true of EVERY invocation of the builtin,
+# so no command-name-specific reasoning is needed beyond "the command word is
+# literally echo". This closes the false-positive shape observed in
+# guard-decisions.log (2026-08-15T08:56:26Z / 09:18:05Z): a plain `echo
+# "=== search git clean -fd ask ==="` diagnostic/log label elsewhere in a
+# multi-line command, which never invokes `git clean` at all, previously
+# reached the git-clean-fd scoped-allowlist check (and every other
+# ASK_PATTERNS entry) unmasked -- neither strip_literal_text() (flag-value
+# quoting only) nor mask_ask_positional_args() (check-duplicate.sh only)
+# recognizes a bare `echo` invocation.
+#
+# INTERPRETER-FED CARVE-OUT: the one way echo's quoted argument CAN become
+# live code is if its STDOUT is piped to something that interprets it (`echo
+# "git clean -fd ." | bash`). Mirroring mask_heredoc_bodies_selective()'s
+# interpreter-fed exclusion, this function leaves an echo invocation's quoted
+# argument(s) FULLY UNMASKED whenever the very next non-whitespace byte after
+# the argument list is a pipe (`|`) -- so a real invocation smuggled that way
+# still asks exactly as before. Every other shape (echo terminated by a
+# newline, `;`, `&&`, `||`, or end-of-buffer) is masked. As with
+# strip_literal_text()/mask_ask_positional_args() above, a double-quoted span
+# carrying `$(`/backtick is left unmasked regardless (real command
+# substitution stays visible); a single-quoted span is always eligible
+# (real single quotes give bash zero expansion).
+mask_ask_echo_args() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        SQ = sprintf("%c", 39)
+        DQ = sprintf("%c", 34)
+        anchor = "(^|[ \t\n;&|`(])echo[ \t]+"
+        buf = ""
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        out = ""
+        while (match(s, anchor)) {
+            pre     = substr(s, 1, RSTART - 1)
+            matched = substr(s, RSTART, RLENGTH)
+            rest    = substr(s, RSTART + RLENGTH)
+            spanout = ""
+            origspan = ""
+            while (1) {
+                qc = substr(rest, 1, 1)
+                if (qc != DQ && qc != SQ) break
+                endpos = 0
+                for (i = 2; i <= length(rest); i++) {
+                    if (substr(rest, i, 1) == qc) { endpos = i; break }
+                }
+                if (endpos == 0) break
+                inner = substr(rest, 2, endpos - 2)
+                origspan = origspan qc inner qc
+                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
+                    gsub(/./, "X", inner)
+                }
+                spanout = spanout qc inner qc
+                rest = substr(rest, endpos + 1)
+                while (substr(rest, 1, 1) == " " || substr(rest, 1, 1) == "\t") {
+                    spanout = spanout substr(rest, 1, 1)
+                    origspan = origspan substr(rest, 1, 1)
+                    rest = substr(rest, 2)
+                }
+            }
+            if (substr(rest, 1, 1) == "|") {
+                out = out pre matched origspan
+            } else {
+                out = out pre matched spanout
+            }
+            s = rest
+        }
+        out = out s
+        printf "%s", out
+    }'
+}
+
 # Mask quoted POSITIONAL arguments (no preceding flag name) to a small
 # allowlist of known non-executing SEARCH commands (issue #5158). Extends the
 # #5235 mask_ask_positional_args() fix shape to the CATASTROPHIC-tier working
@@ -3324,9 +3477,65 @@ fi
 # force-op:protected, or any other ASK_PATTERNS entry. Gated on the same
 # command-name substring the awk allowlist matches, keeping it off the hot
 # path for the vast majority of commands that never invoke it.
-COMMAND_ASK_SCAN="$COMMAND_NO_COMMENT"
+# HEREDOC-MASKED ASK SCAN (gf180-gate-driver#41): a heredoc BODY that merely
+# QUOTES an ask-tier pattern as inert prose -- e.g. a `gh issue create --title
+# ... --body "$(cat <<'EOF' ... EOF)"` call whose heredoc body authors a
+# static issue/PR body describing this exact guard pattern, or a plain `echo
+# "...git clean -fd..."` label elsewhere in a multi-line script -- previously
+# reached the git-clean-fd scoped-allowlist check (below) and every other
+# ASK_PATTERNS entry unmasked, because neither strip_literal_text() (which
+# only redacts the quoted span immediately following a text-carrying flag)
+# nor mask_ask_positional_args() (check-duplicate.sh only) touches a heredoc
+# body, or a quoted span that is not itself a flag's value, at all.
+#
+# Uses mask_heredoc_bodies_selective_quoted_only() (defined alongside
+# mask_heredoc_bodies_selective() in _MASKHEREDOC_AWK above) -- NOT the plain
+# _selective() variant the catastrophic tier's COMMAND_HEREDOC_MASKED uses
+# (#5181/#5198, ~line 3228), and deliberately NOT plain mask_heredoc_bodies()
+# either. Two carve-outs keep this masking pass from ever widening an ask:
+#   - INTERPRETER-FED openers (`bash <<EOF`, `sh -s <<EOF`, `cat <<EOF |
+#     bash`) are left fully visible, same as _selective() -- a real
+#     `git clean -fd` reachable through one still asks exactly as before.
+#   - UNQUOTED-delimiter openers (`<<EOF`, vs. `<<'EOF'`/`<<"EOF"`) are ALSO
+#     left fully visible, which plain _selective() does NOT do. An unquoted
+#     delimiter lets the OUTER shell itself perform `$(...)`/backtick
+#     expansion inside the body, so a body line like `$(git clean -fd .)` is
+#     genuinely live to the outer shell even with no interpreter consuming
+#     the heredoc at all -- masking it there would turn a real invocation
+#     into a false ALLOW. Only a heredoc whose delimiter is explicitly quoted
+#     is provably inert prose to the outer shell, matching the repo's own
+#     `--body "$(cat <<'EOF' ... EOF)"` idiom (CLAUDE.md/builder role), which
+#     always uses a quoted delimiter.
+# This can only NARROW an ask, never widen one: a real, non-heredoc
+# `git clean -fd` (or other ASK_PATTERNS match) elsewhere in the same command
+# is untouched.
+#
+# Built from COMMAND_NO_COMMENT (not raw $COMMAND) to preserve the
+# `#`-comment stripping the ask tier already relies on, and gated on '<<'
+# presence to keep the hot path clean for the vast majority of commands with
+# no heredoc at all.
+if [[ "$COMMAND_NO_COMMENT" == *"<<"* ]]; then
+    COMMAND_ASK_SCAN=$(printf '%s' "$COMMAND_NO_COMMENT" | awk "$_MASKHEREDOC_AWK"'
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END { printf "%s", mask_heredoc_bodies_selective_quoted_only(buf) }')
+else
+    COMMAND_ASK_SCAN="$COMMAND_NO_COMMENT"
+fi
 if [[ "$COMMAND_NO_COMMENT" == *"check-duplicate.sh"* ]]; then
     COMMAND_ASK_SCAN=$(mask_ask_positional_args "$COMMAND_ASK_SCAN")
+fi
+# ECHO POSITIONAL-ARGUMENT MASKING (gf180-gate-driver#41): mask_ask_echo_args()
+# (defined above, alongside mask_ask_positional_args()) closes the analogous
+# false-positive gap for plain `echo "..."` prose elsewhere in a multi-line
+# command -- e.g. `echo "=== search git clean -fd ask ==="` used only as a
+# diagnostic/log label, never invoking `git clean` at all. `echo` never
+# executes its own quoted argument, so masking it here is safe; the function
+# itself carves out the one case where echo's stdout is piped to an
+# interpreter, leaving that shape fully visible and still asking. ASK-tier
+# ONLY (never applied to COMMAND_GH_API_RAWFIELD_SCAN), gated on a substring
+# pre-check to keep the hot path clean for the common echo-free case.
+if [[ "$COMMAND_NO_COMMENT" == *"echo"* ]]; then
+    COMMAND_ASK_SCAN=$(mask_ask_echo_args "$COMMAND_ASK_SCAN")
 fi
 # #5797: "--arg" as a substring gate also covers "--argjson" (a superset
 # spelling of "--arg"), so no separate "--argjson" check is needed here.
