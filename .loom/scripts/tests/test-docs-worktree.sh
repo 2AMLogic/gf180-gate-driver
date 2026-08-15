@@ -233,11 +233,11 @@ assert_no_grep 'git checkout -b "\$branch" main' "$GUIDE_MD" \
 # bullet lines and compared against a hash of the committed marker region
 # (marker lines + headings + blurbs), so it could never be equal.
 assert_no_grep 'portable_hash' "$GUIDE_MD" \
-    "the incommensurable hash comparison is gone from Step 3"
+    "the incommensurable hash comparison is gone from Step 4"
 assert_grep 'render_plan_body' "$GUIDE_MD" \
-    "Step 3 renders the plan body once and compares it to the committed region"
+    "Step 4 renders the plan body once and compares it to the committed region"
 
-# --- Test 6: WORK_PLAN.md carries the markers Step 3 diffs against ----------
+# --- Test 6: WORK_PLAN.md carries the markers Step 4 diffs against ----------
 echo ""
 echo "Test 6: WORK_PLAN.md carries the guide:plan-body markers"
 assert_grep '<!-- guide:plan-body:start -->' "$WORK_PLAN_MD" \
