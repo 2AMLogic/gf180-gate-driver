@@ -22,12 +22,13 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#41**: Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
+- **#58**: Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
 - **#41**: Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
 
 ## PRs Awaiting Review
@@ -62,8 +63,8 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Urgent | 0 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| Ready (`loom:issue`) | 1 |
+| In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
