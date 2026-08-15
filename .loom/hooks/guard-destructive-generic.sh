@@ -2147,27 +2147,55 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
 # even when the sink is an inert `cat`/`tee`/redirect (#58) -- distinct from,
 # and narrower than heredoc_delim_at(), whose job is finding ANY heredoc
 # opener regardless of expansion semantics.
-function heredoc_delim_literal_at(line, p,   start, qc, c, wordend, d, SQ, DQ, literal) {
+#
+# The delimiter word is consumed as a sequence of CONCATENATED segments --
+# bare alnum/underscore runs, single-/double-quoted runs, and backslash-escaped
+# single characters -- exactly like real bash tokenizes a heredoc delimiter
+# word, rather than stopping at the first closing quote. This matters because
+# a three-segment, quote-per-letter heredoc delimiter (E, O, and F each in
+# their own pair of single quotes, with no separating whitespace) is valid
+# bash forming the single word EOF (quoting anywhere in the word disables ALL
+# expansion of the body, per POSIX), but a scan that only reads ONE quoted
+# segment mis-resolves it to just the letter E. That short, WRONG delimiter
+# then lets an attacker plant an early one-letter closer line inside the real
+# (still-open) heredoc body to desync the closer search from the real bash
+# parse, smuggling a second, nested heredoc-like token whose own real closer
+# sits AFTER the genuine terminator -- masking a live, executed command as if
+# it were inert heredoc-body text (confirmed bypass, #60).
+function heredoc_delim_literal_at(line, p,   start, c, d, SQ, DQ, literal, len, i, closeq, nc) {
     SQ = sprintf("%c", 39)    # single quote
     DQ = sprintf("%c", 34)    # double quote
     start = p + 2
     if (substr(line, start, 1) == "<") return ""
     if (substr(line, start, 1) == "-") start++
     while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
-    qc = ""
     literal = 0
-    c = substr(line, start, 1)
-    if (c == SQ || c == DQ) { qc = c; literal = 1; start++ }
-    else if (c == "\\") { literal = 1; start++ }
-    wordend = start
-    while (1) {
-        c = substr(line, wordend, 1)
-        if (c ~ /^[A-Za-z0-9_]$/) { wordend++; continue }
+    d = ""
+    len = length(line)
+    i = start
+    while (i <= len) {
+        c = substr(line, i, 1)
+        if (c == SQ || c == DQ) {
+            closeq = index(substr(line, i + 1), c)
+            if (closeq == 0) return ""    # unterminated quote -- not a recognized word
+            literal = 1
+            d = d substr(line, i + 1, closeq - 1)
+            i = i + 1 + closeq
+            continue
+        }
+        if (c == "\\") {
+            nc = substr(line, i + 1, 1)
+            if (nc == "") break
+            literal = 1
+            d = d nc
+            i = i + 2
+            continue
+        }
+        if (c ~ /^[A-Za-z0-9_]$/) { d = d c; i++; continue }
         break
     }
-    if (wordend <= start) return ""
+    if (d == "") return ""
     if (!literal) return ""
-    d = substr(line, start, wordend - start)
     return d
 }
 # Same closed-block / interpreter-carve-out shape as mask_heredoc_bodies_selective()

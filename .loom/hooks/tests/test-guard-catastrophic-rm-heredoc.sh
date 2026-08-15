@@ -211,6 +211,52 @@ else
             else
                 fail "(8) baseline regressed: expected [$CMD8], got [$OUT8]"
             fi
+
+            # --- (9) multi-segment quoted delimiter (three separately-quoted
+            # single-character segments with no separating whitespace, e.g.
+            # 'E'O'F') -- valid bash forming the single word EOF, since
+            # quoting anywhere in the word disables ALL expansion of the
+            # body. Basic correctness: the body between the real opener and
+            # the real "EOF" closer line must be masked, same as a plain
+            # <<'EOF'.
+            printf -v CMD9 '%s\n%s\n%s' \
+                "cat > /tmp/loom-test-g.sh <<'E'O'F'" \
+                "DANGER=\"${RMRF_ROOT}\"" \
+                "EOF"
+            OUT9=$(run_mask "$CMD9")
+            if ! echo "$OUT9" | grep -qE "$ROOT_PATTERN"; then
+                pass "(9) multi-segment quoted delimiter <<'E'O'F' resolves to EOF and masks body"
+            else
+                fail "(9) multi-segment quoted delimiter body NOT masked: $OUT9"
+            fi
+
+            # --- (10) SECURITY REGRESSION (#60): the confirmed bypass shape.
+            # heredoc_delim_literal_at() must consume the ENTIRE multi-segment
+            # delimiter word ("EOF"), not stop at the first closing quote
+            # ("E") -- a short/wrong delimiter lets an attacker plant an
+            # early one-letter closer line inside the real (still-open)
+            # heredoc body, desyncing the closer search from the real bash
+            # parse. A second, nested heredoc-like token then gets treated as
+            # a fresh opener, and if ITS closer is placed after the genuine
+            # "EOF" terminator, everything in between -- including a
+            # genuinely live, executed command -- gets masked as if it were
+            # inert heredoc-body text. The real heredoc here closes at the
+            # "EOF" line; the dangerous line after it is genuinely executed
+            # by bash and MUST remain visible to the scan.
+            printf -v CMD10 '%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+                "cat > /tmp/loom-test-h.sh <<'E'O'F'" \
+                "harmless" \
+                "E" \
+                "<<'X'" \
+                "padding" \
+                "EOF" \
+                "${RMRF_ROOT}"
+            OUT10=$(run_mask "$CMD10")
+            if echo "$OUT10" | grep -qE "$ROOT_PATTERN"; then
+                pass "(10) SECURITY (#60): multi-segment-delimiter/nested-heredoc bypass fixed -- real invocation after genuine EOF stays visible"
+            else
+                fail "(10) SECURITY REGRESSION (#60): multi-segment-delimiter bypass reintroduced -- real invocation was masked: $OUT10"
+            fi
         fi
     fi
 fi
@@ -350,6 +396,26 @@ assert_allow "(g) extract_rm_targets(): quoted-delimiter heredoc quoting a prote
 result=$(run_hook "owner/repo; ${RMRF_TMP}")
 assert_deny "(h) real ';'-separated protected-top-level-dir rm, no heredoc -> still deny (unaffected)" "$result" \
     "protected system path"
+
+# --- (i) SECURITY REGRESSION (#60): the confirmed multi-segment-delimiter /
+# nested-heredoc bypass, end-to-end through the real hook. A three-segment
+# quoted delimiter ('E'O'F') mis-resolved to just "E" would let an early
+# one-letter closer line desync the closer search, so a nested `<<'X'` token
+# still inside the real (still-open) heredoc body gets treated as a fresh
+# opener whose own closer sits after the genuine "EOF" terminator -- masking
+# the real, live invocation between them as if it were inert heredoc-body
+# text (was ALLOW before the fix; must be DENY).
+printf -v CMD_I '%s\n%s\n%s\n%s\n%s\n%s\n%s' \
+    "cat > /tmp/loom_test_real_fn5.sh <<'E'O'F'" \
+    "harmless" \
+    "E" \
+    "<<'X'" \
+    "padding" \
+    "EOF" \
+    "${RMRF_ROOT}"
+result=$(run_hook "$CMD_I")
+assert_deny "(i) SECURITY (#60): multi-segment-delimiter/nested-heredoc bypass -- real invocation after genuine EOF -> deny" "$result" \
+    "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
