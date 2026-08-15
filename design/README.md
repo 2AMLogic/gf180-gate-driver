@@ -42,7 +42,11 @@ The corner runner consumes netlist *fragments*: devices and sources only, no
 `.include`, `.lib`, `.temp`, `.control` or `.end` (the harness supplies those
 per PVT point). Netlist the schematic from xschem, strip any simulator
 directives, and point a `sim/<experiment-slug>/testbench/tb.json` at the
-result. The runner does not care whether a fragment was generated or typed by
+result. xschem also prepends a `** sch_path: <absolute path>` comment line
+naming the local schematic file on disk — strip that too before committing,
+since it leaks a machine/worktree-local path that is meaningless (and
+sometimes misleading) outside the environment that generated it. The runner
+does not care whether a fragment was generated or typed by
 hand.
 
 ## Two-rail devices

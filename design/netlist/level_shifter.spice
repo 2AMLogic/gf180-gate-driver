@@ -16,7 +16,6 @@
 * See design/level-shifter-partition.md for the device-by-device domain/DNWELL
 * partition table and the cascode-bias derivation.
 
-** sch_path: /home/ubuntu/GitHub/gf180-gate-driver/.loom/worktrees/issue-7/design/level_shifter.sch
 **.subckt level_shifter in vdd_logic gnd_logic vdd_drv gnd_drv out
 *.ipin in
 *.ipin vdd_logic
