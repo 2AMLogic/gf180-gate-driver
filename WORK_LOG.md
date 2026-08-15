@@ -5,6 +5,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **Issue #58** (closed): Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
+- **PR #60**: fix(guard): mask literal-delimiter heredoc bodies before catastrophic rm scan
+- **Issue #68** (closed): Guard decision: worktree-write-confinement false-denies a quoted heredoc body containing a Python '>=' comparison
+- **PR #73**: fix(guard): mask non-shell interpreter heredoc bodies in write-target scan
 - **PR #71**: chore: remove dead klayout_dir property in sim/harness/pdk.py
 - **Issue #70** (closed): Remove dead klayout_dir property in sim/harness/pdk.py
 - **PR #66**: fix(guard): mask heredoc/echo prose from ASK-tier git-clean-fd scan (#41)
