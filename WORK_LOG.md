@@ -5,6 +5,11 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **Issue #62** (closed): T1/bronze checklist re-read against current evidence (2026-08-15)
+- **PR #64**: chore: remove unused OC_RATIOS constant in run_device_mv_fet.py
+- **Issue #61** (closed): Remove unused OC_RATIOS constant in run_device_mv_fet.py
+- **Issue #56** (closed): Guard decision: stash-scope:main-checkout false-asks on --body prose containing bash '\''-escaped apostrophes
+- **PR #57**: fix(guard): make strip_literal_text() single-quote masking BSQ-aware
 - **Issue #51** (closed): Guard decision: rm-scope-outside-repo blocks clearing a stale GitHub App installation-token cache
 - **PR #53**: feat: add invalidate-cache subcommand to github-app-token.sh
 - **Issue #48** (closed): Dedup _fmt(): identical scalar-formatter in cli.py and report.py

@@ -238,6 +238,84 @@ assert_decision \
     "$WT" \
     "ask"
 
+# --- ASK-tier false-positive redaction (gf180-gate-driver#41) ---------------
+# The `git clean -fd` ask-tier scan (COMMAND_ASK_SCAN) previously fired on a
+# command that merely MENTIONS the phrase as inert prose — never invoking
+# `git clean` at all — inside a plain `echo "..."` argument, or a
+# `--body "$(cat <<'EOF' ... EOF)"` heredoc-via-command-substitution value
+# used to author a static issue/PR body. Both shapes below reproduce
+# guard-decisions.log entries cited in #41. Every case still confirms a REAL
+# invocation (bare, interpreter-fed heredoc, unquoted-delimiter heredoc with
+# a live `$(...)`, or mixed with an inert mention on an earlier line) keeps
+# asking exactly as before — the redaction must only ever narrow, never widen.
+
+assert_decision \
+    "plain echo prose mentioning the phrase no longer asks" \
+    "$(printf 'echo "=== search git clean -fd ask ==="\ngh issue list --state all --search "something" --limit 20')" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "--body \"\$(cat <<'EOF' ... EOF)\" heredoc authoring a static issue body no longer asks" \
+    "$(printf '%s\n' \
+        "./.loom/scripts/create-issue.sh --title 'test' --body \"\$(cat <<'EOF2'" \
+        "This issue discusses the git clean -fd ask-tier false positive." \
+        "EOF2" \
+        ')" --label bug')" \
+    "$WT" \
+    "allow"
+
+# strip_literal_text()'s own mask_flag_cat_heredocs() pre-pass already masks
+# the --body/-m/--title/--notes/--comment heredoc-via-$(cat) shape above; this
+# case exercises the NEW COMMAND_ASK_SCAN heredoc-masking step specifically —
+# a heredoc feeding --search, a flag mask_flag_cat_heredocs() does not cover.
+assert_decision \
+    "--search \"\$(cat <<'EOF' ... EOF)\" heredoc mentioning the phrase no longer asks" \
+    "$(printf '%s\n' \
+        "gh issue list --search \"\$(cat <<'EOF2'" \
+        "mentions git clean -fd only as prose" \
+        "EOF2" \
+        ')"')" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "plain echo mention on an earlier line does not hide a REAL invocation later (narrows, never widens)" \
+    "$(printf 'echo "mentions git clean -fd only as text"\ngit clean -fd .')" \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "quoted-delimiter heredoc mention does not hide a REAL invocation on a later line (narrows, never widens)" \
+    "$(printf '%s\n' \
+        "gh issue create --title x --body \"\$(cat <<'EOF'" \
+        "mentions git clean -fd only as prose" \
+        "EOF" \
+        ')"' \
+        'git clean -fd .')" \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "interpreter-fed heredoc (bash <<EOF … git clean -fd … EOF) still asks" \
+    "$(printf '%s\n' \
+        "bash <<EOF" \
+        "cd $WT" \
+        "git clean -fd ." \
+        "EOF")" \
+    "$TMPROOT" \
+    "ask"
+
+assert_decision \
+    "unquoted-delimiter heredoc whose body performs a LIVE git clean -fd via \$(...) still asks" \
+    "$(printf '%s\n' \
+        "gh issue comment 1 --body \"\$(cat <<EOF" \
+        "\$(git clean -fd .)" \
+        "EOF" \
+        ')"')" \
+    "$WT" \
+    "ask"
+
 echo
 echo "== Summary: $PASS/$TOTAL passed =="
 
