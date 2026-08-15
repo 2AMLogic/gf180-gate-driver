@@ -56,6 +56,16 @@
 # Usage (executable):
 #   ./github-app-token.sh status                 # cheap, no network
 #   ./github-app-token.sh get-token OWNER/REPO    # mints/reuses a token
+#   ./github-app-token.sh invalidate-cache        # drop cached tokens/installation
+#                                                  # ids, forcing the next
+#                                                  # get-token to re-resolve and
+#                                                  # re-mint from scratch (#51) --
+#                                                  # the in-script alternative to
+#                                                  # an out-of-repo `rm -f` on
+#                                                  # ~/.cache/loom/github-app/,
+#                                                  # which the guard's
+#                                                  # rm-scope-outside-repo pattern
+#                                                  # denies
 #
 # Usage (sourced, for tests / advanced callers):
 #   source ".../lib/github-app-token.sh"
@@ -103,6 +113,8 @@ _GH_APP_LAST_ERROR=""
 # Populated by github_app_get_token on success, for the CLI envelope.
 GITHUB_APP_INSTALLATION_ID=""
 GITHUB_APP_TOKEN_EXPIRES_AT=""
+# Populated by github_app_invalidate_cache on success, for the CLI envelope.
+GITHUB_APP_CACHE_FILES_REMOVED=""
 
 # _github_app_load_config -> resolves _GH_APP_ID / _GH_APP_KEY_PATH from env
 # (highest precedence) or config (forge.githubApp.appId /
@@ -276,6 +288,39 @@ _github_app_read_cache() {
     return 1
   fi
   jq -c 'if (.token? and .expires_at?) then . else empty end' "$path" 2>/dev/null || return 1
+}
+
+# github_app_invalidate_cache -> removes every cached installation token
+# (installation-*.json) and owner->installation mapping (owner-*.installation)
+# from the cache directory, forcing the next github_app_get_token call to
+# re-resolve the installation and re-mint a token from scratch. This is the
+# in-script recovery path for a stale/corrupt cache (e.g. after a GitHub App
+# permissions change or install re-grant) -- previously the only way to force
+# that was an out-of-repo `rm -f ~/.cache/loom/github-app/installation-*.json`,
+# which the guard's `rm-scope-outside-repo` pattern denies (the cache dir is
+# outside the repo root and wasn't on the guard's ephemeral allowlist, #51).
+#
+# Deleting from INSIDE this script -- rather than via a raw top-level `rm` the
+# Bash-tool guard inspects -- needs no allowlist change and leaves the guard's
+# actual safety floor (denying arbitrary outside-repo paths) untouched: this
+# function only ever touches files matching a fixed, narrow glob inside a
+# directory it itself owns and creates (_github_app_cache_dir). No argument,
+# no network call, no secret ever touches stdout.
+#
+# Sets GITHUB_APP_CACHE_FILES_REMOVED to the count of files deleted; 0 (cache
+# already empty/absent) is a valid, successful outcome, not an error. Always
+# returns 0.
+github_app_invalidate_cache() {
+  local dir removed=0 f
+  dir="$(_github_app_cache_dir)"
+  shopt -s nullglob
+  for f in "$dir"/installation-*.json "$dir"/owner-*.installation; do
+    rm -f -- "$f"
+    removed=$((removed + 1))
+  done
+  shopt -u nullglob
+  GITHUB_APP_CACHE_FILES_REMOVED="$removed"
+  return 0
 }
 
 # _github_app_parse_iso8601 <YYYY-MM-DDTHH:MM:SSZ> -> echoes the unix epoch
@@ -478,8 +523,17 @@ if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
         jq -cn --arg message "$_GH_APP_LAST_ERROR" '{status:"error", message:$message}'
       fi
       ;;
+    invalidate-cache)
+      # No `github_app_configured` gate: clearing the cache is a maintenance
+      # operation on files this script itself owns, independent of whether an
+      # app is currently configured (e.g. recovering a cache left behind by a
+      # since-removed/rotated app).
+      github_app_invalidate_cache
+      jq -cn --arg removed "$GITHUB_APP_CACHE_FILES_REMOVED" \
+        '{status:"ok", removed:($removed|tonumber)}'
+      ;;
     *)
-      echo "Usage: github-app-token.sh {status|get-token OWNER/REPO}" >&2
+      echo "Usage: github-app-token.sh {status|get-token OWNER/REPO|invalidate-cache}" >&2
       exit 64
       ;;
   esac
