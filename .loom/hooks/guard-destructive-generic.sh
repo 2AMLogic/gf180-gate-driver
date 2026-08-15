@@ -2137,6 +2137,87 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
     for (i = 2; i <= nl; i++) out = out "\n" lines[i]
     return out
 }
+# Like heredoc_delim_at(), but returns "" (not a recognized opener) unless the
+# delimiter is QUOTED (single or double) or backslash-prefixed (`<<\EOF`) --
+# the three real-bash shapes that disable ALL expansion of the heredoc body
+# (per-POSIX: "If any part of word is quoted... the here-document lines are
+# not expanded"). A BARE/unquoted delimiter (`<<EOF`) is NOT recognized here:
+# bash performs full parameter/command-substitution expansion on that body,
+# so a `$(...)`/backtick inside it is genuinely live code to the OUTER shell
+# even when the sink is an inert `cat`/`tee`/redirect (#58) -- distinct from,
+# and narrower than heredoc_delim_at(), whose job is finding ANY heredoc
+# opener regardless of expansion semantics.
+function heredoc_delim_literal_at(line, p,   start, qc, c, wordend, d, SQ, DQ, literal) {
+    SQ = sprintf("%c", 39)    # single quote
+    DQ = sprintf("%c", 34)    # double quote
+    start = p + 2
+    if (substr(line, start, 1) == "<") return ""
+    if (substr(line, start, 1) == "-") start++
+    while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
+    qc = ""
+    literal = 0
+    c = substr(line, start, 1)
+    if (c == SQ || c == DQ) { qc = c; literal = 1; start++ }
+    else if (c == "\\") { literal = 1; start++ }
+    wordend = start
+    while (1) {
+        c = substr(line, wordend, 1)
+        if (c ~ /^[A-Za-z0-9_]$/) { wordend++; continue }
+        break
+    }
+    if (wordend <= start) return ""
+    if (!literal) return ""
+    d = substr(line, start, wordend - start)
+    return d
+}
+# Same closed-block / interpreter-carve-out shape as mask_heredoc_bodies_selective()
+# above, but ONLY masks bodies opened by a LITERAL (quoted or backslash-prefixed)
+# delimiter -- via heredoc_delim_literal_at() instead of heredoc_delim_at() (#58).
+# An unquoted/expanding delimiter is left completely untouched (both the body
+# AND everything after it keep flowing through this pass unmasked, exactly like
+# a rejected candidate in mask_heredoc_bodies_selective()), so a real `$(...)`/
+# backtick command substitution inside an unquoted-delimiter heredoc body still
+# reaches the catastrophic scan that calls this function. Used to build
+# COMMAND_NO_LITERAL_TEXT (the shared buffer both the ALWAYS_BLOCK_PATTERNS loop
+# and extract_rm_targets() read, #5216) -- deliberately NOT reused for
+# COMMAND_HEREDOC_MASKED/COMMAND_GH_API_RAWFIELD_SCAN above, which keeps calling
+# mask_heredoc_bodies_selective() unchanged (out of scope for #58).
+function mask_heredoc_bodies_literal_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+    MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
+    nl = split(s, lines, "\n")
+    if (nl == 0) return ""
+    for (i = 1; i <= nl; i++) {
+        line = lines[i]
+        off = 1
+        while (1) {
+            p = index(substr(line, off), "<<")
+            if (p == 0) break
+            p = off + p - 1
+            off = p + 2
+            delim = heredoc_delim_literal_at(line, p)
+            if (delim == "") continue
+            closeat = 0
+            for (j = i + 1; j <= nl; j++) {
+                trimmed = lines[j]
+                sub(/^\t+/, "", trimmed)
+                if (trimmed == delim) { closeat = j; break }
+            }
+            if (closeat == 0) continue
+            if (!is_interpreter_opener(line)) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
+            }
+            i = closeat            # resume scanning after the delimiter line
+            break
+        }
+    }
+    out = lines[1]
+    for (i = 2; i <= nl; i++) out = out "\n" lines[i]
+    return out
+}
 '
 
 # Parse force-op segments out of a command, emitting one TAB-separated
@@ -3011,6 +3092,31 @@ ALWAYS_BLOCK_PATTERNS=(
 # payloads still reach the raw scan; spans carrying `$(` / backtick are left
 # intact so command-substitution smuggling still hard-denies.
 COMMAND_NO_LITERAL_TEXT="$COMMAND"
+# HEREDOC-BODY MASKING (#58): a bare/top-level heredoc write (`cat > file
+# <<'EOF' ... EOF`, not nested inside any --body/-m/... flag value -- that
+# nested shape is already handled by strip_literal_text()'s own
+# mask_flag_cat_heredocs() below) whose body merely QUOTES a dangerous phrase
+# as inert sample/test text (e.g. a regression test fixture for
+# strip_literal_text() itself) previously reached the raw catastrophic scan
+# unmasked, indistinguishable from a real destructive command. Reuses the
+# same is-this-closed / is-this-interpreter-fed machinery as
+# mask_heredoc_bodies_selective() (COMMAND_HEREDOC_MASKED below) via the
+# sibling mask_heredoc_bodies_literal_only(), but ADDITIONALLY requires the
+# heredoc delimiter to be QUOTED or backslash-prefixed (`<<'EOF'`, `<<"EOF"`,
+# `<<\EOF`) -- the only shapes bash itself does NOT expand. An unquoted/
+# expanding delimiter (`<<EOF`, no quotes) is left completely unmasked: a
+# real `$(...)`/backtick command substitution inside such a body genuinely
+# executes when the outer shell writes it, so it must stay visible to the
+# scan below. Built ONCE here (not duplicated at the ALWAYS_BLOCK_PATTERNS
+# loop and extract_rm_targets() separately, #5216) since both consumers read
+# this same COMMAND_NO_LITERAL_TEXT buffer. Cheap substring gate keeps the
+# awk call off the hot path for the vast majority of commands with no
+# heredoc at all.
+if [[ "$COMMAND" == *"<<"* ]]; then
+    COMMAND_NO_LITERAL_TEXT=$(printf '%s' "$COMMAND_NO_LITERAL_TEXT" | awk "$_MASKHEREDOC_AWK"'
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END { printf "%s", mask_heredoc_bodies_literal_only(buf) }')
+fi
 # #5158: mask a leading grep/egrep/fgrep/rg invocation's own quoted pattern
 # argument BEFORE the flag-keyed strip below, so introspecting the guard's
 # own source (e.g. `grep -n "curl .*|" defaults/hooks/guard-destructive.sh`)
