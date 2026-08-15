@@ -2525,6 +2525,18 @@ strip_literal_text() {
     BEGIN {
         SQ = sprintf("%c", 39)   # single quote
         DQ = sprintf("%c", 34)   # double quote
+        # BSQ (#56): the literal 4-byte sequence emitted mid-value by the
+        # standard bash apostrophe-escaping idiom -- close-quote,
+        # backslash, quote, reopen-quote. To a real shell this does NOT
+        # end the logical single-quoted value; it substitutes one literal
+        # apostrophe and keeps concatenating (no intervening whitespace)
+        # onto the same word. Any prose value containing an ordinary
+        # English possessive or contraction built with this idiom (a name
+        # or an issue number immediately followed by an apostrophe-s, or a
+        # word like "does not" contracted the same way) is exactly this
+        # shape, and is extremely common in --body/-m/--title/--notes/
+        # --comment text.
+        BSQ = SQ "\\\\" SQ SQ
         # boundary + text-carrying flag + optional (ws / = / ws) + quoted span.
         # The leading boundary class includes a newline so a `--body` that begins
         # a continuation line is still recognized; the quoted-span classes
@@ -2536,10 +2548,34 @@ strip_literal_text() {
         # and the quoted value, which the first alternative'"'"'s shape does not
         # anticipate, so it gets its own alternative rather than being folded
         # into the flag list above.
+        #
+        # SINGLE-QUOTED SPAN, BSQ-AWARE (#56): the old shape here was simply
+        # `SQ "[^" SQ "]*" SQ` -- open quote, a run of non-quote bytes, close
+        # quote -- which ends the match at the FIRST raw quote byte it
+        # meets. That is wrong the moment the value contains a BSQ-escaped
+        # apostrophe: the raw quote byte sitting inside that 4-byte escape
+        # sequence is not really a close-quote to bash, but the old regex
+        # treated it as one, truncating the masked span there and leaving
+        # everything after the first embedded apostrophe (including any
+        # dangerous phrase quoted as documentation past that point) fully
+        # unmasked and visible to the ASK_PATTERNS / stash-scope scans
+        # below. The fix inserts an optional repeating "(BSQ, then more
+        # non-quote bytes)" group before the real closing quote, so a BSQ
+        # sequence is treated as "keep going, same logical value" rather
+        # than "stop here" -- matching how bash itself parses it. If no
+        # real closing quote follows (a genuinely unterminated
+        # single-quoted span), the regex engine backtracks off this
+        # optional group and falls back to the narrower match ending at
+        # the first raw quote byte, so an unterminated span still fails to
+        # swallow trailing catastrophic text -- this change only ever
+        # widens what counts as "the same inert span", never widens what
+        # counts as "safe to mask" beyond real single-quote semantics
+        # (single-quoted text is unconditionally inert to bash regardless
+        # of content, per the qchar == SQ branch below).
         re = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*" SQ ")" \
+             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")" \
              "|(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*" SQ ")"
+             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
