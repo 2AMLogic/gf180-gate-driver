@@ -258,21 +258,6 @@ def _interp_at(xs: list[float], ys: list[float], y_target: float) -> float | Non
     return None
 
 
-def _interp_y(xs: list[float], ys: list[float], x_target: float) -> float:
-    if x_target <= xs[0]:
-        return ys[0]
-    if x_target >= xs[-1]:
-        return ys[-1]
-    for i in range(1, len(xs)):
-        if xs[i] >= x_target:
-            x0, x1 = xs[i - 1], xs[i]
-            y0, y1 = ys[i - 1], ys[i]
-            if x1 == x0:
-                return y0
-            return y0 + (y1 - y0) * (x_target - x0) / (x1 - x0)
-    return ys[-1]
-
-
 def extract(log: str) -> dict:
     tables = _parse_dc_tables(log)
     vt_header, vt_rows = tables[0]
