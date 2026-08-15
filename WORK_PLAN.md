@@ -28,7 +28,8 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#41**: Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
+- **#39**: Strip leaked local worktree paths from committed design netlists
 
 ## PRs Awaiting Review
 
@@ -50,7 +51,7 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-- **#36**: Remove dead PointResult.deck/.log fields in sim/harness/runner.py *(hermit)*
+_None._
 
 ## Epics
 
@@ -63,10 +64,10 @@ _None._
 | Operator merge-risk holds | 0 |
 | Urgent | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
+| In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 1 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
