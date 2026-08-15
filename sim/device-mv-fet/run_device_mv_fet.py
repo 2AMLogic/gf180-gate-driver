@@ -394,9 +394,6 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
     add("- **Result**: see the per-quantity tables below; overall verdict at the end.")
     add("")
 
-    def spec_window(kind, suf):
-        return DEVICES[suf][kind]
-
     add(
         "**A note on how pass/fail is judged below**: the PDK's published "
         "min/typ/max columns are a *silicon manufacturing spread* at nominal "
