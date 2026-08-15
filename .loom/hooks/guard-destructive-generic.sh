@@ -1872,9 +1872,13 @@ function unmask_ws(s) {
 #      only (masking an interpreter-fed body there flips a DENY to an ALLOW on
 #      the #4523/#4601/#4685 data-loss shape -- never acceptable).
 #      UPDATED DECISION (#5351): the deferral no longer stands. The catastrophic
-#      tier proved the approach, so extract_write_targets() now ALSO calls
-#      mask_heredoc_bodies_selective() (see its END block below) -- both tiers
-#      share the same interpreter-aware masking. _selective() recognizes an
+#      tier proved the approach, so extract_write_targets() now ALSO applies
+#      interpreter-aware masking (see its END block below; as of
+#      gf180-gate-driver#68 it calls the narrower
+#      mask_heredoc_bodies_selective_shell_only() variant, which restricts the
+#      "leave it visible" carve-out to bodies fed to an actual SHELL --
+#      the only kind where shell redirection syntax in the body is live).
+#      _selective() recognizes an
 #      interpreter-fed opener and leaves that block's body VISIBLE to the scan
 #      (so a write into the main checkout inside a `bash <<'EOF' ... EOF` body
 #      now DENYs from a managed worktree), while still masking every
@@ -2046,7 +2050,15 @@ function _interp_basename(tok,   base, SQ, DQ) {
     sub(/^.*\//, "", base)
     return base
 }
-function is_interpreter_opener(line,   n, segs, i, seg, m, toks, j, base) {
+# Shared implementation behind is_interpreter_opener() (shellonly = 0) and
+# is_shell_interpreter_opener() (shellonly = 1). The two differ ONLY in
+# whether a NON-shell scripting interpreter (python/perl/ruby/node) counts:
+# see is_shell_interpreter_opener() below for why that distinction exists.
+# Every other rule -- segment splitting, assignment/wrapper stripping,
+# basename normalization, and the FAIL-CLOSED unresolvable-command-word tail
+# -- is identical for both, so they must stay one function rather than two
+# drifting copies.
+function _interp_opener(line, shellonly,   n, segs, i, seg, m, toks, j, base) {
     # Split into command segments on ; & | (covers && and || too) so a piped
     # or chained interpreter is caught in ANY position, e.g. `cat <<EOF | bash`
     # and `cat <<EOF | sudo bash`.
@@ -2080,25 +2092,65 @@ function is_interpreter_opener(line,   n, segs, i, seg, m, toks, j, base) {
         }
         if (j > m) continue
         base = _interp_basename(toks[j])
-        if (base ~ /^(bash|sh|zsh|dash|ksh|python[0-9.]*|perl|ruby|node|nodejs|eval|source|\.)$/)
+        # SHELL interpreters -- the body is shell source, so shell
+        # redirection/write syntax inside it is genuinely live code.
+        if (base ~ /^(bash|sh|zsh|dash|ksh|eval|source|\.)$/)
+            return 1
+        # NON-shell scripting interpreters -- the body is Python/Perl/Ruby/JS
+        # source, NOT shell source. Counted as interpreter-fed only when the
+        # caller asked for the broad test (shellonly = 0).
+        if (!shellonly && base ~ /^(python[0-9.]*|perl|ruby|node|nodejs)$/)
             return 1
         # (3) Fail CLOSED on a command word that resolves to no name at all --
         # a variable / command substitution, or an empty word. See the
         # FAIL-CLOSED TAIL note above: resolvable-but-unknown command words
-        # (`cat`, `tee`, a repo script) keep masking, per #5181.
+        # (`cat`, `tee`, a repo script) keep masking, per #5181. This tail
+        # applies to BOTH modes: an unresolvable command word could be a
+        # shell, so shellonly must not narrow it away.
         if (base == "" || base ~ /[$`]/)
             return 1
     }
     return 0
 }
+# True when a heredoc OPENER line feeds ANY recognized interpreter (shell or
+# not). Unchanged behaviour -- the wrapper preserves the exact contract every
+# pre-existing caller relies on.
+function is_interpreter_opener(line) {
+    return _interp_opener(line, 0)
+}
+# True when a heredoc OPENER line feeds a SHELL interpreter specifically
+# (`bash <<EOF`, `cat <<EOF | sh`, `eval <<EOF`, ...), or a command word this
+# guard cannot resolve to a name at all (fail-closed tail, #5226).
+#
+# A NON-shell interpreter (`python3 <<EOF`, `perl <<EOF`, `ruby <<EOF`,
+# `node <<EOF`) returns 0 here: its heredoc body is Python/Perl/Ruby/JS
+# source, and NOTHING in that body is ever parsed as shell redirection
+# syntax -- not by the outer shell (a heredoc body is never scanned for
+# operators, only for expansions) and not by the inner interpreter (which
+# does not speak shell at all). Scanning such a body for `>`/`>>`/`tee`/
+# `cp`/`mv` write idioms is a category error that manufactures phantom write
+# targets out of ordinary source text: `if len(methods) >= 10:` tokenizes to
+# a `>=` "redirection" whose target is a file literally named `=`, and
+# `if x > 3:` to a redirection into a file named `3`
+# (gf180-gate-driver#68). Used ONLY by
+# mask_heredoc_bodies_selective_shell_only() below.
+function is_shell_interpreter_opener(line) {
+    return _interp_opener(line, 1)
+}
 # Same closed-block detection as mask_heredoc_bodies(), but SKIPS masking
 # (leaves the body visible) for any block whose opener is interpreter-fed
-# per is_interpreter_opener() -- see KNOWN LIMITATIONS #1 above. Used by BOTH
-# tiers: the gh-api-rawfield-body-literal-at catastrophic check (#5198) and,
-# as of #5351, the extract_write_targets() ask-tier write-confinement scan (the
-# END-block call below) -- so a write into the main checkout inside an
+# per is_interpreter_opener() -- see KNOWN LIMITATIONS #1 above. Used by the
+# gh-api-rawfield-body-literal-at catastrophic check (#5198).
+#
+# #5351 also routed the extract_write_targets() ask-tier write-confinement
+# scan through this function, so a write into the main checkout inside an
 # interpreter-fed heredoc body is no longer masked out of the confinement
-# check. Plain mask_heredoc_bodies() above is retained as the reference
+# check. That caller now uses the strictly narrower
+# mask_heredoc_bodies_selective_shell_only() below instead
+# (gf180-gate-driver#68): it keeps the #5351 property for SHELL-fed bodies,
+# which is the case that reasoning was actually about, while masking a
+# quoted-delimiter python/perl/ruby/node body that no shell layer ever
+# parses. Plain mask_heredoc_bodies() above is retained as the reference
 # primitive (identical minus the interpreter carve-out) but now has no
 # runtime caller.
 function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
@@ -2194,6 +2246,89 @@ function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, li
             }
             if (closeat == 0) continue
             if (!is_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
+            }
+            i = closeat            # resume scanning after the delimiter line
+            break
+        }
+    }
+    out = lines[1]
+    for (i = 2; i <= nl; i++) out = out "\n" lines[i]
+    return out
+}
+# Same closed-block, interpreter-aware detection as mask_heredoc_bodies_selective()
+# above, PLUS one WIDENING (gf180-gate-driver#68): a body fed to a NON-shell
+# interpreter (python/perl/ruby/node) through an explicitly QUOTED delimiter is
+# masked too, instead of being left visible merely because "an interpreter" was
+# recognized on the opener line.
+#
+# Why the original selective rule over-matched here. #5351 kept every
+# interpreter-fed body visible so a REAL redirection inside `bash <<EOF ... >
+# <main-checkout>/f ... EOF` still reaches the write-confinement check. That
+# reasoning is specific to a SHELL inner interpreter. For `python3 <<EOF`, no
+# layer ever parses the body as shell:
+#   * the OUTER shell never scans a heredoc body for operators at all (with a
+#     QUOTED delimiter it does not even expand it -- provably inert prose, the
+#     same property heredoc_delim_quoted_at() is documented against above), and
+#   * the INNER interpreter does not speak shell.
+# So every `>`/`>>`/`tee`/`cp`/`mv`-shaped byte in such a body is ordinary
+# source text, and scanning it can only ever manufacture PHANTOM write targets:
+# the reported `if len(methods) >= 10:` yields a redirection into a file named
+# `=`, and a plain `if x > 3:` one into a file named `3` -- both denied as
+# worktree-isolation bypasses for a script that never writes anything.
+#
+# Strictly narrower than "mask every interpreter-fed body": a SHELL-fed body
+# (`bash <<EOF`, `cat <<EOF | sh`, `sudo bash <<EOF`), an unresolvable command
+# word (`$SHELL <<EOF` -- the #5226 fail-closed tail), and a non-shell
+# interpreter fed through a BARE delimiter (`python3 <<EOF`, where the outer
+# shell still performs `$(...)`/backtick expansion inside the body, so that
+# body is not provably inert to it) all stay VISIBLE exactly as before. The
+# ONLY behaviour change is masking a quoted-delimiter non-shell-interpreter
+# body -- which loses no real coverage, because a write performed from inside
+# Python/Perl/Ruby/JS goes through the file APIs of that language
+# (`open(...,"w")`, `shutil.copy(...)`), which this command-word-based shell
+# scanner never detected in the first place (KNOWN LIMITATIONS #1, "STILL
+# OPEN": the broader interpreter-mediated write class).
+#
+# Used ONLY by the extract_write_targets() write-confinement scan; the
+# catastrophic-tier caller keeps calling mask_heredoc_bodies_selective()
+# unchanged.
+function mask_heredoc_bodies_selective_shell_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC, maskit) {
+    MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
+    nl = split(s, lines, "\n")
+    if (nl == 0) return ""
+    for (i = 1; i <= nl; i++) {
+        line = lines[i]
+        off = 1
+        while (1) {
+            p = index(substr(line, off), "<<")
+            if (p == 0) break
+            p = off + p - 1
+            off = p + 2
+            delim = heredoc_delim_at(line, p)
+            if (delim == "") continue
+            closeat = 0
+            for (j = i + 1; j <= nl; j++) {
+                trimmed = lines[j]
+                sub(/^\t+/, "", trimmed)
+                if (trimmed == delim) { closeat = j; break }
+            }
+            if (closeat == 0) continue
+            maskit = 0
+            if (!is_interpreter_opener(line)) {
+                # Inert sink body (`cat <<EOF`, `--body "$(cat <<EOF ...)"`):
+                # masked exactly as before (#4914/#5000/#5181).
+                maskit = 1
+            } else if (!is_shell_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+                # Non-shell interpreter + quoted delimiter: no shell layer
+                # ever parses this body (gf180-gate-driver#68).
+                maskit = 1
+            }
+            if (maskit) {
                 for (j = i + 1; j < closeat; j++) {
                     body = lines[j]
                     gsub(/./, MASKC, body)
@@ -3992,7 +4127,7 @@ extract_write_targets() {
         # recognized heredoc body, even later in the SAME multi-line command,
         # is untouched and still flows through the unchanged pipeline below.
         #
-        # INTERPRETER-AWARE (#5351): use the _selective() variant, not plain
+        # INTERPRETER-AWARE (#5351): use a _selective() variant, not plain
         # mask_heredoc_bodies(). A write-idiom line inside a body handed to an
         # interpreter (`bash <<'EOF' ... EOF`, `sh -s <<EOF`, `cat <<EOF |
         # bash`, ...) is genuinely LIVE code to that inner interpreter, so
@@ -4004,7 +4139,17 @@ extract_write_targets() {
         # `--body "$(cat <<'EOF' ... EOF)"`), preserving the #4914/#5000/#5181
         # false-positive fixes. This gives the confinement tier the SAME
         # interpreter-awareness the catastrophic tier already has (#5198/#5205).
-        buf = mask_heredoc_bodies_selective(buf)
+        #
+        # SHELL-SPECIFIC (gf180-gate-driver#68): the variant used here is
+        # _selective_shell_only(), which keeps a body visible only when the
+        # inner interpreter is a SHELL (or is unresolvable). A body fed to
+        # python/perl/ruby/node through a QUOTED delimiter is masked, because
+        # no layer ever parses it as shell -- leaving it visible turned
+        # ordinary source text (`if len(methods) >= 10:`, `if x > 3:`) into
+        # phantom redirection targets (`=`, `3`) resolved against the main
+        # checkout and denied. See the header of that function for the full
+        # rationale and for what deliberately stays visible.
+        buf = mask_heredoc_bodies_selective_shell_only(buf)
         $0 = qsplit(buf)   # quote-aware segmentation (#3755)
 
         # Whole-BUFFER quote-aware masking (#5157), not per-segment.
