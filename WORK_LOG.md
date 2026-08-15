@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **PR #38**: chore(sim): remove dead deck/log fields on PointResult
+- **Issue #36** (closed): Remove dead PointResult.deck/.log fields in sim/harness/runner.py
 - **PR #33**: chore(sim): remove dead spec_window helper in run_device_mv_fet.py
 - **Issue #32** (closed): Remove dead spec_window helper in run_device_mv_fet.py
 - **Issue #34** (closed): Remove dead spec_window helper in run_device_mv_fet.py
