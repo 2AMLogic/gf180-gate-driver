@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-08-15
+
+- **PR #30**: chore(sim): remove dead _interp_y helper in run_device_mv_fet.py
+- **Issue #29** (closed): Remove dead _interp_y helper in run_device_mv_fet.py
+
 ### 2026-08-12
 
 - **PR #27**: fix(guard): restore PR #19/#20 fixes dropped by Loom surface resync
