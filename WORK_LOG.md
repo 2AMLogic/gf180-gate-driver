@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **Issue #74** (closed): Process pattern: guard-hook regex/scan changes repeatedly ship without adversarial boundary tests
+- **PR #75**: docs(builder): require adversarial boundary tests for guard-hook regex/scan changes
 - **Issue #58** (closed): Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
 - **PR #60**: fix(guard): mask literal-delimiter heredoc bodies before catastrophic rm scan
 - **Issue #68** (closed): Guard decision: worktree-write-confinement false-denies a quoted heredoc body containing a Python '>=' comparison
