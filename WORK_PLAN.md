@@ -16,19 +16,20 @@ _None._
 
 Issues flagged as highest priority (`loom:urgent`).
 
-_None._
+- **#62**: T1/bronze checklist re-read against current evidence (2026-08-15)
+- **#58**: Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
 
 ## Ready
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#41**: Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
+- **#58**: Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#58**: Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
+- **#62**: T1/bronze checklist re-read against current evidence (2026-08-15)
 - **#41**: Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
 
 ## PRs Awaiting Review
@@ -47,11 +48,11 @@ _None._
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#58**: Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text *(curated)*
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#61**: Remove unused OC_RATIOS constant in run_device_mv_fet.py *(hermit)*
 
 ## Epics
 
@@ -62,12 +63,12 @@ _None._
 | Tier | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Urgent | 0 |
+| Urgent | 2 |
 | Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 0 |
-| Architect / Hermit proposals | 0 |
+| Curated | 1 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
