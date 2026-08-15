@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **PR #71**: chore: remove dead klayout_dir property in sim/harness/pdk.py
+- **Issue #70** (closed): Remove dead klayout_dir property in sim/harness/pdk.py
 - **PR #66**: fix(guard): mask heredoc/echo prose from ASK-tier git-clean-fd scan (#41)
 - **Issue #41** (closed): Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
 - **Issue #62** (closed): T1/bronze checklist re-read against current evidence (2026-08-15)
