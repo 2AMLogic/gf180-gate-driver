@@ -1,4 +1,3 @@
-** sch_path: /home/ubuntu/GitHub/gf180-gate-driver/.loom/worktrees/issue-6/design/output_stage.sch
 **.subckt output_stage VDD_DRV IN_DRV OUT GND_DRV
 *.ipin IN_DRV
 *.ipin VDD_DRV
