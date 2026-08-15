@@ -5,6 +5,11 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **Issue #48** (closed): Dedup _fmt(): identical scalar-formatter in cli.py and report.py
+- **PR #49**: fix(guide): reorder WORK_PLAN.md label queries to run immediately before commit
+- **Issue #44** (closed): Guide's WORK_PLAN.md 'PRs Awaiting Review' section missed an already-open PR
+- **PR #47**: refactor: remove duplicate _fmt helper from cli.py, use report._fmt
+- **Issue #45** (closed): Remove duplicate _fmt helper in cli.py: identical to report._fmt
 - **PR #42**: fix: strip leaked worktree sch_path lines from committed netlists
 - **Issue #39** (closed): Strip leaked local worktree paths from committed design netlists
 - **PR #38**: chore(sim): remove dead deck/log fields on PointResult
