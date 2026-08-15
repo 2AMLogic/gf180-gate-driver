@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-15
 
+- **PR #42**: fix: strip leaked worktree sch_path lines from committed netlists
+- **Issue #39** (closed): Strip leaked local worktree paths from committed design netlists
 - **PR #38**: chore(sim): remove dead deck/log fields on PointResult
 - **Issue #36** (closed): Remove dead PointResult.deck/.log fields in sim/harness/runner.py
 - **PR #33**: chore(sim): remove dead spec_window helper in run_device_mv_fet.py
