@@ -526,7 +526,15 @@ def check_experiments(root: Path, experiments: dict) -> list:
 # --- append-only check ------------------------------------------------------
 
 
-def _git(root: Path, *args: str):
+def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
+    """Run a git subcommand, or ``None`` if git itself could not be invoked.
+
+    Shared with ``sim/harness/report.py`` (imported from there), which is why
+    this returns the full ``CompletedProcess`` rather than just stdout: this
+    module's callers need to distinguish "git is not available" (``None``)
+    from "git ran but the command failed" (non-zero ``.returncode``), a
+    distinction ``report.py``'s callers collapse to a stripped-stdout string.
+    """
     try:
         return subprocess.run(
             ("git", *args),

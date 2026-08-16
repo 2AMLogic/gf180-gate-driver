@@ -30,12 +30,12 @@ import platform
 import re
 import shutil
 import socket
-import subprocess
 import sys
 from pathlib import Path
 
 from . import HARNESS_VERSION
 from .corners import DEFAULT_TEMPERATURES_C, PvtPoint, supply_points
+from .evidence_lint import _git
 from .pdk import Pdk
 from .runner import PointResult
 from .testbench import Testbench
@@ -49,16 +49,6 @@ RECORDS_DIR = "records"
 #: Minimum number of distinct process corners for the matrix to count as
 #: "full" without a written justification.
 MIN_PROCESS_CORNERS = 3
-
-
-def _git(*args: str, cwd: Path) -> str:
-    try:
-        out = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, check=False
-        )
-        return out.stdout.strip()
-    except OSError:  # pragma: no cover - git always present in this repo
-        return ""
 
 
 #: Paths whose git state says nothing about whether a run is reproducible:
@@ -78,7 +68,8 @@ def working_tree_dirty(repo_root: Path) -> bool:
     as dirty (the previous bench's own logs are sitting in the tree). Only
     changes outside the append-only evidence directories count.
     """
-    status = _git("status", "--porcelain", cwd=repo_root)
+    res = _git(repo_root, "status", "--porcelain")
+    status = res.stdout.strip() if res else ""
     for line in status.splitlines():
         path = line[3:].strip().strip('"')
         # Renames read "old -> new"; the destination is what matters here.
@@ -90,11 +81,14 @@ def working_tree_dirty(repo_root: Path) -> bool:
 
 
 def git_provenance(repo_root: Path) -> dict:
-    commit = _git("rev-parse", "HEAD", cwd=repo_root)
+    commit_res = _git(repo_root, "rev-parse", "HEAD")
+    commit = commit_res.stdout.strip() if commit_res else ""
+    branch_res = _git(repo_root, "rev-parse", "--abbrev-ref", "HEAD")
+    branch = branch_res.stdout.strip() if branch_res else ""
     return {
         "commit": commit or "unknown",
         "short": (commit[:7] if commit else "unknown"),
-        "branch": _git("rev-parse", "--abbrev-ref", "HEAD", cwd=repo_root) or "unknown",
+        "branch": branch or "unknown",
         "dirty": working_tree_dirty(repo_root),
     }
 
