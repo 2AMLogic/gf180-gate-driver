@@ -2717,18 +2717,68 @@ resolve_stash_cwd() {
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
 #     is never redacted and its payload stays caught by the raw scan.
-#   - a DOUBLE-quoted span is redacted ONLY when it carries no command-substitution
-#     or backtick opener (`$(` — which also subsumes the arithmetic `$((` — or a
-#     backtick). So a smuggling attempt like `git commit -m "$(git push --force
-#     origin main)"` is left intact and still hard-denies. A SINGLE-quoted span is
-#     always redacted regardless of `$(`/backtick content — real single quotes give
-#     bash NO expansion of any kind, so such a span is provably inert either way
-#     (#5783; see the qchar == SQ branch at strip_literal_text()'s call site below).
+#   - a DOUBLE-quoted span is redacted ONLY when it carries an UNESCAPED
+#     command-substitution or backtick opener (`$(` — which also subsumes the
+#     arithmetic `$((` — or a backtick). So a smuggling attempt like `git commit
+#     -m "$(git push --force origin main)"` is left intact and still hard-denies.
+#     A SINGLE-quoted span is always redacted regardless of `$(`/backtick content
+#     — real single quotes give bash NO expansion of any kind, so such a span is
+#     provably inert either way (#5783; see the qchar == SQ branch at
+#     strip_literal_text()'s call site below).
 # Each redacted span is replaced by a SAME-LENGTH placeholder so byte offsets of
-# the surrounding command are unchanged. Best-effort like COMMAND_NO_COMMENT:
-# it does not model backslash-escaped quotes, but since the result feeds only
-# the narrowing (never widening) catastrophic scan, the worst case is a raw
-# substring surviving — never a catastrophic block being skipped incorrectly.
+# the surrounding command are unchanged.
+#
+# -----------------------------------------------------------------------------
+# BACKSLASH-ESCAPED QUOTES AND OPENERS INSIDE A DOUBLE-QUOTED VALUE (#112)
+#
+# This function used to be explicitly "best-effort … does not model
+# backslash-escaped quotes", on the reasoning that the result only feeds a
+# NARROWING scan so the worst case is an un-redacted substring surviving. That
+# is true of the catastrophic (deny) tier — but COMMAND_ASK_SCAN also feeds
+# SEGMENT PARSERS (extract_git_clean_fd_targets(), extract_rm_targets(),
+# parse_force_ops()), and for those a truncated redaction is not merely
+# "less masking": it hands qsplit() a string whose quote structure no longer
+# matches the real shell's, which MANUFACTURES a phantom command segment.
+#
+# Reproduced in #112 with the ordinary bash idiom for quoting example code as
+# prose inside a comment body:
+#
+#     gh pr comment 1 --body "example: \"\$(true; git clean -fd .)\""
+#
+# To bash that `--body` value is ONE inert argument: `\"` is a literal quote and
+# `\$(` is a literal `$(`, not a substitution — nothing in it executes. The old
+# span regex (`"[^"]*"`) stopped at the FIRST raw quote byte, i.e. inside the
+# `\"` escape, so it redacted only `example: \` and left
+# `\$(true; git clean -fd .)\""` standing as apparently-UNQUOTED text. qsplit()
+# then split at the (now unquoted-looking) `;` and handed
+# extract_git_clean_fd_targets() a phantom segment whose first three tokens are
+# literally `git clean -fd` — a false ask on text that runs nothing. (The same
+# body WITHOUT the `true; ` prefix happened to allow only because it contained
+# no separator to split on.)
+#
+# Two coordinated changes fix it, and BOTH are required — the span must be
+# delimited the way bash delimits it, and the `$(`-floor must then judge the
+# whole span the way bash judges it:
+#
+#   1. The double-quoted alternative of `re` below now consumes `\<char>` as a
+#      unit, so a backslash-escaped quote does not terminate the span. This is
+#      exactly bash's own rule inside double quotes, and it is deliberately NOT
+#      applied to the single-quoted alternative — inside single quotes bash
+#      treats a backslash as an ordinary literal character (the close-reopen
+#      apostrophe idiom is handled separately by BSQ, #56).
+#   2. dq_span_has_live_subst() replaces the raw `index(inner, "$(")` /
+#      `index(inner, "`")` floor: an opener preceded by an ODD number of
+#      consecutive backslashes is escaped and therefore inert, while an EVEN
+#      number (including zero) leaves it live. Parity is the correct test
+#      because `\\` is the only way to get a literal backslash inside a
+#      double-quoted string, so `"\$(x)"` is inert prose while `"\\$(x)"` is a
+#      literal backslash followed by a REAL substitution and stays un-redacted.
+#
+# Net direction: redaction now covers exactly the text bash itself treats as an
+# inert literal argument, no more. A span holding a genuinely live `$(`/backtick
+# is still never redacted, so the catastrophic floor is unchanged for every
+# shape that can actually execute.
+# -----------------------------------------------------------------------------
 #
 # -----------------------------------------------------------------------------
 # HEREDOC-WRAPPED FLAG VALUES (#5216)
@@ -2785,6 +2835,35 @@ resolve_stash_cwd() {
 # -----------------------------------------------------------------------------
 strip_literal_text() {
     printf '%s' "$1" | awk '
+    # Does this DOUBLE-quoted span carry a LIVE command substitution (#112)?
+    #
+    # Returns 1 for an unescaped `$(` or backtick (bash would expand it, so the
+    # span must stay visible to the scans), 0 when every such opener is
+    # backslash-escaped (bash emits it as literal text, so the span is inert
+    # prose and is safe to redact).
+    #
+    # Escapedness is decided by the PARITY of the run of consecutive
+    # backslashes immediately preceding the opener, which is exactly the bash
+    # rule inside double quotes: `\\` is the only spelling of a literal
+    # backslash there, so an odd run ends in a backslash that escapes the
+    # opener and an even run (including zero) leaves it live.
+    #   \$(x)     -> 1 backslash  -> odd  -> inert
+    #   \\$(x)    -> 2 backslashes -> even -> LIVE (literal \ + real subst)
+    #   \\\`x\`   -> 3 backslashes -> odd  -> inert
+    # Only ever called for a double-quoted span; a single-quoted span is inert
+    # unconditionally (#5783) and never reaches here.
+    function dq_span_has_live_subst(s,   i, n, j, c, nbs) {
+        n = length(s)
+        for (i = 1; i <= n; i++) {
+            c = substr(s, i, 1)
+            if (c != "$" && c != BT) continue
+            if (c == "$" && substr(s, i + 1, 1) != "(") continue
+            nbs = 0
+            for (j = i - 1; j >= 1 && substr(s, j, 1) == BS; j--) nbs++
+            if (nbs % 2 == 0) return 1
+        }
+        return 0
+    }
     # Mask the body of a `<flag> "$(cat <<QUOTED_DELIM … DELIM\n)"` heredoc.
     # See the header comment above for the four conditions and why each is
     # load-bearing. Body bytes are replaced 1:1 with "X" so the buffer keeps
@@ -2840,6 +2919,8 @@ strip_literal_text() {
     BEGIN {
         SQ = sprintf("%c", 39)   # single quote
         DQ = sprintf("%c", 34)   # double quote
+        BT = sprintf("%c", 96)   # backtick
+        BS = sprintf("%c", 92)   # backslash (literal byte, for dq_span_has_live_subst)
         # BSQ (#56): the literal 4-byte sequence emitted mid-value by the
         # standard bash apostrophe-escaping idiom -- close-quote,
         # backslash, quote, reopen-quote. To a real shell this does NOT
@@ -2887,10 +2968,26 @@ strip_literal_text() {
         # counts as "safe to mask" beyond real single-quote semantics
         # (single-quoted text is unconditionally inert to bash regardless
         # of content, per the qchar == SQ branch below).
+        #
+        # DOUBLE-QUOTED SPAN, BACKSLASH-AWARE (#112): the old shape here was
+        # `DQ "[^" DQ "]*" DQ` -- open quote, a run of non-quote bytes, close
+        # quote -- which ends the match at the FIRST raw quote byte, even when
+        # that byte is the second half of a `\"` escape sequence that bash does
+        # NOT treat as a closing quote. DQBODY below consumes `\<char>` as an
+        # indivisible unit (matching the bash escaping rule inside double quotes)
+        # so the span ends only at a genuinely unescaped quote. The alternation
+        # cannot run past that quote either -- the non-escape branch excludes a
+        # raw quote byte -- so POSIX leftmost-LONGEST matching still stops at
+        # the same place bash does, and adjacent values (`--body "a" --title
+        # "b"`) are still matched one at a time. Deliberately NOT applied to
+        # the single-quoted alternative: bash performs no backslash escaping
+        # inside single quotes (see BSQ above for the one idiom that matters
+        # there).
+        DQBODY = "(" "\\\\" "(.|\n)|[^" DQ "\\\\" "])*"
         re = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")" \
+             DQ DQBODY DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")" \
              "|(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")"
+             DQ DQBODY DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -2944,7 +3041,13 @@ strip_literal_text() {
             # gsub(/./) leaves embedded newlines untouched (awk `.` never matches a
             # newline), so a multi-line span stays SAME-LENGTH and byte offsets of
             # the surrounding command are preserved.
-            if (qchar == SQ || (index(inner, "$(") == 0 && index(inner, "`") == 0)) {
+            # #112: the double-quoted floor now asks whether the span holds a
+            # LIVE (unescaped) opener rather than whether the two-byte sequence
+            # appears at all -- `"\$(x)"` / "\`x\`" are literal prose to bash and
+            # were previously left half-redacted, desynchronizing every
+            # downstream quote-aware parser. `"\\$(x)"` (even backslash run) is
+            # a real substitution and is still never redacted.
+            if (qchar == SQ || !dq_span_has_live_subst(inner)) {
                 gsub(/./, "X", inner)
             }
             out = out pre head inner qchar

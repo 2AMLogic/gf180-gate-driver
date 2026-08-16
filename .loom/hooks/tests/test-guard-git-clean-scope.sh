@@ -40,6 +40,12 @@
 #     or merely preceded by other text in the same substitution  -> ask
 #   - a double-spaced `git  clean  -fd` invocation               -> ask
 #
+# Plus the #112 group at the bottom of this file (backslash-escaped example
+# code quoted as prose inside a double-quoted flag value):
+#   - `--body "example: \"\$(true; git clean -fd .)\""`          -> allow
+#   - the full PR #103 approval comment body that hit this live  -> allow
+#   - an UNESCAPED `$(...)`/backtick in the same position        -> ask
+#
 # Exit 0 = all pass, 1 = fail.
 
 set -uo pipefail
@@ -441,6 +447,95 @@ assert_decision \
     "bare unconfined 'git clean -fd' outside any worktree still asks (narrows, never widens)" \
     "git clean -fd" \
     "$TMPROOT" \
+    "ask"
+
+# --- Backslash-escaped example code inside a --body value (#112) ------------
+# strip_literal_text()'s double-quoted span regex used to end at the FIRST raw
+# quote byte, i.e. INSIDE a `\"` escape that bash does not treat as a closing
+# quote. It therefore redacted only the head of a `--body` value and left the
+# rest standing as apparently-UNQUOTED text; qsplit() then split at the (now
+# unquoted-looking) `;` and handed extract_git_clean_fd_targets() a PHANTOM
+# segment whose first three tokens are literally `git clean -fd`. The result
+# was an ask on a comment body that runs nothing at all — which in a headless
+# run stalls the agent, since there is nobody to answer it.
+#
+# Both rows of the #112 repro table are pinned below. Row 1 (no `;` in the
+# escaped span) already allowed before the fix, but only by luck: with no
+# separator there was nothing for the desynchronized parser to split on. It is
+# kept here so the pair can never silently diverge again.
+#
+# All payloads below are written inside SINGLE quotes so the string handed to
+# the hook is byte-for-byte what a real shell would receive.
+
+assert_decision \
+    "escaped-\$( example prose in a --body, no separator, allows (#112 repro row 1)" \
+    'gh pr comment 1 --body "example: \"\$(git clean -fd .)\""' \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "escaped-\$( example prose in a --body with a ;-separated segment allows (#112 repro row 2)" \
+    'gh pr comment 1 --body "example: \"\$(true; git clean -fd .)\""' \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "escaped-backtick + escaped-\$( example prose in a --body allows (#112)" \
+    'gh pr comment 1 --body "e.g. \`echo \"\$(true; git clean -fd .)\"\`"' \
+    "$WT" \
+    "allow"
+
+# The literal historical repro: the Judge approval comment on PR #103 that
+# produced the two retried ask-tier entries in .loom/logs/guard-decisions.log
+# (2026-08-16T03:31:48Z / 03:31:56Z) — a multi-line double-quoted --body whose
+# prose quotes PR #92's own example, escaped to keep it inert.
+assert_decision \
+    "the full PR #103 approval comment body allows end-to-end (#112 historical repro)" \
+    "$(printf '%s\n' \
+        'gh pr comment 103 --body "LGTM — approving.' \
+        '' \
+        'The fix adds a 4th boundary-shape bullet (command-substitution embedding,' \
+        'e.g. \`echo \"\$(true; git clean -fd .)\"\`) to the adversarial-testing' \
+        'checklist in builder.md, matching what #96 required going forward.' \
+        '' \
+        'Approving."')" \
+    "$WT" \
+    "allow"
+
+# Narrows, never widens. The escape is what makes the span inert, so the SAME
+# shapes with a LIVE (unescaped) opener must keep asking — including the
+# even-backslash-run spelling, where `\\` is a literal backslash and the
+# substitution that follows it is genuinely expanded by bash.
+assert_decision \
+    "UNESCAPED \$( in the same --body position still asks (#112 narrows, never widens)" \
+    'gh pr comment 1 --body "$(true; git clean -fd .)"' \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "UNESCAPED backtick span in the same --body position still asks (#112)" \
+    'gh pr comment 1 --body "e.g. `true; git clean -fd .`"' \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "even-backslash run (literal backslash + LIVE \$( ) in a --body still asks (#112)" \
+    'gh pr comment 1 --body "\\$(true; git clean -fd .)"' \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "escaped-quote prose in a --body does not hide a REAL invocation after it" \
+    'gh pr comment 1 --body "x \" y" && git clean -fd .' \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "escaped-\$( prose --body does not hide a REAL invocation on a later line" \
+    "$(printf '%s\n' \
+        'gh pr comment 1 --body "a \"\$(true; git clean -fd .)\""' \
+        'git clean -fd .')" \
+    "$WT" \
     "ask"
 
 echo
