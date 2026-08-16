@@ -5,6 +5,13 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-16
 
+- **Issue #112** (closed): Guard decision: git-clean-fd still false-asks on an escaped $(...) body with a ;-separated segment inside a double-quoted --body
+- **PR #119**: fix(guard): delimit escaped double-quoted flag values the way bash does (#112)
+- **Issue #98** (closed): T1 gap: capture a top-level gate-driver schematic instantiating level_shifter + output_stage (checklist item 1)
+- **PR #116**: feat(design): capture gate_driver_core top cell wiring level shifter to output stage
+- **Issue #106** (closed): Guard: BSD sed -i '' target-parsing bug causes systematic false worktree-write-confinement DENY on macOS
+- **PR #117**: fix: resolve real file target for BSD sed -i '' in-place edits in the Bash write guard
+- **Issue #97** (closed): Decompose the T1 re-read's failing items (#62) into dispatchable issues
 - **Issue #110** (closed): Guard: BSD sed -i '' (macOS two-arg form) misparsed as write target by extract_write_targets(), false worktree-write-confinement DENY
 - **Issue #101** (closed): T1 gap: aggregate a block-level characterization report against spec §3 (checklist item 8)
 - **PR #108**: docs: aggregate block-level characterization report against spec §3
