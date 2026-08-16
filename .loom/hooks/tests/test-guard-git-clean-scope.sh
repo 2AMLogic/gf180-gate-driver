@@ -316,6 +316,52 @@ assert_decision \
     "$WT" \
     "ask"
 
+# --- Glued command-substitution guard (gf180-gate-driver#90) ---------------
+# extract_git_clean_fd_targets()'s whitespace tokenizer cannot always resolve
+# a LIVE invocation glued directly onto its command-substitution opener with
+# no internal space (mask_ws()'s flat quote-tracking does not reset inside a
+# nested `$(...)`); the glued-substitution guard added alongside the zero-
+# real-invocation allow must still catch this shape directly, independent of
+# the tokenizer, for both the `$(...)` and backtick forms.
+
+assert_decision \
+    "backtick-glued LIVE git clean -fd inside a heredoc body still asks" \
+    "$(printf '%s\n' \
+        "gh issue comment 1 --body \"\$(cat <<EOF" \
+        "\`git clean -fd .\`" \
+        "EOF" \
+        ')"')" \
+    "$WT" \
+    "ask"
+
+# --- Zero-real-invocation substring false positives (gf180-gate-driver#90) --
+# The line-5666 pre-check in the GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST
+# block is a raw substring scan over the WHOLE command text and fires on the
+# phrase appearing ANYWHERE, including inside a quoted prose/description
+# argument passed to an unrelated tool. extract_git_clean_fd_targets() then
+# correctly finds ZERO real `git clean -fd` invocations for these shapes
+# (no segment's first three tokens are literally `git clean -fd*`) — that
+# "zero real invocations" case must resolve to a trivial allow, not fall
+# through to ask.
+
+assert_decision \
+    "check-duplicate.sh description mentioning the phrase in prose (with an unrelated backtick elsewhere) no longer asks" \
+    "./.loom/scripts/check-duplicate.sh \"guard false positive\" \"The ask pattern (^|[;\&|(\`[:space:]])git clean -fd blocks check-duplicate.sh calls that merely describe it.\"" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "gh issue list --jq test(\"git clean -fd\"...) query string no longer asks" \
+    "gh issue list --repo 2AMLogic/gf180-gate-driver --jq '.[] | select(.title | test(\"git-clean-fd|git clean -fd\"; \"i\"))'" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "bare unconfined 'git clean -fd' outside any worktree still asks (narrows, never widens)" \
+    "git clean -fd" \
+    "$TMPROOT" \
+    "ask"
+
 echo
 echo "== Summary: $PASS/$TOTAL passed =="
 

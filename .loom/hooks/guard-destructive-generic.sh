@@ -5662,6 +5662,45 @@ fi
 # used, scanned against COMMAND_ASK_SCAN, so a mention of the phrase inside a
 # quoted --body/-m/--title/--notes/--comment value (already redacted there)
 # does not spuriously trigger the segment parse.
+#
+# ZERO REAL INVOCATIONS IS A TRIVIAL ALLOW (gf180-gate-driver#90): the line-
+# 5666 pre-check below is a cheap, non-segment-aware substring scan over the
+# WHOLE command text — it fires on the phrase appearing anywhere at all,
+# including inside an unrelated tool's quoted prose/description argument
+# (`check-duplicate.sh "<title>" "<description mentioning it>"`, a `gh issue
+# list --jq 'test("git clean -fd" ...)'` filter string, etc.) where no
+# segment of the command is actually `git clean -fd*`.
+# extract_git_clean_fd_targets() is quote-aware (via qsplit()) and only
+# recognizes a REAL invocation — a segment whose first three tokens are
+# literally `git clean -fd*` — so for pure prose it correctly returns NO
+# lines at all (never a lone "@BARE@"/empty-target line; every recognized
+# invocation always emits at least one line). An empty `_GC_TARGETS`
+# therefore means "zero real invocations recognized as a proper segment", a
+# structurally different outcome from "a real invocation was found but
+# failed confinement" (which always leaves at least one line for the loop
+# below to evaluate). Only the latter should ask; the former has nothing
+# real to confirm or deny, so it must fall through as an allow rather than
+# leaving the pre-check's `_GC_ASK=1` in place — UNLESS the glued-command-
+# substitution guard below fires (see its own comment): this narrows the
+# ask surface only — a real invocation (recognized by
+# extract_git_clean_fd_targets(), or caught by the glued-substitution guard)
+# still asks exactly as before.
+#
+# KNOWN UNDER-MATCH, GUARDED SEPARATELY: extract_git_clean_fd_targets()
+# tokenizes each segment by plain whitespace after mask_ws() (#4934), whose
+# quote-tracking is a single flat toggle across the WHOLE buffer and does not
+# reset inside a nested `$(...)` command substitution. A LIVE invocation
+# glued directly onto its command-substitution opener with no internal space
+# — `$(git clean -fd .)`, a backtick form — nested inside an outer quoted
+# argument (e.g. a `--body "$(cat <<EOF ... EOF)"` heredoc body) therefore
+# does NOT tokenize into a recognized 3-token segment even though it is a
+# genuine, executing invocation: this is the exact shape the pre-existing
+# #41 regression test at the bottom of this file pins ("unquoted-delimiter
+# heredoc whose body performs a LIVE git clean -fd via $(...) still asks").
+# A plain empty-`_GC_TARGETS`-means-allow rule would silently widen the
+# allow to cover this real invocation, so the glued-substitution guard
+# immediately below checks for this specific narrow shape directly against
+# COMMAND_ASK_SCAN (independent of the tokenizer) and keeps it asking.
 # =============================================================================
 if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git clean -fd'; then
     _GC_ASK=1
@@ -5676,7 +5715,25 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git clean -fd'; then
     # ordinary ask rather than being allowed on a partial scan.
     _GC_TARGET_CAP=500
     _GC_TARGETS=$(extract_git_clean_fd_targets "$COMMAND_ASK_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
-    if [[ -n "$_GC_TARGETS" ]]; then
+    if [[ -z "$_GC_TARGETS" ]]; then
+        # No real `git clean -fd*` invocation recognized as a proper 3-token
+        # segment anywhere in the command (see the "ZERO REAL INVOCATIONS IS
+        # A TRIVIAL ALLOW" note above). Before treating this as a trivial
+        # allow, rule out the one under-match shape called out in that same
+        # note: a command-substitution opener glued directly onto `git` with
+        # no space (`$(git clean -fd`, a backtick form) — the tokenizer
+        # cannot always resolve this (mask_ws()'s flat quote-tracking does
+        # not reset inside a nested `$(...)`), but it is a genuine, live
+        # invocation, not prose, so it must keep asking regardless of what
+        # extract_git_clean_fd_targets() saw.
+        if echo "$COMMAND_ASK_SCAN" | grep -qE '(\$\(|`)[[:space:]]*git[[:space:]]+clean[[:space:]]+-fd'; then
+            _GC_ASK=1
+        else
+            # Nothing real to confirm or deny — the pre-check's raw
+            # substring match was pure prose/text. Skip the ask entirely.
+            _GC_ASK=""
+        fi
+    else
         _GC_ASK=""
         if [[ $(printf '%s\n' "$_GC_TARGETS" | wc -l) -gt "$_GC_TARGET_CAP" ]]; then
             # More targets than the bound allows us to fully verify — the
