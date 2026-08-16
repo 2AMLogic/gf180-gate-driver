@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-08-16
+
+- **Issue #79** (closed): Remove unused check:all npm script: byte-identical duplicate of check:ci
+- **PR #81**: chore: remove unused check:all npm script
+
 ### 2026-08-15
 
 - **Issue #74** (closed): Process pattern: guard-hook regex/scan changes repeatedly ship without adversarial boundary tests
