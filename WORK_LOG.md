@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-16
 
+- **Issue #90** (closed): Guard decision: ask-tier git-clean-fd pattern matches on substring in ANY command text, not just actual invocations
+- **PR #92**: fix(guard): treat zero recognized git-clean-fd invocations as allow
 - **Issue #89** (closed): Consolidate append-only write guard in report.py; write_device_netlist_snapshot silently skips it
 - **PR #91**: refactor(sim): dedup append-only exists-guard across evidence writers
 - **Issue #83** (closed): Dedup _git(): near-identical git subprocess wrapper in report.py and evidence_lint.py
