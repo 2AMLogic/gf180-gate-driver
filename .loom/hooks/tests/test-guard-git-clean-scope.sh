@@ -7,10 +7,12 @@
 # a `defaults/` source tree — this consumer repo has no `defaults/` directory
 # (that only exists in the Loom source repo itself; see the header comment on
 # test-guard-worktree-paths.sh, which is inert here for exactly that reason).
-# `.loom/**` is intentionally excluded from this repo's own CI lint
+# `.loom/**` is intentionally excluded from this repo's own CI *lint*
 # (.github/scripts/lint.sh: "vendored .loom/… tree… installed and regenerated
-# by external tooling"), so this file is not wired into any CI job — it is a
-# standalone regression check to run manually after touching the guard.
+# by external tooling"), but this suite IS gated: the `test` job in
+# .github/workflows/ci.yml runs it (with the four other hook suites) under
+# `set -euo pipefail`, so a failing case fails the PR. Run it manually after
+# touching the guard too — it needs nothing but bash and jq.
 #
 # Usage:
 #   bash .loom/hooks/tests/test-guard-git-clean-scope.sh
