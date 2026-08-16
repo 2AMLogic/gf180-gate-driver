@@ -150,9 +150,18 @@ issue #105.
   friction showing up exactly where CLAUDE.md predicts it would; filed
   upstream per the friction protocol.
 - **`klt gen`'s MOS generators cannot draw a voltage-domain / thick-oxide
-  marker themselves**, so `Dualgate`/`DNWELL`/`LVPWELL` had to be drawn by
-  `klt draw` alongside the generated device cells rather than requested as a
-  generator param — also filed upstream.
+  marker themselves** (klayout-tools
+  [#1054](https://github.com/2AMLogic/klayout-tools/issues/1054)), so
+  `Dualgate`/`DNWELL`/`LVPWELL` are drawn by `klt draw` and aligned over the
+  generated device cells' reported bounding boxes — which is exactly the
+  workaround that issue names. Two more klt gaps shaped this flow and are
+  tracked upstream: `gen-compose`'s router is two-pin only, so a shared supply
+  rail or any fanout node is unroutable
+  ([#1073](https://github.com/2AMLogic/klayout-tools/issues/1073)) — hence the
+  hand-built interconnect cell — and a `klt draw` response is not accepted as
+  a `gen-compose` block without hand-synthesising a `generator_report`
+  ([#1059](https://github.com/2AMLogic/klayout-tools/issues/1059)), which is
+  what `gen_gate_driver_core.py` does for the interconnect cell.
 - **Device aspect ratios are whatever `m` folds into a single row.** The
   500-finger `x2_XMP6` is 486 µm wide and 13 µm tall. Electrically it is what
   the netlist asks for; as a floorplan it is a first cut.
