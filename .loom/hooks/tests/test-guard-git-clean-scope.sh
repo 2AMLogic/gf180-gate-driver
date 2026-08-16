@@ -33,6 +33,13 @@
 #   - a target list larger than the scan bound fails safe        -> ask
 #   - fail-open contract preserved: exit is always 0
 #
+# Plus the #90 / PR #92-review group at the bottom of this file:
+#   - inert prose mentioning the phrase (zero real invocations)  -> allow
+#   - a LIVE invocation anywhere inside a `$(...)`/backtick
+#     substitution nested in a quoted span — glued to the opener
+#     or merely preceded by other text in the same substitution  -> ask
+#   - a double-spaced `git  clean  -fd` invocation               -> ask
+#
 # Exit 0 = all pass, 1 = fail.
 
 set -uo pipefail
@@ -314,6 +321,126 @@ assert_decision \
         "EOF" \
         ')"')" \
     "$WT" \
+    "ask"
+
+# --- Command-substitution re-scan guard (gf180-gate-driver#90) -------------
+# extract_git_clean_fd_targets()'s whitespace tokenizer cannot resolve a LIVE
+# invocation sitting anywhere inside a `$(...)`/backtick substitution that is
+# nested in an outer quoted span: mask_ws()'s flat quote-tracking does not
+# reset at the substitution boundary, so every space for the REST of the
+# outer span is masked and the invocation collapses into one token. The
+# zero-real-invocation allow must therefore be backed by a re-scan of every
+# command-substitution BODY, not just the narrow "glued directly onto the
+# `$(` opener" shape — a real invocation that is merely PRECEDED by other
+# text inside the same substitution (`$(true; git clean -fd .)`) is just as
+# live, and was silently allowed by the glued-only guard (PR #92 review).
+
+assert_decision \
+    "backtick-glued LIVE git clean -fd inside a heredoc body still asks" \
+    "$(printf '%s\n' \
+        "gh issue comment 1 --body \"\$(cat <<EOF" \
+        "\`git clean -fd .\`" \
+        "EOF" \
+        ')"')" \
+    "$WT" \
+    "ask"
+
+# The PR #92 review's exact repro: a plain quoted command substitution whose
+# invocation is NOT the first token after the opener. No heredoc involved.
+assert_decision \
+    "nested-but-not-glued LIVE invocation in a quoted \$() still asks (PR #92 repro)" \
+    "echo \"\$(true; git  clean  -fd .)\"" \
+    "$TMPROOT" \
+    "ask"
+
+assert_decision \
+    "nested-but-not-glued LIVE invocation, single-spaced, still asks" \
+    "echo \"\$(true; git clean -fd .)\"" \
+    "$TMPROOT" \
+    "ask"
+
+assert_decision \
+    "nested-but-not-glued LIVE invocation after && still asks" \
+    "echo \"\$(echo hi && git clean -fd .)\"" \
+    "$TMPROOT" \
+    "ask"
+
+assert_decision \
+    "nested-but-not-glued LIVE invocation in a quoted backtick span still asks" \
+    "echo \"\`true; git clean -fd .\`\"" \
+    "$TMPROOT" \
+    "ask"
+
+# The same gap in the heredoc shape the glued guard was written for — the
+# invocation is inside the heredoc body's own \$(...), just not glued to it.
+assert_decision \
+    "nested-but-not-glued LIVE invocation inside a heredoc body still asks (PR #92 repro)" \
+    "$(printf '%s\n' \
+        "gh issue comment 1 --body \"\$(cat <<EOF" \
+        "\$(true; git  clean  -fd .)" \
+        "EOF" \
+        ')"')" \
+    "$WT" \
+    "ask"
+
+# A substitution-nested invocation is unresolvable by the tokenizer, so the
+# scoped sim/** allowlist can never prove its confinement — it asks even when
+# its target text would have been confined had it been written plainly. The
+# guard only ever asks here; it never denies.
+assert_decision \
+    "substitution-nested invocation asks even with a sim/** target (cannot prove confinement)" \
+    "echo \"\$(true; git clean -fd sim/device-mv-fet/corners/)\"" \
+    "$WT" \
+    "ask"
+
+# Whitespace-tolerant pre-check: a double-spaced invocation previously missed
+# the block's literal single-space gate entirely and never asked at all.
+assert_decision \
+    "double-spaced bare unconfined 'git  clean  -fd .' asks" \
+    "git  clean  -fd ." \
+    "$TMPROOT" \
+    "ask"
+
+assert_decision \
+    "double-spaced confined sim/** target still allows (gate widening adds no false ask)" \
+    "git  clean  -fd sim/device-mv-fet/corners/" \
+    "$WT" \
+    "allow"
+
+# Narrows, never widens: prose living INSIDE a command substitution is still
+# prose — the re-scan recognizes invocations, not mentions.
+assert_decision \
+    "prose mention inside a command-substitution body still allows" \
+    "gh issue comment 1 --body \"\$(printf '%s' 'mentions git clean -fd only as prose')\"" \
+    "$WT" \
+    "allow"
+
+# --- Zero-real-invocation substring false positives (gf180-gate-driver#90) --
+# The line-5666 pre-check in the GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST
+# block is a raw substring scan over the WHOLE command text and fires on the
+# phrase appearing ANYWHERE, including inside a quoted prose/description
+# argument passed to an unrelated tool. extract_git_clean_fd_targets() then
+# correctly finds ZERO real `git clean -fd` invocations for these shapes
+# (no segment's first three tokens are literally `git clean -fd*`) — that
+# "zero real invocations" case must resolve to a trivial allow, not fall
+# through to ask.
+
+assert_decision \
+    "check-duplicate.sh description mentioning the phrase in prose (with an unrelated backtick elsewhere) no longer asks" \
+    "./.loom/scripts/check-duplicate.sh \"guard false positive\" \"The ask pattern (^|[;\&|(\`[:space:]])git clean -fd blocks check-duplicate.sh calls that merely describe it.\"" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "gh issue list --jq test(\"git clean -fd\"...) query string no longer asks" \
+    "gh issue list --repo 2AMLogic/gf180-gate-driver --jq '.[] | select(.title | test(\"git-clean-fd|git clean -fd\"; \"i\"))'" \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "bare unconfined 'git clean -fd' outside any worktree still asks (narrows, never widens)" \
+    "git clean -fd" \
+    "$TMPROOT" \
     "ask"
 
 echo
