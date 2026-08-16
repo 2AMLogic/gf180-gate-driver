@@ -5,6 +5,11 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-16
 
+- **Issue #110** (closed): Guard: BSD sed -i '' (macOS two-arg form) misparsed as write target by extract_write_targets(), false worktree-write-confinement DENY
+- **Issue #101** (closed): T1 gap: aggregate a block-level characterization report against spec §3 (checklist item 8)
+- **PR #108**: docs: aggregate block-level characterization report against spec §3
+- **Issue #96** (closed): Guard-hook adversarial checklist (builder.md) missing a 4th boundary shape: command-substitution embedding
+- **PR #103**: docs(builder): add command-substitution boundary shape to guard-hook adversarial checklist
 - **Issue #90** (closed): Guard decision: ask-tier git-clean-fd pattern matches on substring in ANY command text, not just actual invocations
 - **PR #92**: fix(guard): treat zero recognized git-clean-fd invocations as allow
 - **Issue #89** (closed): Consolidate append-only write guard in report.py; write_device_netlist_snapshot silently skips it
