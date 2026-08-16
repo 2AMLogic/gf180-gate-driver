@@ -5,22 +5,59 @@ Schematic capture is xschem; simulation is ngspice via the corner runner in
 
 ```
 design/
-  xschemrc     repo xschem config: resolves the PDK, adds repo symbol libraries
-  symbols/     repo-local .sym files (created when the first one exists)
-  netlist/     xschem-generated .spice netlists (created on first netlist)
+  xschemrc              repo xschem config: resolves the PDK, adds repo symbol libraries
+  gate_driver_core.sch  TOP cell: instantiates level_shifter + output_stage
+  gate_driver_core.sym  its hierarchical symbol (must sit here, see below)
+  level_shifter.sch     sub-cell (spec §4), + level_shifter.sym
+  output_stage.sch      sub-cell (spec §3), + output_stage.sym
+  symbols/              repo-local .sym files that are NOT schematic-derived
+  netlist/              xschem-generated .spice netlists
 ```
+
+## Cell hierarchy
+
+`gate_driver_core` is the top cell: it instantiates `level_shifter` (`x1`) and
+`output_stage` (`x2`) and wires them per `spec/gate-driver.md` and
+`spec/decision-records/0001` Decision 1's port list —
+
+```
+IN ─▶ x1 level_shifter ─▶ IN_DRV ─▶ x2 output_stage ─▶ OUT
+      (VDD/GND_LOGIC + VDD/GND_DRV)   (VDD/GND_DRV)
+```
+
+`IN_DRV` is the only signal net between the two sub-cells; `VDD_DRV`/`GND_DRV`
+are shared, and `VDD_LOGIC`/`GND_LOGIC`/`IN` reach the level shifter only. Both
+sub-cells are non-inverting (the level shifter's 2-inverter drive-rail output
+buffer; the output stage's 6-stage chain), so the block is non-inverting per
+decision record 0001, Decision 3. UVLO (spec §5) is in scope for this increment
+but has no implemented sub-cell yet, so it is not instantiated in the top cell.
 
 **Hierarchical schematic-cell symbols must live next to their `.sch`, not in
 `symbols/`.** xschem auto-descends into a child schematic only when the
 referencing symbol is found at the *same relative path* as a same-named
-`.sch` file (e.g. `design/gate_driver_core.sym` next to
+`.sch` file — hence `design/gate_driver_core.sym` next to
 `design/gate_driver_core.sch`, both referenced bare as
-`{gate_driver_core.sym}`). A symbol placed under
-`design/symbols/gate_driver_core.sym` cannot find `design/gate_driver_core.sch`
-next to it and instead netlists as an empty subcircuit — no error, just
-missing devices, which is easy to miss. `design/symbols/` remains the right
-place for symbols that are *not* schematic-derived (e.g. hand-authored device
-symbols with no matching `.sch`).
+`{gate_driver_core.sym}`, and likewise for `level_shifter` / `output_stage`. A
+symbol placed under `design/symbols/gate_driver_core.sym` cannot find
+`design/gate_driver_core.sch` next to it and instead netlists as an empty
+subcircuit — no error, just missing devices, which is easy to miss.
+`design/symbols/` remains the right place for symbols that are *not*
+schematic-derived (e.g. hand-authored device symbols with no matching `.sch`).
+
+Generate a cell's symbol from its own `.sch` rather than drawing pin geometry by
+hand, then hand-add only a provenance comment block:
+
+```bash
+cd design && awk -f "$(dirname "$(command -v xschem)")/../share/xschem/make_sym.awk" \
+  300 gate_driver_core.sch
+```
+
+Note that `make_sym.awk` emits pins grouped by direction, so the resulting
+`.subckt` port **order** is the symbol's pin order, not the order the `ipin`/
+`opin` instances appear in the schematic (for `gate_driver_core` that is
+`VDD_LOGIC GND_LOGIC IN OUT VDD_DRV GND_DRV`). Connect by name, and read the
+port order off the committed netlist rather than assuming the spec table's
+order.
 
 ## Running xschem
 
@@ -45,9 +82,23 @@ directives, and point a `sim/<experiment-slug>/testbench/tb.json` at the
 result. xschem also prepends a `** sch_path: <absolute path>` comment line
 naming the local schematic file on disk — strip that too before committing,
 since it leaks a machine/worktree-local path that is meaningless (and
-sometimes misleading) outside the environment that generated it. The runner
-does not care whether a fragment was generated or typed by
-hand.
+sometimes misleading) outside the environment that generated it. A
+**hierarchical** netlist leaks two more per expanded child cell, `** sym_path:`
+and a second `** sch_path:`, so strip on line *content*, not line number. The
+runner does not care whether a fragment was generated or typed by hand.
+
+Netlist a cell (from the repo root, after `source sim/env.sh`) with:
+
+```bash
+xschem --rcfile design/xschemrc -x -q -n -s -o design/netlist design/<cell>.sch
+grep -v -e '^\*\* sch_path:' -e '^\*\* sym_path:' -e '^\.end$' \
+  design/netlist/<cell>.spice > /tmp/nl && mv /tmp/nl design/netlist/<cell>.spice
+```
+
+then re-add the cell's hand-written header comment block (each committed
+netlist under `design/netlist/` carries one describing its ports and how to
+regenerate it). Everything below that header is generated — do not hand-edit
+device lines; change the schematic and re-run.
 
 ## Two-rail devices
 
