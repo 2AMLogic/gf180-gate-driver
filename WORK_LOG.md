@@ -5,6 +5,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-16
 
+- **Issue #83** (closed): Dedup _git(): near-identical git subprocess wrapper in report.py and evidence_lint.py
+- **PR #87**: refactor(sim): dedup _git() git subprocess wrapper
+- **Issue #82** (closed): CI 'Hook regression suites' step doesn't run test-guard-heredoc-interpreter-masking.sh (guards today's #68 fix)
+- **PR #86**: ci: run test-guard-heredoc-interpreter-masking.sh in Hook regression suites
 - **Issue #79** (closed): Remove unused check:all npm script: byte-identical duplicate of check:ci
 - **PR #81**: chore: remove unused check:all npm script
 
