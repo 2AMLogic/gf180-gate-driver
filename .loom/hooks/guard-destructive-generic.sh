@@ -4721,6 +4721,131 @@ extract_git_clean_fd_targets() {
     }'
 }
 
+# =============================================================================
+# COMMAND-SUBSTITUTION BODY EXTRACTION (gf180-gate-driver#90, PR #92 review)
+#
+# Emits the BODY TEXT of every command substitution in the command, one per
+# 0x1e (RS)-terminated record, innermost-first at each nesting level and
+# including every enclosing level too (so a body is reported once per span it
+# sits inside — an invocation nested three deep appears in all three bodies).
+#
+# WHY THIS EXISTS. extract_git_clean_fd_targets() (and every other parser in
+# this file built on qsplit()/mask_ws()) tokenizes with a FLAT quote toggle
+# that does not reset when a nested `$(...)`/backtick substitution opens
+# inside an outer quoted span (#4934's accepted simplification). Once the
+# scan is inside `"$(... )"`, every space for the REST of the outer quoted
+# span is masked, so a genuine invocation anywhere in that span collapses
+# into a single token and is not recognized as a `git clean -fd*` segment.
+# The gf180-gate-driver#90 fix treats "zero recognized invocations" as a
+# trivial allow, which makes that under-match a SILENT ALLOW of a real,
+# executing command — the regression the PR #92 review found with
+#     echo "<dq>$(true; git clean -fd .)<dq>"
+# (a real invocation that is neither bare nor glued to the `$(` opener).
+#
+# Extracting the substitution BODIES and re-running the SAME recognizer on
+# each of them sidesteps the tokenizer defect entirely rather than trying to
+# enumerate the shapes it cannot see: a body is a fresh command string with
+# the outer quoting stripped off, so mask_ws()'s flat toggle starts clean and
+# `true; git clean -fd .` tokenizes normally. This is a pure ASK-side safety
+# net (it can only cause an ask, never an allow) — see its caller in the
+# GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST block below.
+#
+# Quoting model (deliberately narrow, biased toward reporting MORE bodies —
+# reporting a body can only ever produce an ask, never an allow):
+#   - single-quoted spans are inert: `$(`/backtick inside them open nothing
+#     (this is what keeps `--jq '... test("git clean -fd") ...'` prose out of
+#     the results entirely);
+#   - double quotes do NOT protect `$(`/backtick — bash expands both inside
+#     double quotes, and that is precisely the shape this function exists for;
+#   - quote state is tracked PER NESTING LEVEL (a `"` inside `$( )` belongs to
+#     that substitution, not to the enclosing span) — the exact thing mask_ws()
+#     does not do;
+#   - a backslash skips the following byte (an escaped quote/`$`/backtick
+#     never changes state);
+#   - an UNTERMINATED opener emits the remainder of the string as a body. Such
+#     a command is a syntax error the shell would refuse to run, so this can
+#     only over-report — the fail-safe direction. It is also what keeps the
+#     #90 `check-duplicate.sh "<prose with a stray backtick>"` case honest:
+#     the remainder is emitted, re-parsed, and correctly yields no recognized
+#     invocation, so that case still allows on its own merits rather than by
+#     the scanner failing to look.
+# =============================================================================
+extract_command_substitution_bodies() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        SQ = sprintf("%c", 39)    # single quote
+        DQ = sprintf("%c", 34)    # double quote
+        BT = sprintf("%c", 96)    # backtick
+        BS = sprintf("%c", 92)    # backslash
+        RSEP = sprintf("%c", 30)  # RS -- record terminator between bodies
+        MAXBODIES = 200           # bound the output (fail safe: see caller)
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        n = length(s)
+        i = 1
+        depth = 0
+        emitted = 0
+        dq[0] = 0
+        sq[0] = 0
+        while (i <= n && emitted < MAXBODIES) {
+            c = substr(s, i, 1)
+            if (sq[depth]) {
+                if (c == SQ) sq[depth] = 0
+                i++
+                continue
+            }
+            if (c == BS) { i += 2; continue }
+            if (dq[depth]) {
+                if (c == DQ) { dq[depth] = 0; i++; continue }
+            } else {
+                if (c == SQ) { sq[depth] = 1; i++; continue }
+                if (c == DQ) { dq[depth] = 1; i++; continue }
+            }
+            if (c == "$" && substr(s, i + 1, 1) == "(") {
+                depth++
+                start[depth] = i + 2
+                kind[depth] = "$"
+                dq[depth] = 0
+                sq[depth] = 0
+                i += 2
+                continue
+            }
+            if (c == BT) {
+                if (depth > 0 && kind[depth] == BT) {
+                    printf "%s%s", substr(s, start[depth], i - start[depth]), RSEP
+                    emitted++
+                    depth--
+                } else {
+                    depth++
+                    start[depth] = i + 1
+                    kind[depth] = BT
+                    dq[depth] = 0
+                    sq[depth] = 0
+                }
+                i++
+                continue
+            }
+            if (c == ")" && depth > 0 && kind[depth] == "$") {
+                printf "%s%s", substr(s, start[depth], i - start[depth]), RSEP
+                emitted++
+                depth--
+                i++
+                continue
+            }
+            i++
+        }
+        # Unterminated openers still standing: emit each remaining span so an
+        # invocation hidden behind one is never invisible to the caller.
+        while (depth > 0 && emitted < MAXBODIES) {
+            printf "%s%s", substr(s, start[depth]), RSEP
+            emitted++
+            depth--
+        }
+    }'
+}
+
 normalize_abs_path() {
     # Lexically normalize an ABSOLUTE path without touching the filesystem:
     #   - collapse duplicate slashes    (//etc        -> /etc)
@@ -5680,29 +5805,44 @@ fi
 # failed confinement" (which always leaves at least one line for the loop
 # below to evaluate). Only the latter should ask; the former has nothing
 # real to confirm or deny, so it must fall through as an allow rather than
-# leaving the pre-check's `_GC_ASK=1` in place — UNLESS the glued-command-
-# substitution guard below fires (see its own comment): this narrows the
+# leaving the pre-check's `_GC_ASK=1` in place — UNLESS the command-
+# substitution re-scan below fires (see its own comment): this narrows the
 # ask surface only — a real invocation (recognized by
-# extract_git_clean_fd_targets(), or caught by the glued-substitution guard)
-# still asks exactly as before.
+# extract_git_clean_fd_targets() directly, or by re-running it over the
+# command-substitution bodies) still asks exactly as before.
 #
 # KNOWN UNDER-MATCH, GUARDED SEPARATELY: extract_git_clean_fd_targets()
 # tokenizes each segment by plain whitespace after mask_ws() (#4934), whose
 # quote-tracking is a single flat toggle across the WHOLE buffer and does not
-# reset inside a nested `$(...)` command substitution. A LIVE invocation
-# glued directly onto its command-substitution opener with no internal space
-# — `$(git clean -fd .)`, a backtick form — nested inside an outer quoted
-# argument (e.g. a `--body "$(cat <<EOF ... EOF)"` heredoc body) therefore
-# does NOT tokenize into a recognized 3-token segment even though it is a
-# genuine, executing invocation: this is the exact shape the pre-existing
-# #41 regression test at the bottom of this file pins ("unquoted-delimiter
-# heredoc whose body performs a LIVE git clean -fd via $(...) still asks").
-# A plain empty-`_GC_TARGETS`-means-allow rule would silently widen the
-# allow to cover this real invocation, so the glued-substitution guard
-# immediately below checks for this specific narrow shape directly against
-# COMMAND_ASK_SCAN (independent of the tokenizer) and keeps it asking.
+# reset inside a nested `$(...)` command substitution. Once the scan is
+# inside a `$(...)`/backtick substitution nested in an outer quoted argument
+# (e.g. a `--body "$(cat <<EOF ... EOF)"` heredoc body), every space for the
+# REST of that outer quoted span is masked, so ANY genuine invocation in it —
+# not merely one glued directly onto the `$(` opener — collapses into a
+# single token and is not recognized as a 3-token segment. PR #92's original
+# fix only re-asserted the ask for the GLUED shape (`$(git clean -fd`), which
+# left a real, executing invocation appearing later in the same substitution
+# (`"$(true; git clean -fd .)"`) as a silent allow — the regression the PR
+# #92 review found.
+#
+# Rather than enumerating the shapes the tokenizer cannot see, the guard
+# below re-runs the SAME recognizer over the BODY of every command
+# substitution in the command (extract_command_substitution_bodies(), defined
+# alongside extract_git_clean_fd_targets() above). A body is a fresh command
+# string with the outer quoting stripped, so mask_ws() starts from a clean
+# state and the invocation tokenizes normally at any position inside it. This
+# subsumes the glued shape (the pre-existing #41 regression test
+# "unquoted-delimiter heredoc whose body performs a LIVE git clean -fd via
+# $(...) still asks" pins it) and closes the not-glued gap with it.
+#
+# WHITESPACE-TOLERANT PRE-CHECK: the pre-check below also accepts runs of
+# whitespace between the three words (`git  clean  -fd`). The old literal
+# single-space form let a double-spaced invocation skip this block entirely,
+# so an unconfined `git  clean  -fd` never asked at all. Widening the gate can
+# only ADD asks (the block never denies, and a confined invocation still
+# reaches the same allowlist checks, which tokenize whitespace runs already).
 # =============================================================================
-if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git clean -fd'; then
+if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean[[:space:]]+-fd'; then
     _GC_ASK=1
     # Target-count bound, FAIL-SAFE (PR #19 review). EVERY extracted target
     # must be checked before the ask can be skipped, so the bound must never
@@ -5719,20 +5859,31 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git clean -fd'; then
         # No real `git clean -fd*` invocation recognized as a proper 3-token
         # segment anywhere in the command (see the "ZERO REAL INVOCATIONS IS
         # A TRIVIAL ALLOW" note above). Before treating this as a trivial
-        # allow, rule out the one under-match shape called out in that same
-        # note: a command-substitution opener glued directly onto `git` with
-        # no space (`$(git clean -fd`, a backtick form) — the tokenizer
-        # cannot always resolve this (mask_ws()'s flat quote-tracking does
-        # not reset inside a nested `$(...)`), but it is a genuine, live
-        # invocation, not prose, so it must keep asking regardless of what
-        # extract_git_clean_fd_targets() saw.
-        if echo "$COMMAND_ASK_SCAN" | grep -qE '(\$\(|`)[[:space:]]*git[[:space:]]+clean[[:space:]]+-fd'; then
-            _GC_ASK=1
-        else
-            # Nothing real to confirm or deny — the pre-check's raw
-            # substring match was pure prose/text. Skip the ask entirely.
-            _GC_ASK=""
-        fi
+        # allow, rule out the under-match class called out in that same note:
+        # mask_ws()'s flat quote-tracking cannot tokenize an invocation that
+        # sits ANYWHERE inside a `$(...)`/backtick substitution nested in an
+        # outer quoted span, so re-run the SAME recognizer over each
+        # substitution BODY (outer quoting stripped ⇒ the tokenizer starts
+        # clean). Any recognized invocation there is genuine, live code, not
+        # prose, and must keep asking regardless of what the whole-command
+        # pass saw.
+        _GC_ASK=""
+        _GC_BODY_SEEN=0
+        while IFS= read -r -d $'\036' _gcbody; do
+            _GC_BODY_SEEN=$((_GC_BODY_SEEN + 1))
+            [[ $_GC_BODY_SEEN -gt 200 ]] && break
+            # Cheap reject first: a body with no `clean` word cannot hold a
+            # recognized `git clean -fd*` segment, so skip the awk call.
+            [[ "$_gcbody" != *clean* ]] && continue
+            if [[ -n "$(extract_git_clean_fd_targets "$_gcbody" "$CWD" | head -n 1)" ]]; then
+                _GC_ASK=1
+                break
+            fi
+        done < <(extract_command_substitution_bodies "$COMMAND_ASK_SCAN")
+        # Falling out of the loop with _GC_ASK empty means: no substitution
+        # body holds a recognized invocation either — the pre-check's raw
+        # substring match was pure prose/text, with nothing real to confirm
+        # or deny. Skip the ask entirely.
     else
         _GC_ASK=""
         if [[ $(printf '%s\n' "$_GC_TARGETS" | wc -l) -gt "$_GC_TARGET_CAP" ]]; then
