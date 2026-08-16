@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-16
 
+- **Issue #89** (closed): Consolidate append-only write guard in report.py; write_device_netlist_snapshot silently skips it
+- **PR #91**: refactor(sim): dedup append-only exists-guard across evidence writers
 - **Issue #83** (closed): Dedup _git(): near-identical git subprocess wrapper in report.py and evidence_lint.py
 - **PR #87**: refactor(sim): dedup _git() git subprocess wrapper
 - **Issue #82** (closed): CI 'Hook regression suites' step doesn't run test-guard-heredoc-interpreter-masking.sh (guards today's #68 fix)
