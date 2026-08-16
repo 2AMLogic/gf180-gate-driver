@@ -10,6 +10,7 @@ Maintained automatically by the Guide role's document maintenance phase.
 - **PR #108**: docs: aggregate block-level characterization report against spec §3
 - **Issue #96** (closed): Guard-hook adversarial checklist (builder.md) missing a 4th boundary shape: command-substitution embedding
 - **PR #103**: docs(builder): add command-substitution boundary shape to guard-hook adversarial checklist
+- **Issue #102** (closed): perm test - delete me
 - **Issue #90** (closed): Guard decision: ask-tier git-clean-fd pattern matches on substring in ANY command text, not just actual invocations
 - **PR #92**: fix(guard): treat zero recognized git-clean-fd invocations as allow
 - **Issue #89** (closed): Consolidate append-only write guard in report.py; write_device_netlist_snapshot silently skips it
