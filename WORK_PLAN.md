@@ -16,19 +16,20 @@ _None._
 
 Issues flagged as highest priority (`loom:urgent`).
 
-_None._
+- **#82**: CI 'Hook regression suites' step doesn't run test-guard-heredoc-interpreter-masking.sh (guards today's #68 fix)
 
 ## Ready
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#79**: Remove unused check:all npm script: byte-identical duplicate of check:ci
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#83**: Dedup _git(): near-identical git subprocess wrapper in report.py and evidence_lint.py
+- **#82**: CI 'Hook regression suites' step doesn't run test-guard-heredoc-interpreter-masking.sh (guards today's #68 fix)
 
 ## PRs Awaiting Review
 
@@ -40,17 +41,17 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#81**: chore: remove unused check:all npm script
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#79**: Remove unused check:all npm script: byte-identical duplicate of check:ci *(curated)*
 
 ## Proposed (Architect / Hermit)
 
-- **#79**: Remove unused check:all npm script: byte-identical duplicate of check:ci *(hermit)*
+_None._
 
 ## Epics
 
@@ -61,12 +62,12 @@ _None._
 | Tier | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Urgent | 0 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
+| Urgent | 1 |
+| Ready (`loom:issue`) | 1 |
+| In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 0 |
-| Curated | 0 |
-| Architect / Hermit proposals | 1 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 1 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
