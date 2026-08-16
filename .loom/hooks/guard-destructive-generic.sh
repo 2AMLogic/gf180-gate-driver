@@ -4545,10 +4545,44 @@ extract_write_targets() {
             } else if (toks[1] == "sed") {
                 has_i = 0
                 nf = 0
+                # toks[] index of a candidate BSD backup-extension argument,
+                # and the nfargs[] slot that same token landed in (0 = none).
+                sed_ext_tok = 0
+                sed_ext_pos = 0
                 delete nfargs
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
-                    if (toks[j] ~ /^-i/) has_i = 1
+                    if (toks[j] ~ /^-i/) {
+                        has_i = 1
+                        # BSD/macOS sed requires a SEPARATE, possibly-empty
+                        # backup-extension argument immediately after a bare
+                        # `-i` token (the idiom `sed -i EMPTYQUOTE <script>
+                        # <file>`, EMPTYQUOTE being a pair of adjacent single
+                        # or double quotes with nothing between them); the
+                        # attached form used by GNU (`-i.bak`, or a bare `-i`
+                        # with NO separate argument) carries no such token.
+                        # qsplit()/mask_ws() preserve quote characters
+                        # VERBATIM in each token (#3755/#4934), so this
+                        # argument arrives here as the literal TWO-CHARACTER
+                        # token SQ-SQ or DQ-DQ -- never as a true awk empty
+                        # string -- so the `toks[j] == ""` check a few lines
+                        # below can never match it. Left unhandled, that
+                        # token fell through to the generic non-flag branch
+                        # and was collected into nfargs[] as if it were a
+                        # real file operand, shifting every later index by
+                        # one so the SED SCRIPT itself (not the real file
+                        # argument) printed as the write "target" -- a false
+                        # worktree-write-confinement DENY (main checkout) or
+                        # a false-negative ALLOW (worktree/tmp) depending on
+                        # which token landed in the reported position (#106).
+                        # Record it here (rather than consuming it outright)
+                        # so the AMBIGUOUS two-operand shape below can still
+                        # fall back to the pre-#106 fail-closed reading.
+                        if (toks[j] == "-i" && j + 1 <= m && !((j + 1) in stdin_redir) && (toks[j+1] == SQ SQ || toks[j+1] == DQ DQ)) {
+                            sed_ext_tok = j + 1
+                        }
+                        continue
+                    }
                     if (toks[j] ~ /^-/) continue
                     if (toks[j] == "") continue
                     # Same heredoc/herestring exclusion as the `tee` branch
@@ -4562,8 +4596,36 @@ extract_write_targets() {
                     }
                     nf++
                     nfargs[nf] = toks[j]
+                    if (j == sed_ext_tok) sed_ext_pos = nf
                 }
-                if (has_i && nf >= 2) {
+                # DROP the BSD backup-extension argument ONLY when doing so
+                # still leaves at least two operands -- a script AND at least
+                # one file. That >= 3 floor is what keeps this a
+                # parser-correctness fix rather than a relaxation of the
+                # #4178 confinement floor: the two-operand shape
+                # `sed -i EMPTYQUOTE <one-operand>` is genuinely AMBIGUOUS
+                # across sed flavors, and the two readings disagree about
+                # whether a write happens at all --
+                #   GNU:  EMPTYQUOTE is the (empty) SCRIPT and the operand is
+                #         the FILE, so this REWRITES that file in place;
+                #   BSD:  EMPTYQUOTE is the backup extension and the operand
+                #         is the SCRIPT, with no file at all (sed would read
+                #         stdin, which BSD `sed -i` rejects outright).
+                # Dropping the token under the GNU reading would silently
+                # ALLOW a real main-checkout write, so the ambiguous shape
+                # keeps the pre-#106 fail-closed reading below instead. Only
+                # the unambiguous >= 3-operand BSD form (extension + script +
+                # file...) takes the corrected path.
+                if (has_i && sed_ext_pos > 0 && nf >= 3) {
+                    nreal = 0
+                    delete realargs
+                    for (j = 1; j <= nf; j++) {
+                        if (j == sed_ext_pos) continue
+                        nreal++
+                        realargs[nreal] = nfargs[j]
+                    }
+                    for (j = 2; j <= nreal; j++) print curcwd SEP resolve_var(realargs[j])
+                } else if (has_i && nf >= 2) {
                     for (j = 2; j <= nf; j++) print curcwd SEP resolve_var(nfargs[j])
                 }
             } else if (toks[1] == "cp" || toks[1] == "mv") {
