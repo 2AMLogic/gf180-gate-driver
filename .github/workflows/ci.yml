@@ -97,7 +97,7 @@ jobs:
         # .loom/hooks/ is vendored and deliberately excluded from the `lint`
         # job's shellcheck sweep (see that job's own header comment), but its
         # regression suites are plain bash with no PDK/toolchain dependency,
-        # so they run here. All four suites must report a FULL pass count -- a
+        # so they run here. All five suites must report a FULL pass count -- a
         # future `chore: resync installed Loom surfaces` that silently drops
         # a locally-vendored fix (as c7ba31d did to both of these, #25) must
         # fail CI instead of only surfacing days later via
@@ -111,3 +111,4 @@ jobs:
           bash .loom/hooks/tests/test-guard-git-clean-scope.sh
           bash .loom/hooks/tests/test-strip-literal-text-bsq.sh
           bash .loom/hooks/tests/test-guard-catastrophic-rm-heredoc.sh
+          bash .loom/hooks/tests/test-guard-heredoc-interpreter-masking.sh
