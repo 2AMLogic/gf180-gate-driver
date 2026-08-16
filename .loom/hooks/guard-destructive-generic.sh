@@ -6081,7 +6081,11 @@ fi
 # substitution re-scan below fires (see its own comment): this narrows the
 # ask surface only — a real invocation (recognized by
 # extract_git_clean_fd_targets() directly, or by re-running it over the
-# command-substitution bodies) still asks exactly as before.
+# command-substitution bodies) still asks exactly as before. The re-scan is
+# NOT gated on `_GC_TARGETS` being empty (gf180-gate-driver#94): it is a
+# second, independent ask reason that runs whatever the direct extraction
+# found, so a confined direct target cannot vouch for the rest of the
+# command.
 #
 # KNOWN UNDER-MATCH, GUARDED SEPARATELY: extract_git_clean_fd_targets()
 # tokenizes each segment by plain whitespace after mask_ws() (#4934), whose
@@ -6106,6 +6110,18 @@ fi
 # subsumes the glued shape (the pre-existing #41 regression test
 # "unquoted-delimiter heredoc whose body performs a LIVE git clean -fd via
 # $(...) still asks" pins it) and closes the not-glued gap with it.
+#
+# COEXISTENCE, NOT ALTERNATIVES (gf180-gate-driver#94): that re-scan was
+# originally reached only when the direct extraction returned NO targets,
+# which made the two checks mutually exclusive — a directly-recognized,
+# confined invocation earlier in the command (`git clean -fd sim/x/ && echo
+# "$(true; git clean -fd /etc/passwordfile)"`) took the other branch and the
+# hidden second invocation was never scanned for at all, a silent allow. The
+# under-match above is a property of the tokenizer, not of the command, so it
+# can coexist with a perfectly resolvable invocation in the same string. The
+# re-scan therefore runs unconditionally below and raises the ask on its own
+# authority; the confinement loop's verdict on the targets it COULD see never
+# suppresses it.
 #
 # WHITESPACE-TOLERANT PRE-CHECK: the pre-check below also accepts runs of
 # whitespace between the three words (`git  clean  -fd`). The old literal
@@ -6149,37 +6165,16 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean
     # ordinary ask rather than being allowed on a partial scan.
     _GC_TARGET_CAP=500
     _GC_TARGETS=$(extract_git_clean_fd_targets "$_GC_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
-    if [[ -z "$_GC_TARGETS" ]]; then
-        # No real `git clean -fd*` invocation recognized as a proper 3-token
-        # segment anywhere in the command (see the "ZERO REAL INVOCATIONS IS
-        # A TRIVIAL ALLOW" note above). Before treating this as a trivial
-        # allow, rule out the under-match class called out in that same note:
-        # mask_ws()'s flat quote-tracking cannot tokenize an invocation that
-        # sits ANYWHERE inside a `$(...)`/backtick substitution nested in an
-        # outer quoted span, so re-run the SAME recognizer over each
-        # substitution BODY (outer quoting stripped ⇒ the tokenizer starts
-        # clean). Any recognized invocation there is genuine, live code, not
-        # prose, and must keep asking regardless of what the whole-command
-        # pass saw.
-        _GC_ASK=""
-        _GC_BODY_SEEN=0
-        while IFS= read -r -d $'\036' _gcbody; do
-            _GC_BODY_SEEN=$((_GC_BODY_SEEN + 1))
-            [[ $_GC_BODY_SEEN -gt 200 ]] && break
-            # Cheap reject first: a body with no `clean` word cannot hold a
-            # recognized `git clean -fd*` segment, so skip the awk call.
-            [[ "$_gcbody" != *clean* ]] && continue
-            if [[ -n "$(extract_git_clean_fd_targets "$_gcbody" "$CWD" | head -n 1)" ]]; then
-                _GC_ASK=1
-                break
-            fi
-        done < <(extract_command_substitution_bodies "$_GC_SCAN")
-        # Falling out of the loop with _GC_ASK empty means: no substitution
-        # body holds a recognized invocation either — the pre-check's raw
-        # substring match was pure prose/text, with nothing real to confirm
-        # or deny. Skip the ask entirely.
-    else
-        _GC_ASK=""
+    # Two INDEPENDENT ask reasons, evaluated in turn (gf180-gate-driver#94):
+    #   (1) the direct-extraction confinement loop over $_GC_TARGETS, and
+    #   (2) the command-substitution BODY re-scan.
+    # Reason (2) used to run only when (1) had nothing to look at (empty
+    # $_GC_TARGETS), which let a directly-recognized, CONFINED invocation
+    # suppress it — so a second invocation hidden in a nested `$(...)`
+    # elsewhere in the SAME command was never seen and was silently allowed.
+    # Start from "no ask" and let either reason raise it.
+    _GC_ASK=""
+    if [[ -n "$_GC_TARGETS" ]]; then
         if [[ $(printf '%s\n' "$_GC_TARGETS" | wc -l) -gt "$_GC_TARGET_CAP" ]]; then
             # More targets than the bound allows us to fully verify — the
             # extracted list may be truncated, so confinement cannot be
@@ -6247,6 +6242,39 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean
                 */records|*/records/*) _GC_ASK=1; break ;;
             esac
         done <<< "$_GC_TARGETS"
+    fi
+
+    # Ask reason (2) — the command-substitution BODY re-scan, run
+    # UNCONDITIONALLY (gf180-gate-driver#94), i.e. whether or not the direct
+    # extraction above recognized any target and whether or not it proved
+    # every one of them confined. mask_ws()'s flat quote-tracking cannot
+    # tokenize an invocation sitting ANYWHERE inside a `$(...)`/backtick
+    # substitution nested in an outer quoted span, so re-run the SAME
+    # recognizer over each substitution BODY (outer quoting stripped ⇒ the
+    # tokenizer starts clean). Any recognized invocation there is genuine,
+    # live code, not prose, and must ask regardless of what the whole-command
+    # pass saw — an already-confirmed-confined direct target says nothing
+    # about a separately-hidden invocation in the same command.
+    #
+    # Skipped only when the ask is already decided (nothing left to raise),
+    # which keeps the cost identical to before for the ask path.
+    if [[ -z "$_GC_ASK" ]]; then
+        _GC_BODY_SEEN=0
+        while IFS= read -r -d $'\036' _gcbody; do
+            _GC_BODY_SEEN=$((_GC_BODY_SEEN + 1))
+            [[ $_GC_BODY_SEEN -gt 200 ]] && break
+            # Cheap reject first: a body with no `clean` word cannot hold a
+            # recognized `git clean -fd*` segment, so skip the awk call.
+            [[ "$_gcbody" != *clean* ]] && continue
+            if [[ -n "$(extract_git_clean_fd_targets "$_gcbody" "$CWD" | head -n 1)" ]]; then
+                _GC_ASK=1
+                break
+            fi
+        done < <(extract_command_substitution_bodies "$_GC_SCAN")
+        # Falling out of the loop with _GC_ASK still empty means: neither
+        # reason fired — no substitution body holds a recognized invocation,
+        # and every directly-recognized target (if any) was proven confined.
+        # Nothing real is left to confirm or deny, so skip the ask entirely.
     fi
 
     if [[ -n "$_GC_ASK" ]]; then
