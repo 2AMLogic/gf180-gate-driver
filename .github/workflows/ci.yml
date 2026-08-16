@@ -194,3 +194,4 @@ jobs:
           bash .loom/hooks/tests/test-guard-destructive-sed-bsd-inplace.sh
           bash .loom/hooks/tests/test-guard-sql-ddl-jq-prose.sh
           bash .loom/hooks/tests/test-guard-force-push-literal-masking.sh
+          bash .loom/hooks/tests/test-guard-readonly-fastpath-pipe.sh

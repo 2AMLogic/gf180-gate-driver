@@ -482,7 +482,11 @@ fastpath_builtin_admits() {
 #   * exactly ONE pipe, and NO other shell metacharacter (; & < > ` $( newline)
 #     anywhere — so wrapper (`bash -c`), substitution (`$(...)`), and compound
 #     (`&&`/`;`) forms are untouched and keep denying via the full path exactly
-#     as before (satisfying #5263's "obfuscation still caught" requirement);
+#     as before (satisfying #5263's "obfuscation still caught" requirement).
+#     "ONE pipe" means one SHELL-LEVEL pipe as bash would parse it (#109): a `|`
+#     inside the search pattern — ERE alternation, `grep "a\|b" f | head` — is
+#     argument text, not structure, and does not count. See
+#     _fastpath_pipe_split() below;
 #   * the UPSTREAM command word is a non-executing search: grep|egrep|fgrep|rg
 #     (grep/rg are already fully admitted for any args by the built-in allowlist;
 #     egrep/fgrep are the same tool). A real DDL-executing command piped the same
@@ -502,22 +506,115 @@ fastpath_builtin_admits() {
 # file operand) declines and is handled by the full path unchanged.
 _FASTPATH_PIPE_SINKS_ANYARG=" head tail wc "     # already fully allowlisted → any args
 _FASTPATH_PIPE_SINKS_STDIN=" cat less more "     # stdin-only → no positional operand
+
+# Quote-aware "split at THE single shell-level pipe" (#109). Pure bash, no forks.
+#
+# The original spelling of this step was `left="${cmd%%|*}"` / `right="${cmd#*|}"`
+# plus `case "$right" in *'|'*) return 1`, a RAW byte scan that splits at the
+# FIRST `|` byte anywhere in the string with no notion of quoting. That is wrong
+# the moment the search PATTERN itself contains a `|` — which is exactly what ERE
+# alternation looks like, and the single most useful way to write a multi-term
+# search: `grep -n "DROP TABLE\|foo" schema.sql | head -3`. There the leftmost
+# `|` byte sits INSIDE grep's quoted argument, so the split landed mid-argument
+# and `right` still held the real shell pipe, tripping the "second pipe" decline.
+# The command then fell through to the full path where SQL_DDL_PATTERN matched
+# the phrase inside grep's own argument and denied at the catastrophic tier — the
+# precise false positive #5263's carve-out exists to prevent, reappearing as soon
+# as a second search term is added.
+#
+# So the pipe count has to agree with what bash itself would parse. This walks
+# the string once tracking quote state the way bash does:
+#   * outside quotes: `\` escapes the next byte; `'` and `"` open a span;
+#     a bare `|` is a REAL pipe.
+#   * inside `'…'`: nothing is special but the closing `'` (no backslash escapes).
+#   * inside `"…"`: `\` escapes the next byte (so `\"` does not close the span,
+#     matching the #112 rule), `"` closes.
+# The BSQ apostrophe idiom (`'a'\''b'`, #56) falls out of these rules for free:
+# close, escaped bare quote, reopen — the scan ends balanced, as bash does.
+#
+# On success sets _FASTPATH_PIPE_L / _FASTPATH_PIPE_R to the text either side of
+# that one pipe and returns 0. FAIL-SAFE in the declining direction for every
+# other outcome — zero real pipes, two or more real pipes (`grep a | grep b |
+# head`, and `||` which is two `|` bytes), or an unterminated quote (where our
+# parse and bash's could disagree) all return 1, so the caller falls through to
+# the full path exactly as before. This function only ever narrows a FALSE
+# positive: nothing it admits was reachable through the old raw split, because a
+# command with exactly one unquoted pipe and no quoted `|` splits identically
+# under both.
+_fastpath_pipe_split() {
+    # NOTE: separate statements on purpose — under `set -u` bash declares every
+    # name in a single `local` list before running any of its initializers, so
+    # `local s="$1" n=${#s}` errors with "s: unbound variable". This file does
+    # not set -u, but its test harness sources these functions into one that does.
+    local s="$1"
+    local n=${#s}
+    local i c q='' pos=-1
+    _FASTPATH_PIPE_L=''
+    _FASTPATH_PIPE_R=''
+    # Every branch below ends on an assignment or an `if`, never on a bare
+    # `(( … ))`. That matters because the natural spelling of the escape branch,
+    # `(( i++ ))`, evaluates to the PRE-increment value: at offset 0 (`\grep …`)
+    # it yields 0, i.e. a FAILED simple command. This file does not `set -e`, but
+    # the function is also sourced standalone by its test harness, and under
+    # errexit that one branch would silently abort the caller mid-scan (a bare
+    # failed `[[ … ]]` in an `&&` list is exempt from errexit; a bare `(( … ))`
+    # is not). `i=$(( i + 1 ))` is a plain assignment and always succeeds.
+    for (( i = 0; i < n; i++ )); do
+        c="${s:i:1}"
+        case "$q" in
+            "'")
+                # Single-quoted: only the closing quote is special (no escapes).
+                if [[ "$c" == "'" ]]; then q=''; fi
+                ;;
+            '"')
+                # Double-quoted: `\` escapes the next byte, so `\"` does not close.
+                if [[ "$c" == '\' ]]; then
+                    i=$(( i + 1 ))
+                elif [[ "$c" == '"' ]]; then
+                    q=''
+                fi
+                ;;
+            *)
+                case "$c" in
+                    '\') i=$(( i + 1 )) ;;
+                    "'") q="'" ;;
+                    '"') q='"' ;;
+                    '|')
+                        if (( pos >= 0 )); then
+                            return 1   # a second REAL pipe — decline
+                        fi
+                        pos=$i
+                        ;;
+                esac
+                ;;
+        esac
+    done
+    [[ -z "$q" ]] || return 1        # unterminated quote — decline
+    (( pos >= 0 )) || return 1       # no shell-level pipe at all — decline
+    _FASTPATH_PIPE_L="${s:0:pos}"
+    _FASTPATH_PIPE_R="${s:pos+1}"
+    return 0
+}
+
 fastpath_grep_pipe_admits() {
     local cmd="$1"
     # No shell metacharacter other than a single pipe. Reject substitution,
     # redirection, chaining, backticks, and newlines outright.
+    #
+    # Deliberately still a RAW scan, unlike the pipe split below: a quoted `;`
+    # or `>` only ever costs a decline (fall through to the full path, the
+    # pre-existing behavior), never an admission, so leaving it byte-literal
+    # keeps this carve-out's blast radius exactly where #5263 documented it.
     case "$cmd" in
         *';'*|*'&'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
     esac
     [[ "$cmd" == *$'\n'* ]] && return 1
     [[ "$cmd" == *'|'* ]] || return 1
-    local left="${cmd%%|*}"
-    local right="${cmd#*|}"
-    # Exactly one pipe: a second one (`grep a | grep b | head`) declines here and
-    # falls through to the full path (conservative — a false negative, not a hole).
-    case "$right" in
-        *'|'*) return 1 ;;
-    esac
+    # Exactly one pipe, counted the way bash parses it — a `|` inside the search
+    # pattern is text, not structure. See _fastpath_pipe_split() above.
+    _fastpath_pipe_split "$cmd" || return 1
+    local left="$_FASTPATH_PIPE_L"
+    local right="$_FASTPATH_PIPE_R"
     local -a lt rt
     read -ra lt <<< "$left"
     read -ra rt <<< "$right"
