@@ -16,12 +16,16 @@ Judge-approved PRs stuck under a `loom:operator` merge-risk hold — implementat
 
 Issues flagged as highest priority (`loom:urgent`).
 
-_None._
+- **#109**: Guard: #5263 grep|head read-only fastpath disqualified by literal ERE alternation, causing false SQL_DDL_PATTERN deny
+- **#104**: T1 gap: physical layout for gate-driver block (checklist item 2)
+- **#100**: T1 gap: end-to-end PVT corner campaign against ratified spec §3, incl. refreshing the stale level-shifter-oxide-safety record (checklist item 5)
 
 ## Ready
 
 Human-approved issues ready for implementation (`loom:issue`).
 
+- **#122**: Guard decision: ask-tier git-clean-fd substring still fires on backtick-quoted example text inside a $(cat <<EOF …) --body heredoc
+- **#111**: Remove unused check:ci npm script: byte-identical duplicate of lint
 - **#94**: guard-destructive-generic.sh: recognized+confined invocation masks a coexisting hidden invocation elsewhere in the same command
 
 ## In Progress
@@ -30,7 +34,6 @@ Issues currently being built (`loom:building`).
 
 - **#120**: Guard: strip_literal_text() redaction span ignores enclosing quote context, hiding a live command after a single-quoted region
 - **#113**: Remove unused sim:list npm script: byte-identical duplicate of test
-- **#111**: Remove unused check:ci npm script: byte-identical duplicate of lint
 - **#109**: Guard: #5263 grep|head read-only fastpath disqualified by literal ERE alternation, causing false SQL_DDL_PATTERN deny
 - **#104**: T1 gap: physical layout for gate-driver block (checklist item 2)
 - **#100**: T1 gap: end-to-end PVT corner campaign against ratified spec §3, incl. refreshing the stale level-shifter-oxide-safety record (checklist item 5)
@@ -72,9 +75,9 @@ _None._
 | Tier | Count |
 |------|-------|
 | Operator merge-risk holds | 1 |
-| Urgent | 0 |
-| Ready (`loom:issue`) | 1 |
-| In Progress (`loom:building`) | 6 |
+| Urgent | 3 |
+| Ready (`loom:issue`) | 3 |
+| In Progress (`loom:building`) | 5 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 1 |
 | Curated | 7 |
