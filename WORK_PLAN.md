@@ -24,6 +24,7 @@ Issues flagged as highest priority (`loom:urgent`).
 
 Human-approved issues ready for implementation (`loom:issue`).
 
+- **#113**: Remove unused sim:list npm script: byte-identical duplicate of test
 - **#112**: Guard decision: git-clean-fd still false-asks on an escaped $(...) body with a ;-separated segment inside a double-quoted --body
 - **#111**: Remove unused check:ci npm script: byte-identical duplicate of lint
 - **#109**: Guard: #5263 grep|head read-only fastpath disqualified by literal ERE alternation, causing false SQL_DDL_PATTERN deny
@@ -54,6 +55,7 @@ _None._
 
 Issues carrying `loom:curated`.
 
+- **#113**: Remove unused sim:list npm script: byte-identical duplicate of test *(curated)*
 - **#112**: Guard decision: git-clean-fd still false-asks on an escaped $(...) body with a ;-separated segment inside a double-quoted --body *(curated)*
 - **#111**: Remove unused check:ci npm script: byte-identical duplicate of lint *(curated)*
 - **#109**: Guard: #5263 grep|head read-only fastpath disqualified by literal ERE alternation, causing false SQL_DDL_PATTERN deny *(curated)*
@@ -64,7 +66,7 @@ Issues carrying `loom:curated`.
 
 ## Proposed (Architect / Hermit)
 
-- **#113**: Remove unused sim:list npm script: byte-identical duplicate of test *(hermit)*
+_None._
 
 ## Epics
 
@@ -76,11 +78,11 @@ Issues carrying `loom:curated`.
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Urgent | 3 |
-| Ready (`loom:issue`) | 7 |
+| Ready (`loom:issue`) | 8 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 7 |
-| Architect / Hermit proposals | 1 |
+| Curated | 8 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 1 |
 <!-- guide:plan-body:end -->
