@@ -803,28 +803,35 @@ Full background: `.loom/docs/guard-hooks.md` → "Known consequence".
 
 ### Guard-hook regex/scan changes need adversarial boundary tests, not just the reported repro
 
-Three separate Judge `changes-requested` verdicts (PRs #19, #57, #60 — all
-same-day fix-and-reverify, so nothing bad reached `main`, but each cost a
-review round-trip) found a real bypass in a `guard-destructive-generic.sh`
+Four separate Judge `changes-requested` verdicts (PRs #19, #57, #60, #92 —
+all same-day fix-and-reverify, so nothing bad reached `main`, but each cost
+a review round-trip) found a real bypass in a `guard-destructive-generic.sh`
 regex/scanning change that the PR's own new test suite didn't cover: an
 unstated 50-target scan cap silently fail-open past target 50, a
 BSQ-awareness fix left un-probed for cross-span and unterminated-quote
-edge cases, and a heredoc delimiter parser that only handled a single
+edge cases, a heredoc delimiter parser that only handled a single
 quoted segment (missing the valid-bash multi-segment form `<<'E'O'F'`,
-which desynchronized masking and let a `rm -rf /` line through). In each
-case Judge had to invent adversarial inputs beyond the PR's stated
+which desynchronized masking and let a `rm -rf /` line through), and a
+live `git clean -fd` allowed through because it sat inside a `$(...)`
+command substitution without being the first token after the opener. In
+each case Judge had to invent adversarial inputs beyond the PR's stated
 repro to find the hole.
 
 **If your PR adds or modifies a regex/scanning helper in
 `guard-destructive-generic.sh`** (an `extract_*`, `mask_*`, `strip_*`
 function, or any hardcoded scan/line cap), give the PR's own test suite
-these three boundary shapes in addition to the literal reported repro —
-they account for all three real bypasses above:
+these four boundary shapes in addition to the literal reported repro —
+they account for all four real bypasses above:
 - a case that exceeds any hardcoded cap/bound by exactly one (off-by-one
   at the truncation boundary),
 - a case with an unterminated or multi-segment quoted/delimited span,
 - a case where two separate spans appear on the same command line
-  (cross-span bridging).
+  (cross-span bridging),
+- a case where the target appears inside a command substitution (`$(...)`
+  or backticks) at a position other than the first recognized token — e.g.
+  `echo "$(true; git clean -fd .)"` — since a scanner that only checks the
+  first token after the opener (or that flattens the whole quoted span into
+  one token) silently misses it.
 
 Treat this as a floor, not a substitute for thinking through the
 adversarial cases specific to the change you're making — Judge will still
