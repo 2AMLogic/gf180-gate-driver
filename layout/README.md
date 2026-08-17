@@ -32,7 +32,7 @@ layout/
 | DRC-clean | yes — `status: clean`, 0 violations, **within the deck scope below** |
 | LVS-clean | yes — `status: match`, 959/959 devices, 30/30 nets, 19/19 pins, **3 warnings-only findings below** |
 | Bulk/body terminals tied | **no — no well or substrate taps drawn**; this is what the LVS `device.body_unverified` warnings are |
-| Post-layout simulation | yes — full 60-point PVT grid on the extracted netlist, `sim/gate-driver-core-drive-postlayout/`; **no interconnect parasitics in the simulated DUT** |
+| Post-layout simulation | yes — two full 60-point PVT grids on the extracted netlist (with and without interconnect RC), `sim/gate-driver-core-drive-postlayout/` |
 
 Both verdicts are real (each has a committed negative control, below) but
 neither is a tapeout signoff: the deck does not carry rules for this layout's
@@ -282,7 +282,7 @@ built from the same layout:
 | File | Built from | Contents | Used for |
 |---|---|---|---|
 | [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 18 C per-net ground stars | a documented corner subset (the finger-level netlist is far too slow for the whole grid) |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 18 C per-net ground stars; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
 
 The campaign, its per-corner results, and the schematic-vs-extracted delta
 live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
@@ -296,6 +296,17 @@ gate node**. Both of its harness-check misses are the same inherited -50 mV
 undershoot sanity band, on the same node and corner family, that the
 schematic-side record already misses; the record's own sections 1-3 explain
 each one rather than leaving the one-word verdict to speak.
+
+Both records are the full 60-point grid, and they answer different questions —
+the parasitic-free one whether the drawn geometry realises the schematic's
+devices, the RC one what the drawn wires cost. Read together they say: layout
+costs this block **delay, not drive** — the output edge into the 1 nF
+reference load moves by ≤ 31 ps, while input-to-output propagation delay
+roughly doubles (+4.5 ns median, +7.2 ns worst case). The RC record is
+[`20260817-153225-9a64a9e`](../sim/gate-driver-core-drive-postlayout/records/20260817-153225-9a64a9e.md)
+and passes every harness check at all 60 points; the parasitic C damps the
+gate-node ringing that both the schematic-side and parasitic-free records
+report against the inherited −50 mV undershoot band.
 
 ## Known gaps
 
