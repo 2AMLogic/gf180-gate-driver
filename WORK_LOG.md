@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-08-17
+
+- **Issue #104** (closed): T1 gap: physical layout for gate-driver block (checklist item 2)
+- **PR #128**: feat(layout): generate gate_driver_core GDS from its netlist via klt
+
 ### 2026-08-16
 
 - **Issue #112** (closed): Guard decision: git-clean-fd still false-asks on an escaped $(...) body with a ;-separated segment inside a double-quoted --body
