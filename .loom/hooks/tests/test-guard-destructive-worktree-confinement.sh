@@ -391,6 +391,53 @@ W=\"\$T/../../..$TMPROOT/x\"
 cp /etc/hosts \"\$W\"")
 assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
+# --- (x1)-(x6) gf180-gate-driver#148: a no-space fd-numbered output
+# redirection (`2>/dev/null`, `1>/dev/null`, `2>&1`) attached to a cp/mv/tee/
+# sed -i command was misread by the tee/sed/cp-mv operand loops as an
+# ordinary path operand -- for cp/mv specifically, as THE destination
+# (last-non-flag-token) -- producing a phantom `<repo>/2>/dev/null` (or, once
+# qsplit()'s `&`-as-segment-separator splits a `2>&1` token, `<repo>/2>`)
+# write target that the worktree-write-confinement check then falsely
+# DENIED. All six commands below write only to /tmp -- no confinement
+# violation exists anywhere in them -> ALLOW.
+result=$(run_hook 'cp /tmp/a /tmp/b 2>/dev/null')
+assert_allow "(x1) cp ... 2>/dev/null (no space) -> allow, not misread as a write target" "$result"
+
+result=$(run_hook 'cp /tmp/a /tmp/b 1>/dev/null')
+assert_allow "(x2) cp ... 1>/dev/null (no space) -> allow, not misread as a write target" "$result"
+
+result=$(run_hook 'cp /tmp/a /tmp/b >/dev/null 2>&1')
+assert_allow "(x3) cp ... >/dev/null 2>&1 -> allow, not misread as a write target" "$result"
+
+result=$(run_hook 'mv /tmp/a /tmp/b 2>/dev/null')
+assert_allow "(x4) mv ... 2>/dev/null (no space) -> allow, not misread as a write target" "$result"
+
+result=$(run_hook 'tee /tmp/b 2>/dev/null')
+assert_allow "(x5) tee ... 2>/dev/null (no space) -> allow, not misread as a write target" "$result"
+
+result=$(run_hook 'sed -i s/a/b/ /tmp/f 2>/dev/null')
+assert_allow "(x6) sed -i ... 2>/dev/null (no space) -> allow, not misread as a write target" "$result"
+
+# --- (x7)-(x8) NEGATIVE (no-regression): the already-allowed forms cited in
+# #148 -- a SPACED fd-numbered redirection, and a plain `>` redirection
+# followed by a no-space `2>/dev/null` on a command the tee/sed/cp-mv loops
+# never touch -- must stay allow exactly as before this fix.
+result=$(run_hook 'cp /tmp/a /tmp/b 2> /dev/null')
+assert_allow "(x7) cp ... 2> /dev/null (spaced) -> allow (baseline, no regression)" "$result"
+
+result=$(run_hook 'echo hi > /tmp/x 2>/dev/null')
+assert_allow "(x8) echo hi > /tmp/x 2>/dev/null -> allow (baseline, no regression)" "$result"
+
+# --- (x9) EDGE CASE: a `2>&1` dup-to-fd token immediately after the real cp
+# destination, followed by a pipe, must still resolve THAT destination as the
+# write target -- not `2>&1`, the pipe, or the token after it. Point the
+# destination at the main checkout (an absolute path, no $VAR resolution
+# needed) so a DENY with the right target in its reason text is the positive
+# signal that the parser landed on `evil.txt`, not a phantom token.
+result=$(run_hook "cp /tmp/x $TMPROOT/evil.txt 2>&1 | cat")
+assert_deny "(x9) cp SRC <main-checkout>/evil.txt 2>&1 | cat -> deny, target is evil.txt (not 2>&1/cat)" "$result" \
+    "evil.txt"
+
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
 # against -- confirm that expectation instead of silently skipping it.

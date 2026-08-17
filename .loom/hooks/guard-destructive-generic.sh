@@ -5004,9 +5004,69 @@ extract_write_targets() {
                 }
             }
 
+            # STDOUT-REDIRECTION EXCLUSION (gf180-gate-driver#148) -- the
+            # fd-numbered-output-redirection analog of the STDIN-REDIRECTION
+            # EXCLUSION immediately above. A `>`/`N>`/`N>>` token (with or
+            # without a filename attached, no space) is a redirection
+            # OPERATOR, never a write-target operand, so it must not be
+            # scanned as one by the tee / sed -i / cp-mv loops below any more
+            # than a `<` may be. Left unhandled, an idiom as ordinary as
+            # `cp SRC DST 2>/dev/null` misread the attached `2>/dev/null`
+            # token as an extra cp operand -- worse, as THE operand cp/mv
+            # treats as the destination (last-non-flag-token) -- producing a
+            # phantom `<repo>/2>/dev/null` (or, once qsplit() turns a bare
+            # `&` byte into a segment separator, splitting a `2>&1` dup-to-fd
+            # token into `2>` at the end of one segment and `1` starting the
+            # next, a phantom `<repo>/2>`) that a #4178 worktree-confinement
+            # check then falsely DENIED.
+            #
+            # Reuses the EXACT two regexes the `>`/`>>` write-target loop
+            # below already applies, so this exclusion set can never disagree
+            # with what that loop treats as a redirection operator:
+            #   `>` / `N>` / `N>>`   (bare, end-of-token) consumes the NEXT
+            #                        non-empty token too -- mirroring the
+            #                        stdin_redir bare-`<` case above, since
+            #                        that next token is the target or dup-fd
+            #                        argument belonging to this operator,
+            #                        never a second cp/mv/tee/sed operand.
+            #                        (The write-target loop below separately
+            #                        decides whether that consumed token is
+            #                        itself a real target to report -- e.g.
+            #                        skipping a `&`-prefixed dup-to-fd token
+            #                        -- but either way it is never AN OPERAND
+            #                        of the preceding cp/mv/tee/sed command,
+            #                        so this exclusion set marks it
+            #                        unconditionally.)
+            #   `>file` / `N>file` / `N>>file`  (attached) consumes only
+            #                        itself, exactly like the attached `<`
+            #                        case.
+            #
+            # Deliberately reused, not re-derived, per the caution in #148:
+            # this file has a long history of narrowly-scoped fixes in this
+            # exact area (#106, #4934, #5232, #5233), and an exclusion set
+            # built from a DIFFERENT (broader) pattern than the one the
+            # write-target loop itself uses could silently drop a real write
+            # target from confinement checking -- a false ALLOW / security
+            # regression, the opposite failure direction from this bug.
+            delete stdout_redir
+            for (j = 1; j <= m; j++) {
+                if (toks[j] == "") continue
+                if (mtoks[j] ~ /^[0-9]*>>?$/) {
+                    stdout_redir[j] = 1
+                    for (k = j + 1; k <= m; k++) {
+                        if (toks[k] == "") continue
+                        stdout_redir[k] = 1
+                        break
+                    }
+                } else if (mtoks[j] ~ /^[0-9]*>>?[^ \t&]/) {
+                    stdout_redir[j] = 1
+                }
+            }
+
             if (toks[1] == "tee") {
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
+                    if (j in stdout_redir) continue
                     if (toks[j] == "" || toks[j] ~ /^-/) continue
                     # Heredoc/herestring redirection (attached or quoted
                     # delimiter, or the bare double-angle-bracket / dashed
@@ -5042,6 +5102,7 @@ extract_write_targets() {
                 delete nfargs
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
+                    if (j in stdout_redir) continue
                     if (toks[j] ~ /^-i/) {
                         has_i = 1
                         # BSD/macOS sed requires a SEPARATE, possibly-empty
@@ -5123,6 +5184,7 @@ extract_write_targets() {
                 delete nfargs
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
+                    if (j in stdout_redir) continue
                     if (toks[j] ~ /^-/) continue
                     if (toks[j] == "") continue
                     # Same heredoc/herestring exclusion as the `tee` branch
