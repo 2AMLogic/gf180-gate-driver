@@ -15,8 +15,19 @@
 * (design/README.md) -- a testbench supplies models, corners, temp and sources.
 * See design/level-shifter-partition.md for the device-by-device domain/DNWELL
 * partition table and the cascode-bias derivation.
+*
+* XCCOMP (issue #155, spec/decision-records/0007): ~12-14 fF MIM feedforward
+* compensation capacitor from `ncb` to `out` (the block-level IN_DRV net),
+* mitigating the gate-drive-feedthrough overshoot spec/decision-records/0006
+* characterizes. cap_mim_1f0_m4m5_noshield (1 fF/um2, rated to 20V -- ample
+* headroom over the ~6V stretch-rail swing across it) at 3.0um x 3.0um,
+* measured 11.56/12.84/14.13 fF at ff/tt/ss (mimcap_ff/typical/ss corner
+* sections, this repo's PVT harness already sweeps this device family). Sized
+* at the small end of decision record 0006's characterized effective range
+* (10-100 fF), not the middle -- see spec/decision-records/0007 for why.
 
 **.subckt level_shifter in vdd_logic gnd_logic vdd_drv gnd_drv out
+
 *.ipin in
 *.ipin vdd_logic
 *.ipin gnd_logic
@@ -47,4 +58,5 @@ XMPBUF2 out nbuf1 vdd_drv vdd_drv pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2)
 + pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XMNBUF2 out nbuf1 gnd_drv gnd_drv nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XCCOMP ncb out cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u m=1
 **.ends

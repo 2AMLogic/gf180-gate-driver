@@ -33,6 +33,11 @@
 * connection between the two sub-cells; VDD_DRV/GND_DRV are shared, and
 * VDD_LOGIC/GND_LOGIC/IN reach the level shifter only.
 *
+* level_shifter's XCCOMP (issue #155, spec/decision-records/0007): a
+* ~12-14 fF MIM feedforward compensation capacitor from x1.ncb to IN_DRV,
+* mitigating decision record 0006's characterized gate-drive-feedthrough
+* overshoot on this net -- see design/netlist/level_shifter.spice's header.
+*
 * NOT present: UVLO (spec Sec.5, decision record 0001 Decisions 4-5) is in
 * scope for this increment but has no implemented sub-cell yet, so this top
 * cell is the level-shifter + output-stage signal path only.
@@ -80,6 +85,7 @@ XMPBUF2 out nbuf1 vdd_drv vdd_drv pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2)
 + pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XMNBUF2 out nbuf1 gnd_drv gnd_drv nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XCCOMP ncb out cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u m=1
 .ends
 
 
