@@ -87,6 +87,40 @@ HOOK="$TMPROOT/.loom/hooks/guard-destructive-generic.sh"
 pass() { PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1)); printf "${GREEN}PASS${NC} %s\n" "$1"; }
 fail() { FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); printf "${RED}FAIL${NC} %s\n" "$1"; }
 
+# mktempd_standin_climb() -- a "../"-joined relative-path prefix long enough
+# to climb from the guard's own `mktemp -d` sandbox stand-in
+# (`<physical TMPDIR>/.loom-guard-mktemp-d-sandbox`, see
+# _wt_init_default_tmpdir()/mktempd_standin() in guard-destructive-generic.sh)
+# all the way back to `/`, plus one extra climb of margin.
+#
+# Case (w) below needs this because the climb depth is host-dependent, NOT a
+# portable constant: Linux's default `mktemp -d` parent is `/tmp` (1
+# component), but macOS's default $TMPDIR is a deep per-user path
+# (`/var/folders/<xx>/<hash>/T`) that itself resolves through the
+# `/var -> /private/var` symlink to 6 physical components. A hardcoded
+# `../../..` (sized for Linux) never reaches `/` on macOS, so the
+# reconstructed traversal target is garbled and the case silently exercises
+# nothing there (gf180-gate-driver#159). This mirrors the hook's own
+# resolution exactly (same `${TMPDIR:-/tmp}` + `cd ... && pwd -P` physical
+# resolve) so the climb depth always matches the stand-in path the hook will
+# actually construct, on any host.
+mktempd_standin_climb() {
+    local base phys segs=() seg depth=0 out=""
+    base="${TMPDIR:-/tmp}"
+    base="${base%/}"
+    [[ "$base" == /* ]] || base=/tmp
+    phys=$(cd "$base" 2>/dev/null && pwd -P) || phys="$base"
+    IFS='/' read -r -a segs <<< "$phys/.loom-guard-mktemp-d-sandbox"
+    for seg in "${segs[@]}"; do
+        [[ -n "$seg" ]] && depth=$((depth + 1))
+    done
+    depth=$((depth + 1))  # margin: ".." at/above root safely clamps at root
+    for ((i = 0; i < depth; i++)); do
+        if [[ -n "$out" ]]; then out="$out/.."; else out=".."; fi
+    done
+    printf '%s' "$out"
+}
+
 # Build stdin JSON for a Bash tool_input, with cwd fixed at TMPROOT (the
 # synthetic main checkout).
 make_input() {
@@ -386,8 +420,12 @@ assert_deny "(v) mktemp assignment as prose in another argument -> binds nothing
 # --- (w) NEGATIVE: a resolved sandbox is a real path, so climbing back OUT of
 # it into the main checkout is caught by the ordinary containment test -- the
 # stand-in must not become a blanket "anything rooted at $T is fine" token.
+# The climb depth is computed dynamically (mktempd_standin_climb, above)
+# rather than hardcoded, since it depends on the host's default TMPDIR depth
+# (gf180-gate-driver#159).
+CLIMB_W="$(mktempd_standin_climb)"
 result=$(run_hook "T=\$(mktemp -d)
-W=\"\$T/../../..$TMPROOT/x\"
+W=\"\$T/$CLIMB_W$TMPROOT/x\"
 cp /etc/hosts \"\$W\"")
 assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
