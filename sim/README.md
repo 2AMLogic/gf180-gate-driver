@@ -110,7 +110,10 @@ fields:
   analysis) — N samples and sigma level reported. Used for distribution
   claims that are not a per-corner pass/fail.
 - **Result** — per-corner pass/fail, plus an overall pass/fail against the
-  ratified spec value.
+  ratified spec value. Where the spec states two tiers for a parameter, each
+  point is judged against the tier that applies *at that point* — see
+  [Two-tier (nominal / stretch) checks](#two-tier-nominal--stretch-checks)
+  below.
 - **Links** — paths to the testbench file(s), the frozen netlist snapshot,
   and the raw per-corner logs used to produce this record.
 - **Timestamp / author** — when the record was created and who (human or
@@ -118,6 +121,38 @@ fields:
 - **Supersedes** (optional) — the prior `<record-id>` this record supersedes,
   for corrections or for a post-layout extracted re-run that reports a
   schematic-vs-extracted delta against the schematic-level record.
+
+## Two-tier (nominal / stretch) checks
+
+`spec/gate-driver.md` §3 states two bounds for several parameters — a
+**Target** and a **Stretch** target (peak source/sink current ≥ 0.5 A / 1 A;
+propagation delay < 50 ns / < 25 ns) — and the stretch column of that same
+table is what the 6 V `vdrv` point in the decision record above *is*. A
+record that runs the stretch point must therefore say which of the two
+bounds each point was judged against; a single loose bound applied across
+the whole grid records a stretch-corner point that misses the stretch target
+as PASS, which reads as evidence for a claim the run did not substantiate
+(issue #125).
+
+The convention:
+
+- A point sitting at a rail's opt-in `extra_v` voltage (the 6 V `vdrv`
+  stretch point) is judged against the **stretch** bound for that parameter.
+- Every other point in the grid is judged against the **nominal** bound.
+- A parameter with no stretch target in the spec (`—`) keeps its nominal
+  bound everywhere, stretch point included. A stretch bound is never
+  invented for a spec row that does not state one, and the nominal bound is
+  never left standing in for one that does.
+- The record makes the tier visible rather than implicit: the limits column
+  carries both (`min=0.5, stretch min=1`) and a stretch-tier failure is
+  tagged `[stretch]`.
+
+This is implemented in [`sim/harness/report.py`](harness/report.py)
+(`is_stretch_point`, `evaluate_checks`) and expressed per testbench as a
+`"stretch": {...}` override inside a `checks` entry — see
+[`sim/harness/README.md`](harness/README.md#corner-scoped-bounds-nominal-vs-stretch)
+for the manifest syntax and the load-time rules that keep such a bound from
+being declared where it could never fire.
 
 ## Append-only rule
 

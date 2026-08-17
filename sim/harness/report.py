@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 from . import HARNESS_VERSION
-from .corners import DEFAULT_TEMPERATURES_C, PvtPoint, supply_points
+from .corners import DEFAULT_TEMPERATURES_C, PvtPoint, Rail, supply_points
 from .evidence_lint import _git
 from .pdk import Pdk
 from .runner import PointResult
@@ -150,37 +150,97 @@ def summarize(results: list[PointResult], measure_names: list[str]) -> dict:
     return summary
 
 
+#: Absolute tolerance when matching a point's supply against a rail's
+#: ``extra_v`` stretch voltage. Both sides come from the same manifest via
+#: ``corners.stretch_points``, so this only absorbs float round-tripping
+#: (``json`` -> ``float`` -> ``round(..., 6)``), never a genuinely different
+#: rail voltage: the grid's real neighbours are 0.5 V apart.
+STRETCH_MATCH_TOL_V = 1e-9
+
+
+def is_stretch_point(point: PvtPoint, rails: tuple[Rail, ...] | list[Rail]) -> bool:
+    """Is ``point`` at one of ``rails``' opt-in ``extra_v`` stretch voltages?
+
+    True when *any* declared rail's supply at this point matches one of that
+    rail's ``extra_v`` values (e.g. ``vdrv``'s 6 V stretch target, the
+    opt-in extra composite points ``corners.stretch_points`` mints) rather
+    than its nominal ±tolerance triple. Used by :func:`evaluate_checks` to
+    pick a check's ``stretch`` bound override over its nominal ``min``/
+    ``max`` at exactly the stretch corner points, and nowhere else in the
+    grid.
+    """
+    for rail in rails:
+        value = point.supplies.get(rail.name)
+        if value is None:
+            continue
+        if any(abs(value - extra) <= STRETCH_MATCH_TOL_V for extra in rail.extra_v):
+            return True
+    return False
+
+
 def evaluate_checks(
     checks: dict[str, dict],
     results: list[PointResult],
     summary: dict,
+    rails: tuple[Rail, ...] | list[Rail],
 ) -> list[dict]:
-    """Return a list of check failures (empty list == everything passed)."""
+    """Return a list of check failures (empty list == everything passed).
+
+    A check may declare a corner-scoped override, ``"stretch": {"min": ...,
+    "max": ...}``, alongside its nominal ``min``/``max``: at points where
+    :func:`is_stretch_point` is true (some rail is at one of its ``extra_v``
+    stretch voltages), the stretch bound is evaluated *instead of* the
+    nominal one for that measurement; every other point keeps evaluating
+    against the nominal bound only. This is what lets one testbench state
+    spec/gate-driver.md §3's two tiers -- "≥ 0.5 A, 1 A stretch" -- as two
+    harness-enforced bounds instead of one loose bound covering both.
+
+    A ``stretch`` override that omits ``min`` or ``max`` falls back to the
+    nominal value for the omitted side, so a check may tighten just one side
+    at the stretch corner (e.g. only ``min`` for a current target) without
+    repeating the other. A parameter whose spec row has no stretch target at
+    all simply declares no ``stretch`` key and keeps its nominal bound
+    everywhere, stretch corner included.
+
+    ``rails`` is required rather than defaulting to ``()`` on purpose: with
+    no rails every point looks non-stretch, so a defaulted call would
+    silently evaluate every stretch bound as its nominal one -- the exact
+    class of silent-loose-bound bug this override exists to close.
+    """
     failures: list[dict] = []
     for name, spec in checks.items():
         low = spec.get("min")
         high = spec.get("max")
-        if low is not None or high is not None:
+        stretch_spec = spec.get("stretch")
+        stretch_low = stretch_spec.get("min", low) if stretch_spec else None
+        stretch_high = stretch_spec.get("max", high) if stretch_spec else None
+        if low is not None or high is not None or stretch_spec:
             for result in results:
                 if result.status != "ok" or name not in result.measurements:
                     continue
                 value = result.measurements[name]
-                if low is not None and value < low:
+                at_stretch = bool(stretch_spec) and is_stretch_point(result.point, rails)
+                point_low = stretch_low if at_stretch else low
+                point_high = stretch_high if at_stretch else high
+                bound = "stretch" if at_stretch else "nominal"
+                if point_low is not None and value < point_low:
                     failures.append(
                         {
                             "measurement": name,
                             "kind": "min",
-                            "limit": low,
+                            "bound": bound,
+                            "limit": point_low,
                             "value": value,
                             "at": result.point.corner_id,
                         }
                     )
-                if high is not None and value > high:
+                if point_high is not None and value > point_high:
                     failures.append(
                         {
                             "measurement": name,
                             "kind": "max",
-                            "limit": high,
+                            "bound": bound,
+                            "limit": point_high,
                             "value": value,
                             "at": result.point.corner_id,
                         }
@@ -296,7 +356,7 @@ def build_record(
 ) -> dict:
     measure_names = list(tb.measure)
     summary = summarize(results, measure_names)
-    failures = evaluate_checks(tb.checks, results, summary)
+    failures = evaluate_checks(tb.checks, results, summary, rails=tb.rails)
     n_ok = sum(1 for r in results if r.status == "ok")
 
     if n_ok != len(results):
@@ -471,9 +531,10 @@ def _result_lines(record: dict) -> list[str]:
     measure_names = list(record["measure"])
     failures_at: dict[str, list[str]] = {}
     for failure in record["checks"]["failures"]:
+        stretch_tag = " [stretch]" if failure.get("bound") == "stretch" else ""
         failures_at.setdefault(failure["at"], []).append(
-            f"{failure['measurement']} {failure['kind']}={_fmt(failure['limit'])} "
-            f"(got {_fmt(failure['value'])})"
+            f"{failure['measurement']} {failure['kind']}{stretch_tag}="
+            f"{_fmt(failure['limit'])} (got {_fmt(failure['value'])})"
         )
 
     lines = ["- **Result**:", ""]
@@ -506,7 +567,20 @@ def _result_lines(record: dict) -> list[str]:
             f"{key}={_fmt(spec[key])}"
             for key in ("min", "max", "max_spread_pct", "min_spread_pct")
             if key in spec
-        ) or "—"
+        )
+        stretch_spec = spec.get("stretch")
+        if stretch_spec:
+            # Spell the corner-scoped override out in the limits column, so a
+            # reader of the record can tell which bound each point was judged
+            # against without opening tb.json.
+            stretch_bits = ", ".join(
+                f"{key}={_fmt(stretch_spec[key])}"
+                for key in ("min", "max")
+                if key in stretch_spec
+            )
+            stretch_text = f"stretch {stretch_bits}"
+            limits = f"{limits}, {stretch_text}" if limits else stretch_text
+        limits = limits or "—"
         if not stats.get("n"):
             lines.append(f"  | `{name}` | no data | | | | {limits} |")
             continue
