@@ -105,7 +105,13 @@ jobs:
         # a locally built, OpenMP-enabled ngspice's own spinit can default to
         # a thread count > 1, which is pure oversubscription once run_corners
         # is already parallelizing with -j -- measured at ~2000x slower for
-        # byte-identical results. Pure string composition over synthetic
+        # byte-identical results. It also pins the harness-default
+        # `reltol=1e-4` transient tolerance (issue #156): the harness-default
+        # deck's un-clamped timestep under-resolved every recorded spec §2.3
+        # gate-ceiling peak by ~25%, and this asserts the tightened default
+        # stays in the generated deck, honors a manifest override without
+        # double-setting it, and is recorded on the record's Environment
+        # block. Pure string/record composition over synthetic
         # Testbench/Pdk/PvtPoint inputs -- no ngspice, no PDK -- so it belongs
         # on this PDK-free runner.
         run: python3 sim/test_harness_runner.py
