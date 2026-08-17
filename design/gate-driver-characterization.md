@@ -106,8 +106,10 @@ temperature) across grids of different shape, not identical grids.
   see "Results" below. That record also documents new spec §2.3 thick-oxide
   gate-ceiling findings on `IN_DRV`/`x2.n1`…`n5` at the 6 V stretch rail;
   those are outside this report's §3 scope (see the note at the end of
-  "Results") and are recorded as open, unratified findings in that record
-  itself, not resolved here.
+  "Results") and are recorded in that record itself, not resolved here —
+  both have since been formally scoped in `spec/gate-driver.md` §5 by
+  [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)
+  (issue #136).
 
 ### `sim/output-stage-drive/` — the output stage only (retained for cross-check)
 
@@ -147,7 +149,11 @@ temperature) across grids of different shape, not identical grids.
   case for the same taper nodes under the real level-shifter edge — see
   that record's Finding 3 — so this idealized-edge number is no longer the
   worst-case figure on record for those nodes, though decision record 0005's
-  conclusion is unaffected.
+  conclusion is unaffected. `spec/gate-driver.md` §5's Exception 2 and
+  decision record 0005's own appended amendment now cite that corrected
+  figure (`n1` = 6.10232 V at `sf_-40c_vlogic3p30v-vdrv6p00v`, margin
+  −102.3 mV) instead, per
+  [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md).
 
 ### `sim/level-shifter-oxide-safety/` — the level shifter only (refreshed by #100)
 
@@ -274,10 +280,12 @@ is not disturbed by this — the end-to-end worst case clears the full
 thick-oxide gate-ceiling findings on the inter-cell node `IN_DRV` and the
 output stage's internal taper nodes (`x2.n1`…`n5`) at the 6 V stretch rail
 — these are not spec §3 drive-strength/timing/rise-fall rows and are out of
-this report's scope; they are recorded in full, including an open,
-unratified exceedance on `IN_DRV` not covered by decision record 0005, in
+this report's scope; they are recorded in full, including the exceedance on
+`IN_DRV` that decision record 0005 did not cover, in
 [`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`](../sim/gate-driver-core-drive/records/20260817-013400-ae66957.md)
-§2. This report does not restate or resolve them.
+§2. This report does not restate them; both are now formally scoped as
+`spec/gate-driver.md` §5 exceptions by
+[decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md).
 
 ## Coverage: what is now end-to-end, and what is not
 
@@ -314,11 +322,18 @@ spec-decision follow-ups, not documentation gaps):
 
 - The 6 V stretch-rail peak-sink-current shortfall against spec §3's ≥ 1 A
   stretch target (cross-references issue #125).
-- The new, unratified spec §2.3 thick-oxide ceiling exceedance on `IN_DRV`
-  at the 6 V stretch rail, and the larger-than-previously-recorded
-  taper-node worst case on `x2.n1` — both documented in the end-to-end
-  record's §2, neither restated in full here because they fall outside this
-  report's spec §3 scope (see the scope note at the end of "Results").
+- ~~The new, unratified spec §2.3 thick-oxide ceiling exceedance on
+  `IN_DRV`~~ — **resolved by
+  [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)**
+  (issue #136), which ratifies it as `spec/gate-driver.md` §5's Exception 3
+  and corrects Exception 2's cited worst case to the
+  larger-than-previously-recorded taper-node figure on `x2.n1`. Both are
+  documented in the end-to-end record's §2 and not restated in full here
+  because they fall outside this report's spec §3 scope (see the scope note
+  at the end of "Results"). Decision record 0006 also leaves one item open:
+  a characterized-but-not-adopted mitigation for `IN_DRV`, and a
+  deck-fidelity question about whether the harness's default transient
+  tolerances resolve narrow coupling transients.
 - Five harness-check misses on the inherited, non-spec −50 mV undershoot
   sanity band, documented in the end-to-end record's §3 and not restated
   here for the same reason.
