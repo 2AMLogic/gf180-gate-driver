@@ -32,7 +32,7 @@ layout/
 | DRC-clean | yes — `status: clean`, 0 violations, **within the deck scope below** |
 | LVS-clean | yes — `status: match`, 959/959 devices, 30/30 nets, 19/19 pins, **3 warnings-only findings below** |
 | Bulk/body terminals tied | **no — no well or substrate taps drawn**; this is what the LVS `device.body_unverified` warnings are |
-| Post-layout simulation | yes — two full 60-point PVT grids on the extracted netlist (with and without interconnect RC), `sim/gate-driver-core-drive-postlayout/` |
+| Post-layout simulation | yes — two full 60-point PVT grids on the extracted netlist (with and without interconnect RC), `sim/gate-driver-core-drive-postlayout/`. Both records' overall verdict is `FAIL` on **inherited** misses the schematic-side record already carries — [enumerated below](#post-layout-simulation), not summarised away |
 
 Both verdicts are real (each has a committed negative control, below) but
 neither is a tapeout signoff: the deck does not carry rules for this layout's
@@ -286,16 +286,13 @@ built from the same layout:
 
 The campaign, its per-corner results, and the schematic-vs-extracted delta
 live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
-as ordinary append-only `sim/` evidence. The first record —
-[`20260817-152820-6a5739c`](../sim/gate-driver-core-drive-postlayout/records/20260817-152820-6a5739c.md),
+as ordinary append-only `sim/` evidence. The parasitic-free record —
+[`20260817-174259-f1a4903`](../sim/gate-driver-core-drive-postlayout/records/20260817-174259-f1a4903.md),
 the **full 60-point PVT grid** (5 process corners x -40/27/125 C x three tied
 +-10 % supply points plus the 6 V stretch point) — re-runs the same spec suite
 the schematic-side record covers, at every one of the same 60 corner-ids, and
 lands within **1.8 % on every drive row** and **<= 79 mV on every thick-oxide
-gate node**. Both of its harness-check misses are the same inherited -50 mV
-undershoot sanity band, on the same node and corner family, that the
-schematic-side record already misses; the record's own sections 1-3 explain
-each one rather than leaving the one-word verdict to speak.
+gate node**.
 
 Both records are the full 60-point grid, and they answer different questions —
 the parasitic-free one whether the drawn geometry realises the schematic's
@@ -303,10 +300,36 @@ devices, the RC one what the drawn wires cost. Read together they say: layout
 costs this block **delay, not drive** — the output edge into the 1 nF
 reference load moves by ≤ 31 ps, while input-to-output propagation delay
 roughly doubles (+4.5 ns median, +7.2 ns worst case). The RC record is
-[`20260817-153225-9a64a9e`](../sim/gate-driver-core-drive-postlayout/records/20260817-153225-9a64a9e.md)
-and passes every harness check at all 60 points; the parasitic C damps the
-gate-node ringing that both the schematic-side and parasitic-free records
-report against the inherited −50 mV undershoot band.
+[`20260817-174318-f1a4903`](../sim/gate-driver-core-drive-postlayout/records/20260817-174318-f1a4903.md).
+
+**Neither record's overall verdict is `PASS`, and neither miss is a layout
+finding** — both are enumerated in the records rather than summarised away:
+
+| Miss | Parasitic-free | RC | Also on the schematic side? |
+|---|---|---|---|
+| `ipeak_sink_a` short of spec §3's **1 A stretch** target at `ss_125c` / `sf_125c` 6 V | 0.889 A / 0.938 A | 0.877 A / 0.931 A | **yes** — 0.883 A / 0.932 A, at the same two of the fifteen 6 V points and no others. Only the harness changed: #147's corner-scoped override now scores the row the schematic record's narrative already reported |
+| `n1_min_v` past the inherited **−50 mV undershoot sanity band** | 2 points | **none** | **yes** — 5 points, two of them deeper. Not a spec bound; carried over unchanged rather than retuned (CLAUDE.md) |
+
+The undershoot misses vanish under RC because the extracted per-net C damps
+exactly that gate-node ringing (worst undershoot over all 60 points and all
+six probed nodes: −19.3 mV, vs −54.6 mV parasitic-free).
+
+The same damping applies to the two 6 V-stretch-rail gate-ceiling excursions
+`spec/gate-driver.md` §5 ratifies as **Exception 2** (decision records
+0005/0006, taper nodes `n1`…`n5`) and **Exception 3** (decision record 0006,
+inter-cell `IN_DRV`). The layout stays inside both ratified envelopes at
+every one of the 15 affected points, and clears the 6.0 V ceiling by
+≥ 381 mV at all 45 nominal-tolerance points:
+
+| Ratified worst case (schematic) | extracted, no RC | extracted, RC |
+|---|---|---|
+| Exception 2 — taper, 6.10232 V | 6.10229 V | 6.03482 V |
+| Exception 3 — `IN_DRV`, 6.11823 V (bounded ≤ 150 mV over) | 6.11308 V | 6.01364 V |
+
+Those are measurements of a different netlist, not a licence to re-quantify a
+ratified exception downward — the schematic figures stay governing until a
+spec change says otherwise. What the layout evidence adds is only that
+**it does not widen either exception.**
 
 ## Known gaps
 
