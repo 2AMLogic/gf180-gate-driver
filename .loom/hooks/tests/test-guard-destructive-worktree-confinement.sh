@@ -386,8 +386,33 @@ assert_deny "(v) mktemp assignment as prose in another argument -> binds nothing
 # --- (w) NEGATIVE: a resolved sandbox is a real path, so climbing back OUT of
 # it into the main checkout is caught by the ordinary containment test -- the
 # stand-in must not become a blanket "anything rooted at $T is fine" token.
+#
+# The guard resolves $T (the #144 same-command `mktemp -d` stand-in) to a
+# FIXED literal child of the PARENT DIRECTORY a bare `mktemp -d` would use
+# (the hook's inherited TMPDIR, physically resolved) -- never the actual
+# random-suffix depth a real `mktemp -d` would create. How many `../` it
+# takes to climb that stand-in back out to `/` therefore depends on how deep
+# that parent directory is, which is platform-dependent: Linux's default
+# `mktemp -d` parent is shallow (`/tmp`, 1 level), while macOS resolves
+# through `$TMPDIR` into a deep path (e.g.
+# `/var/folders/0h/l9gwswj97wb82mh27zyw305r0000gn/T`, 5+ levels). A HARDCODED
+# `../../..` (sized for Linux) undershoots on macOS: the traversal never
+# reaches root, so it lands mid-tree instead of back at $TMPROOT -- the guard
+# correctly does not flag that (nothing to deny), and this test would then
+# wrongly expect a deny.
+#
+# Compute the traversal depth from $TMPROOT's OWN path instead of a
+# platform-specific literal: TMPROOT was created by an unadorned `mktemp -d`
+# in this same environment, so it shares the same parent-directory depth the
+# guard's stand-in resolves against, plus one level for the stand-in's own
+# leaf component. Add a one-level safety margin on top --
+# normalize_abs_path() clamps any *extra* ".." at root to a no-op (see that
+# function's own header), so overshooting is harmless while undershooting
+# silently defeats this test, exactly as the hardcoded "3" did on macOS.
+w_ups=$(( $(printf '%s' "$TMPROOT" | tr -cd '/' | wc -c) + 1 ))
+W_DOTS=$(printf '%0.s../' $(seq 1 "$w_ups"))
 result=$(run_hook "T=\$(mktemp -d)
-W=\"\$T/../../..$TMPROOT/x\"
+W=\"\$T/${W_DOTS}$TMPROOT/x\"
 cp /etc/hosts \"\$W\"")
 assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
