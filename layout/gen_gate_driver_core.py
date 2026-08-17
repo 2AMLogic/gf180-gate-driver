@@ -15,10 +15,14 @@ script never links klayout itself and needs nothing but the standard library):
     sub-cells (``level_shifter`` x1, ``output_stage`` x2) into one device list
     with top-level net names.
 2.  ``klt gen mos_array`` once per netlist device. A netlist device with
-    ``m=M`` is drawn as a single ``1x1`` unit device folded into ``M`` parallel
-    gate fingers (``finger_topology: "parallel"``), which is exactly ``M``
-    parallel transistors of width ``W`` sharing one source/drain/gate strap --
-    the same thing ``m=M`` means in SPICE, and what ``klt extract`` reads back.
+    ``W=W nf=N m=M`` is drawn as a single ``1x1`` unit device folded into
+    ``N*M`` parallel gate fingers of ``W/N`` each (``finger_topology:
+    "parallel"``), which is exactly what those parameters mean in SPICE: ``M``
+    parallel copies of one ``W``-wide transistor whose width is itself split
+    across ``N`` fingers, all sharing one source/drain/gate strap. The total
+    drawn width is ``W*M`` whatever ``N`` is, and that is what ``klt extract``
+    reads back. Every device in the committed netlist has ``nf=1``, where this
+    is ``M`` fingers of width ``W``.
 3.  ``klt draw`` once for the interconnect/marker cell: the Metal2 net rails,
     the Metal1 device stubs and gate routes, the Via1 stack between them, the
     net-name labels, and the two voltage-domain marker regions
@@ -186,7 +190,15 @@ def _spice_number(value: str) -> float:
 
 
 class Device:
-    """One flattened MOS device, with top-level net names."""
+    """One flattened MOS device, with top-level net names.
+
+    ``w_um`` is the **per-finger** drawn width (the netlist's ``W`` divided by
+    its ``nf``), and ``fingers`` is ``nf * m`` -- i.e. exactly the pair
+    ``klt gen mos_array`` wants, where a ``finger_topology: "parallel"`` unit
+    device is one folded transistor of total width ``fingers * w_um``.  For
+    ``nf=1`` (every device in the committed netlist) ``w_um`` is just ``W``.
+    See :func:`_device_from_tokens` for why the split is the right reading.
+    """
 
     def __init__(
         self,
@@ -304,16 +316,29 @@ def _device_from_tokens(
     def resolve(net: str) -> str:
         return mapping.get(net, f"{prefix}{net}")
 
-    w_um = _spice_number(params["W"]) * 1e6
+    total_w_um = _spice_number(params["W"]) * 1e6
     l_um = _spice_number(params["L"]) * 1e6
     nf = int(round(_spice_number(params.get("nf", "1"))))
     m = int(round(_spice_number(params.get("m", "1"))))
     if nf < 1 or m < 1:
         raise GenError(f"{name}: nf/m must be >= 1 (got nf={nf}, m={m})")
+    # `W` is the device's *total* width, split across its `nf` fingers, and `m`
+    # replicates the whole device -- gf180mcu's model cards hand `w=w nf=nf`
+    # straight to the BSIM core and size their drift resistors on `w/nf`, and
+    # this netlist's own geometry parameters use `W/nf` as the per-finger width
+    # (`ad='int((nf+1)/2) * W/nf * 0.18u'`).  `klt gen mos_array`'s `w_um` is
+    # the *per-finger* width on the other side of the handoff: with
+    # `finger_topology: "parallel"` the unit device is "one folded transistor of
+    # width `fingers * w_um`" (klayout-tools docs/cli/gen.md; same sentence in
+    # its `_mos_unit_strapped_layout` docstring), which klt 0.2.0 confirms by
+    # extracting `{"w_um": 1.0, "fingers": 2}` back as two parallel transistors
+    # of `w_um: 1.0`.  So `nf*m` fingers of `W/nf` -- total drawn width `W*m`,
+    # whatever `nf` is.  Every device in the committed netlist has `nf=1`, where
+    # this is `m` fingers of `W` exactly as before (issue #129).
     return Device(
         name=f"{prefix}{name}",
         model=model,
-        w_um=w_um,
+        w_um=total_w_um / nf,
         l_um=l_um,
         fingers=nf * m,
         d=resolve(terminals[0]),

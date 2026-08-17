@@ -10,6 +10,7 @@ name: CI
 # | `.github/scripts/lint.sh`                     | python3      | `lint` (here)  |
 # | evidence-record format + append-only          | python3+git  | `lint` (here)  |
 # | testbench manifests load (`--list`)           | python3      | `test` (here)  |
+# | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
 # Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
@@ -85,6 +86,14 @@ jobs:
             echo "::error::a testbench manifest failed to load (see the '!!' line above)"
             exit 1
           fi
+
+      - name: Layout generator unit tests
+        # layout/test_gen_gate_driver_core.py pins how the generator reads a
+        # netlist device's W/nf/m (issue #129). Pure stdlib arithmetic -- no
+        # klt, no PDK, no GDS -- so it belongs on this PDK-free runner, and it
+        # is the only check of that interpretation that is *independent* of it:
+        # check_gate_driver_core.py imports the same parser it audits against.
+        run: python3 layout/test_gen_gate_driver_core.py
 
       - name: Environment check (informational -- no PDK on this runner)
         # sim/harness/README.md's documented contract: --check-env exits 3
