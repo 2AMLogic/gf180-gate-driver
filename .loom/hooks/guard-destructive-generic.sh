@@ -4992,7 +4992,37 @@ extract_command_substitution_bodies() {
                 i++
                 continue
             }
-            if (c == ")" && depth > 0 && kind[depth] == "$") {
+            # gf180-gate-driver#122: a ")" is only the REAL closer of the
+            # enclosing $(...) when it is not sitting inside a nested
+            # double-quoted span AT THIS DEPTH. Without the `!dq[depth]`
+            # guard, an ordinary parenthesis that is merely part of the
+            # double-quoted TEXT nested inside the substitution -- a
+            # parenthetical remark ("hello (world)"), or the residual literal
+            # `)` left behind once an escaped `\$(` opener upstream was
+            # correctly recognized as inert and never pushed its own depth --
+            # closed the substitution early. That silently TRUNCATED the body
+            # extract_git_clean_fd_targets() rescans below, before the real
+            # closer was ever reached. Two independently-confirmed
+            # consequences of the truncation: (1) the truncated body, missing
+            # its closing quote, forced qsplit() into its unterminated-quote
+            # fallback (separator-active), which then mis-split an embedded
+            # literal `;` inside the escaped example text into a phantom
+            # top-level `git clean -fd` segment -- the false ASK #122
+            # reports; (2) a genuinely live invocation positioned AFTER the
+            # truncation point in the same substitution (e.g.
+            # `$(echo "hello (world)" && git clean -fd .)`) fell outside the
+            # emitted body entirely -- a silent ALLOW, reproduced separately
+            # while diagnosing #122. `dq[depth]` already tracks exactly the
+            # double-quote state needed: real bash treats every byte inside a
+            # `"..."` span as ordinary text when looking for the matching
+            # close of $(...) (only $/backtick keep expanding), so gating on
+            # `!dq[depth]` matches that rule. A `)` while dq[depth] is 1 now
+            # falls through as ordinary text and is picked back up once the
+            # nested quote closes and the gate re-opens -- this can only
+            # WIDEN what is captured in a body (more text visible to the
+            # ask-side rescan), never narrow it, so it stays on the fail-safe
+            # (over-report) side documented above for an unterminated opener.
+            if (c == ")" && depth > 0 && kind[depth] == "$" && !dq[depth]) {
                 printf "%s%s", substr(s, start[depth], i - start[depth]), RSEP
                 emitted++
                 depth--
@@ -5008,6 +5038,83 @@ extract_command_substitution_bodies() {
             emitted++
             depth--
         }
+    }'
+}
+
+# =============================================================================
+# mask_escaped_subst_openers() — neutralize BACKSLASH-ESCAPED `$(`/backtick
+# openers before a substitution BODY reaches extract_git_clean_fd_targets()
+# (gf180-gate-driver#122).
+#
+# WHY THIS EXISTS. extract_command_substitution_bodies()'s #122 fix (the
+# `!dq[depth]` guard above) now correctly extracts the FULL, untruncated body
+# of a `$(cat <<EOF ... EOF)` substitution even when that body quotes an
+# ESCAPED example invocation as inert prose (`\`git clean -fd .\`` /
+# `"\$(git clean -fd .)"`). But qsplit() (used inside
+# extract_git_clean_fd_targets() below) decides whether a double-quoted span
+# is inert with a NAIVE substring search --
+# `index(inner, "$(") == 0 && index(inner, "`") == 0` -- that does not know
+# about backslash-escaping at all. A span like `"\$(true; git clean -fd .)"`
+# still contains the raw substring `$(` (the backslash does not remove it
+# from the string), so qsplit() judges it non-inert, keeps separators ACTIVE,
+# and splits on the embedded `;` -- manufacturing the exact same phantom
+# `git clean -fd` segment the #112 fix (strip_literal_text()) already had to
+# defeat at the top-level scan. This is the substitution-body-rescan sibling
+# of that gap: strip_literal_text() runs once, upstream, on the whole
+# COMMAND_ASK_SCAN, and its dq_span_has_live_subst() parity check never sees
+# text that only becomes visible once extract_command_substitution_bodies()
+# pulls a substitution BODY back out.
+#
+# This function applies the SAME backslash-parity rule dq_span_has_live_subst
+# already uses (odd run of backslashes immediately before `$(`/backtick ==
+# escaped == inert; even run, including zero, == live) directly to a body
+# string, replacing ONLY the final escaping backslash and the opener byte
+# with a same-length inert filler ("X"). That is enough to make qsplit()'s
+# raw substring search agree with bash: after masking, an escaped
+# `"\$(...)"` span no longer contains a `$(`/backtick substring at all, so
+# qsplit() correctly treats it as inert and copies it verbatim (no internal
+# `;`/`&`/`|` split). A GENUINELY live opener -- zero or an even run of
+# backslashes before it -- is left completely untouched, so a real nested
+# invocation (the #90 "nested-but-not-glued" shapes, still pinned by their
+# own tests) is still visible to the rescan exactly as before. This can only
+# NARROW an ask (fewer phantom segments recognized), never widen one: a live
+# opener is never masked, and masking never removes or alters the target
+# text of a genuine `git clean -fd` invocation elsewhere in the body.
+# =============================================================================
+mask_escaped_subst_openers() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        BT = sprintf("%c", 96)   # backtick
+        BS = sprintf("%c", 92)   # backslash
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        n = length(s)
+        out = ""
+        i = 1
+        while (i <= n) {
+            c = substr(s, i, 1)
+            isopener = (c == BT) || (c == "$" && substr(s, i + 1, 1) == "(")
+            if (isopener) {
+                nbs = 0
+                for (j = i - 1; j >= 1 && substr(s, j, 1) == BS; j--) nbs++
+                if (nbs % 2 == 1) {
+                    # Odd run: the immediately-preceding backslash escapes
+                    # this opener. Neutralize just that backslash + opener
+                    # pair (2 bytes -> 2 bytes, so offsets elsewhere in the
+                    # body are unaffected); every earlier backslash in the
+                    # run is untouched (it pairs off into literal backslash
+                    # bytes on its own and carries no opener meaning).
+                    out = substr(out, 1, length(out) - 1) "XX"
+                    i++
+                    continue
+                }
+            }
+            out = out c
+            i++
+        }
+        printf "%s", out
     }'
 }
 
@@ -6009,6 +6116,28 @@ fi
 # =============================================================================
 if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean[[:space:]]+-fd'; then
     _GC_ASK=1
+    # gf180-gate-driver#122: neutralize BACKSLASH-ESCAPED `$(`/backtick
+    # openers (mask_escaped_subst_openers(), defined above) BEFORE either
+    # segment-parse below runs, gated on a cheap backslash pre-check to keep
+    # the hot path clean for the vast majority of invocations with no
+    # backslash at all. Without this, qsplit() (shared by
+    # extract_git_clean_fd_targets() and, transitively, the
+    # command-substitution rescan just below) judges whether a double-quoted
+    # span is inert with a NAIVE `index(inner, "$(")`/backtick substring
+    # search that does not know about escaping -- so a `--body` value built
+    # from a live `$(cat <<EOF ... EOF)` heredoc (never redacted by
+    # strip_literal_text(), since it genuinely executes) that ALSO quotes an
+    # escaped example invocation as inert prose (`"\$(git clean -fd .)"`,
+    # `` \`git clean -fd .\` ``) still reads as "not inert" to that naive
+    # check purely because the raw `$(`/backtick BYTES are present, escaping
+    # or not. qsplit() then keeps `;`/`&`/`|` separators ACTIVE inside that
+    # span and manufactures a phantom top-level `git clean -fd` segment out
+    # of text that never executes -- the false ask #122 reports. A
+    # genuinely LIVE opener (zero, or an even run, of backslashes before it)
+    # is left completely untouched by the mask, so a real nested invocation
+    # is exactly as visible to both scans below as it was before this fix.
+    _GC_SCAN="$COMMAND_ASK_SCAN"
+    [[ "$COMMAND_ASK_SCAN" == *'\'* ]] && _GC_SCAN=$(mask_escaped_subst_openers "$COMMAND_ASK_SCAN")
     # Target-count bound, FAIL-SAFE (PR #19 review). EVERY extracted target
     # must be checked before the ask can be skipped, so the bound must never
     # silently drop targets: a plain `| head -N` would let a violating target
@@ -6019,7 +6148,7 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean
     # pathological invocation we refuse to scan in full falls back to the
     # ordinary ask rather than being allowed on a partial scan.
     _GC_TARGET_CAP=500
-    _GC_TARGETS=$(extract_git_clean_fd_targets "$COMMAND_ASK_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
+    _GC_TARGETS=$(extract_git_clean_fd_targets "$_GC_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
     if [[ -z "$_GC_TARGETS" ]]; then
         # No real `git clean -fd*` invocation recognized as a proper 3-token
         # segment anywhere in the command (see the "ZERO REAL INVOCATIONS IS
@@ -6044,7 +6173,7 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean
                 _GC_ASK=1
                 break
             fi
-        done < <(extract_command_substitution_bodies "$COMMAND_ASK_SCAN")
+        done < <(extract_command_substitution_bodies "$_GC_SCAN")
         # Falling out of the loop with _GC_ASK empty means: no substitution
         # body holds a recognized invocation either — the pre-check's raw
         # substring match was pure prose/text, with nothing real to confirm
