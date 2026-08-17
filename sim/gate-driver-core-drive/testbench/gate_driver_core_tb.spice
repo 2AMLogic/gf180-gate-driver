@@ -46,6 +46,29 @@
 * long before the next transition, at every PVT point including the
 * worst-case slow corners.
 
+* Internal-node probing (tb.json's "measure" map). Because the DUT's top
+* cell is a FRAGMENT whose own `.subckt gate_driver_core` line is commented
+* out (design/netlist/gate_driver_core.spice), x1/x2 are instantiated at
+* this deck's top level -- so the inter-cell net IN_DRV is a plain
+* top-level node, `v(IN_DRV)`, while the output stage's internal taper
+* nodes are reached hierarchically as `v(x2.n1)`..`v(x2.n5)`.
+*
+* IN_DRV is worth probing here specifically: it is the level shifter's
+* drive-rail-referenced output AND the thick-oxide gate of the output
+* stage's first taper inverter (x2.XMP1/x2.XMN1), so spec Sec.2.3's
+* thick-oxide gate ceiling applies to it -- but NEITHER per-cell campaign
+* observes it under real drive. sim/output-stage-drive/ drives IN_DRV from
+* an ideal 1 ns-edge source, and sim/level-shifter-oxide-safety/ terminates
+* the level shifter's OUT in a lumped capacitor with no output-stage
+* devices attached. Only this end-to-end chain has the level shifter's
+* actual output buffer (XMPBUF2/XMNBUF2) driving the actual first-stage
+* gate load. PR #116 already observed ~100 mV of overshoot on this node at
+* a single 5 V smoke corner; this campaign quantifies it across the whole
+* PVT grid, including the 6 V stretch rail where spec Sec.2.3's 6.0 V
+* ceiling has the least margin. x2.n1..x2.n5 are carried alongside for the
+* same reason -- decision record 0005 quantified their excursion under
+* sim/output-stage-drive's ideal input edge, not under this real one.
+
 vsup_logic VDD_LOGIC 0        dc {vlogic_val}
 vsup_drv   VDD_DRV   0        dc {vdrv_val}
 vgnd_logic GND_LOGIC 0        dc 0

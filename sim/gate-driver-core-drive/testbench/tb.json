@@ -1,7 +1,7 @@
 {
   "name": "gate-driver-core-drive",
-  "description": "End-to-end gate-driver signal chain (design/netlist/gate_driver_core.spice, issue #98): logic-in (IN) -> level_shifter -> output_stage -> 1 nF reference load, driven as one connected chain (not an isolated sub-cell) -- substantiates spec/gate-driver.md Sec.3's block-level drive targets end-to-end (issue #100).",
-  "claim": "spec/gate-driver.md#3-drive-strength-and-reference-load",
+  "description": "End-to-end gate-driver signal chain (design/netlist/gate_driver_core.spice, issue #98): logic-in (IN) -> level_shifter -> output_stage -> 1 nF reference load, driven as one connected chain (not an isolated sub-cell) -- substantiates spec/gate-driver.md Sec.3's block-level drive targets end-to-end, and probes the chain's thick-oxide gate nodes (IN_DRV, x2.n1..x2.n5) against spec Sec.2.3's ceiling under REAL inter-cell drive (issue #100).",
+  "claim": "spec/gate-driver.md#3-drive-strength-and-reference-load; spec/gate-driver.md#23-dc-gate-voltage-ceiling-thin-oxide-vs-thick-oxide",
   "netlist": "gate_driver_core_tb.spice",
   "dut": "design/netlist/gate_driver_core.spice",
   "temperatures_c": [-40, 27, 125],
@@ -30,7 +30,19 @@
     "vout_max_v": "maximum(v(OUT))",
     "vout_min_v": "minimum(v(OUT))",
     "vin_max_v": "maximum(v(IN))",
-    "vin_min_v": "minimum(v(IN))"
+    "vin_min_v": "minimum(v(IN))",
+    "indrv_max_v": "maximum(v(IN_DRV))",
+    "indrv_min_v": "minimum(v(IN_DRV))",
+    "n1_max_v": "maximum(v(x2.n1))",
+    "n1_min_v": "minimum(v(x2.n1))",
+    "n2_max_v": "maximum(v(x2.n2))",
+    "n2_min_v": "minimum(v(x2.n2))",
+    "n3_max_v": "maximum(v(x2.n3))",
+    "n3_min_v": "minimum(v(x2.n3))",
+    "n4_max_v": "maximum(v(x2.n4))",
+    "n4_min_v": "minimum(v(x2.n4))",
+    "n5_max_v": "maximum(v(x2.n5))",
+    "n5_min_v": "minimum(v(x2.n5))"
   },
   "checks": {
     "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT"},
@@ -38,6 +50,18 @@
     "ipeak_source_a": {"min": 0.5, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A (nominal target; the 1A stretch-rail target is evaluated separately in this record's narrative, not as a blanket harness check -- see sim/output-stage-drive/testbench/tb.json's identical convention)"},
     "ipeak_sink_a": {"min": 0.5, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A (nominal target; see ipeak_source_a note on the 1A stretch target)"},
     "vout_max_v": {"max": 6.6, "description": "sanity: OUT must not exceed the swept drive rail plus headroom (no uncontrolled overshoot source in this chain)"},
-    "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV"}
+    "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV -- the same inherited -50mV band as indrv_min_v below"},
+    "indrv_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: IN_DRV -- the level shifter's drive-rail-referenced output, and the THICK-OXIDE gate of the output stage's first taper inverter (x2.XMP1/x2.XMN1) -- must not exceed the swept rail plus headroom. This node is only observable in the end-to-end chain: sim/output-stage-drive drives it from an ideal source and sim/level-shifter-oxide-safety loads it with a lumped cap, so neither per-cell record measures the real level-shifter-driving-output-stage excursion. The 6.6V bound matches the sibling n1..n5 convention; spec Sec.2.3's 6.0V thick-oxide DC ceiling is evaluated row-by-row in the record narrative, because the harness cannot express a rail-dependent bound (issue #125)"},
+    "indrv_min_v": {"min": -0.05, "description": "sanity: IN_DRV must not undershoot GND_DRV. The -50mV band is the tolerance sim/output-stage-drive/testbench/tb.json already established for this class of node -- NOT a spec value -- carried over unchanged rather than retuned to whatever this end-to-end chain happens to produce (CLAUDE.md: agents do not relax a bound to make results pass). See the record narrative for the coupling-undershoot rows that miss it"},
+    "n1_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: output-stage taper node n1 (x2.n1, gate of MP2/MN2) under REAL level-shifter drive rather than sim/output-stage-drive's ideal 1ns input edge"},
+    "n1_min_v": {"min": -0.05, "description": "sanity: taper node n1 must not undershoot GND_DRV -- same inherited -50mV band as indrv_min_v, carried over unchanged"},
+    "n2_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: output-stage taper node n2 under real level-shifter drive"},
+    "n2_min_v": {"min": -0.05, "description": "sanity: taper node n2 must not undershoot GND_DRV -- same inherited -50mV band as indrv_min_v, carried over unchanged"},
+    "n3_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: output-stage taper node n3 under real level-shifter drive"},
+    "n3_min_v": {"min": -0.05, "description": "sanity: taper node n3 must not undershoot GND_DRV -- same inherited -50mV band as indrv_min_v, carried over unchanged"},
+    "n4_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: output-stage taper node n4 under real level-shifter drive"},
+    "n4_min_v": {"min": -0.05, "description": "sanity: taper node n4 must not undershoot GND_DRV -- same inherited -50mV band as indrv_min_v, carried over unchanged"},
+    "n5_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: output-stage taper node n5 (gate of the final push-pull MP6/MN6) under real level-shifter drive"},
+    "n5_min_v": {"min": -0.05, "description": "sanity: taper node n5 must not undershoot GND_DRV -- same inherited -50mV band as indrv_min_v, carried over unchanged"}
   }
 }
