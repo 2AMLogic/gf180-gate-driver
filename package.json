@@ -6,7 +6,6 @@
     "worktree:return": "./.loom/scripts/worktree-return.sh",
     "test": "python3 sim/run_corners.py --list",
     "sim:env": "python3 sim/run_corners.py --check-env",
-    "sim:list": "python3 sim/run_corners.py --list",
     "sim:smoke": "python3 sim/run_corners.py smoke-mv-inverter",
     "lint": "bash .github/scripts/lint.sh"
   }
