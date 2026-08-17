@@ -2688,15 +2688,15 @@ resolve_stash_cwd() {
 }
 
 # Redact the quoted VALUES of known text-carrying flags (--body, -m/--message,
-# --title, --notes, --comment, --search) so a dangerous-looking phrase quoted
-# INSIDE such a value no longer trips the raw ALWAYS_BLOCK_PATTERNS substring
-# scan (catastrophic tier) or the ASK_PATTERNS scan (ask tier, #3756). Used
-# ONLY to build the literal-redacted working copies for those two loops
-# (mirrors the COMMAND_NO_COMMENT precedent); every other scan keeps reading
-# the raw command. This kills the #3679 false positive where `gh pr comment
-# --body "…git push --force origin main…"` / `git commit -m "…"` hard-denied
-# even though nothing executes, and (#3756) the analogous ask-tier false ask
-# where an ask-phrase like `gh issue close` quoted inside a
+# --title, --notes, --comment, --search, --jq) so a dangerous-looking phrase
+# quoted INSIDE such a value no longer trips the raw ALWAYS_BLOCK_PATTERNS
+# substring scan (catastrophic tier) or the ASK_PATTERNS scan (ask tier,
+# #3756). Used ONLY to build the literal-redacted working copies for those two
+# loops (mirrors the COMMAND_NO_COMMENT precedent); every other scan keeps
+# reading the raw command. This kills the #3679 false positive where `gh pr
+# comment --body "…git push --force origin main…"` / `git commit -m "…"`
+# hard-denied even though nothing executes, and (#3756) the analogous ask-tier
+# false ask where an ask-phrase like `gh issue close` quoted inside a
 # `--comment`/`--body` value prompted for confirmation despite no such
 # command actually being run.
 #
@@ -2713,6 +2713,15 @@ resolve_stash_cwd() {
 # `cloud-cli` ask tier). Both additions are narrowly scoped to `gh`/`jq`
 # read-only value arguments, per the #5214/#5157/#5158 precedent of NOT
 # generalizing this into a full qsplit()-segment-parsed rewrite.
+#
+# #170: `--jq` (e.g. `gh api ... --jq 'select(.title | test("DROP TABLE"))'`)
+# is likewise a read-only jq FILTER STRING, never an executed shell command —
+# structurally identical to `--search` above, so it fits the same
+# `<flag> "<quoted value>"` shape (NOT the NAME-aware `--arg`/`--argjson`
+# shape, which requires a bare identifier between the flag and the value).
+# This closes the sibling false positive where a search/audit command whose
+# `--jq` filter merely quotes a dangerous phrase as a substring/regex test
+# (never executing it) tripped the catastrophic sql-ddl deny.
 #
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
@@ -3067,8 +3076,8 @@ strip_literal_text() {
         # flag and the quoted value, which the first alternative'"'"'s shape does
         # not anticipate, so it gets its own pattern rather than being folded
         # into the flag list above.
-        FLAG_RE_BOL = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*$"
-        FLAG_RE_MID = "[ \t\n](--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*$"
+        FLAG_RE_BOL = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|--jq|-m)[ \t]*=?[ \t]*$"
+        FLAG_RE_MID = "[ \t\n](--message|--body|--notes|--title|--comment|--search|--jq|-m)[ \t]*=?[ \t]*$"
         JQ_RE_BOL = "(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
         JQ_RE_MID = "[ \t\n](--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
         buf = ""
@@ -3639,7 +3648,8 @@ fi
 if [[ "$COMMAND" == *"--body"* || "$COMMAND" == *"--message"* || \
       "$COMMAND" == *"--title"* || "$COMMAND" == *"--notes"* || \
       "$COMMAND" == *"--comment"* || "$COMMAND" == *"-m"* || \
-      "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* ]]; then
+      "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* || \
+      "$COMMAND" == *"--jq"* ]]; then
     COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
 fi
 
@@ -3859,7 +3869,7 @@ if [[ "$COMMAND" == *"@"* ]]; then
     #     check-duplicate.sh) -- exactly the repro shape above.
     #   - strip_literal_text() (#3679/#5216/#5783) masks quoted values following a
     #     text-carrying FLAG (--body/--message/--title/--notes/--comment/--search/
-    #     -m/--arg/--argjson), single-quoted spans unconditionally (real single
+    #     --jq/-m/--arg/--argjson), single-quoted spans unconditionally (real single
     #     quotes give bash zero expansion) and double-quoted spans only when they
     #     carry no `$(`/backtick (so a live command-substitution smuggled through a
     #     double-quoted value stays visible and still denies).
@@ -3875,7 +3885,8 @@ if [[ "$COMMAND" == *"@"* ]]; then
     if [[ "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--body"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--message"* || \
           "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--title"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--notes"* || \
           "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--comment"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"-m"* || \
-          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--search"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--arg"* ]]; then
+          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--search"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--arg"* || \
+          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--jq"* ]]; then
         COMMAND_GH_API_RAWFIELD_SCAN=$(strip_literal_text "$COMMAND_GH_API_RAWFIELD_SCAN")
     fi
     GH_API_RAWFIELD_BODY_AT_PATTERN="(^|[;&|[:space:]])gh[[:space:]]+api[^;&]*[[:space:]](-f|--raw-field)[[:space:]]*=?[[:space:]]*[\"']?body=[\"']?$GH_AT_PATHISH"
@@ -3998,7 +4009,8 @@ fi
 if [[ "$COMMAND_NO_COMMENT" == *"--body"* || "$COMMAND_NO_COMMENT" == *"--message"* || \
       "$COMMAND_NO_COMMENT" == *"--title"* || "$COMMAND_NO_COMMENT" == *"--notes"* || \
       "$COMMAND_NO_COMMENT" == *"--comment"* || "$COMMAND_NO_COMMENT" == *"-m"* || \
-      "$COMMAND_NO_COMMENT" == *"--search"* || "$COMMAND_NO_COMMENT" == *"--arg"* ]]; then
+      "$COMMAND_NO_COMMENT" == *"--search"* || "$COMMAND_NO_COMMENT" == *"--arg"* || \
+      "$COMMAND_NO_COMMENT" == *"--jq"* ]]; then
     COMMAND_ASK_SCAN=$(strip_literal_text "$COMMAND_ASK_SCAN")
 fi
 
@@ -6506,8 +6518,8 @@ fi
 #
 # Gated by the SAME literal substring pre-check the removed ASK_PATTERNS entry
 # used, scanned against COMMAND_ASK_SCAN, so a mention of the phrase inside a
-# quoted --body/-m/--title/--notes/--comment value (already redacted there)
-# does not spuriously trigger the segment parse.
+# quoted --body/-m/--title/--notes/--comment/--jq value (already redacted
+# there) does not spuriously trigger the segment parse.
 #
 # ZERO REAL INVOCATIONS IS A TRIVIAL ALLOW (gf180-gate-driver#90): the line-
 # 5666 pre-check below is a cheap, non-segment-aware substring scan over the
