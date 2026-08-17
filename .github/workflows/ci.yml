@@ -11,6 +11,7 @@ name: CI
 # | evidence-record format + append-only          | python3+git  | `lint` (here)  |
 # | testbench manifests load (`--list`)           | python3      | `test` (here)  |
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
+# | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
@@ -97,6 +98,17 @@ jobs:
         # failure mode it guards (a loose bound recorded as if it were the
         # tight one) looks identical to a passing run in the record itself.
         run: python3 sim/test_harness_checks.py
+
+      - name: Harness deck-composition unit tests
+        # sim/test_harness_runner.py pins that compose_deck() always emits
+        # `set num_threads=1` in the generated .control block (issue #146):
+        # a locally built, OpenMP-enabled ngspice's own spinit can default to
+        # a thread count > 1, which is pure oversubscription once run_corners
+        # is already parallelizing with -j -- measured at ~2000x slower for
+        # byte-identical results. Pure string composition over synthetic
+        # Testbench/Pdk/PvtPoint inputs -- no ngspice, no PDK -- so it belongs
+        # on this PDK-free runner.
+        run: python3 sim/test_harness_runner.py
 
       - name: Layout generator unit tests
         # layout/test_gen_gate_driver_core.py pins how the generator reads a

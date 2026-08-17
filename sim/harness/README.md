@@ -123,6 +123,13 @@ python3 sim/run_corners.py smoke-mv-inverter --corner-set full -j 8
 python3 sim/run_corners.py smoke-mv-inverter --corners tt res_ss --temps -40 125
 ```
 
+`-j` parallelizes across PVT points at the harness level (one ngspice
+subprocess per point), so the generated deck's `.control` block always pins
+`set num_threads=1` — see the note on the control block under
+[Writing a testbench](#writing-a-testbench) below — to stop each ngspice
+process from *also* fanning out across OpenMP threads underneath the
+harness's own parallelism.
+
 There is no `--supply`/`--supply-tol` override (unlike gf180-bandgap): with
 two independently-named rails there is no single scalar left to override from
 the command line the way the source harness's one `vdd` was. Change a rail's
@@ -223,6 +230,18 @@ The netlist is a **fragment**, not a complete deck. It must not contain
 all of those, which is what lets one netlist sweep the whole grid unedited.
 The loader rejects fragments that break this rule instead of silently pinning
 every corner to 27 °C. The harness hands the fragment, per declared rail:
+
+`compose_deck()`'s `.control` block also always pins `set num_threads=1`,
+alongside `set numdgt=10` / `set noaskquit`. This isn't a numerical-accuracy
+knob — it stops each ngspice subprocess from fanning out across OpenMP
+threads on its own. A locally built, OpenMP-enabled ngspice reads its own
+`spinit` (or a `.spiceinit`) for a default thread count — some hosts ship one
+with `set num_threads=8` — which is pure oversubscription once `-j` is
+already running several PVT points in parallel: on an affected host, one
+point went from ~0.17 CPU-s to ~8.5 CPU-min, and a 60-point sweep from ~5 s to
+hours, for byte-identical measurements. The harness is what decides the
+sweep's parallelism, so it is also what pins each ngspice invocation to a
+single thread underneath it, independent of host `spinit` configuration.
 
 | Parameter | Value |
 |---|---|

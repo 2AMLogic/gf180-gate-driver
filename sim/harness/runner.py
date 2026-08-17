@@ -98,6 +98,7 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
         ".control",
         "set numdgt=10",
         "set noaskquit",
+        "set num_threads=1",
     ]
     lines += [f"  {analysis}" for analysis in tb.analyses]
     for name, expr in tb.measure.items():
