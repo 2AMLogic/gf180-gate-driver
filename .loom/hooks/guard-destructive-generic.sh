@@ -5900,6 +5900,61 @@ if worktree_isolation_guard_enabled && \
             _WT_MAIN_ROOT_LOGICAL=$(cd "$CWD" 2>/dev/null && cd "$_wt_common/.." 2>/dev/null && pwd) || _WT_MAIN_ROOT_LOGICAL=""
         fi
     fi
+
+    # Identity-verify the CWD-discovered root before trusting it as "the"
+    # protected main checkout (#175). Without this, ANY git repository that
+    # happens to enclose $CWD authenticates as the main checkout, with no
+    # check that it is actually this Loom-managed project — so a `git
+    # init`'d scratch tree under /tmp (routinely created by agents testing
+    # this very guard) that happens to also carry a
+    # `.loom/worktrees/*/.loom-managed` fixture gets treated as the real main
+    # checkout, denying writes that are 100% outside the real repository.
+    #
+    # Anchor a SECOND, CWD-INDEPENDENT identity probe at SCRIPT_DIR — the
+    # on-disk location of THIS hook file itself, resolved via
+    # `${BASH_SOURCE[0]}` near the top of the file, well before the
+    # tool_input-controlled $CWD/$COMMAND are ever consulted. SCRIPT_DIR is
+    # always inside the real project this guard protects: installed at
+    # .loom/hooks/ there in production, or copied alongside a fresh git tree
+    # in the test harness (test-guard-destructive-worktree-confinement.sh),
+    # which self-consistently keeps CWD and SCRIPT_DIR in the SAME synthetic
+    # repo. It cannot be steered by a command string or a spoofed `cwd` field
+    # the way $CWD can.
+    #
+    # If the CWD-derived root does not match the script-anchored root, the
+    # CWD-derived root belongs to a DIFFERENT repository — however genuinely
+    # `git init`'d it is — and must not be trusted as "the" main checkout.
+    # Fall back to the identity-verified script-anchored root instead, so a
+    # genuine write into the REAL main checkout is still caught (criterion
+    # 2), while the foreign scratch repo is not mistaken for it (criterion
+    # 1). Only the PHYSICAL (`pwd -P`) spellings need to agree for a match —
+    # requiring BOTH spellings to disagree before calling it a mismatch means
+    # a legitimate symlink-reached path (#4495's concern) with only the
+    # LOGICAL spelling differing between the two anchors still verifies.
+    #
+    # Fails SAFE per criterion 3: if the script-anchored identity itself
+    # cannot be established (SCRIPT_DIR is not inside a git repo at all —
+    # e.g. the hook was invoked standalone, outside any checkout), this
+    # block is a no-op and _WT_MAIN_ROOT/_WT_MAIN_ROOT_LOGICAL are left
+    # exactly as derived from $CWD above — this issue rejects a WRONGLY
+    # authenticated root, it does not add a new way to fail closed.
+    _wt_script_common=""
+    _WT_SCRIPT_ROOT=""
+    _WT_SCRIPT_ROOT_LOGICAL=""
+    if [[ -n "$SCRIPT_DIR" && -d "$SCRIPT_DIR" ]]; then
+        _wt_script_common=$(cd "$SCRIPT_DIR" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || _wt_script_common=""
+        if [[ -n "$_wt_script_common" ]]; then
+            _WT_SCRIPT_ROOT=$(cd "$SCRIPT_DIR" 2>/dev/null && cd "$_wt_script_common/.." 2>/dev/null && pwd -P) || _WT_SCRIPT_ROOT=""
+            _WT_SCRIPT_ROOT_LOGICAL=$(cd "$SCRIPT_DIR" 2>/dev/null && cd "$_wt_script_common/.." 2>/dev/null && pwd) || _WT_SCRIPT_ROOT_LOGICAL=""
+        fi
+    fi
+    if [[ -n "$_WT_MAIN_ROOT" && -n "$_WT_SCRIPT_ROOT" ]]; then
+        if [[ "$_WT_MAIN_ROOT" != "$_WT_SCRIPT_ROOT" && "$_WT_MAIN_ROOT_LOGICAL" != "$_WT_SCRIPT_ROOT_LOGICAL" ]]; then
+            _WT_MAIN_ROOT="$_WT_SCRIPT_ROOT"
+            _WT_MAIN_ROOT_LOGICAL="$_WT_SCRIPT_ROOT_LOGICAL"
+        fi
+    fi
+
     [[ -n "$_WT_MAIN_ROOT" ]] || _WT_MAIN_ROOT="$REPO_ROOT"
     [[ -n "$_WT_MAIN_ROOT_LOGICAL" ]] || _WT_MAIN_ROOT_LOGICAL="$_WT_MAIN_ROOT"
 
