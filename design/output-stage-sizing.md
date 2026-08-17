@@ -421,6 +421,12 @@ drives the cell's largest, most delay-critical devices, unlike the
 lower-stakes analogous case in decision record 0003). §2.3's 6.0 V ceiling
 number itself is unchanged, and this record (§6) remains the unmodified,
 authoritative evidence trail for this cell — no new PVT run was required.
+Per [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md),
+the end-to-end campaign has amended the exception's quantification: under the
+real level-shifter edge, the worst case is n1 = 6.10232 V (margin −102.3 mV)
+at `sf_-40c_vlogic3p30v-vdrv6p00v`, not n5 = 6.0538 V (−53.8 mV) measured here
+with an ideal 1 ns edge; this record's own idealized-edge results remain the
+authoritative baseline for `sim/output-stage-drive/`.
 
 ## 7. Cross-conduction / shoot-through (captured, no spec limit)
 
