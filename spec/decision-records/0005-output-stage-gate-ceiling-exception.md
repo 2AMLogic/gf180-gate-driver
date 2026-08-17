@@ -3,6 +3,17 @@
 - **Status**: Ratified
 - **Date**: 2026-08-12
 - **Decided by**: Builder agent, issue #24
+- **Amended by**: [decision record
+  0006](0006-indrv-inter-cell-gate-ceiling-exception.md), 2026-08-17 —
+  **quantification only**. This record's decision stands unchanged; its
+  cited worst-case number (`n5` = 6.0538 V, margin −53.8 mV, measured under
+  `sim/output-stage-drive/`'s ideal 1 ns input edge) is superseded by the
+  end-to-end measurement under the real level-shifter edge, `n1` = 6.10232 V
+  (margin −102.3 mV) at `sf_-40c_vlogic3p30v-vdrv6p00v`
+  (`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`, Finding
+  3). The argument text below is left exactly as ratified — see the
+  "Amendment" section at the end of this file, and decision record 0006's
+  "Amendment to decision record 0005" section, for the correction.
 - **Supersedes**: none. **Extends** decision record 0004 (does not reopen or
   contradict it — 0004's own "Consequences" section explicitly deferred this
   exact choice to a follow-up issue; this record is that follow-up, and it
@@ -216,3 +227,45 @@ protection *claim*, not the ceiling §2.3 measures against.
   work (most plausibly a structural cascode, re-deriving §1–§3 of
   `design/output-stage-sizing.md` from scratch) requiring its own decision
   record and full-PVT evidence record, not a silent edit to this one.
+
+---
+
+## Amendment (2026-08-17, decision record 0006, issue #136)
+
+*Additive. Nothing above this line is altered — this record's decision, its
+scope, and its reasoning all stand as ratified on 2026-08-12. Only the
+worst-case number it cites is corrected, exactly as the evidence record
+below anticipated ("a future amendment should cite this record's value
+instead").*
+
+Every number this record quotes for the taper nodes comes from
+`sim/output-stage-drive/records/20260812-064304-03699ea.md`, which drives
+`IN_DRV` from an **ideal 1 ns-edge voltage source** with no level shifter
+present. The end-to-end campaign
+`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md` (issue #100)
+has since measured the same nodes under the **real level-shifter output
+edge**, and Finding 3 records a worse case:
+
+| | This record (ideal 1 ns edge) | End-to-end (real level-shifter edge) |
+|---|---|---|
+| Binding node | `n5` | **`n1`** (the stage nearest the level shifter) |
+| Worst case | 6.0538 V | **6.10232 V** |
+| Margin to §2.3's 6.0 V ceiling | −53.8 mV | **−102.3 mV** (≈ 1.9×) |
+| Binding corner | `ss_27c_vdrv6p00v` | `sf_-40c_vlogic3p30v-vdrv6p00v` |
+
+The mechanism is unchanged (a gate-capacitance/Miller-coupling kick onto a
+node parked at its own rail); only its magnitude moves, because the first
+taper stage now sees a real finite-impedance driver carrying its own
+overshoot rather than a stiff ideal source. **The exception's existence and
+its 6 V-stretch-rail-only scope are unaffected** — all 45 nominal-tolerance
+points still clear the ceiling with wide margin — so this is a correction to
+the bound, not a reopening of the decision. `spec/gate-driver.md` §5's
+Exception 2 bullet cites the corrected number and the end-to-end record.
+
+Decision record 0006 additionally records a deck-fidelity observation that
+bears on this record's numbers: re-solving the analogous excursion with a
+bounded maximum timestep or a tighter `reltol` moves the peak outward by
+~25 %, so figures measured at the harness's default transient tolerances —
+including this record's and decision record 0004's — are likely lower bounds
+on the true excursion. That is tracked as its own follow-up; no number in
+this record is edited on the strength of it.
