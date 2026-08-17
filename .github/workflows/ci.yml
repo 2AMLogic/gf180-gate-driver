@@ -179,3 +179,4 @@ jobs:
           bash .loom/hooks/tests/test-guard-heredoc-interpreter-masking.sh
           bash .loom/hooks/tests/test-guard-destructive-sed-bsd-inplace.sh
           bash .loom/hooks/tests/test-guard-sql-ddl-jq-prose.sh
+          bash .loom/hooks/tests/test-guard-force-push-literal-masking.sh
