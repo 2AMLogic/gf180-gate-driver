@@ -32,7 +32,7 @@ layout/
 | DRC-clean | yes — `status: clean`, 0 violations, **within the deck scope below** |
 | LVS-clean | yes — `status: match`, 959/959 devices, 30/30 nets, 19/19 pins, **3 warnings-only findings below** |
 | Bulk/body terminals tied | **no — no well or substrate taps drawn**; this is what the LVS `device.body_unverified` warnings are |
-| Post-layout simulation | yes — 36 PVT points on the extracted netlist, `sim/gate-driver-core-drive-postlayout/`; **no interconnect parasitics in the simulated DUT** |
+| Post-layout simulation | yes — full 60-point PVT grid on the extracted netlist, `sim/gate-driver-core-drive-postlayout/`; **no interconnect parasitics in the simulated DUT** |
 
 Both verdicts are real (each has a committed negative control, below) but
 neither is a tapeout signoff: the deck does not carry rules for this layout's
@@ -287,13 +287,14 @@ built from the same layout:
 The campaign, its per-corner results, and the schematic-vs-extracted delta
 live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
 as ordinary append-only `sim/` evidence. The first record —
-[`20260817-113244-e0f9aa2`](../sim/gate-driver-core-drive-postlayout/records/20260817-113244-e0f9aa2.md),
-36 PVT points (tt/ss/ff × −40/27/125 °C × three tied ±10 % supply points plus
-the 6 V stretch point) — re-runs the same spec suite the schematic-side record
-covers and lands within **1.7 % on every drive row** and **≤ 79 mV on every
-thick-oxide gate node**. Both of its harness-check misses are the same
-inherited −50 mV undershoot sanity band, on the same node and corner family,
-that the schematic-side record already misses; the record's own §1–§4 explain
+[`20260817-152820-6a5739c`](../sim/gate-driver-core-drive-postlayout/records/20260817-152820-6a5739c.md),
+the **full 60-point PVT grid** (5 process corners x -40/27/125 C x three tied
++-10 % supply points plus the 6 V stretch point) — re-runs the same spec suite
+the schematic-side record covers, at every one of the same 60 corner-ids, and
+lands within **1.8 % on every drive row** and **<= 79 mV on every thick-oxide
+gate node**. Both of its harness-check misses are the same inherited -50 mV
+undershoot sanity band, on the same node and corner family, that the
+schematic-side record already misses; the record's own sections 1-3 explain
 each one rather than leaving the one-word verdict to speak.
 
 ## Known gaps
