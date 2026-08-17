@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "worktree:return": "./.loom/scripts/worktree-return.sh",
-    "check:ci": "bash .github/scripts/lint.sh",
     "test": "python3 sim/run_corners.py --list",
     "sim:env": "python3 sim/run_corners.py --check-env",
     "sim:list": "python3 sim/run_corners.py --list",
