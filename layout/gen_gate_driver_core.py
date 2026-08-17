@@ -54,6 +54,12 @@ is what keeps a purely orthogonal, no-router wiring scheme short-free.
 Known limitations of this first-cut layout (deliberately not fixed here -- see
 ``layout/README.md`` and issue #105, which owns DRC/LVS closure):
 
+* Passive devices are parsed but not drawn.  ``klt gen`` has no capacitor
+  generator, and ``XCCOMP``'s metal pair is an explicitly deferred layout-time
+  choice (design/level-shifter-partition.md), so the MIM cap added by issue
+  #155 is reported (a stderr warning plus a ``passives_not_drawn`` block in the
+  provenance record) rather than silently dropped.  Issue #166 owns drawing it
+  and re-running DRC/LVS.
 * No well/substrate taps, no guard ring around ``DNWELL_DRV``.  A closed tap
   ring around the drive domain has to be cut for every signal crossing the
   domain boundary, which is a routing plan, not a marker rectangle.
@@ -126,6 +132,19 @@ DUALGATE_MARGIN_UM = 2.0  # Dualgate enclosure of the 5V/6V group
 # (spec/gate-driver.md 2.4, DRM 7.2, design/level-shifter-partition.md).
 MV_MODELS = {"nfet_06v0", "pfet_06v0"}
 LV_MODELS = {"nfet_03v3", "pfet_03v3"}
+
+# Passive (non-MOS) device model families this netlist may contain.  gf180mcu
+# spells its capacitor primitives `cap_mim_*` / `cap_nmos*` / `cap_pmos*`, and
+# they carry `c_width`/`c_length` rather than a MOSFET's `W`/`L`.  They are
+# parsed and reported, but *not* drawn: `klt gen` has no capacitor generator in
+# this repo's flow (`klt gen --list`: mos_array, diff_pair, guard_ring,
+# res_array, esd_device, bjt_array, bond_pad, resistor_strip -- none of which
+# is a MIM cap), and the metal-pair choice for `XCCOMP` is explicitly deferred
+# to layout time (design/level-shifter-partition.md).  Issue #166 owns drawing
+# it and re-running DRC/LVS; until then :func:`build` refuses to pretend the
+# generated GDS covers them -- see the warning it prints and the
+# `passives_not_drawn` block it writes into the provenance record.
+PASSIVE_MODEL_PREFIXES = ("cap_",)
 
 
 class GenError(RuntimeError):
@@ -241,12 +260,71 @@ class Device:
         }
 
 
-def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
-    """Flatten ``gate_driver_core.spice`` into (top port list, device list).
+class Passive:
+    """One flattened two-terminal passive device, with top-level net names.
 
-    Returns the top cell's port names in ``.subckt`` order plus every MOS
-    device in the design, with each device's terminals renamed to the
-    *top-level* net they resolve to through the ``x1``/``x2`` instance lines.
+    Today this is only the MIM capacitor ``XCCOMP``
+    (``cap_mim_1f0_m4m5_noshield``, issue #155 / decision record 0007), whose
+    geometry is ``c_width``/``c_length`` rather than a MOSFET's ``W``/``L``.
+
+    A ``Passive`` is deliberately **not** a :class:`Device`: nothing in this
+    generator draws one (see :data:`PASSIVE_MODEL_PREFIXES`), so keeping the
+    two types distinct is what stops a capacitor from being silently fed to
+    ``klt gen mos_array`` as if it were a transistor -- or, worse, silently
+    dropped, leaving a GDS that claims to implement a netlist it does not.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        model: str,
+        w_um: float,
+        l_um: float,
+        multiplicity: int,
+        plus: str,
+        minus: str,
+    ) -> None:
+        self.name = name
+        self.model = model
+        self.w_um = w_um
+        self.l_um = l_um
+        self.multiplicity = multiplicity
+        self.plus = plus
+        self.minus = minus
+
+    def as_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "model": self.model,
+            "c_width_um": self.w_um,
+            "c_length_um": self.l_um,
+            "m": self.multiplicity,
+            "nets": {"plus": self.plus, "minus": self.minus},
+        }
+
+
+def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
+    """Flatten ``gate_driver_core.spice`` into (top port list, MOS device list).
+
+    Thin wrapper over :func:`parse_netlist_full` that drops the passive list,
+    kept because every downstream consumer of this parser
+    (``check_gate_driver_core.py``, ``lvs/make_reference.py``) is MOS-only by
+    construction: both audit the drawn transistors of the committed GDS, which
+    contains no passive today.  Anything that *generates* layout should call
+    :func:`parse_netlist_full` instead, so an undrawn passive is visible rather
+    than silently absent.
+    """
+    top_ports, devices, _passives = parse_netlist_full(path)
+    return top_ports, devices
+
+
+def parse_netlist_full(path: str) -> tuple[list[str], list[Device], list[Passive]]:
+    """Flatten ``gate_driver_core.spice`` into (top ports, MOS devices, passives).
+
+    Returns the top cell's port names in ``.subckt`` order, every MOS device in
+    the design, and every non-MOS (passive) device, with each terminal renamed
+    to the *top-level* net it resolves to through the ``x1``/``x2`` instance
+    lines.
     """
     with open(path, encoding="utf-8") as handle:
         lines = _logical_lines(handle.read())
@@ -287,6 +365,7 @@ def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
         raise GenError(f"{path}: no top-level subcircuit instances found")
 
     devices: list[Device] = []
+    passives: list[Passive] = []
     for inst_name, inst_nets, subckt_name in top_instances:
         if subckt_name not in subckts:
             raise GenError(f"{path}: instance {inst_name} names unknown cell {subckt_name}")
@@ -298,24 +377,69 @@ def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
             )
         mapping = {f: a for f, a in zip(formal, inst_nets)}
         for tokens in body:
-            devices.append(
-                _device_from_tokens(tokens, mapping, prefix=f"{inst_name}_")
-            )
-    return top_ports, devices
+            parsed = _device_from_tokens(tokens, mapping, prefix=f"{inst_name}_")
+            if isinstance(parsed, Passive):
+                passives.append(parsed)
+            else:
+                devices.append(parsed)
+    return top_ports, devices, passives
+
+
+def _split_instance(tokens: list[str]) -> tuple[str, list[str], str, dict[str, str]]:
+    """Split ``X<name> <net>... <model> [param=value ...]`` into its four parts.
+
+    The terminal count is *not* fixed at four: a MOSFET line has four (d g s b)
+    and a two-terminal passive has two, so the model is located as "the last
+    token before the first ``param=value``" rather than at a fixed index.  The
+    old fixed-index reading is what produced ``KeyError: 'W'`` on the MIM cap
+    line: it took the cap's first parameter (``c_width=3.0u``) for the model
+    name and then looked up a width that was never there (issue #155 / #166).
+    """
+    param_start = next((i for i, tok in enumerate(tokens) if "=" in tok), len(tokens))
+    if param_start < 3:
+        raise GenError(
+            f"{tokens[0]}: cannot read a device line with fewer than one "
+            f"terminal and a model name: {' '.join(tokens)!r}"
+        )
+    return (
+        tokens[0],
+        tokens[1 : param_start - 1],
+        tokens[param_start - 1],
+        dict(_PARAM_RE.findall(" ".join(tokens[param_start:]))),
+    )
 
 
 def _device_from_tokens(
     tokens: list[str], mapping: dict[str, str], prefix: str
-) -> Device:
-    """Build a :class:`Device` from one ``X<name> d g s b model params...`` line."""
-    name = tokens[0]
-    terminals = tokens[1:5]
-    model = tokens[5]
-    params = dict(_PARAM_RE.findall(" ".join(tokens[6:])))
+) -> Device | Passive:
+    """Build one device from a ``X<name> <nets...> model params...`` line.
+
+    Returns a :class:`Device` for a MOSFET and a :class:`Passive` for a
+    recognized non-MOS model (:data:`PASSIVE_MODEL_PREFIXES`).  Any other line
+    shape is a :class:`GenError`, never a bare ``KeyError``: a netlist device
+    this generator cannot classify must fail loudly, since silently dropping it
+    would produce a GDS that does not implement the schematic.
+    """
+    name, terminals, model, params = _split_instance(tokens)
 
     def resolve(net: str) -> str:
         return mapping.get(net, f"{prefix}{net}")
 
+    if model.startswith(PASSIVE_MODEL_PREFIXES):
+        return _passive_from_params(name, terminals, model, params, prefix, resolve)
+
+    if len(terminals) != 4:
+        raise GenError(
+            f"{name}: MOS device {model} has {len(terminals)} terminals "
+            f"(expected 4: d g s b)"
+        )
+    missing = [key for key in ("W", "L") if key not in params]
+    if missing:
+        raise GenError(
+            f"{name}: model {model} has no {'/'.join(missing)} parameter -- it "
+            f"is neither a MOSFET nor a model family this generator knows how "
+            f"to draw (recognized passives: {', '.join(PASSIVE_MODEL_PREFIXES)}*)"
+        )
     total_w_um = _spice_number(params["W"]) * 1e6
     l_um = _spice_number(params["L"]) * 1e6
     nf = int(round(_spice_number(params.get("nf", "1"))))
@@ -345,6 +469,39 @@ def _device_from_tokens(
         g=resolve(terminals[1]),
         s=resolve(terminals[2]),
         b=resolve(terminals[3]),
+    )
+
+
+def _passive_from_params(
+    name: str,
+    terminals: list[str],
+    model: str,
+    params: dict[str, str],
+    prefix: str,
+    resolve,
+) -> Passive:
+    """Build a :class:`Passive` from a recognized non-MOS device line."""
+    if len(terminals) != 2:
+        raise GenError(
+            f"{name}: passive {model} has {len(terminals)} terminals "
+            f"(expected 2)"
+        )
+    missing = [key for key in ("c_width", "c_length") if key not in params]
+    if missing:
+        raise GenError(
+            f"{name}: passive {model} has no {'/'.join(missing)} parameter"
+        )
+    m = int(round(_spice_number(params.get("m", "1"))))
+    if m < 1:
+        raise GenError(f"{name}: m must be >= 1 (got m={m})")
+    return Passive(
+        name=f"{prefix}{name}",
+        model=model,
+        w_um=_spice_number(params["c_width"]) * 1e6,
+        l_um=_spice_number(params["c_length"]) * 1e6,
+        multiplicity=m,
+        plus=resolve(terminals[0]),
+        minus=resolve(terminals[1]),
     )
 
 
@@ -758,7 +915,24 @@ def build(out_dir: str, pdk: str) -> dict:
     work_dir = os.path.join(out_dir, "build")
     os.makedirs(work_dir, exist_ok=True)
 
-    top_ports, devices = parse_netlist(NETLIST_PATH)
+    top_ports, devices, passives = parse_netlist_full(NETLIST_PATH)
+    if passives:
+        # Loud on purpose: this generator draws MOS devices only, so a netlist
+        # passive means the GDS it is about to write does NOT implement the
+        # whole schematic.  Issue #166 owns drawing `XCCOMP` (and the
+        # metal-pair choice that goes with it) plus the DRC/LVS re-run; until
+        # then the gap is reported here and recorded in the provenance file
+        # rather than being discovered at LVS time.
+        print(
+            "warning: "
+            + f"{len(passives)} passive device(s) in "
+            + os.path.relpath(NETLIST_PATH, REPO_ROOT)
+            + " are NOT drawn by this generator: "
+            + ", ".join(f"{p.name} ({p.model})" for p in passives)
+            + " -- the generated layout is incomplete with respect to the "
+            + "netlist until issue #166 lands",
+            file=sys.stderr,
+        )
     reports = generate_device_cells(devices, work_dir, pdk)
     placements = place_devices(devices, reports)
 
@@ -805,6 +979,10 @@ def build(out_dir: str, pdk: str) -> dict:
             "top_ports": top_ports,
             "device_count": len(devices),
             "transistor_count": sum(d.fingers for d in devices),
+            # Netlist devices this generator does not draw (issue #166). An
+            # empty list is the "layout covers the whole netlist" statement;
+            # a non-empty one records exactly what the GDS is missing.
+            "passives_not_drawn": [p.as_dict() for p in passives],
         },
         "generator": {
             "path": os.path.relpath(os.path.abspath(__file__), REPO_ROOT),
@@ -849,6 +1027,7 @@ def build(out_dir: str, pdk: str) -> dict:
         "provenance": provenance_path,
         "compose": compose_report,
         "devices": devices,
+        "passives": passives,
     }
 
 
@@ -889,6 +1068,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"netlist devs : {len(result['devices'])}")
     print(f"transistors  : {sum(d.fingers for d in result['devices'])}")
+    print(f"not drawn    : {len(result['passives'])} passive(s) (see issue #166)")
     return 0
 
 

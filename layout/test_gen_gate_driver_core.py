@@ -52,9 +52,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     NETLIST_PATH,
+    Device,
     GenError,
+    Passive,
     _device_from_tokens,
     parse_netlist,
+    parse_netlist_full,
 )
 
 
@@ -170,6 +173,92 @@ class CommittedNetlistTest(unittest.TestCase):
         _ports, devices = parse_netlist(NETLIST_PATH)
         self.assertEqual(len(devices), 24)
         self.assertEqual(sum(d.fingers for d in devices), 959)
+
+
+class PassiveDeviceTest(unittest.TestCase):
+    """Non-MOS device lines are classified, not misread as transistors.
+
+    Issue #155 added ``XCCOMP``, a MIM feedforward compensation capacitor, to
+    the netlist. It carries ``c_width``/``c_length`` and two terminals rather
+    than a MOSFET's ``W``/``L`` and four, which the position-based parser read
+    as "model = ``c_width=3.0u``" and then crashed on with ``KeyError: 'W'``.
+    The parser now locates the model as the last token before the first
+    parameter, so both device shapes parse, and a capacitor is returned as a
+    :class:`Passive` -- a distinct type from :class:`Device`, so it can never
+    reach ``klt gen mos_array`` as if it were a transistor.
+
+    The capacitor is deliberately *not* drawn by the generator (``klt gen`` has
+    no capacitor generator, and the metal pair is a deferred layout-time
+    choice) -- issue #166 owns drawing it and re-running DRC/LVS. What this
+    suite pins is that the skip is explicit and visible: the passive appears in
+    ``parse_netlist_full``'s third return value, so ``build()`` can warn and
+    record it, and never in the MOS device list the layout is generated from.
+    """
+
+    CAP_LINE = "XCCOMP ncb out cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u m=1"
+
+    def test_mim_cap_line_parses_as_a_passive(self):
+        passive = _device_from_tokens(self.CAP_LINE.split(), {}, prefix="x1_")
+        self.assertIsInstance(passive, Passive)
+        self.assertNotIsInstance(passive, Device)
+        self.assertEqual(passive.name, "x1_XCCOMP")
+        self.assertEqual(passive.model, "cap_mim_1f0_m4m5_noshield")
+        self.assertAlmostEqual(passive.w_um, 3.0, places=9)
+        self.assertAlmostEqual(passive.l_um, 3.0, places=9)
+        self.assertEqual(passive.multiplicity, 1)
+
+    def test_passive_terminals_resolve_through_the_instance_mapping(self):
+        # `out` is a formal port of level_shifter, wired to IN_DRV at the top
+        # level; `ncb` is internal, so it takes the instance prefix.
+        passive = _device_from_tokens(
+            self.CAP_LINE.split(), {"out": "IN_DRV"}, prefix="x1_"
+        )
+        self.assertEqual(passive.plus, "x1_ncb")
+        self.assertEqual(passive.minus, "IN_DRV")
+
+    def test_committed_netlist_has_exactly_one_undrawn_passive(self):
+        _ports, devices, passives = parse_netlist_full(NETLIST_PATH)
+        self.assertEqual(len(devices), 24)
+        self.assertEqual([p.name for p in passives], ["x1_XCCOMP"])
+        self.assertEqual(passives[0].minus, "IN_DRV")
+        # The MOS list the layout is generated from must contain no passive.
+        self.assertTrue(all(isinstance(d, Device) for d in devices))
+        self.assertNotIn("cap_mim_1f0_m4m5_noshield", {d.model for d in devices})
+
+    def test_passive_is_reported_in_full_but_hidden_from_the_mos_parser(self):
+        ports_a, devices_a = parse_netlist(NETLIST_PATH)
+        ports_b, devices_b, _passives = parse_netlist_full(NETLIST_PATH)
+        self.assertEqual(ports_a, ports_b)
+        self.assertEqual([d.name for d in devices_a], [d.name for d in devices_b])
+
+
+class MalformedDeviceLineTest(unittest.TestCase):
+    """An unclassifiable device line raises ``GenError``, never a bare KeyError.
+
+    Silently dropping a netlist device would produce a GDS that does not
+    implement the schematic, so every rejection here is deliberate and loud.
+    """
+
+    def test_mos_line_without_W_raises_gen_error_not_keyerror(self):
+        with self.assertRaises(GenError) as ctx:
+            _device_from_tokens("XMTEST d g s b nfet_06v0 L=0.7u m=1".split(), {}, "x1_")
+        self.assertIn("W", str(ctx.exception))
+
+    def test_unknown_two_terminal_model_raises(self):
+        with self.assertRaises(GenError):
+            _device_from_tokens("XRTEST a b res_generic r=1k".split(), {}, "x1_")
+
+    def test_passive_without_geometry_raises(self):
+        with self.assertRaises(GenError):
+            _device_from_tokens("XCTEST a b cap_mim_1f0_m4m5_noshield m=1".split(), {}, "x1_")
+
+    def test_passive_with_wrong_terminal_count_raises(self):
+        with self.assertRaises(GenError):
+            _device_from_tokens(
+                "XCTEST a b c cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u".split(),
+                {},
+                "x1_",
+            )
 
 
 if __name__ == "__main__":
