@@ -37,6 +37,20 @@
 #     NOT start treating single-quoted tokens as variable references (that
 #     would be a genuine confinement bypass, not a false-positive fix)
 #
+# Issue #144 (same-command `mktemp -d` sandbox) extends the same suite: a
+# guard self-test script that mints its own throwaway tree
+# (`TMPROOT="$(mktemp -d)"`) and writes only inside it was denied at the
+# catastrophic -unresolved-var tier seven times in this repo's guard telemetry
+# (2026-08-15..17), because record_assign() stored the value TRUNCATED at the
+# space inside the substitution. Cases (h)-(w) below cover the flip to ALLOW
+# and, more importantly, every neighbouring shape that must keep denying:
+# `mktemp` without -d, a repo-relative template, an explicit `-p` parent,
+# `-u`, a reassigned/ambiguous binding, a concatenated value, a bare
+# `$(mktemp -d)` target, a TMPDIR pointing inside the checkout, a command that
+# sets TMPDIR itself (so the parent the scan can see is not the parent
+# `mktemp` would actually use), an assignment-shaped substring appearing only
+# as prose, and a `../` climb back out of the sandbox into the checkout.
+#
 # The hook under test is the canonical source at .loom/hooks/ (this repo
 # ships no defaults/ tree and no .claude/skills/repo/hooks/ canonical Repo
 # Skills guard -- see the file's own banner -- so this vendored copy is the
@@ -87,6 +101,16 @@ run_hook() {
     local command="$1"
     local exit_code=0 output
     output=$(cd "$TMPROOT" && bash "$HOOK" < <(make_input "$command") 2>/dev/null) || exit_code=$?
+    printf '%s|%s' "$exit_code" "$output"
+}
+
+# Same, with an explicit TMPDIR in the hook's environment — the parent
+# directory a bare `mktemp -d` would use, and therefore the parent of the
+# stand-in the #144 exception resolves such a binding to.
+run_hook_tmpdir() {
+    local tmpdir="$1" command="$2"
+    local exit_code=0 output
+    output=$(cd "$TMPROOT" && TMPDIR="$tmpdir" bash "$HOOK" < <(make_input "$command") 2>/dev/null) || exit_code=$?
     printf '%s|%s' "$exit_code" "$output"
 }
 
@@ -188,6 +212,184 @@ assert_deny "(f) quoted \$VAR, conflicting same-command assignment (AMBIG) -> st
 result=$(run_hook "WORKTREE_ABS=\"$WT\"
 cp /tmp/f.txt '\$WORKTREE_ABS/evil.txt'")
 assert_deny "(g) single-quoted '\$VAR/...' write target -> still deny (never expands in real shell)" "$result"
+
+echo "--- same-command 'mktemp -d' sandbox bindings (#144) ---"
+
+# --- (h) the reported false positive: a guard self-test script mints its own
+# throwaway tree with `mktemp -d` and copies into it -> ALLOW. Before the fix
+# the assignment scan truncated the value at the space inside the command
+# substitution (`TMPROOT="$(mktemp`), resolve_var() substituted that fragment,
+# and the phantom target denied at the catastrophic
+# worktree-write-confinement-unresolved-var tier.
+result=$(run_hook 'TMPROOT="$(mktemp -d)"
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_allow "(h) quoted \$(mktemp -d) sandbox, cp into it -> allow" "$result"
+
+# --- (i) unquoted assignment + `>` redirection, same shape -> ALLOW
+result=$(run_hook 'TMPROOT=$(mktemp -d)
+echo hi > "$TMPROOT/x"')
+assert_allow "(i) unquoted \$(mktemp -d) sandbox, > redirect into it -> allow" "$result"
+
+# --- (j) backtick spelling -> ALLOW
+result=$(run_hook 'TMPROOT=`mktemp -d`
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_allow "(j) backticked \`mktemp -d\` sandbox -> allow" "$result"
+
+# --- (k) the telemetry's own shape: a subdirectory of the sandbox is named in
+# a second variable before being written to -> ALLOW (chain rooted at the
+# sandbox is followed one step per assignment, in stream order).
+result=$(run_hook 'TMPROOT="$(mktemp -d)"
+WT="$TMPROOT/.loom/worktrees/issue-99"
+cp /etc/hosts "$WT/f"')
+assert_allow "(k) chained \$WT under a \$(mktemp -d) sandbox -> allow" "$result"
+
+# --- (l) NEGATIVE: `mktemp` with no -d creates a FILE, not a sandbox
+# directory -> still DENY unresolved.
+result=$(run_hook 'F=$(mktemp)
+cp /etc/hosts "$F/hosts"')
+assert_deny "(l) \$(mktemp) without -d (file, not directory) -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (m) NEGATIVE: a repo-relative template really can land inside the
+# checkout -> still DENY unresolved.
+result=$(run_hook 'TMPROOT=$(mktemp -d ./scratch.XXXX)
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(m) mktemp -d with a repo-relative template -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (n) NEGATIVE: a RELATIVE explicit parent is joined against a cwd this
+# scan is not tracking for the substituted command -> still DENY unresolved.
+result=$(run_hook 'TMPROOT=$(mktemp -d -p .)
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(n) mktemp -d -p . (relative parent) -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (n2) an ABSOLUTE template names its own parent, so it is resolvable the
+# same way the default one is -> ALLOW. This is the exact shape of one of the
+# telemetry hits (`mktemp -d /tmp/gc94-XXXX`).
+result=$(run_hook 'SCRATCH=$(mktemp -d /tmp/gc94-XXXX)
+cp /etc/hosts "$SCRATCH/f"')
+assert_allow "(n2) mktemp -d with an absolute out-of-repo template -> allow" "$result"
+
+# --- (n3) ditto for an absolute `-p` parent.
+result=$(run_hook 'SCRATCH=$(mktemp -d -p /var/tmp)
+cp /etc/hosts "$SCRATCH/f"')
+assert_allow "(n3) mktemp -d -p /var/tmp (absolute out-of-repo parent) -> allow" "$result"
+
+# --- (n4) NEGATIVE, the mirror of (t): an absolute template INSIDE the main
+# checkout is judged as the literal path it is -> DENY, and with the ordinary
+# confinement tag rather than the unresolved one.
+result=$(run_hook "SCRATCH=\$(mktemp -d $TMPROOT/gc-XXXX)
+cp /etc/hosts \"\$SCRATCH/f\"")
+assert_deny "(n4) mktemp -d with a template inside the main checkout -> deny" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (n5) NEGATIVE: a template carrying an unexpanded \$ is exactly the kind
+# of unknown this guard fails closed on -> still DENY unresolved.
+result=$(run_hook 'SCRATCH=$(mktemp -d "$BASE/gc-XXXX")
+cp /etc/hosts "$SCRATCH/f"')
+assert_deny "(n5) mktemp -d with a \$-carrying template -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (o) NEGATIVE: -u only PRINTS a name, creating nothing -> still DENY.
+result=$(run_hook 'TMPROOT=$(mktemp -u -d)
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(o) mktemp -u -d (dry run, nothing created) -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (p) NEGATIVE: the sandbox binding is reassigned to the main checkout in
+# a LATER segment -> the AMBIG sentinel must still poison it.
+result=$(run_hook "TMPROOT=\"\$(mktemp -d)\"
+TMPROOT=\"$TMPROOT\"
+cp /etc/hosts \"\$TMPROOT/evil\"")
+assert_deny "(p) sandbox var reassigned to the main checkout -> still deny (AMBIG)" "$result" \
+    "unexpanded shell variable"
+
+# --- (q) NEGATIVE: the `||` fallback shape, which qsplit() does not segment
+# after a QUOTED command substitution, so the second binding is invisible to
+# the assignment scan -> the exception must refuse the whole recognition
+# rather than trust the first branch.
+result=$(run_hook 'TMPROOT="$(mktemp -d)" || TMPROOT=/some/other
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(q) sandbox var with a same-segment || fallback binding -> still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (r) NEGATIVE: concatenation onto the substitution is a different value
+# than the sandbox root -> still DENY unresolved.
+result=$(run_hook 'TMPROOT=$(mktemp -d)/sub
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(r) X=\$(mktemp -d)/sub concatenation -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (s) NEGATIVE: a bare `$(mktemp -d)` used DIRECTLY as the write target
+# (no binding to follow) keeps its existing root-unknown deny.
+result=$(run_hook 'cp /etc/hosts $(mktemp -d)/hosts')
+assert_deny "(s) bare \$(mktemp -d) as the write target itself -> still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (t) NEGATIVE, the security hinge: with TMPDIR pointing INSIDE the main
+# checkout, a real `mktemp -d` creates its directory there. The stand-in is a
+# judged path in that same parent, so the ordinary literal containment test
+# catches it -- no special case, and this is why the exception is fail-closed
+# rather than a blanket trust of `mktemp`.
+mkdir -p "$TMPROOT/intmp"
+result=$(run_hook_tmpdir "$TMPROOT/intmp" 'TMPROOT="$(mktemp -d)"
+cp /etc/hosts "$TMPROOT/hosts"')
+assert_deny "(t) TMPDIR inside the main checkout -> deny (sandbox stand-in lands in the checkout)" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (u) NEGATIVE, the other half of the (t) hinge: the parent a bare
+# `mktemp -d` uses is read from the TMPDIR this HOOK inherited, so a command
+# that sets TMPDIR *itself* would be judged against the wrong directory --
+# and could point its sandbox straight into the checkout while the scan
+# happily judged /tmp. Any TMPDIR assignment in the command therefore
+# disables the default-parent shape outright. Prefix form:
+result=$(run_hook "TMPDIR=$TMPROOT/intmp TMPROOT=\$(mktemp -d)
+cp /etc/hosts \"\$TMPROOT/hosts\"")
+assert_deny "(u) command sets TMPDIR as an assignment prefix -> deny (default parent no longer trusted)" "$result" \
+    "unexpanded shell variable"
+
+# --- (u2) same, in the shape the per-segment assignment scan never records
+# at all (an `export` on its own line) -- the check reads the whole buffer
+# precisely so this cannot slip past it.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+TMPROOT=\$(mktemp -d)
+cp /etc/hosts \"\$TMPROOT/hosts\"")
+assert_deny "(u2) command exports TMPDIR on an earlier line -> deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (u3) POSITIVE counterpart: `mktemp -p` ignores TMPDIR entirely, so an
+# explicit absolute out-of-repo parent stays resolvable even when the command
+# does set TMPDIR. (u)/(u2) must not over-reach into this shape.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+SCRATCH=\$(mktemp -d -p /var/tmp)
+cp /etc/hosts \"\$SCRATCH/f\"")
+assert_allow "(u3) explicit -p parent is unaffected by a TMPDIR assignment -> allow" "$result"
+
+# --- (u4) the `--tmpdir=` FLAG is lowercase and a `*_TMPDIR=` variable is a
+# different name -- neither may trip the (u) refusal, or the flag form would
+# disable itself.
+result=$(run_hook 'LOOM_TMPDIR=/some/where
+T=$(mktemp --directory --tmpdir=/var/tmp)
+cp /etc/hosts "$T/f"')
+assert_allow "(u4) --tmpdir= flag / FOO_TMPDIR= name do not trip the TMPDIR refusal -> allow" "$result"
+
+# --- (v) NEGATIVE: the same text as PROSE inside another command's argument
+# binds nothing -- recognition is anchored at a segment head, so an
+# assignment-shaped substring elsewhere on the line must not make `$T`
+# resolvable.
+result=$(run_hook 'echo "T=$(mktemp -d)"
+cp /etc/hosts "$T/f"')
+assert_deny "(v) mktemp assignment as prose in another argument -> binds nothing, still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (w) NEGATIVE: a resolved sandbox is a real path, so climbing back OUT of
+# it into the main checkout is caught by the ordinary containment test -- the
+# stand-in must not become a blanket "anything rooted at $T is fine" token.
+result=$(run_hook "T=\$(mktemp -d)
+W=\"\$T/../../..$TMPROOT/x\"
+cp /etc/hosts \"\$W\"")
+assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
