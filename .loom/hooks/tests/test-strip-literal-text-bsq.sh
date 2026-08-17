@@ -92,6 +92,8 @@ fail() { FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); printf "${RED}FAIL${NC} %s\n"
 # same guard on the Bash invocation that RUNS this test suite.
 GS="git st""ash"
 GSP="git st""ash po""p"
+RMRF="rm -r""f /"
+GITCLEAN="git cl""ean -fd ."
 
 # =============================================================================
 # PART 1 -- direct strip_literal_text() unit tests
@@ -187,6 +189,48 @@ else
     else
         fail "(7) baseline regressed: expected [$EXPECT7], got [$OUT7]"
     fi
+
+    # --- (8)-(10) issue #120: a flag-shaped substring INSIDE an
+    # already-open single-quoted argument must never be mistaken for a real
+    # flag/value pair. In each case bash closes the single quote right after
+    # the embedded `"b`, so the `;`-separated command that follows is a REAL,
+    # live segment -- it must survive strip_literal_text() completely
+    # unmasked (byte-for-byte identical to the input from that `;` onward).
+    # Before the #120 fix, the context-free span regex treated the `"` right
+    # after `--body` (itself just four bytes of the single-quoted argument's
+    # text, not a real flag) as opening a double-quoted span, and matched
+    # through to the LAST unescaped `"` in the buffer -- masking the live
+    # command in between.
+
+    # --- (8) row 1: no backslash escape at all (pre-existing on main before
+    # #119, per the issue's own "Provenance / scope" section).
+    CMD8="foo 'a --body \"b' ; ${RMRF} ; echo \"c\""
+    OUT8=$(strip_literal_text "$CMD8")
+    if [[ "$OUT8" == "$CMD8" ]]; then
+        pass "(8) #120 row 1: flag-shaped text inside an open single-quoted arg -> buffer left fully unmasked"
+    else
+        fail "(8) #120 row 1: buffer was mutated (real command masked): in=[$CMD8] out=[$OUT8]"
+    fi
+
+    # --- (9) row 2: the \"-escaped spelling (the shape #119/#112 newly
+    # reaches, per the issue's provenance note).
+    CMD9="foo 'a --body \"b\\\"' ; ${RMRF} ; echo \"c\""
+    OUT9=$(strip_literal_text "$CMD9")
+    if [[ "$OUT9" == "$CMD9" ]]; then
+        pass "(9) #120 row 2: backslash-escaped-quote spelling inside an open single-quoted arg -> buffer left fully unmasked"
+    else
+        fail "(9) #120 row 2: buffer was mutated (real command masked): in=[$CMD9] out=[$OUT9]"
+    fi
+
+    # --- (10) row 3: same shape, ask-tier trigger (git clean -fd) instead of
+    # the catastrophic-tier rm -rf /.
+    CMD10="foo 'a --body \"b' ; ${GITCLEAN} ; echo \"c\""
+    OUT10=$(strip_literal_text "$CMD10")
+    if [[ "$OUT10" == "$CMD10" ]]; then
+        pass "(10) #120 row 3: flag-shaped text inside an open single-quoted arg (ask-tier phrase) -> buffer left fully unmasked"
+    else
+        fail "(10) #120 row 3: buffer was mutated (real command masked): in=[$CMD10] out=[$OUT10]"
+    fi
 fi
 
 # =============================================================================
@@ -254,6 +298,27 @@ assert_ask() {
     pass "$desc"
 }
 
+assert_deny() {
+    local desc="$1" result="$2" reason_substr="${3:-}"
+    local code="${result%%|*}" out="${result#*|}"
+    if [[ "$code" != "0" ]]; then
+        fail "$desc (expected exit 0 with deny JSON, got NONZERO exit=$code)"
+        return
+    fi
+    local decision reason
+    decision=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecision // empty' 2>/dev/null || true)
+    reason=$(echo "$out" | jq -r '.hookSpecificOutput.permissionDecisionReason // empty' 2>/dev/null || true)
+    if [[ "$decision" != "deny" ]]; then
+        fail "$desc (expected permissionDecision=deny, got: $out)"
+        return
+    fi
+    if [[ -n "$reason_substr" && "$reason" != *"$reason_substr"* ]]; then
+        fail "$desc (deny reason missing expected substring '$reason_substr': $reason)"
+        return
+    fi
+    pass "$desc"
+}
+
 # --- (a) minimal apostrophe-escaped --body value quoting a dangerous phrase
 # as documentation, deliberately free of any whitespace-preceded `#` (so
 # this is unconfounded by COMMAND_NO_COMMENT's separate, out-of-scope
@@ -308,6 +373,22 @@ assert_ask "(e) real unquoted stash recovery in main checkout -> still ask (real
 result=$(run_hook "gh issue comment 50 --body 'unterminated'\\''oops && ${GSP}")
 assert_ask "(f) unterminated single-quoted value + real trailing stash recovery -> still ask (no runaway match)" "$result" \
     "MAIN checkout can destroy operator-preserved state"
+
+# --- (g)-(i) issue #120 end-to-end: the three exact repro rows from the
+# issue body, run through the REAL hook. In each, bash closes the
+# single-quoted `foo` argument right after the embedded `"b`, so the
+# `;`-separated command that follows genuinely executes -- these must not
+# ALLOW.
+result=$(run_hook "foo 'a --body \"b' ; ${RMRF} ; echo \"c\"")
+assert_deny "(g) #120 row 1: flag-shaped text inside an open single-quoted arg no longer hides a live rm -rf / -> deny" "$result" \
+    "dangerous pattern"
+
+result=$(run_hook "foo 'a --body \"b\\\"' ; ${RMRF} ; echo \"c\"")
+assert_deny "(h) #120 row 2: backslash-escaped-quote spelling no longer hides a live rm -rf / -> deny" "$result" \
+    "dangerous pattern"
+
+result=$(run_hook "foo 'a --body \"b' ; ${GITCLEAN} ; echo \"c\"")
+assert_ask "(i) #120 row 3: flag-shaped text inside an open single-quoted arg no longer hides a live git clean -fd -> ask" "$result"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff

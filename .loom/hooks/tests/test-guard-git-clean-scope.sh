@@ -586,6 +586,20 @@ assert_decision \
     "$TMPROOT" \
     "ask"
 
+# --- #120: strip_literal_text()'s span regex used to be unaware of the
+# enclosing quote context, so a flag-shaped substring (`--body "..."`)
+# sitting INSIDE an already-open single-quoted argument to an unrelated
+# command was mistaken for a real flag/value pair. bash closes that
+# single-quoted argument right after the embedded `"b`, so the `;`-separated
+# `git clean -fd .` that follows is a REAL, live invocation -- it must still
+# ask, not be masked away by a redaction span that ran past the real bash
+# argument boundary into the rest of the command.
+assert_decision \
+    "flag-shaped text inside an already-open single-quoted argument does not hide a real trailing git clean -fd (#120)" \
+    'foo '"'"'a --body "b'"'"' ; git clean -fd . ; echo "c"' \
+    "$WT" \
+    "ask"
+
 echo
 echo "== Summary: $PASS/$TOTAL passed =="
 
