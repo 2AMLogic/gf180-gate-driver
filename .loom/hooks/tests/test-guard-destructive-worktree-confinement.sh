@@ -158,6 +158,21 @@ run_hook_tmpdir() {
     printf '%s|%s' "$exit_code" "$output"
 }
 
+# Same as run_hook(), but with an EXPLICIT cwd override — the hook's
+# git-common-dir/SCRIPT_DIR identity check (#175) is anchored at $TMPROOT
+# (HOOK is physically installed under $TMPROOT/.loom/hooks/), while the
+# tool_input `cwd` field points somewhere else entirely, exactly like a real
+# Bash tool_input's cwd need not match the hook process's own launch
+# directory. The hook process itself is still launched from $TMPROOT (so
+# SCRIPT_DIR resolves there), but the JSON `cwd` is $1.
+run_hook_cwd() {
+    local cwd="$1" command="$2"
+    local exit_code=0 output
+    output=$(cd "$TMPROOT" && jq -n --arg cmd "$command" --arg cwd "$cwd" \
+        '{tool_input: {command: $cmd}, cwd: $cwd}' | bash "$HOOK" 2>/dev/null) || exit_code=$?
+    printf '%s|%s' "$exit_code" "$output"
+}
+
 assert_allow() {
     local desc="$1" result="$2"
     local code="${result%%|*}" out="${result#*|}"
@@ -505,6 +520,39 @@ assert_allow "(x8) echo hi > /tmp/x 2>/dev/null -> allow (baseline, no regressio
 result=$(run_hook "cp /tmp/x $TMPROOT/evil.txt 2>&1 | cat")
 assert_deny "(x9) cp SRC <main-checkout>/evil.txt 2>&1 | cat -> deny, target is evil.txt (not 2>&1/cat)" "$result" \
     "evil.txt"
+
+echo "--- unrelated scratch-repo git-common-dir spoofing (#175) ---"
+
+# --- (y) THE MINIMAL REPRO: an entirely unrelated, `git init`'d scratch tree
+# (FAKEROOT, distinct from TMPROOT) that happens to also carry its own
+# `.loom/worktrees/*/.loom-managed` fixture -- exactly the shape an agent
+# produces when testing THIS guard in scratch space under /tmp. Before the
+# #175 fix, _WT_MAIN_ROOT/_wt_isolation_in_play trusted WHATEVER git repo
+# enclosed the tool_input `cwd` field with no ownership check, so a write
+# entirely inside FAKEROOT (nowhere near the real TMPROOT checkout) was
+# denied as "resolves to the main repository checkout". -> must now ALLOW.
+FAKEROOT="$(mktemp -d)"
+git init -q "$FAKEROOT"
+mkdir -p "$FAKEROOT/.loom/worktrees/fakewt"
+touch "$FAKEROOT/.loom/worktrees/fakewt/.loom-managed"
+result=$(run_hook_cwd "$FAKEROOT" "mkdir -p \"$FAKEROOT/scratch\"
+cp /tmp/a.txt \"$FAKEROOT/scratch/b.txt\"")
+assert_allow "(y) write entirely inside an unrelated git-init'd scratch repo (with its own .loom-managed fixture) -> allow, not mistaken for the main checkout" "$result"
+rm -rf "$FAKEROOT"
+
+# --- (z) NEGATIVE, the security hinge for (y): a genuine write into the REAL
+# main checkout (TMPROOT, the repo the hook is actually installed in via
+# SCRIPT_DIR) must still deny exactly as before the #175 fix -- the identity
+# check narrows WHICH root is trusted, it does not weaken containment once
+# the correct root is fed in.
+result=$(run_hook "cp /tmp/f.txt $TMPROOT/evil.txt")
+assert_deny "(z) genuine write into the real main checkout -> still deny (no regression from #175 fix)" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (z2) NEGATIVE, the other half: a genuine write into the already-fixtured
+# managed worktree ($WT, under TMPROOT) must still allow exactly as before.
+result=$(run_hook "cp /tmp/f.txt \"$WT/design/z2.sch\"")
+assert_allow "(z2) genuine write into a real managed worktree -> still allow (no regression from #175 fix)" "$result"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
