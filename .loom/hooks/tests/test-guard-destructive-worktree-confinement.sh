@@ -87,6 +87,50 @@ HOOK="$TMPROOT/.loom/hooks/guard-destructive-generic.sh"
 pass() { PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1)); printf "${GREEN}PASS${NC} %s\n" "$1"; }
 fail() { FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); printf "${RED}FAIL${NC} %s\n" "$1"; }
 
+# mktempd_standin_climb() -- emit a "../"-joined relative prefix long enough to
+# climb from the guard's own `mktemp -d` sandbox stand-in
+# (`<physical TMPDIR>/.loom-guard-mktemp-d-sandbox`) all the way back to `/`.
+#
+# This mirrors the hook's OWN resolution step for step, so the depth is correct
+# by construction on any host rather than by coincidence:
+#   _wt_init_default_tmpdir()  (guard-destructive-generic.sh)
+#       base = ${TMPDIR:-/tmp}, trailing "/" stripped, must be absolute,
+#       then PHYSICALLY resolved with `cd ... && pwd -P`
+#   mktempd_standin()          (same file, inside the awk scan)
+#       stand-in = <that parent> + "/.loom-guard-mktemp-d-sandbox"
+# Counting the non-empty components of that exact stand-in path gives the
+# number of `..` needed to reach `/`.
+#
+# The physical resolve is the load-bearing part. Deriving the depth from an
+# UNRESOLVED path instead (e.g. this script's own `mktemp -d` output, as the
+# previous fix did) undercounts by exactly the number of components a symlink
+# hop adds: on macOS `$TMPDIR` is `/var/folders/<xx>/<hash>/T` (5 components)
+# but resolves through `/var -> /private/var` to 6, and a `$TMPDIR` reached via
+# a longer symlink chain can differ by more than one. A fixed "+1" margin
+# happens to cover the single-hop case only. Undershooting is silent and
+# defeats the test (the traversal lands mid-tree, the guard has nothing to
+# flag, and the expected deny never fires), whereas overshooting is free:
+# normalize_abs_path() clamps any extra ".." at root to a no-op. So this still
+# adds one climb of margin on top of the derived depth -- as insurance, not as
+# the derivation itself.
+mktempd_standin_climb() {
+    local base phys segs=() seg depth=0 out="" i
+    base="${TMPDIR:-/tmp}"
+    base="${base%/}"
+    [[ "$base" == /* ]] || base=/tmp
+    phys=$(cd "$base" 2>/dev/null && pwd -P) || phys="$base"
+    [[ -n "$phys" ]] || phys="$base"
+    IFS='/' read -r -a segs <<< "$phys/.loom-guard-mktemp-d-sandbox"
+    for seg in "${segs[@]}"; do
+        [[ -n "$seg" ]] && depth=$((depth + 1))
+    done
+    depth=$((depth + 1))  # margin: ".." at/above root safely clamps at root
+    for ((i = 0; i < depth; i++)); do
+        if [[ -n "$out" ]]; then out="$out/.."; else out=".."; fi
+    done
+    printf '%s' "$out"
+}
+
 # Build stdin JSON for a Bash tool_input, with cwd fixed at TMPROOT (the
 # synthetic main checkout).
 make_input() {
@@ -401,18 +445,17 @@ assert_deny "(v) mktemp assignment as prose in another argument -> binds nothing
 # correctly does not flag that (nothing to deny), and this test would then
 # wrongly expect a deny.
 #
-# Compute the traversal depth from $TMPROOT's OWN path instead of a
-# platform-specific literal: TMPROOT was created by an unadorned `mktemp -d`
-# in this same environment, so it shares the same parent-directory depth the
-# guard's stand-in resolves against, plus one level for the stand-in's own
-# leaf component. Add a one-level safety margin on top --
-# normalize_abs_path() clamps any *extra* ".." at root to a no-op (see that
-# function's own header), so overshooting is harmless while undershooting
-# silently defeats this test, exactly as the hardcoded "3" did on macOS.
-w_ups=$(( $(printf '%s' "$TMPROOT" | tr -cd '/' | wc -c) + 1 ))
-W_DOTS=$(printf '%0.s../' $(seq 1 "$w_ups"))
+# Derive the traversal depth from the stand-in the guard will actually
+# construct -- `${TMPDIR:-/tmp}` physically resolved (`cd ... && pwd -P`) plus
+# the fixed sandbox leaf -- via mktempd_standin_climb() above. That is the
+# guard's own math, so it holds for any $TMPDIR shape. Depth derived from an
+# UNRESOLVED path plus a fixed margin (this script's own `mktemp -d` output
+# + 1, as before) only covers a $TMPDIR whose physical form is at most one
+# component deeper than its logical form; a longer symlink chain undershoots
+# again, which is exactly the failure mode this case exists to catch.
+W_DOTS="$(mktempd_standin_climb)"
 result=$(run_hook "T=\$(mktemp -d)
-W=\"\$T/${W_DOTS}$TMPROOT/x\"
+W=\"\$T/$W_DOTS$TMPROOT/x\"
 cp /etc/hosts \"\$W\"")
 assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
