@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-08-17
 
+- **Issue #122** (closed): Guard decision: ask-tier git-clean-fd substring still fires on backtick-quoted example text inside a $(cat <<EOF …) --body heredoc
+- **PR #131**: fix(guard): recognize escaped $(/backtick openers nested in a live heredoc body as inert (git-clean-fd ask tier)
 - **Issue #104** (closed): T1 gap: physical layout for gate-driver block (checklist item 2)
 - **PR #128**: feat(layout): generate gate_driver_core GDS from its netlist via klt
 
