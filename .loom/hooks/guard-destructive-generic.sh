@@ -4183,6 +4183,68 @@ extract_rm_targets() {
 }
 
 # =============================================================================
+# _wt_init_default_tmpdir() — resolves _WT_DEFAULT_TMPDIR, the parent directory
+# a bare `mktemp -d` would create its new directory in (gf180-gate-driver#144).
+#
+# A guard-development / self-test script routinely mints its OWN throwaway tree
+# in one command and then writes only inside it:
+#
+#     TMPROOT="$(mktemp -d)"
+#     cp .loom/hooks/guard-destructive-generic.sh "$TMPROOT/.loom/hooks/g.sh"
+#
+# Every such write is provably outside this repository, but `$TMPROOT` is
+# unresolvable to extract_write_targets()'s same-command resolver (record_assign
+# stores the raw `$(mktemp` text; resolve_var refuses any value that still
+# begins with `$`), so the target fell through to the catastrophic
+# `worktree-write-confinement-unresolved-var` deny — 8 of the 10 denials under
+# that tag in this repo's guard-decisions telemetry through 2026-08-17, none of
+# them a real confinement violation. (The other two bind `$(mktemp)` with no
+# `-d`, a FILE, which deliberately keeps denying — see mktempd_parent().)
+#
+# The runtime value of a `mktemp -d` really IS unknowable ahead of time (a fresh
+# random suffix), so this does NOT resolve the variable to the path the write
+# will have. It resolves it to a SYNTHETIC stand-in directory in the same PARENT
+# `mktemp` would use — which is all the confinement check needs, because that
+# check only ever asks "is this inside the main checkout / a managed worktree?",
+# a question the parent answers for every child.
+#
+# That indirection is what keeps the fix fail-closed rather than a blanket
+# trust of `mktemp`: the stand-in is a real, judged path, so a `TMPDIR` pointing
+# INSIDE the checkout (`TMPDIR=<repo>/tmp`) resolves into the protected area and
+# still denies, via the ordinary literal containment test, with no special case.
+#
+# This helper resolves only the DEFAULT parent (`$TMPDIR`, else /tmp). An
+# invocation that names its own parent explicitly — `mktemp -d /tmp/x.XXXX`,
+# `mktemp -d -p /var/tmp` — is handled inside the awk scan, which uses that
+# absolute literal as the parent instead; either way the parent is judged by
+# the ordinary containment test, so naming an in-repo parent still denies.
+#
+# Physical (`pwd -P`), because _WT_MAIN_ROOT is physical too — on a host where
+# /tmp is a symlink (macOS -> /private/tmp) a logical stand-in would be compared
+# against a physical root and could miss a containment it should catch.
+# Cached: this is one subshell per hook invocation at most.
+# =============================================================================
+_WT_DEFAULT_TMPDIR=""
+_WT_DEFAULT_TMPDIR_INIT=0
+_wt_init_default_tmpdir() {
+    if [[ "$_WT_DEFAULT_TMPDIR_INIT" == "0" ]]; then
+        _WT_DEFAULT_TMPDIR_INIT=1
+        local _base="${TMPDIR:-/tmp}"
+        _base="${_base%/}"
+        # A relative or empty TMPDIR is itself unresolvable (it would be joined
+        # against a cwd this scan is not tracking for the mktemp call) — leave
+        # the parent empty, which disables the exception for the DEFAULT shape
+        # and keeps every such command on today's fail-closed path.
+        if [[ "$_base" == /* ]]; then
+            local _phys
+            _phys=$(cd "$_base" 2>/dev/null && pwd -P) || _phys=""
+            [[ -n "$_phys" ]] || _phys="$_base"
+            _WT_DEFAULT_TMPDIR="$_phys"
+        fi
+    fi
+}
+
+# =============================================================================
 # extract_write_targets() — Bash-tool write-idiom target extraction (#4178).
 #
 # Emits one "<cwd>\t<target>" line (TAB-separated, US separator 0x1f — mirrors
@@ -4322,7 +4384,8 @@ extract_rm_targets() {
 # inventing NEW denies; preserving an EXISTING one is the conservative side.)
 # =============================================================================
 extract_write_targets() {
-    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKGT_AWK""$_MASKWS_AWK""$_MASKHEREDOC_AWK"'
+    _wt_init_default_tmpdir
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" -v deftmpdir="$_WT_DEFAULT_TMPDIR" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKGT_AWK""$_MASKWS_AWK""$_MASKHEREDOC_AWK"'
     # Unresolvable cases all return tok UNCHANGED, which is exactly the
     # pre-#4881 treatment (literal, cwd-prefixed => still denied when it
     # lands in the main checkout). Fail-closed by construction: this function
@@ -4403,7 +4466,14 @@ extract_write_targets() {
     # SAME value is not a conflict and still resolves normally -- quotes are
     # stripped above, before the comparison, so a bare and a quoted spelling of
     # one value compare equal.
-    function record_assign(word,   eqpos, vname, vval, vlen, c1, c2) {
+    function store_assign(vname, vval) {
+        if ((vname in varmap) && varmap[vname] != vval) {
+            varmap[vname] = AMBIG
+            return
+        }
+        varmap[vname] = vval
+    }
+    function record_assign(word,   eqpos, vname, vval, vlen, c1, c2, rv) {
         eqpos = index(word, "=")
         if (eqpos < 2) return
         vname = substr(word, 1, eqpos - 1)
@@ -4416,20 +4486,215 @@ extract_write_targets() {
                 vval = substr(vval, 2, vlen - 2)
             }
         }
-        if ((vname in varmap) && varmap[vname] != vval) {
-            varmap[vname] = AMBIG
-            return
+        # CHAIN ROOTED AT A `mktemp -d` SANDBOX (gf180-gate-driver#144): a
+        # self-test script names a subdirectory of its throwaway tree before
+        # writing into it (`TMPROOT="$(mktemp -d)"` then
+        # `WT="$TMPROOT/.loom/worktrees/issue-99"`). The stored value here
+        # still begins with `$`, which resolve_var() refuses to substitute (an
+        # unresolved chain this single-pass resolver does not follow), so every
+        # later `"$WT/..."` write stayed unresolvable. Follow the chain ONE
+        # step at record time -- assignments are recorded in stream order, so
+        # this composes transitively -- but ONLY when it lands under the
+        # mktemp -d stand-in. Every other chained value keeps the raw,
+        # deliberately-unresolved treatment byte for byte, so no existing
+        # verdict moves: this widens resolution exclusively for a root the
+        # command itself minted moments earlier.
+        if (substr(vval, 1, 1) == "$") {
+            rv = resolve_var(vval)
+            if (rv != vval && is_mktempd_path(rv)) vval = rv
         }
-        varmap[vname] = vval
+        store_assign(vname, vval)
+    }
+    # `mktemp -d` DETECTION (gf180-gate-driver#144) -- see the
+    # _wt_init_default_tmpdir() header above for why a same-command
+    # `NAME=$(mktemp -d)` binding is trustworthy where a bare `$(...)` is not.
+    #
+    # mktempd_parent() returns the PARENT directory the new sandbox would be
+    # created in ("" = not a recognized shape, i.e. keep the fail-closed deny).
+    # The recognized argument set is deliberately small; every shape outside it
+    # can put the directory somewhere this guard protects or somewhere no
+    # static scan can predict:
+    #   -d / --directory      required (a `mktemp` with no -d makes a FILE, and
+    #                         a later `"$VAR/sub"` write is then a different,
+    #                         still-unpredictable operation)
+    #   -q / --quiet          harmless, no effect on the location
+    #   -p DIR, --tmpdir=DIR  parent is DIR -- accepted only as an ABSOLUTE
+    #                         literal, and still judged (an in-repo DIR denies);
+    #                         a BARE `--tmpdir` is not accepted, since the word
+    #                         after it is the template, not the parent
+    #   TEMPLATE              parent is its dirname -- same absolute-literal
+    #                         rule, so `mktemp -d ./scratch.XXXX` (which really
+    #                         does land in the cwd) stays denied
+    # Anything else -- `-u` (prints a name, creates nothing), `-t`, an unknown
+    # flag, a second template, a template combined with -p (it is relative to
+    # DIR), a parent containing an unexpanded `$` -- returns "".
+    function mktempd_parent(cmd,   nt, t, i, w, seen_d, parent, tmpl, npos) {
+        sub(/^[ \t]+/, "", cmd)
+        sub(/[ \t]+$/, "", cmd)
+        if (cmd == "") return ""
+        nt = split(cmd, t, /[ \t]+/)
+        if (nt < 2) return ""
+        if (t[1] != "mktemp" && t[1] !~ /^\/[^ \t]*\/mktemp$/) return ""
+        seen_d = 0
+        parent = ""
+        tmpl = ""
+        npos = 0
+        for (i = 2; i <= nt; i++) {
+            w = t[i]
+            if (w == "--directory") { seen_d = 1; continue }
+            if (w == "--quiet") continue
+            if (w ~ /^-[dq]+$/) {
+                if (index(w, "d") > 0) seen_d = 1
+                continue
+            }
+            # `-p DIR` takes its argument as a separate word. A BARE
+            # `--tmpdir` deliberately is NOT accepted here: its argument is
+            # optional, so the word after it is the TEMPLATE, not the parent --
+            # reading it as a parent would be simply wrong. It falls through to
+            # the unknown-flag refusal below.
+            if (w == "-p") {
+                i++
+                if (i > nt || parent != "") return ""
+                parent = t[i]
+                continue
+            }
+            if (w ~ /^--tmpdir=/) {
+                if (parent != "") return ""
+                parent = substr(w, 10)
+                continue
+            }
+            if (substr(w, 1, 1) == "-") return ""
+            npos++
+            if (npos > 1) return ""
+            tmpl = w
+        }
+        if (!seen_d) return ""
+        # A TEMPLATE is interpreted relative to -p DIR, so the two together
+        # describe a location this simple reading would get wrong.
+        if (parent != "" && tmpl != "") return ""
+        if (tmpl != "") {
+            tmpl = mktempd_literal_abs(tmpl)
+            if (tmpl == "") return ""
+            parent = tmpl
+            sub(/\/[^\/]*$/, "", parent)
+            if (parent == "") parent = "/"
+            return parent
+        }
+        if (parent != "") return mktempd_literal_abs(parent)
+        # No explicit parent: $TMPDIR (else /tmp), resolved by the shell layer.
+        # Empty when that was itself unresolvable, which disables this shape.
+        return deftmpdir
+    }
+    # An mktemp path ARGUMENT is usable only when it is an absolute literal:
+    # a relative one is joined against a cwd this scan is not tracking for the
+    # substituted command, and one carrying an unexpanded `$`/backtick is the
+    # very kind of unknown this guard fails closed on. Returns "" otherwise.
+    function mktempd_literal_abs(w,   c1, c2, wl) {
+        wl = length(w)
+        if (wl >= 2) {
+            c1 = substr(w, 1, 1)
+            c2 = substr(w, wl, 1)
+            if ((c1 == DQ && c2 == DQ) || (c1 == SQ && c2 == SQ)) w = substr(w, 2, wl - 2)
+        }
+        if (substr(w, 1, 1) != "/") return ""
+        if (index(w, "$") > 0 || index(w, BQ) > 0 || index(w, DQ) > 0 || index(w, SQ) > 0) return ""
+        sub(/\/+$/, "", w)
+        if (w == "") w = "/"
+        return w
+    }
+    # Recognize a leading `NAME=$(mktemp -d …)` / `NAME="$(mktemp -d …)"` /
+    # backticked assignment WORD at the head of `seg`, record NAME -> a
+    # synthetic stand-in directory inside the parent that invocation would use,
+    # and return the byte length of that word (0 = no match, i.e. nothing
+    # recorded and the caller falls through to the ordinary
+    # whitespace-bounded assignment scan).
+    #
+    # This has to run BEFORE that ordinary scan, not inside record_assign():
+    # the generic scan bounds an assignment value with /[^ \t]*/, so
+    # `TMPROOT="$(mktemp -d)"` reaches record_assign() already truncated at the
+    # space to `TMPROOT="$(mktemp` -- and that TRUNCATED value, which does not
+    # begin with `$`, is what resolve_var() then happily substituted into a
+    # phantom `"$(mktemp/hosts` target. Matching the whole command substitution
+    # here is what makes the shape recognizable at all.
+    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, parent) {
+        if (!match(seg, /^[A-Za-z_][A-Za-z0-9_]*=/)) return 0
+        vname = substr(seg, 1, RLENGTH - 1)
+        val = substr(seg, RLENGTH + 1)
+        dq = 0
+        if (substr(val, 1, 1) == DQ) { dq = 1; val = substr(val, 2) }
+        if (substr(val, 1, 2) == "$(") {
+            cpos = index(val, ")")
+            if (cpos == 0) return 0
+            inner = substr(val, 3, cpos - 3)
+            tail = substr(val, cpos + 1)
+        } else if (substr(val, 1, 1) == BQ) {
+            cpos = index(substr(val, 2), BQ)
+            if (cpos == 0) return 0
+            inner = substr(val, 2, cpos - 1)
+            tail = substr(val, cpos + 2)
+        } else {
+            return 0
+        }
+        # A nested substitution/subshell inside the parens means the text
+        # between them is not the single simple command this scan verified.
+        if (index(inner, "(") > 0 || index(inner, ")") > 0) return 0
+        if (dq) {
+            if (substr(tail, 1, 1) != DQ) return 0
+            tail = substr(tail, 2)
+        }
+        # The assignment WORD must end here. A concatenation
+        # (`X=$(mktemp -d)/sub`, `X=$(mktemp -d)$SUFFIX`) is a different value
+        # than the sandbox root and is left unrecognized.
+        if (tail != "" && tail !~ /^[ \t]/) return 0
+        parent = mktempd_parent(inner)
+        if (parent == "") return 0
+        # SAME-SEGMENT REASSIGNMENT IS UNRESOLVABLE. A name re-assigned in a
+        # LATER segment is already poisoned to the AMBIG sentinel by
+        # store_assign(), but a quoted command substitution is one shape
+        # qsplit() does not segment after -- `X="$(mktemp -d)" || X=/elsewhere`
+        # arrives here as ONE segment, and the ordinary assignment scan stops
+        # at the `||`, so that second binding would never be seen at all.
+        # Refuse the whole recognition in that case: returning 0 drops the word
+        # back onto the generic (truncating) scan, i.e. exactly the fail-closed
+        # deny it gets today.
+        if (tail ~ ("(^|[^A-Za-z0-9_])" vname "=")) return 0
+        store_assign(vname, mktempd_standin(parent))
+        return length(seg) - length(tail)
+    }
+    # The stand-in path itself: a fixed child of the parent. Never the path the
+    # write will really have (that suffix is random by design) -- only a path
+    # in the same directory, which is all the confinement test needs to judge.
+    function mktempd_standin(parent) {
+        if (parent == "/") return MKTEMPD_LEAF
+        return parent MKTEMPD_LEAF
+    }
+    # Is `p` a resolved sandbox stand-in, or a path underneath one? Used by
+    # record_assign() to decide whether a CHAINED value is one this scan may
+    # follow. Note the direction of the risk: following a chain only ever
+    # replaces an unresolvable token with a LITERAL path, which the containment
+    # test below then judges on its merits -- so even a mis-recognition here
+    # cannot manufacture an allow for a path inside the checkout.
+    function is_mktempd_path(p,   ix, lf) {
+        lf = length(MKTEMPD_LEAF)
+        ix = index(p, MKTEMPD_LEAF)
+        if (ix == 0) return 0
+        if (length(p) == ix + lf - 1) return 1
+        return substr(p, ix + lf, 1) == "/"
     }
     BEGIN {
         SEP = sprintf("%c", 31)
         DQ = sprintf("%c", 34)
         SQ = sprintf("%c", 39)
+        BQ = sprintf("%c", 96)
         # Poison value for a name assigned two different values in one command
         # (see record_assign). The leading "$" is load-bearing: it routes into
         # the existing unresolved-chain refusal inside resolve_var().
         AMBIG = "$__LOOM_AMBIGUOUS_ASSIGNMENT__"
+        # Prefix identifying a resolved same-command `mktemp -d` sandbox
+        # (#144), used by record_assign() to decide whether a CHAINED value is
+        # safe to follow. `deftmpdir` (the default parent, from the shell
+        # layer) arrives via -v.
+        MKTEMPD_LEAF = "/.loom-guard-mktemp-d-sandbox"
         curcwd = startcwd
     }
     # Slurp the whole (possibly multi-line) command into ONE buffer,
@@ -4527,11 +4792,26 @@ extract_write_targets() {
                     if (!sub(/^-[^ \t]*[ \t]*/, "", seg)) break
                 }
             }
-            while (match(seg, /^[A-Za-z_][A-Za-z0-9_]*=[^ \t]*([ \t]+|$)/)) {
-                assignword = substr(seg, 1, RLENGTH)
-                seg = substr(seg, RLENGTH + 1)
-                sub(/[ \t]+$/, "", assignword)
-                record_assign(assignword)
+            while (1) {
+                # `NAME=$(mktemp -d …)` is tried FIRST (#144): its value
+                # legitimately contains whitespace, so the generic scan below
+                # would otherwise truncate it mid-substitution (see
+                # the mktempd_assign_len header). Anything it does not recognize
+                # falls straight through to that scan, unchanged.
+                mklen = mktempd_assign_len(seg)
+                if (mklen > 0) {
+                    seg = substr(seg, mklen + 1)
+                    sub(/^[ \t]+/, "", seg)
+                    continue
+                }
+                if (match(seg, /^[A-Za-z_][A-Za-z0-9_]*=[^ \t]*([ \t]+|$)/)) {
+                    assignword = substr(seg, 1, RLENGTH)
+                    seg = substr(seg, RLENGTH + 1)
+                    sub(/[ \t]+$/, "", assignword)
+                    record_assign(assignword)
+                    continue
+                }
+                break
             }
             # A segment that was NOTHING but assignments writes nothing.
             # Anything left over keeps flowing into the command scan below

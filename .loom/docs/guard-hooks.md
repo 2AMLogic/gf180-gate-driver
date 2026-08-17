@@ -448,6 +448,55 @@ target derived from a variable that would land *outside* the repo entirely
 (`> $HOME/x`, `> $TMPDIR/f`): the guard cannot know that at scan time, and
 fail-closed on an unknowable location is the whole point of the rule.
 
+**One narrow exception: a same-command `mktemp -d` sandbox
+(gf180-gate-driver#144).** A script that mints its *own* throwaway tree in the
+same command and then writes only inside it —
+
+```bash
+TMPROOT="$(mktemp -d)"
+cp .loom/hooks/guard-destructive-generic.sh "$TMPROOT/.loom/hooks/g.sh"
+```
+
+— was denied by the rule above, because the same-command resolver stored the
+value truncated at the space inside the substitution and the target became a
+phantom `"$(mktemp/...`. This is the dominant shape in guard-development and
+guard self-testing (8 of the 10 `worktree-write-confinement-unresolved-var`
+denials in this repo's guard telemetry through 2026-08-17 were exactly it, none
+of them a real confinement violation). The scan now recognizes
+`NAME=$(mktemp -d …)` / `NAME="$(mktemp -d …)"` / the backticked spelling as a
+binding it can reason about, and resolves later `"$NAME/..."` targets — plus
+sub-paths named off it in a further assignment, `WT="$TMPROOT/sub"` — against a
+**synthetic stand-in directory in the parent `mktemp` would use**, not against
+the (genuinely unknowable) random path itself. The parent is all the
+confinement test needs: it asks only whether the write lands inside the main
+checkout, and a parent answers that for every child.
+
+The indirection is what keeps this fail-closed rather than a blanket trust of
+`mktemp` — the stand-in is a *judged* path, so pointing the sandbox at the
+checkout still denies through the ordinary containment test, with no special
+case:
+
+| Shape | Verdict |
+|---|---|
+| `X=$(mktemp -d)`, `X="$(mktemp -d)"`, ``X=`mktemp -d` `` | resolved against `$TMPDIR` (else `/tmp`) |
+| `X=$(mktemp -d /tmp/foo.XXXX)`, `X=$(mktemp -d -p /var/tmp)` | resolved against that absolute parent |
+| …with `TMPDIR`, `-p`, or a template **inside the checkout** | **deny** (`worktree-write-confinement`) |
+| `X=$(mktemp)` — no `-d`, so a *file* | **deny** (unresolved), unchanged |
+| relative template/parent (`mktemp -d ./s.XXXX`, `-p .`), a `$` in either, `-u`, `-t`, any other flag, a second template | **deny** (unresolved), unchanged |
+| `X=$(mktemp -d)/sub`, a bare `$(mktemp -d)` written to directly | **deny** (unresolved), unchanged |
+| `X` re-bound to a different value anywhere in the command (including the `X="$(mktemp -d)" \|\| X=/elsewhere` shape) | **deny** (unresolved), unchanged |
+
+Residual limitation, unchanged by this: `cd "$TMPROOT" && echo x > f` still
+denies. The `cd` handler deliberately keeps its argument *raw* (quote
+characters intact) so the unresolved-`$` classifier can tell a literal `$` from
+an expandable one, and it never runs the same-command resolver — so a
+sandbox-relative write is still an unknown location to this scan. Write the
+target as `"$TMPROOT/f"` instead of cd-ing into it.
+
+Regression coverage lives in
+`.loom/hooks/tests/test-guard-destructive-worktree-confinement.sh` cases
+(h)–(t).
+
 **Quoted targets are still absolute (issue #4926).** The same classification had
 a second way to be fooled, reached without any `$` at all: the tokenizer copies
 a token's quote characters **verbatim** (`qsplit()`'s contract, #3755 — the `rm`
