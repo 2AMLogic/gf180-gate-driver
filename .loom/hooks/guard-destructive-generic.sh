@@ -3416,6 +3416,17 @@ mask_catastrophic_positional_args() {
         # main") .loom/logs/guard-decisions.log, read-only log introspection
         # for this guard own pattern name) can safely be masked without hiding
         # a real invocation from the scan.
+        #
+        # EXCEPTION (issue #137): `jq -n`/`--null-input` is excluded from this
+        # allowlist entry below (see jq_null_input) — with -n, jq needs no
+        # input at all and can manufacture arbitrary literal output purely
+        # from the filter argument this masking pass would otherwise redact.
+        # Combined with `-r` (raw output), a masked filter becomes directly
+        # shell-executable via `$(...)` or a pipe to a shell, defeating the
+        # ALWAYS_BLOCK_PATTERNS scan entirely — not just for force-push, but
+        # for every catastrophic-tier phrase. grep/egrep/fgrep/rg/
+        # check-duplicate.sh carry no equivalent risk (they only ever emit
+        # substrings of real input) so only jq needs this carve-out.
         cmdre = "(grep|egrep|fgrep|rg|jq|\\./\\.loom/scripts/check-duplicate\\.sh)"
         flagre = "([ \t]+-[A-Za-z0-9_-]+)*"
         anchor = "(^|[ \t\n;&|`(])" cmdre flagre "[ \t]+"
@@ -3430,6 +3441,15 @@ mask_catastrophic_positional_args() {
             matched = substr(s, RSTART, RLENGTH)
             rest    = substr(s, RSTART + RLENGTH)
             out = out pre matched
+            # jq -n/--null-input carve-out (issue #137): determine whether
+            # this anchors command name is jq and, if so, whether -n or
+            # --null-input appears among its flags. See the cmdre
+            # BEGIN-block comment above for why only jq needs this check.
+            jq_null_input = 0
+            if (match(matched, cmdre) && substr(matched, RSTART, RLENGTH) == "jq" && \
+                matched ~ /(^|[ \t])(-n|--null-input)([ \t]|$)/) {
+                jq_null_input = 1
+            }
             # Mask every consecutive quoted positional argument immediately
             # following the anchor (whitespace-separated). Stops at the first
             # non-quote-starting token, so anything after the argument list
@@ -3444,7 +3464,7 @@ mask_catastrophic_positional_args() {
                 }
                 if (endpos == 0) break
                 inner = substr(rest, 2, endpos - 2)
-                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
+                if (index(inner, "$(") == 0 && index(inner, "`") == 0 && !jq_null_input) {
                     gsub(/./, "X", inner)
                 }
                 out = out qc inner qc

@@ -206,6 +206,26 @@ else
     else
         fail "(7) mask_catastrophic_positional_args(): grep masking regressed: $OUT7"
     fi
+
+    # --- (8) mask_catastrophic_positional_args(): SAFETY-FLOOR REGRESSION FIX
+    # (issue #137) -- `jq -n`/`--null-input` needs no input at all, so it can
+    # manufacture the dangerous phrase purely from its filter argument. That
+    # argument must stay UNMASKED (visible to ALWAYS_BLOCK_PATTERNS) even
+    # though the general jq allowlist entry above masks a normal jq filter.
+    CMD8A="\$(jq -n -r '\"${FP_MAIN}\"')"
+    OUT8A=$(mask_catastrophic_positional_args "$CMD8A")
+    if echo "$OUT8A" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(8a) mask_catastrophic_positional_args(): jq -n -r filter argument left UNMASKED (safety floor)"
+    else
+        fail "(8a) mask_catastrophic_positional_args(): jq -n -r filter argument was incorrectly masked: $OUT8A"
+    fi
+    CMD8B="jq --null-input -r '\"${FP_MAIN}\"' | sh"
+    OUT8B=$(mask_catastrophic_positional_args "$CMD8B")
+    if echo "$OUT8B" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(8b) mask_catastrophic_positional_args(): jq --null-input filter argument left UNMASKED (safety floor)"
+    else
+        fail "(8b) mask_catastrophic_positional_args(): jq --null-input filter argument was incorrectly masked: $OUT8B"
+    fi
 fi
 
 # =============================================================================
@@ -323,6 +343,22 @@ assert_deny "(i) real force-push chained after a read-only gh api -f call -> sti
 # denial, nothing to mask).
 result=$(run_hook "gh api -f q='just an ordinary search string'")
 assert_allow "(j) sanity: gh api -f q='...' with no dangerous phrase -> allow" "$result"
+
+# --- (k) SAFETY-FLOOR REGRESSION FIX (issue #137): `jq -n -r` needs no real
+# input at all -- it can manufacture the dangerous phrase purely from its
+# filter argument. Combined with `-r` (raw/unquoted output) and `$(...)`
+# command substitution, a masked filter here becomes directly
+# shell-executable -- bash runs the substitution first, then executes its
+# captured output as a command line. Must still DENY.
+result=$(run_hook "\$(jq -n -r '\"${FP_MAIN}\"')")
+assert_deny "(k) jq -n -r filter manufacturing a force-push phrase via \$(...) -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (l) same shape piped directly to a shell instead of \$(...) -- still
+# DENY.
+result=$(run_hook "jq -n -r '\"${FP_MAIN}\"' | sh")
+assert_deny "(l) jq -n -r filter manufacturing a force-push phrase piped to sh -> still deny" "$result" \
+    "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
