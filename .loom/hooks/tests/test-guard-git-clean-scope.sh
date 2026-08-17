@@ -538,6 +538,54 @@ assert_decision \
     "$WT" \
     "ask"
 
+# --- Escaped example code inside an UNQUOTED-delimiter heredoc body, itself
+# the body of a live `$(cat <<EOF ... EOF)` substitution (#122) -------------
+# #112 fixed the shape where the escaped example lived directly inside a
+# --body value's own double-quoted span. This is a distinct shape: the
+# ENTIRE --body value is `$(cat <<EOF ... EOF)` (unquoted delimiter, so
+# mask_flag_cat_heredocs()/strip_literal_text() correctly leave it fully
+# visible -- it genuinely executes `cat`). Nested TWO levels deep inside that
+# live heredoc body is a backtick-delimited inline-code span, itself
+# containing a `"..."`-quoted escaped `$(...)`, both escaped with backslashes
+# so neither actually expands. The exact minimal repro from the issue body.
+assert_decision \
+    "escaped-backtick example quoting an escaped \$(git clean -fd) inside a LIVE, unquoted-delimiter \$(cat <<EOF...) heredoc body allows (#122 repro)" \
+    "$(printf '%s\n' \
+        'gh pr comment 1 --body "$(cat <<EOF' \
+        'Example: \`git clean -fd sim/x/ && echo "\$(true; git clean -fd /etc/passwordfile)"\`' \
+        'EOF' \
+        ')"')" \
+    "$WT" \
+    "allow"
+
+# Narrows, never widens: a GENUINELY live (unescaped) nested $(...) inside
+# the very same heredoc shape -- sitting right alongside the escaped/inert
+# backtick example above -- must still ask.
+assert_decision \
+    "genuinely LIVE nested invocation (unescaped \$(...)) inside the same heredoc shape still asks (#122 narrows, never widens)" \
+    "$(printf '%s\n' \
+        'gh pr comment 1 --body "$(cat <<EOF' \
+        'Example: \`git clean -fd sim/x/\` and also $(true; git clean -fd /etc/passwordfile)' \
+        'EOF' \
+        ')"')" \
+    "$WT" \
+    "ask"
+
+# Regression pin for the SILENT-ALLOW half of the #122 root cause: an
+# ordinary parenthetical remark ("hello (world)") inside a nested
+# double-quoted string, sitting BEFORE a real `git clean -fd` invocation in
+# the same `$(...)` substitution, previously made
+# extract_command_substitution_bodies() close the substitution body early on
+# the parenthetical's own literal `)` -- truncating the extracted body before
+# the real invocation was ever reached, and silently ALLOWING it. Found while
+# diagnosing #122, not itself the reported symptom, but fixed by the same
+# `!dq[depth]` guard.
+assert_decision \
+    "LIVE invocation reachable past an unrelated parenthetical earlier in the same substitution still asks (#122 silent-allow found while diagnosing the false ask)" \
+    'echo "$(echo "hello (world) test" && git clean -fd .)"' \
+    "$TMPROOT" \
+    "ask"
+
 echo
 echo "== Summary: $PASS/$TOTAL passed =="
 
