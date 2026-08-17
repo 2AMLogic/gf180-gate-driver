@@ -26,6 +26,7 @@
 | `XMNBUF1` | `nfet_06v0` | thick | 5 V/6 V drive | `gnd_drv` (isolated pwell) | `DNWELL_DRV` |
 | `XMPBUF2` | `pfet_06v0` | thick | 5 V/6 V drive | `vdd_drv` (nwell) | `DNWELL_DRV` |
 | `XMNBUF2` | `nfet_06v0` | thick | 5 V/6 V drive | `gnd_drv` (isolated pwell) | `DNWELL_DRV` |
+| `XCCOMP` | `cap_mim_1f0_m4m5_noshield` (MIM, 1 fF/µm², M4-M5) | n/a — no silicon bulk/well terminal, isolated by inter-metal dielectric | 5 V/6 V drive (both terminals, `ncb` and `out`/`IN_DRV`, are `DNWELL_DRV`-group nodes) | n/a | co-located with `DNWELL_DRV` — a MIM cap has no diffusion/well terminal of its own to place inside or outside a DNWELL, so it adds no new isolation requirement beyond the domain boundary the 5 V/6 V group already forces |
 
 **Result**: two groups, no group mixes 3.3 V and 5 V/6 V devices — DRM 7.2
 satisfied by construction. The 3.3 V group (pre-driver inverter + both
@@ -37,6 +38,29 @@ already the same electrical domain (`vdd_drv`/`gnd_drv`-referenced) with no
 node inside that group ever expected to differ from another by more than one
 rail's worth of headroom, so co-locating them in one DNWELL adds no new
 isolation requirement beyond what the domain boundary itself already forces.
+
+## Compensation capacitor (`XCCOMP`) — this cell's first passive
+
+`XCCOMP` (issue #155, [decision record
+0007](../spec/decision-records/0007-indrv-feedforward-compensation-capacitor.md))
+is the first passive component in this design. It has no diffusion or well
+terminal of its own — a MIM cap is a metal-metal stack sitting above the
+active area, isolated from the substrate by inter-metal dielectric — so DRM
+7.2's DNWELL-mixing rule, which governs diffusion/well devices, does not
+apply to it directly. Both of its plates connect to nodes (`ncb`, `out`)
+that already belong to the `DNWELL_DRV` group, so it introduces no new
+domain-crossing surface for layout to isolate.
+
+**Metal-layer pair deferred to layout.** `cap_mim_1f0_m4m5_noshield` names
+the M4-M5 metal pair for *simulation* purposes only (all four pairs the PDK
+offers — M2-M3, M3-M4, M4-M5, M5-M6 — share the same characterized
+capacitance-per-area model, confirmed directly against
+`sm141064_mim.ngspice`, so the choice is electrically interchangeable at the
+schematic level). Per this document's own scope note above, no layout has
+been drawn for this cell yet; the final metal pair is a layout-time decision
+(driven by which metals are free for the compensation cap's small footprint
+once the cell's guard ring, power straps and cascode boundary routing are
+placed), not a schematic commitment carried forward from this record.
 
 ## Guard-ring requirement
 
