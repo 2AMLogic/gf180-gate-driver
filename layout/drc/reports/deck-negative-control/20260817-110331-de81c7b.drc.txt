@@ -1,0 +1,10 @@
+file: layout/build/drc-negative-control.gds
+deck: gf180mcu
+dbu_um: 0.001
+status: violations
+violations: 1
+
+rule_counts:
+  metal1.space.1: 1
+
+metal1.space.1  drc_negative_control  Metal1  (1000,0)-(1050,1000)  minimum metal1 spacing
