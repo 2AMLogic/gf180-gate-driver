@@ -5,6 +5,7 @@
   "scripts": {
     "worktree:return": "./.loom/scripts/worktree-return.sh",
     "test": "python3 sim/run_corners.py --list",
+    "test:layout": "python3 layout/test_gen_gate_driver_core.py",
     "sim:env": "python3 sim/run_corners.py --check-env",
     "sim:smoke": "python3 sim/run_corners.py smoke-mv-inverter",
     "lint": "bash .github/scripts/lint.sh"

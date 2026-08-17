@@ -8,11 +8,19 @@ the stream, not a replay of how it was built:
 ``devices``
     ``klt extract --deck gf180mcu`` the layout and compare every extracted
     transistor against ``design/netlist/gate_driver_core.spice``, flattened.
-    A netlist device with ``m=M`` must appear as exactly ``M`` extracted
-    transistors with the same width/length whose gate net and (unordered)
-    source/drain net pair match the schematic's.  This is the issue's
-    "connectivity/device-count check against the source netlist" -- it is
-    deliberately *not* a full LVS run (that is issue #105's scope).
+    A netlist device with ``nf=N m=M`` must appear as exactly ``N*M``
+    extracted transistors of width ``W/N`` and the same length, whose gate net
+    and (unordered) source/drain net pair match the schematic's (every device
+    in the committed netlist has ``nf=1``, so today that is ``M`` transistors
+    of width ``W``).  This is the issue's "connectivity/device-count check
+    against the source netlist" -- it is deliberately *not* a full LVS run
+    (that is issue #105's scope).
+
+    Note what this check can and cannot see: it re-derives the expected list
+    through the generator's own ``parse_netlist``, so it audits the *stream*
+    against that interpretation but cannot audit the interpretation itself.
+    ``layout/test_gen_gate_driver_core.py`` is the independent half of that
+    (issue #129).
 
 ``dnwell_partition``
     ``klt components`` with ``DNWELL`` (12/0) declared both as a conductor and

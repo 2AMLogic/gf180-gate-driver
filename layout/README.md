@@ -46,7 +46,10 @@ The generator needs `klt` on `PATH` and a resolvable gf180mcu install (it uses
 nothing itself: it is standard-library Python that shells out to `klt`.
 Re-running it on the same inputs reproduces the GDS **byte for byte**, so
 `gate_driver_core.provenance.json`'s `sha256` is a checkable claim, not a
-decoration.
+decoration. That cuts both ways: a change to the generator source must leave
+`provenance.generator.sha256` matching `sha256sum layout/gen_gate_driver_core.py`,
+even when the stream itself is unchanged — otherwise the record names a
+generator that is no longer in the tree.
 
 To look at it:
 
@@ -62,11 +65,29 @@ klt cells layout/gate_driver_core.gds
    (`x2`) are flattened into one device list carrying top-level net names.
    Internal sub-cell nets keep an `x1_`/`x2_` prefix (`x1_nca`, `x2_n3`, …).
 2. **Devices — `klt gen mos_array`, once per netlist device.** A device with
-   `m=M` is drawn as a single unit device folded into `M` parallel gate
-   fingers (`finger_topology: "parallel"`), which is exactly what `m=M` means
-   in SPICE: `M` transistors of width `W` sharing one source, drain and gate
-   strap. `klt extract` reads them back as `M` parallel transistors, so the
-   layout's transistor count equals the netlist's (959) rather than 24.
+   `W=W nf=N m=M` is drawn as a single unit device folded into `N*M` parallel
+   gate fingers of width `W/N` each (`finger_topology: "parallel"`), which is
+   exactly what those parameters mean in SPICE: `M` copies of one `W`-wide
+   transistor whose width is itself split across `N` fingers, all sharing one
+   source, drain and gate strap. `klt extract` reads them back as `N*M`
+   parallel transistors, so the layout's transistor count equals the
+   netlist's (959) rather than 24, and the total drawn width is `W*M`
+   whatever `N` is.
+
+   Both halves of that handoff are load-bearing and both are confirmed rather
+   than assumed (issue #129): SPICE's `W` is a *total* width split across `nf`
+   fingers (gf180mcu's model cards pass `w=w nf=nf` into the BSIM core and
+   size their drift resistors on `w/nf`; this netlist's own `ad`/`ps`
+   expressions use `W/nf`), while `klt gen mos_array`'s `w_um` is the
+   *per-finger* width — a `"parallel"` unit device is "one folded transistor
+   of width `fingers * w_um`" ([`docs/cli/gen.md`][klt-gen]). Every device in
+   the committed netlist has `nf=1`, so this is `M` fingers of width `W` and
+   the committed GDS is unaffected;
+   [`test_gen_gate_driver_core.py`](test_gen_gate_driver_core.py) pins the
+   `nf>1` arithmetic against hand-computed values so a future netlist edit
+   that folds a device cannot silently draw an `N`×-too-wide transistor.
+
+[klt-gen]: https://github.com/2AMLogic/klayout-tools/blob/main/docs/cli/gen.md
 3. **Wiring + markers — `klt draw`, once.** One flat cell carrying the Metal2
    net rails, the Metal1 stubs and gate routes, the Via1 stack between them,
    the net-name labels, and the voltage-domain marker geometry.
@@ -120,12 +141,27 @@ rather than replaying how it was made. Its output is committed as
 
 | Check | What it does |
 |---|---|
-| `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `m=M` must appear as `M` transistors of the same W/L whose gate net and unordered source/drain pair match. Passing means 959/959 with no missing and no unexpected device. |
+| `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `nf=N m=M` must appear as `N*M` transistors of width `W/N` and the same L, whose gate net and unordered source/drain pair match. Passing means 959/959 with no missing and no unexpected device. |
 | `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. Asserts exactly 20 active regions inside (the 5 V/6 V devices) and 4 outside (the 3.3 V devices). |
 | `voltage_domain` | `klt layers --flattened` for the marker layers, plus the `voltage_domain_warnings` block `klt extract` returns — see the deck caveat below. |
 
 This is a device-count/connectivity check, **not** LVS. `klt lvs` belongs to
 issue #105.
+
+### Generator unit tests
+
+```bash
+python3 layout/test_gen_gate_driver_core.py        # or: npm run test:layout
+```
+
+`check_gate_driver_core.py` imports `parse_netlist` from the generator, so it
+derives its *expected* device list from the same interpretation the generator
+drew from: a misreading of `W`/`nf`/`m` would be common-mode and the `devices`
+check would pass on a wrong layout (issue #129).
+[`test_gen_gate_driver_core.py`](test_gen_gate_driver_core.py) is the
+independent half — hand-computed expectations for that arithmetic, with no
+number derived by calling the helpers under test. It is stdlib-only and needs
+neither `klt` nor the PDK, so it runs on every PR in CI's `test` job.
 
 ## Known gaps (all deferred to #105, none accidental)
 
