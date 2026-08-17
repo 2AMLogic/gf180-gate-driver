@@ -31,6 +31,19 @@ the stream, not a replay of how it was built:
     3.3V (``*_03v3``) device's active region is outside it -- DRM 7.2 /
     spec/gate-driver.md 2.4, the "no shared DNWELL" acceptance criterion.
 
+    Issue #132's per-device body-tie taps
+    (``gen_gate_driver_core.Interconnect.body_ties()``) also draw Comp shapes
+    -- one per device (both flavors: an Nplus well tie for every PMOS, a
+    Pplus substrate/LVPWELL tie for every NMOS), deliberately on the *same*
+    Comp layer this check inspects, since gf180mcu's curated deck derives
+    both kinds of tie from ordinary active diffusion (see that method's
+    docstring) -- so the raw Comp shape count in/outside DNWELL is no longer
+    "one per device"; the expected counts below add exactly one tap per
+    device (of either flavor) on each side of the boundary. The guard ring
+    (``Interconnect.guard_ring()``) is positioned with a real, non-touching
+    gap outside DNWELL_DRV specifically so it never joins either component
+    and needs no such adjustment.
+
 ``voltage_domain``
     ``klt layers --flattened`` for the marker layers, plus the
     ``voltage_domain_warnings`` block ``klt extract`` returns.  gf180mcu's
@@ -59,6 +72,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
+    GUARD_RING_STROKE_COUNT,
     HERE,
     LV_MODELS,
     MV_MODELS,
@@ -84,9 +98,40 @@ DEFAULT_PDK = "gf180mcuD"
 
 _PARAM_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)")
 
+#: GND_LOGIC (3.3V group) and GND_DRV (5V/6V group) -- two drawn Metal2 nets,
+#: two schematic pins, but the one electrical reference node
+#: spec/decision-records/0001 Decision 1 ratifies. See `_canon_net` below.
+_GROUND_NETS = frozenset({"GND_LOGIC", "GND_DRV"})
+
+
+def _canon_net(net: str) -> str:
+    """Collapse ``GND_LOGIC``/``GND_DRV`` (and klt's own merged label for the
+    two, e.g. ``"GND_DRV|GND_LOGIC"``) to one canonical token, for comparison
+    purposes only.
+
+    Issue #132 draws real substrate-tie geometry for *both* of this design's
+    grounds (``GND_LOGIC`` for the 3.3V group, ``GND_DRV`` for the 5V/6V
+    group -- ``Interconnect.body_ties()``). gf180mcu's curated `klt`
+    extraction deck ties every NMOS body to one hardcoded global substrate
+    identity regardless of DNWELL/LVPWELL enclosure (klayout-tools #1128,
+    confirmed by reading `extract.py`'s own `connect_global` handling) -- so
+    once both grounds carry a real tie, `klt extract` also reports every
+    device terminal actually wired to either rail as one merged net (its own
+    synthesized ``"GND_DRV|GND_LOGIC"``-style label), not the two separate
+    rails the schematic and the drawn metal both keep distinct. That merge is
+    the *extractor's* model, not a real short in the drawn interconnect (see
+    `body_ties()`'s docstring and `layout/README.md`'s "Known gaps"), so it
+    is normalized away here for this check's device-connectivity comparison
+    the same way `layout/lvs/make_reference.py` normalizes it for `klt lvs`.
+    Every other net name is returned unchanged.
+    """
+    if set(net.split("|")) & _GROUND_NETS:
+        return "|".join(sorted(_GROUND_NETS))
+    return net
+
 
 def _device_key(flavor: str, w_um: float, l_um: float, gate: str, ds: frozenset) -> tuple:
-    return (flavor, round(w_um, 3), round(l_um, 3), gate, ds)
+    return (flavor, round(w_um, 3), round(l_um, 3), _canon_net(gate), frozenset(_canon_net(n) for n in ds))
 
 
 def expected_devices(devices: list[Device]) -> collections.Counter:
@@ -231,6 +276,25 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
     lv_devices = [d for d in devices if d.model in LV_MODELS]
     unknown = [d.model for d in devices if d.model not in MV_MODELS | LV_MODELS]
 
+    # Issue #132: body_ties() draws one Comp tap per *every* device (both
+    # flavors), not just PMOS -- an nfet tap (Pplus implant) and a pfet tap
+    # (Nplus implant) both land on this same Comp layer this check inspects,
+    # so the raw Comp shape count in/outside DNWELL gains one extra shape per
+    # device, regardless of flavor -- see this function's module-docstring
+    # entry above.
+    mv_pfet_taps = sum(1 for d in mv_devices if d.flavor == "pfet")
+    lv_pfet_taps = sum(1 for d in lv_devices if d.flavor == "pfet")
+    mv_nfet_taps = sum(1 for d in mv_devices if d.flavor == "nfet")
+    lv_nfet_taps = sum(1 for d in lv_devices if d.flavor == "nfet")
+    # guard_ring() draws GUARD_RING_STROKE_COUNT more Comp shapes, positioned
+    # with a real, non-touching gap outside DNWELL_DRV (see that method's
+    # docstring) -- so they land in the "outside" bucket too, but only when
+    # there is an MV group for it to enclose (guard_ring() itself no-ops
+    # otherwise).
+    guard_ring_shapes = GUARD_RING_STROKE_COUNT if mv_devices else 0
+    expected_in_dnwell = len(mv_devices) + mv_pfet_taps + mv_nfet_taps
+    expected_outside = len(lv_devices) + lv_pfet_taps + lv_nfet_taps + guard_ring_shapes
+
     active_in_dnwell = sum(counts(c).get("active", 0) for c in in_dnwell)
     active_outside = sum(counts(c).get("active", 0) for c in outside)
 
@@ -239,15 +303,19 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
         failures.append(f"device model(s) not classified as 3.3V or 5V/6V: {sorted(set(unknown))}")
     if len(in_dnwell) != 1:
         failures.append(f"expected exactly one DNWELL region, found {len(in_dnwell)}")
-    if active_in_dnwell != len(mv_devices):
+    if active_in_dnwell != expected_in_dnwell:
         failures.append(
             f"{active_in_dnwell} active region(s) inside DNWELL, expected "
-            f"{len(mv_devices)} (one per 5V/6V device)"
+            f"{expected_in_dnwell} ({len(mv_devices)} 5V/6V device(s) + "
+            f"{mv_pfet_taps} PMOS well-tie tap(s) + {mv_nfet_taps} NMOS "
+            "substrate-tie tap(s))"
         )
-    if active_outside != len(lv_devices):
+    if active_outside != expected_outside:
         failures.append(
             f"{active_outside} active region(s) outside every DNWELL, expected "
-            f"{len(lv_devices)} (one per 3.3V device)"
+            f"{expected_outside} ({len(lv_devices)} 3.3V device(s) + "
+            f"{lv_pfet_taps} PMOS well-tie tap(s) + {lv_nfet_taps} NMOS "
+            f"substrate-tie tap(s) + {guard_ring_shapes} guard-ring stroke(s))"
         )
     return {
         "name": "dnwell_partition",
@@ -255,6 +323,10 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
         "dnwell_regions": len(in_dnwell),
         "mv_devices": len(mv_devices),
         "lv_devices": len(lv_devices),
+        "mv_pfet_taps": mv_pfet_taps,
+        "lv_pfet_taps": lv_pfet_taps,
+        "mv_nfet_taps": mv_nfet_taps,
+        "lv_nfet_taps": lv_nfet_taps,
         "active_regions_in_dnwell": active_in_dnwell,
         "active_regions_outside_dnwell": active_outside,
         "dnwell_bbox_um": in_dnwell[0]["bbox_um"] if in_dnwell else None,

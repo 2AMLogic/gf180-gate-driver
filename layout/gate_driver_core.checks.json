@@ -4,21 +4,21 @@
   "top_cell": "gate_driver_core",
   "pdk": {
     "variant": "gf180mcuD",
-    "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
+    "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
   },
   "provenance": {
     "klt_version": "0.2.0",
     "klayout_version": "0.30.10",
     "pdk": {
       "name": "gf180mcuD",
-      "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
     },
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:e2726af899d1837fe8c9a99688483f145b23c92ded07323f54d627d06bdb2bbf"
+      "content_hash": "sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3"
     },
     "input": {
-      "content_hash": "sha256:8cdb7cb699ced7b323ecec4c10477bde97a66380bf70b84ae332358bde26dea3"
+      "content_hash": "sha256:70ca45b75109e913f93ca759da9bac866f9bfd05025f05e4a4614f97fe49066b"
     }
   },
   "passed": true,
@@ -33,7 +33,7 @@
         "nfet": 299,
         "pfet": 660
       },
-      "extracted_net_count": 30,
+      "extracted_net_count": 17,
       "extracted_netlist": "layout/gate_driver_core.extracted.spice",
       "missing": [],
       "unexpected": []
@@ -44,8 +44,12 @@
       "dnwell_regions": 1,
       "mv_devices": 20,
       "lv_devices": 4,
-      "active_regions_in_dnwell": 20,
-      "active_regions_outside_dnwell": 4,
+      "mv_pfet_taps": 10,
+      "lv_pfet_taps": 1,
+      "mv_nfet_taps": 10,
+      "lv_nfet_taps": 3,
+      "active_regions_in_dnwell": 40,
+      "active_regions_outside_dnwell": 12,
       "dnwell_bbox_um": {
         "left": -4.15,
         "bottom": 84.18,
@@ -65,7 +69,7 @@
       "klt_voltage_domain_warnings": [
         {
           "marker": "55/0",
-          "description": "Dualgate (55/0) marks gf180mcu's 5V/6V thick-oxide voltage domain. This curated deck's DRC rules apply the 3.3V/_LV thresholds to geometry regardless of Dualgate's presence (e.g. DF.1a min COMP width 0.22 vs. the real 5V/6V DF.1a_MV 0.30, DF.3a min COMP space 0.28 vs. 0.36, DF.6 COMP extend beyond gate 0.24 vs. 0.40, PL.5a/PL.5b field poly to COMP 0.10 vs. 0.30 -- all in um), and MOS extraction always binds the 3.3V models (nfet_03v3/pfet_03v3) even to a transistor drawn entirely inside Dualgate."
+          "description": "Dualgate (55/0) marks gf180mcu's 5V/6V thick-oxide voltage domain. This curated deck models it for the DF.1a/DF.3a COMP width/space rules only, which ship as _LV/_MV pairs (0.22/0.30 and 0.28/0.36 um) scoped to the marker; every other DRC rule still applies the 3.3V/_LV thresholds regardless of Dualgate's presence (e.g. DF.6 COMP extend beyond gate 0.24 vs. 0.40, PL.5a/PL.5b field poly to COMP 0.10 vs. 0.30 -- all in um, and neither transcribed in this deck yet), and MOS extraction always binds the 3.3V models (nfet_03v3/pfet_03v3) even to a transistor drawn entirely inside Dualgate."
         }
       ],
       "failures": []
