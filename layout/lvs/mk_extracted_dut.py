@@ -89,16 +89,23 @@ TRANSFORMS = [
     ),
     (
         "T2",
-        "MOS cards: `M<n> d g s b nfet|pfet L=..U W=..U` is rebound to the "
-        "real gf180mcu `nfet_03v3`/`nfet_06v0`/`pfet_03v3`/`pfet_06v0` "
-        "subcircuit, selected by (device class, drawn L) -- the extraction "
-        "deck's generic `nfet`/`pfet` device class does not distinguish "
-        "voltage flavor (gate_driver_core.checks.json's "
+        "MOS cards: the extractor's `M<n> d g s b nfet|pfet L=..U W=..U` is "
+        "rebound to the real gf180mcu `nfet_03v3`/`nfet_06v0`/`pfet_03v3`/"
+        "`pfet_06v0` subcircuit, selected by (device class, drawn L) -- the "
+        "extraction deck's generic `nfet`/`pfet` device class does not "
+        "distinguish voltage flavor (gate_driver_core.checks.json's "
         "voltage_domain_warnings; also layout/lvs/make_reference.py's "
         "transform 2), but this design's drawn L cleanly disjoint-identifies "
         "it. `nf=1 m=1`: each extracted device is one drawn finger, so the "
         "schematic's `nf`/`m` multipliers are already spent as real, "
-        "separately-extracted geometry.",
+        "separately-extracted geometry. Emitted as an `X<n>` subcircuit call, "
+        "matching design/netlist/gate_driver_core.spice's own device cards, "
+        "because those PDK models ARE .subckts: ngspice will resolve an `M` "
+        "card against a subcircuit of that name, but then expands `m=<n>` "
+        "into n separate subcircuit instances instead of passing m down to "
+        "the model -- measured at 3.32 s of CPU for the `X` form of this "
+        "netlist versus ~2200 s for the `M` form, at bit-identical measured "
+        "results.",
     ),
     (
         "T3",
@@ -140,10 +147,11 @@ TRANSFORMS = [
         "T2/T4) are folded back into one `m=<n>` card. This is a simulation- "
         "cost optimization, not a fidelity change -- an ideal parallel "
         "combination of n identical devices *is* `m=n` in SPICE -- needed "
-        "because 959 individually-instantiated BSIM fingers (one per drawn "
-        "finger, this script's default) converges/steps far slower than the "
-        "schematic's own `m=`-scaled instances, to the point of being "
-        "PVT-grid-infeasible within a bounded evidence run.",
+        "because 959 individually-instantiated fingers (one per drawn finger, "
+        "this script's default) cost roughly three orders of magnitude more "
+        "simulation time than the same circuit as `m=`-scaled instances, to "
+        "the point of being PVT-grid-infeasible within a bounded evidence "
+        "run.",
     ),
 ]
 
@@ -236,7 +244,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             counts[model] = counts.get(model, 0) + 1
             inst = name.lstrip("$")
             lines.append(
-                f"M{inst} {leg_of(dev, 'd')} {leg_of(dev, 'g')} {leg_of(dev, 's')} {body} {model} "
+                f"X{inst} {leg_of(dev, 'd')} {leg_of(dev, 'g')} {leg_of(dev, 's')} {body} {model} "
                 f"L={_fmt(params['l_um'])}U W={_fmt(params['w_um'])}U nf=1 "
                 f"ad={_fmt(params['ad_um2'])}P as={_fmt(params['as_um2'])}P "
                 f"pd={_fmt(params['pd_um'])}U ps={_fmt(params['ps_um'])}U m=1"
@@ -258,7 +266,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             model, d, g, s, body, l_um, w_um, ad, as_, pd, ps = key
             counts[model] = counts.get(model, 0) + len(members)
             lines.append(
-                f"M{index} {d} {g} {s} {body} {model} "
+                f"X{index} {d} {g} {s} {body} {model} "
                 f"L={_fmt(l_um)}U W={_fmt(w_um)}U nf=1 "
                 f"ad={_fmt(ad)}P as={_fmt(as_)}P "
                 f"pd={_fmt(pd)}U ps={_fmt(ps)}U m={len(members)}"
