@@ -2833,6 +2833,53 @@ resolve_stash_cwd() {
 # That is the safe direction (a false positive that already exists, never a new
 # bypass), and the shape above is the one the repo's own role prompts prescribe.
 # -----------------------------------------------------------------------------
+#
+# -----------------------------------------------------------------------------
+# QUOTE-CONTEXT-AWARE SPAN SELECTION (#120)
+#
+# Every rule above this point describes how far a redacted span EXTENDS once
+# one is opened. This section is about a prior gap in deciding WHETHER to open
+# one at all: the span matcher used to be a single context-free regex applied
+# to the whole slurped buffer — `<flag> <quote>...<quote>` — with no notion of
+# whether the `<quote>` right after the flag was itself already inside an
+# earlier-opened quoted region. Bash tracks that with a single piece of state
+# (the currently-open quote char, if any); the old regex tracked none of it.
+#
+# Concretely, this let a flag-shaped substring INSIDE an already-open
+# single-quoted argument be mistaken for a real flag/value pair:
+#
+#     foo 'a --body "b' ; rm -rf / ; echo "c"
+#
+# To bash, `'a --body "b'` is ONE single-quoted argument to `foo` (the `"`
+# inside it is an ordinary literal byte, not a quote) — `--body` here is just
+# four bytes of that argument's text, not a real flag. The old regex didn't
+# know that: it saw `--body` followed by a `"`, treated THAT `"` as opening a
+# double-quoted span, and matched through to the next unescaped `"` — the one
+# opening `"c"` at the very end of the buffer. The redacted span consumed
+# `b' ; rm -rf / ; echo `, masking a live `rm -rf /` out of every downstream
+# scan (a false ALLOW on a catastrophic command; the ask-tier analog with
+# `git clean -fd .` in place of `rm -rf /` produced a false ALLOW where an ASK
+# was expected).
+#
+# The fix is `segment_quotes()` below: a single left-to-right pass over the
+# buffer that tracks quote state exactly the way bash does (honoring the same
+# two escaping idioms as the rest of this function — BSQ continuation inside
+# single quotes, #56, and backslash-escaped bytes inside double quotes, #112)
+# and splits the buffer into an ordered sequence of "U" (unquoted) and "Q"
+# (quoted, including both delimiting quote bytes) segments. A quoted span is
+# then only EVER a candidate for redaction when it is segment k in that
+# sequence AND segment k-1 is an "U" segment whose own TAIL — not merely
+# "somewhere in the buffer" — matches one of the recognized flag shapes. Since
+# segment boundaries are themselves computed with full quote-state awareness,
+# a flag-shaped substring sitting inside an already-open quoted region can
+# never again be mistaken for a real flag: it is bytes in the MIDDLE of a "Q"
+# segment, not the tail of a "U" segment, so it can't satisfy the check no
+# matter what follows it. This also finally makes the "masking only ever
+# narrows" claim made elsewhere in this file about strip_literal_text()'s
+# output literally true: a redacted span can no longer extend past the real
+# bash argument boundary in either direction, because segment boundaries ARE
+# the real bash argument boundaries.
+# -----------------------------------------------------------------------------
 strip_literal_text() {
     printf '%s' "$1" | awk '
     # Does this DOUBLE-quoted span carry a LIVE command substitution (#112)?
@@ -2916,78 +2963,114 @@ strip_literal_text() {
         for (i = 2; i <= nl; i++) s = s "\n" lines[i]
         return s
     }
+    # Walk `s` left to right tracking real bash quote state, populating the
+    # global arrays segtype[1..nseg] ("U" unquoted / "Q" quoted-including-
+    # its-own-quote-bytes) and segtxt[1..nseg] (segqchar[k] set only for a
+    # "Q" segment). See the QUOTE-CONTEXT-AWARE SPAN SELECTION comment above
+    # strip_literal_text() for why this replaces the old context-free regex
+    # (#120).
+    #
+    # Honors the same two escaping idioms the rest of this function already
+    # models, so segmentation matches bash exactly for both:
+    #   - BSQ continuation (#56): a single-quote byte encountered while
+    #     inside an open single-quoted span does NOT close it if the
+    #     following three bytes are exactly backslash-quote-quote (BSQTAIL)
+    #     -- that four-byte sequence is the close/escape/reopen idiom bash
+    #     uses for a literal apostrophe, so scanning skips past all four
+    #     bytes and keeps looking for the real close.
+    #   - Backslash-escaping (#112): a `\` encountered while inside an open
+    #     double-quoted span consumes itself AND the next byte as one unit
+    #     (mirrors bash: `\"` inside double quotes is a literal quote, not a
+    #     close), so only a genuinely unescaped `"` closes the span.
+    # An unterminated quote (no matching close anywhere in the rest of `s`)
+    # falls back to treating everything from the opening quote to the end of
+    # the buffer as ONE final "U" segment -- never redacted, mirroring
+    # qsplit()'"'"'s identical fallback for the identical situation (never widen
+    # what gets masked).
+    function segment_quotes(s,    n, i, c, cur, start, j, cc, closed) {
+        n = length(s)
+        i = 1
+        cur = ""
+        nseg = 0
+        while (i <= n) {
+            c = substr(s, i, 1)
+            if (c == SQ) {
+                if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur; cur = "" }
+                start = i
+                j = i + 1
+                closed = 0
+                while (j <= n) {
+                    cc = substr(s, j, 1)
+                    if (cc == SQ) {
+                        if (substr(s, j + 1, 3) == BSQTAIL) { j += 4; continue }
+                        closed = 1
+                        break
+                    }
+                    j++
+                }
+                if (!closed) {
+                    nseg++; segtype[nseg] = "U"; segtxt[nseg] = substr(s, start)
+                    i = n + 1
+                    continue
+                }
+                nseg++; segtype[nseg] = "Q"; segqchar[nseg] = SQ
+                segtxt[nseg] = substr(s, start, j - start + 1)
+                i = j + 1
+                continue
+            }
+            if (c == DQ) {
+                if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur; cur = "" }
+                start = i
+                j = i + 1
+                closed = 0
+                while (j <= n) {
+                    cc = substr(s, j, 1)
+                    if (cc == BS) { j += 2; continue }
+                    if (cc == DQ) { closed = 1; break }
+                    j++
+                }
+                if (!closed) {
+                    nseg++; segtype[nseg] = "U"; segtxt[nseg] = substr(s, start)
+                    i = n + 1
+                    continue
+                }
+                nseg++; segtype[nseg] = "Q"; segqchar[nseg] = DQ
+                segtxt[nseg] = substr(s, start, j - start + 1)
+                i = j + 1
+                continue
+            }
+            cur = cur c
+            i++
+        }
+        if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur }
+    }
     BEGIN {
         SQ = sprintf("%c", 39)   # single quote
         DQ = sprintf("%c", 34)   # double quote
         BT = sprintf("%c", 96)   # backtick
-        BS = sprintf("%c", 92)   # backslash (literal byte, for dq_span_has_live_subst)
-        # BSQ (#56): the literal 4-byte sequence emitted mid-value by the
-        # standard bash apostrophe-escaping idiom -- close-quote,
-        # backslash, quote, reopen-quote. To a real shell this does NOT
-        # end the logical single-quoted value; it substitutes one literal
-        # apostrophe and keeps concatenating (no intervening whitespace)
-        # onto the same word. Any prose value containing an ordinary
-        # English possessive or contraction built with this idiom (a name
-        # or an issue number immediately followed by an apostrophe-s, or a
-        # word like "does not" contracted the same way) is exactly this
-        # shape, and is extremely common in --body/-m/--title/--notes/
-        # --comment text.
-        BSQ = SQ "\\\\" SQ SQ
-        # boundary + text-carrying flag + optional (ws / = / ws) + quoted span.
-        # The leading boundary class includes a newline so a `--body` that begins
-        # a continuation line is still recognized; the quoted-span classes
-        # ([^"]* / [^'"'"']*) already match a newline, so a MULTI-LINE quoted
-        # value is captured as one span once the whole command is slurped below.
+        BS = sprintf("%c", 92)   # backslash (literal byte)
+        BSQTAIL = BS SQ SQ       # the 3 bytes after a BSQ-idiom-opening quote (#56)
+        # Text-carrying-flag shapes, checked against the TAIL of the "U"
+        # segment immediately preceding a candidate "Q" segment (#120) --
+        # never against the raw buffer as a whole, so a flag-shaped substring
+        # sitting inside an already-open quoted region can never match (it is
+        # never the tail of a "U" segment). Two variants of each: the "_BOL"
+        # form additionally allows the flag at the absolute START of the
+        # segment (`^`), which is only semantically meaningful for the FIRST
+        # segment of the whole buffer -- segtype[1] is the only segment that
+        # can ever truly start at buffer position 1, so callers use the BOL
+        # form only when checking segment 1 and the MID form (boundary
+        # whitespace/newline required) otherwise.
         #
         # Second alternative (#5797): `jq --arg NAME "<value>"` / `jq --argjson
-        # NAME "<value>"` — a bare identifier token (NAME) sits between the flag
-        # and the quoted value, which the first alternative'"'"'s shape does not
-        # anticipate, so it gets its own alternative rather than being folded
+        # NAME "<value>"` -- a bare identifier token (NAME) sits between the
+        # flag and the quoted value, which the first alternative'"'"'s shape does
+        # not anticipate, so it gets its own pattern rather than being folded
         # into the flag list above.
-        #
-        # SINGLE-QUOTED SPAN, BSQ-AWARE (#56): the old shape here was simply
-        # `SQ "[^" SQ "]*" SQ` -- open quote, a run of non-quote bytes, close
-        # quote -- which ends the match at the FIRST raw quote byte it
-        # meets. That is wrong the moment the value contains a BSQ-escaped
-        # apostrophe: the raw quote byte sitting inside that 4-byte escape
-        # sequence is not really a close-quote to bash, but the old regex
-        # treated it as one, truncating the masked span there and leaving
-        # everything after the first embedded apostrophe (including any
-        # dangerous phrase quoted as documentation past that point) fully
-        # unmasked and visible to the ASK_PATTERNS / stash-scope scans
-        # below. The fix inserts an optional repeating "(BSQ, then more
-        # non-quote bytes)" group before the real closing quote, so a BSQ
-        # sequence is treated as "keep going, same logical value" rather
-        # than "stop here" -- matching how bash itself parses it. If no
-        # real closing quote follows (a genuinely unterminated
-        # single-quoted span), the regex engine backtracks off this
-        # optional group and falls back to the narrower match ending at
-        # the first raw quote byte, so an unterminated span still fails to
-        # swallow trailing catastrophic text -- this change only ever
-        # widens what counts as "the same inert span", never widens what
-        # counts as "safe to mask" beyond real single-quote semantics
-        # (single-quoted text is unconditionally inert to bash regardless
-        # of content, per the qchar == SQ branch below).
-        #
-        # DOUBLE-QUOTED SPAN, BACKSLASH-AWARE (#112): the old shape here was
-        # `DQ "[^" DQ "]*" DQ` -- open quote, a run of non-quote bytes, close
-        # quote -- which ends the match at the FIRST raw quote byte, even when
-        # that byte is the second half of a `\"` escape sequence that bash does
-        # NOT treat as a closing quote. DQBODY below consumes `\<char>` as an
-        # indivisible unit (matching the bash escaping rule inside double quotes)
-        # so the span ends only at a genuinely unescaped quote. The alternation
-        # cannot run past that quote either -- the non-escape branch excludes a
-        # raw quote byte -- so POSIX leftmost-LONGEST matching still stops at
-        # the same place bash does, and adjacent values (`--body "a" --title
-        # "b"`) are still matched one at a time. Deliberately NOT applied to
-        # the single-quoted alternative: bash performs no backslash escaping
-        # inside single quotes (see BSQ above for the one idiom that matters
-        # there).
-        DQBODY = "(" "\\\\" "(.|\n)|[^" DQ "\\\\" "])*"
-        re = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*(" \
-             DQ DQBODY DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")" \
-             "|(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+(" \
-             DQ DQBODY DQ "|" SQ "[^" SQ "]*(" BSQ "[^" SQ "]*)*" SQ ")"
+        FLAG_RE_BOL = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*$"
+        FLAG_RE_MID = "[ \t\n](--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*$"
+        JQ_RE_BOL = "(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
+        JQ_RE_MID = "[ \t\n](--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -3002,29 +3085,33 @@ strip_literal_text() {
     { buf = buf (NR > 1 ? "\n" : "") $0 }
     END {
         # PRE-PASS (#5216): blank the body of a `<flag> "$(cat <<QDELIMQ … )"`
-        # heredoc before the quoted-span redaction below runs. It has to happen
-        # here rather than inside the loop because `re`'"'"'s quoted-span classes
-        # ([^"]* / [^'"'"']*) stop at the first quote character, and a heredoc body
-        # is free to contain raw quotes (prose routinely does) — so the span
-        # match alone cannot see such a value whole. Masking first also means
-        # the `$(`-floor below needs no exception: by the time the loop reads
-        # this span, the only text left inside it is `$(cat <<QDELIMQ`, the
-        # delimiter, and `)`.
+        # heredoc before the segmentation/redaction below runs. It has to
+        # happen here rather than inside segment_quotes() because a heredoc
+        # body is free to contain raw quotes (prose routinely does) -- so
+        # segmenting first would see them as real quote boundaries. Masking
+        # first also means the `$(`-floor below needs no exception: by the
+        # time segmentation reads this span, the only text left inside it is
+        # `$(cat <<QDELIMQ`, the delimiter, and `)`.
         s = mask_flag_cat_heredocs(buf)
+        segment_quotes(s)
         out = ""
-        while (match(s, re)) {
-            pre     = substr(s, 1, RSTART - 1)
-            matched = substr(s, RSTART, RLENGTH)
-            s       = substr(s, RSTART + RLENGTH)
-            # Locate the opening quote inside the matched span.
-            qpos = 0
-            for (i = 1; i <= length(matched); i++) {
-                c = substr(matched, i, 1)
-                if (c == DQ || c == SQ) { qpos = i; break }
+        for (k = 1; k <= nseg; k++) {
+            if (segtype[k] != "Q") { out = out segtxt[k]; continue }
+            # A "Q" segment is only a redaction candidate when the segment
+            # immediately before it is "U" and that segment'"'"'s own TAIL --
+            # not merely some earlier occurrence anywhere in the buffer --
+            # matches a recognized flag shape (#120).
+            flagged = 0
+            if (k > 1 && segtype[k - 1] == "U") {
+                if (k - 1 == 1) {
+                    if (segtxt[k - 1] ~ FLAG_RE_BOL || segtxt[k - 1] ~ JQ_RE_BOL) flagged = 1
+                } else {
+                    if (segtxt[k - 1] ~ FLAG_RE_MID || segtxt[k - 1] ~ JQ_RE_MID) flagged = 1
+                }
             }
-            head  = substr(matched, 1, qpos)                              # up to & incl. opening quote
-            qchar = substr(matched, qpos, 1)
-            inner = substr(matched, qpos + 1, length(matched) - qpos - 1) # between the quotes
+            if (!flagged) { out = out segtxt[k]; continue }
+            qchar = segqchar[k]
+            inner = substr(segtxt[k], 2, length(segtxt[k]) - 2)   # between the quotes
             # Redact ONLY provably inert text (no command substitution / backtick)
             # -- UNLESS the span is single-quoted (#5783). Inside real single
             # quotes bash performs NO expansion of any kind: dollar-paren and
@@ -3033,26 +3120,23 @@ strip_literal_text() {
             # a single-quoted --body/-m/etc value that merely quotes a
             # dangerous phrase as documentation (e.g. gh issue comment --body
             # quoting a backticked example command) is safe to redact even
-            # though it contains a backtick -- closing the boundary-anchor gap
-            # elsewhere in this file must not turn that inert prose into a new
-            # false ask/deny. A DOUBLE-quoted span keeps the original
-            # conservative floor: dollar-paren / backtick there IS live shell
-            # syntax, so it stays un-redacted and visible to the scans below.
+            # though it contains a backtick. A DOUBLE-quoted span keeps the
+            # original conservative floor: dollar-paren / backtick there IS
+            # live shell syntax, so it stays un-redacted and visible to the
+            # scans below.
             # gsub(/./) leaves embedded newlines untouched (awk `.` never matches a
             # newline), so a multi-line span stays SAME-LENGTH and byte offsets of
             # the surrounding command are preserved.
-            # #112: the double-quoted floor now asks whether the span holds a
-            # LIVE (unescaped) opener rather than whether the two-byte sequence
-            # appears at all -- `"\$(x)"` / "\`x\`" are literal prose to bash and
-            # were previously left half-redacted, desynchronizing every
-            # downstream quote-aware parser. `"\\$(x)"` (even backslash run) is
-            # a real substitution and is still never redacted.
+            # #112: the double-quoted floor asks whether the span holds a LIVE
+            # (unescaped) opener rather than whether the two-byte sequence
+            # appears at all -- `"\$(x)"` / "\`x\`" are literal prose to bash.
+            # `"\\$(x)"` (even backslash run) is a real substitution and is
+            # still never redacted.
             if (qchar == SQ || !dq_span_has_live_subst(inner)) {
                 gsub(/./, "X", inner)
             }
-            out = out pre head inner qchar
+            out = out qchar inner qchar
         }
-        out = out s
         printf "%s", out
     }'
 }
