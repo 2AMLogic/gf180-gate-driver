@@ -1,0 +1,43 @@
+{
+  "name": "gate-driver-core-drive",
+  "description": "End-to-end gate-driver signal chain (design/netlist/gate_driver_core.spice, issue #98): logic-in (IN) -> level_shifter -> output_stage -> 1 nF reference load, driven as one connected chain (not an isolated sub-cell) -- substantiates spec/gate-driver.md Sec.3's block-level drive targets end-to-end (issue #100).",
+  "claim": "spec/gate-driver.md#3-drive-strength-and-reference-load",
+  "netlist": "gate_driver_core_tb.spice",
+  "dut": "design/netlist/gate_driver_core.spice",
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "stretch": true,
+  "analyses": [
+    "tran 0.1n 700n",
+    "let outswing = maximum(v(OUT)) - minimum(v(OUT))",
+    "let outlo = minimum(v(OUT)) + 0.1*outswing",
+    "let outhi = minimum(v(OUT)) + 0.9*outswing",
+    "let outmid = minimum(v(OUT)) + 0.5*outswing",
+    "let inswing = maximum(v(IN)) - minimum(v(IN))",
+    "let inmid = minimum(v(IN)) + 0.5*inswing",
+    "meas tran trise10_90 TRIG v(OUT) VAL=outlo RISE=1 TARG v(OUT) VAL=outhi RISE=1",
+    "meas tran tfall10_90 TRIG v(OUT) VAL=outhi FALL=1 TARG v(OUT) VAL=outlo FALL=1",
+    "meas tran tpdlh TRIG v(IN) VAL=inmid RISE=1 TARG v(OUT) VAL=outmid RISE=1",
+    "meas tran tpdhl TRIG v(IN) VAL=inmid FALL=1 TARG v(OUT) VAL=outmid FALL=1"
+  ],
+  "measure": {
+    "trise_s": "trise10_90",
+    "tfall_s": "tfall10_90",
+    "tpdlh_s": "tpdlh",
+    "tpdhl_s": "tpdhl",
+    "ipeak_source_a": "maximum(i(vimeas))",
+    "ipeak_sink_a": "-minimum(i(vimeas))",
+    "vout_max_v": "maximum(v(OUT))",
+    "vout_min_v": "minimum(v(OUT))",
+    "vin_max_v": "maximum(v(IN))",
+    "vin_min_v": "minimum(v(IN))"
+  },
+  "checks": {
+    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT"},
+    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF reference load < 50ns, end-to-end IN->OUT"},
+    "ipeak_source_a": {"min": 0.5, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A (nominal target; the 1A stretch-rail target is evaluated separately in this record's narrative, not as a blanket harness check -- see sim/output-stage-drive/testbench/tb.json's identical convention)"},
+    "ipeak_sink_a": {"min": 0.5, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A (nominal target; see ipeak_source_a note on the 1A stretch target)"},
+    "vout_max_v": {"max": 6.6, "description": "sanity: OUT must not exceed the swept drive rail plus headroom (no uncontrolled overshoot source in this chain)"},
+    "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV"}
+  }
+}

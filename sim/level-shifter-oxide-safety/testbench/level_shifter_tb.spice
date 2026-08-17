@@ -17,11 +17,19 @@
 * the full vlogic_val rail (0 -> vlogic_val), exercising both edges twice
 * inside the 200 ns transient window.
 *
-* Output load: this cell's OUT feeds issue #6's output-stage pre-driver
-* input gate. #6 has not landed as of this record (see
-* design/level-shifter-partition.md and this experiment's record for the
-* assumption note) -- 20 fF is a placeholder representative pre-driver
-* input gate capacitance, not a measured #6 number; revisit once #6 lands.
+* Output load: this cell's OUT feeds design/output_stage.sch's pre-driver
+* first-stage gate (issue #6, landed 2026-08-12 via PR #23). This record
+* replaces the original 20 fF placeholder with the REAL predriver input
+* capacitance, computed from the actual first-stage device geometry:
+* design/output-stage-sizing.md Sec.1.4/Sec.3 gives the unit inverter's own
+* gate cap (XMP1 W=4.4u, XMN1 W=2.0u, design/netlist/output_stage.spice) as
+*   C_in = 0.9585 fF/um * 2.0um (Cgg_n) + 0.9227 fF/um * 4.4um (Cgg_p)
+*        = 5.977 fF
+* (BSIM4 cgg probe against the installed sm141064.ngspice model, typical
+* corner/27C/5V bias -- see that document for the full derivation). This
+* supersedes sim/level-shifter-oxide-safety/records/20260808-052057-5fbdb2d.md,
+* whose 20 fF load was noted as "not a measured #6 number; revisit once #6
+* lands" -- #6 has since landed and this is that revisit (issue #100).
 
 vsup_logic vdd_logic  0         dc {vlogic_val}
 vsup_drv   vdd_drv    0         dc {vdrv_val}
@@ -30,4 +38,4 @@ rgndtie    gnd_logic  gnd_drv   1m
 
 vin  in  gnd_logic pulse(0 {vlogic_val} 20n 0.5n 0.5n 40n 80n)
 
-cload out gnd_drv 20f
+cload out gnd_drv 5.977f
