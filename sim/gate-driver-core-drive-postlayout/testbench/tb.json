@@ -45,10 +45,12 @@
     "n5_min_v": "minimum(v(x2_n5))"
   },
   "checks": {
-    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT"},
-    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF reference load < 50ns, end-to-end IN->OUT"},
-    "ipeak_source_a": {"min": 0.5, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A (nominal target)"},
-    "ipeak_sink_a": {"min": 0.5, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A (nominal target)"},
+    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF reference load < 50ns, end-to-end IN->OUT (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tpdlh_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: end-to-end low-to-high propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner. Evaluated per corner tier via the harness's stretch override (#147/#125); this is the row post-layout interconnect RC moves most"},
+    "tpdhl_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: end-to-end high-to-low propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner"},
+    "ipeak_source_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
+    "ipeak_sink_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
     "vout_max_v": {"max": 6.6, "description": "sanity: OUT must not exceed the swept drive rail plus headroom"},
     "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV -- inherited band, see sibling record"},
     "indrv_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: IN_DRV, the level shifter's drive-rail-referenced output and the thick-oxide gate of the output stage's first taper inverter -- a real top-level net on both the schematic and the extracted netlist"},
