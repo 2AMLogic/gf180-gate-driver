@@ -346,9 +346,10 @@ def run(args: argparse.Namespace) -> int:
         )
 
     for failure in record["checks"]["failures"]:
+        stretch_tag = " [stretch]" if failure.get("bound") == "stretch" else ""
         print(
-            f"  CHECK FAIL {failure['measurement']} {failure['kind']}={report._fmt(failure['limit'])} "
-            f"got {report._fmt(failure['value'])} at {failure['at']}"
+            f"  CHECK FAIL {failure['measurement']} {failure['kind']}{stretch_tag}="
+            f"{report._fmt(failure['limit'])} got {report._fmt(failure['value'])} at {failure['at']}"
         )
 
     if not args.no_write:

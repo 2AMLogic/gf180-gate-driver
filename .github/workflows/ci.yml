@@ -10,6 +10,7 @@ name: CI
 # | `.github/scripts/lint.sh`                     | python3      | `lint` (here)  |
 # | evidence-record format + append-only          | python3+git  | `lint` (here)  |
 # | testbench manifests load (`--list`)           | python3      | `test` (here)  |
+# | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
@@ -86,6 +87,16 @@ jobs:
             echo "::error::a testbench manifest failed to load (see the '!!' line above)"
             exit 1
           fi
+
+      - name: Harness spec-check unit tests
+        # sim/test_harness_checks.py pins how `checks` bounds are evaluated,
+        # including the corner-scoped nominal/stretch override (issue #125).
+        # Pure stdlib arithmetic over synthetic measurements -- no ngspice, no
+        # PDK -- so it belongs on this PDK-free runner. It is the only check
+        # that a stretch bound is actually applied at the stretch corner: the
+        # failure mode it guards (a loose bound recorded as if it were the
+        # tight one) looks identical to a passing run in the record itself.
+        run: python3 sim/test_harness_checks.py
 
       - name: Layout generator unit tests
         # layout/test_gen_gate_driver_core.py pins how the generator reads a

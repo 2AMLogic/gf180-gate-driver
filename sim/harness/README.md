@@ -110,7 +110,11 @@ point 1 is both at nominal, point 2 is both at their high value — see
 A rail's optional `extra_v` stretch point (e.g. `vdrv`'s 6 V stretch target,
 spec §3) is **not** part of the default grid — a testbench opts in with
 `"stretch": true` in its manifest (`corners.stretch_points`), so the mandated
-±10 % matrix is never silently widened for every experiment.
+±10 % matrix is never silently widened for every experiment. A point sitting
+at one of those `extra_v` voltages is what the `checks` block calls a
+*stretch point*, and it can be held to a stricter bound than the rest of the
+grid — see [Corner-scoped bounds](#corner-scoped-bounds-nominal-vs-stretch)
+below.
 
 Override any axis from the command line:
 
@@ -238,12 +242,74 @@ the control block, so the expression must reduce to a **scalar**: fine for
 | Key | Applies to | Meaning |
 |---|---|---|
 | `min` / `max` | every point | hard limit; failure names the offending corner-id |
+| `stretch` | stretch points only | `{"min": …, "max": …}` override — see below |
 | `max_spread_pct` | the grid | `(max−min)/\|mean\|` must stay under the limit |
 | `min_spread_pct` | the grid | must *exceed* it — asserts the sweep really moved |
+| `description` | — | free text, copied onto the record |
+
+Any other key is a load error: a misspelled bound (`"maximum"`) would
+otherwise leave the measurement unchecked while the record still said PASS.
 
 `min_spread_pct` is a harness-integrity check: if `.temp` or a `.lib` section
 silently failed to apply, a strongly PVT-sensitive measurement would come back
 flat, and this catches that instead of reporting a suspiciously perfect result.
+
+### Corner-scoped bounds (nominal vs stretch)
+
+`spec/gate-driver.md` §3 states two tiers for the same parameter — a target
+and a **stretch** target:
+
+| Parameter | Target | Stretch |
+|---|---|---|
+| Peak source/sink current | ≥ 0.5 A | 1 A |
+| Propagation delay | < 50 ns | < 25 ns |
+| Rise/fall into reference load | < 50 ns | — |
+
+A check states both by adding a `stretch` object next to its nominal
+`min`/`max`:
+
+```json
+"checks": {
+  "ipeak_sink_a": {"min": 0.5, "stretch": {"min": 1.0}},
+  "tpdlh_s":      {"max": 50e-9, "stretch": {"max": 25e-9}},
+  "trise_s":      {"max": 50e-9}
+}
+```
+
+- At a **stretch point** — any point whose supply sits at one of a rail's
+  `extra_v` values, e.g. `vdrv` at 6 V (`report.is_stretch_point`) — the
+  `stretch` bound is evaluated **instead of** the nominal one. It replaces
+  that side of the bound, it does not stack with it, so one point never
+  reports two failures for the same measurement.
+- At every **other** point the nominal `min`/`max` applies, exactly as
+  before. A check with no `stretch` key is unchanged everywhere.
+- A `stretch` object may override just **one side**; the omitted side falls
+  back to the nominal value (so `{"min": 0.5, "max": 6.6, "stretch":
+  {"min": 5.4}}` still enforces `max` 6.6 at the stretch point).
+- A parameter whose spec row has **no** stretch target (`—`, like rise/fall
+  above) simply declares no `stretch` key and keeps its nominal bound at the
+  stretch corner too. Do not invent a stretch bound the spec does not state —
+  and equally, do not leave the loose nominal bound standing in for one it
+  does.
+- `stretch` may only scope the per-point `min`/`max`. The two `*_spread_pct`
+  keys are properties of the whole grid, so scoping one to a single corner
+  is meaningless and is rejected at load time.
+- Declaring a `stretch` bound on a testbench that never *runs* a stretch
+  point (`"stretch": false`, or no rail with an `extra_v`) is a load error
+  too: the stricter bound could never fire, so the record would read as if
+  the tighter target were enforced while every point was judged against the
+  looser one. That silent-loose-bound failure is exactly what this feature
+  exists to prevent (issue #125).
+
+The record reports which tier each verdict came from: the limits column
+reads `min=0.5, stretch min=1`, and a failure at a stretch point is tagged
+`ipeak_sink_a min [stretch]=1 (got 0.875334)`.
+
+`sim/test_harness_checks.py` pins this behavior (stdlib `unittest`, no PDK):
+
+```bash
+python3 sim/test_harness_checks.py     # npm run test:harness
+```
 
 ## What a run writes
 

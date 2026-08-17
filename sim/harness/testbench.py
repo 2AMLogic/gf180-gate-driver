@@ -191,6 +191,79 @@ class Testbench:
         }
 
 
+#: Keys a ``checks`` entry may carry. ``min``/``max`` are per-point bounds,
+#: the two ``*_spread_pct`` keys are grid-level, ``stretch`` is the
+#: corner-scoped override validated by :func:`validate_checks`, and
+#: ``description`` is free text copied onto the record.
+CHECK_KEYS = ("min", "max", "max_spread_pct", "min_spread_pct", "stretch", "description")
+
+#: Keys a check's ``stretch`` override may carry -- the two per-point bounds
+#: only. A spread check is a property of the whole grid, not of one corner,
+#: so scoping one to the stretch points would be meaningless.
+STRETCH_KEYS = ("min", "max")
+
+
+def validate_checks(tb: "Testbench", manifest_path: Path) -> None:
+    """Reject a ``checks`` block the harness would silently mis-evaluate.
+
+    Two failure modes matter here, both of which otherwise look exactly like
+    a passing run (issue #125):
+
+    * a **misspelled key** (``"maximum"``, ``"streach"``) is not a bound the
+      evaluator knows, so the measurement ends up unchecked while the record
+      still says PASS;
+    * a ``stretch`` override on a testbench that never *visits* a stretch
+      point -- ``"stretch": false``, or no rail carrying an ``extra_v`` --
+      can never fire, so the stricter bound reads as enforced but every
+      point is judged against the looser nominal one.
+
+    Both are refused at load time instead of at read-the-record time.
+    """
+    for name, spec in tb.checks.items():
+        if not isinstance(spec, dict):
+            raise ValueError(
+                f"{manifest_path}: check {name!r} must be an object, got {type(spec).__name__}"
+            )
+        unknown = [key for key in spec if key not in CHECK_KEYS]
+        if unknown:
+            raise ValueError(
+                f"{manifest_path}: check {name!r} has unknown key(s) "
+                f"{', '.join(repr(k) for k in unknown)}; known keys: "
+                + ", ".join(CHECK_KEYS)
+            )
+        stretch = spec.get("stretch")
+        if stretch is None:
+            continue
+        if not isinstance(stretch, dict) or not stretch:
+            raise ValueError(
+                f"{manifest_path}: check {name!r}'s 'stretch' must be a non-empty object "
+                f"of {'/'.join(STRETCH_KEYS)} bounds, e.g. "
+                '{"min": 0.5, "stretch": {"min": 1.0}}'
+            )
+        unknown = [key for key in stretch if key not in STRETCH_KEYS]
+        if unknown:
+            raise ValueError(
+                f"{manifest_path}: check {name!r}'s 'stretch' has unknown key(s) "
+                f"{', '.join(repr(k) for k in unknown)}; a stretch override may only "
+                f"scope the per-point bounds: {', '.join(STRETCH_KEYS)}"
+            )
+        stretch_rails = [rail.name for rail in tb.rails if rail.extra_v]
+        if not tb.stretch or not stretch_rails:
+            raise ValueError(
+                f"{manifest_path}: check {name!r} declares a 'stretch' bound, but this "
+                "testbench never runs a stretch point"
+                + (
+                    " (no rail declares 'extra_v')"
+                    if not stretch_rails
+                    else " ('stretch' is not true in this manifest)"
+                )
+                + " -- the stricter bound would never be evaluated and every point "
+                "would silently be judged against the looser nominal one. Set "
+                '"stretch": true and give a rail an "extra_v" value, or drop the '
+                "override."
+            )
+
+
 def _require(manifest: dict, key: str, path: Path):
     if key not in manifest:
         raise ValueError(f"{path}: missing required key {key!r}")
@@ -295,6 +368,7 @@ def load(directory: str | Path, dut: str | Path | None = None) -> Testbench:
     )
     validate_netlist(tb)
     validate_dut(tb)
+    validate_checks(tb, manifest_path)
     return tb
 
 

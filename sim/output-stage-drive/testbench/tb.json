@@ -51,10 +51,12 @@
     "n5_min_v": "minimum(v(n5))"
   },
   "checks": {
-    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF load < 50ns"},
-    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF load < 50ns"},
-    "ipeak_source_a": {"min": 0.5, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A"},
-    "ipeak_sink_a": {"min": 0.5, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A"},
+    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF load < 50ns (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF load < 50ns (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tpdlh_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: low-to-high propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner"},
+    "tpdhl_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: high-to-low propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner"},
+    "ipeak_source_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
+    "ipeak_sink_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
     "vout_max_v": {"max": 6.6, "description": "sanity: OUT must not exceed the swept rail (no overshoot from an uncontrolled source in this RC-only circuit)"},
     "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV"},
     "n1_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: internal taper node n1 (gate of MP2/MN2, drain of MP1/MN1) must not exceed the swept rail"},
