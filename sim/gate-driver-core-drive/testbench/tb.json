@@ -45,10 +45,12 @@
     "n5_min_v": "minimum(v(x2.n5))"
   },
   "checks": {
-    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT"},
-    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF reference load < 50ns, end-to-end IN->OUT"},
-    "ipeak_source_a": {"min": 0.5, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A (nominal target; the 1A stretch-rail target is evaluated separately in this record's narrative, not as a blanket harness check -- see sim/output-stage-drive/testbench/tb.json's identical convention)"},
-    "ipeak_sink_a": {"min": 0.5, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A (nominal target; see ipeak_source_a note on the 1A stretch target)"},
+    "trise_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% rise into 1nF reference load < 50ns, end-to-end IN->OUT (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tfall_s": {"max": 50e-9, "description": "spec Sec.3: 10-90% fall into 1nF reference load < 50ns, end-to-end IN->OUT (no stretch target -- spec Sec.3's Rise/fall row is '-' at the 6V stretch corner)"},
+    "tpdlh_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: low-to-high propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner, end-to-end IN->OUT"},
+    "tpdhl_s": {"max": 50e-9, "stretch": {"max": 25e-9}, "description": "spec Sec.3: high-to-low propagation delay < 50ns nominal, < 25ns at the 6V vdrv stretch corner, end-to-end IN->OUT"},
+    "ipeak_source_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak source current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
+    "ipeak_sink_a": {"min": 0.5, "stretch": {"min": 1.0}, "description": "spec Sec.3: peak sink current into 1nF load >= 0.5A nominal, >= 1A at the 6V vdrv stretch corner"},
     "vout_max_v": {"max": 6.6, "description": "sanity: OUT must not exceed the swept drive rail plus headroom (no uncontrolled overshoot source in this chain)"},
     "vout_min_v": {"min": -0.05, "description": "sanity: OUT must not undershoot below GND_DRV -- the same inherited -50mV band as indrv_min_v below"},
     "indrv_max_v": {"max": 6.6, "description": "spec Sec.2.3 gate-ceiling evidence: IN_DRV -- the level shifter's drive-rail-referenced output, and the THICK-OXIDE gate of the output stage's first taper inverter (x2.XMP1/x2.XMN1) -- must not exceed the swept rail plus headroom. This node is only observable in the end-to-end chain: sim/output-stage-drive drives it from an ideal source and sim/level-shifter-oxide-safety loads it with a lumped cap, so neither per-cell record measures the real level-shifter-driving-output-stage excursion. The 6.6V bound matches the sibling n1..n5 convention; spec Sec.2.3's 6.0V thick-oxide DC ceiling is evaluated row-by-row in the record narrative, because the harness cannot express a rail-dependent bound (issue #125)"},
