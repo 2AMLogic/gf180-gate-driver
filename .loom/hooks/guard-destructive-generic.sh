@@ -4583,6 +4583,18 @@ extract_write_targets() {
         if (parent != "") return mktempd_literal_abs(parent)
         # No explicit parent: $TMPDIR (else /tmp), resolved by the shell layer.
         # Empty when that was itself unresolvable, which disables this shape.
+        #
+        # `deftmpdir` is the TMPDIR THIS HOOK inherited, which is the same one
+        # the tool shell would use -- unless the command SETS TMPDIR itself
+        # (`TMPDIR=<repo>/tmp T=$(mktemp -d)`, `export TMPDIR=…` on an earlier
+        # line). Then the real parent is that new value, not the inherited one,
+        # and reading the inherited one would judge the wrong directory --
+        # allowing a sandbox deliberately pointed INTO the checkout. Refuse the
+        # default shape outright whenever the command mentions a TMPDIR
+        # assignment anywhere (cheap, and fail-closed on the ambiguous side);
+        # an invocation that names its parent explicitly is unaffected, because
+        # `mktemp -p`/an absolute template ignores TMPDIR entirely.
+        if (tmpdir_assigned) return ""
         return deftmpdir
     }
     # An mktemp path ARGUMENT is usable only when it is an absolute literal:
@@ -4736,6 +4748,17 @@ extract_write_targets() {
         # checkout and denied. See the header of that function for the full
         # rationale and for what deliberately stays visible.
         buf = mask_heredoc_bodies_selective_shell_only(buf)
+        # Does the command set TMPDIR anywhere? Read off the whole (masked)
+        # buffer BEFORE segmentation, because the assignment can sit in a shape
+        # the per-segment assignment scan never records -- a prefix on another
+        # command, an `export`, a line inside a function body. Any hit disables
+        # the DEFAULT-parent `mktemp -d` recognition (see mktempd_parent).
+        # Deliberately over-broad: matching the word in a comment or in a
+        # visible interpreter-fed heredoc only ever restores the deny this
+        # exception would otherwise have lifted.
+        # `--tmpdir=` is lowercase and `FOO_TMPDIR=` is excluded by the
+        # preceding-character class, so neither trips this.
+        tmpdir_assigned = (buf ~ /(^|[^A-Za-z0-9_])TMPDIR=/)
         $0 = qsplit(buf)   # quote-aware segmentation (#3755)
 
         # Whole-BUFFER quote-aware masking (#5157), not per-segment.

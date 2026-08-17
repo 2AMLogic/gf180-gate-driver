@@ -485,6 +485,7 @@ case:
 | relative template/parent (`mktemp -d ./s.XXXX`, `-p .`), a `$` in either, `-u`, `-t`, any other flag, a second template | **deny** (unresolved), unchanged |
 | `X=$(mktemp -d)/sub`, a bare `$(mktemp -d)` written to directly | **deny** (unresolved), unchanged |
 | `X` re-bound to a different value anywhere in the command (including the `X="$(mktemp -d)" \|\| X=/elsewhere` shape) | **deny** (unresolved), unchanged |
+| the command **sets `TMPDIR` itself** (`TMPDIR=… X=$(mktemp -d)`, an earlier `export TMPDIR=…`) and lets `mktemp` pick the parent | **deny** (unresolved) — the inherited `TMPDIR` the scan can see is no longer the parent that would be used |
 
 Residual limitation, unchanged by this: `cd "$TMPROOT" && echo x > f` still
 denies. The `cd` handler deliberately keeps its argument *raw* (quote
@@ -495,7 +496,7 @@ target as `"$TMPROOT/f"` instead of cd-ing into it.
 
 Regression coverage lives in
 `.loom/hooks/tests/test-guard-destructive-worktree-confinement.sh` cases
-(h)–(t).
+(h)–(w).
 
 **Quoted targets are still absolute (issue #4926).** The same classification had
 a second way to be fooled, reached without any `$` at all: the tokenizer copies

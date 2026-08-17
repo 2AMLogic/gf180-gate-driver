@@ -42,11 +42,14 @@
 # (`TMPROOT="$(mktemp -d)"`) and writes only inside it was denied at the
 # catastrophic -unresolved-var tier seven times in this repo's guard telemetry
 # (2026-08-15..17), because record_assign() stored the value TRUNCATED at the
-# space inside the substitution. Cases (h)-(t) below cover the flip to ALLOW
+# space inside the substitution. Cases (h)-(w) below cover the flip to ALLOW
 # and, more importantly, every neighbouring shape that must keep denying:
 # `mktemp` without -d, a repo-relative template, an explicit `-p` parent,
 # `-u`, a reassigned/ambiguous binding, a concatenated value, a bare
-# `$(mktemp -d)` target, and a TMPDIR pointing inside the checkout.
+# `$(mktemp -d)` target, a TMPDIR pointing inside the checkout, a command that
+# sets TMPDIR itself (so the parent the scan can see is not the parent
+# `mktemp` would actually use), an assignment-shaped substring appearing only
+# as prose, and a `../` climb back out of the sandbox into the checkout.
 #
 # The hook under test is the canonical source at .loom/hooks/ (this repo
 # ships no defaults/ tree and no .claude/skills/repo/hooks/ canonical Repo
@@ -334,6 +337,59 @@ result=$(run_hook_tmpdir "$TMPROOT/intmp" 'TMPROOT="$(mktemp -d)"
 cp /etc/hosts "$TMPROOT/hosts"')
 assert_deny "(t) TMPDIR inside the main checkout -> deny (sandbox stand-in lands in the checkout)" "$result" \
     "resolves to the main repository checkout"
+
+# --- (u) NEGATIVE, the other half of the (t) hinge: the parent a bare
+# `mktemp -d` uses is read from the TMPDIR this HOOK inherited, so a command
+# that sets TMPDIR *itself* would be judged against the wrong directory --
+# and could point its sandbox straight into the checkout while the scan
+# happily judged /tmp. Any TMPDIR assignment in the command therefore
+# disables the default-parent shape outright. Prefix form:
+result=$(run_hook "TMPDIR=$TMPROOT/intmp TMPROOT=\$(mktemp -d)
+cp /etc/hosts \"\$TMPROOT/hosts\"")
+assert_deny "(u) command sets TMPDIR as an assignment prefix -> deny (default parent no longer trusted)" "$result" \
+    "unexpanded shell variable"
+
+# --- (u2) same, in the shape the per-segment assignment scan never records
+# at all (an `export` on its own line) -- the check reads the whole buffer
+# precisely so this cannot slip past it.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+TMPROOT=\$(mktemp -d)
+cp /etc/hosts \"\$TMPROOT/hosts\"")
+assert_deny "(u2) command exports TMPDIR on an earlier line -> deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (u3) POSITIVE counterpart: `mktemp -p` ignores TMPDIR entirely, so an
+# explicit absolute out-of-repo parent stays resolvable even when the command
+# does set TMPDIR. (u)/(u2) must not over-reach into this shape.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+SCRATCH=\$(mktemp -d -p /var/tmp)
+cp /etc/hosts \"\$SCRATCH/f\"")
+assert_allow "(u3) explicit -p parent is unaffected by a TMPDIR assignment -> allow" "$result"
+
+# --- (u4) the `--tmpdir=` FLAG is lowercase and a `*_TMPDIR=` variable is a
+# different name -- neither may trip the (u) refusal, or the flag form would
+# disable itself.
+result=$(run_hook 'LOOM_TMPDIR=/some/where
+T=$(mktemp --directory --tmpdir=/var/tmp)
+cp /etc/hosts "$T/f"')
+assert_allow "(u4) --tmpdir= flag / FOO_TMPDIR= name do not trip the TMPDIR refusal -> allow" "$result"
+
+# --- (v) NEGATIVE: the same text as PROSE inside another command's argument
+# binds nothing -- recognition is anchored at a segment head, so an
+# assignment-shaped substring elsewhere on the line must not make `$T`
+# resolvable.
+result=$(run_hook 'echo "T=$(mktemp -d)"
+cp /etc/hosts "$T/f"')
+assert_deny "(v) mktemp assignment as prose in another argument -> binds nothing, still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (w) NEGATIVE: a resolved sandbox is a real path, so climbing back OUT of
+# it into the main checkout is caught by the ordinary containment test -- the
+# stand-in must not become a blanket "anything rooted at $T is fine" token.
+result=$(run_hook "T=\$(mktemp -d)
+W=\"\$T/../../..$TMPROOT/x\"
+cp /etc/hosts \"\$W\"")
+assert_deny "(w) ../ traversal out of the sandbox back into the checkout -> deny" "$result"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
