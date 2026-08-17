@@ -37,7 +37,7 @@ from . import HARNESS_VERSION
 from .corners import DEFAULT_TEMPERATURES_C, PvtPoint, Rail, supply_points
 from .evidence_lint import _git
 from .pdk import Pdk
-from .runner import PointResult
+from .runner import PointResult, effective_reltol
 from .testbench import Testbench
 
 #: Subdirectories of ``sim/<experiment-slug>/`` defined by ``sim/README.md``.
@@ -275,18 +275,27 @@ def evaluate_checks(
     return failures
 
 
-def environment(pdk: Pdk, ngspice: str, repo_root: Path, git: dict | None = None) -> dict:
+def environment(
+    pdk: Pdk, ngspice: str, repo_root: Path, git: dict | None = None, tb: Testbench | None = None
+) -> dict:
     """Reproducibility provenance for the record.
 
     ``git`` should be sampled *before* the run starts. The harness writes its
     own per-corner logs into the tracked evidence tree, so sampling afterwards
     would report every record as taken against a dirty tree.
+
+    ``tb`` -- when given -- adds the transient tolerance this record's decks
+    actually ran at (issue #156: every recorded §2.3 gate-ceiling peak comes
+    from a narrow capacitive-coupling spike whose measured height depends on
+    the deck's ``reltol``, so a later reader needs that value on the record
+    to tell which convention produced a given number, not just the ngspice
+    version and PDK this block already carried).
     """
     try:
         user = getpass.getuser()
     except Exception:  # pragma: no cover - unusual environments
         user = "unknown"
-    return {
+    env: dict = {
         "harness_version": HARNESS_VERSION,
         "ngspice": ngspice,
         "python": sys.version.split()[0],
@@ -296,6 +305,9 @@ def environment(pdk: Pdk, ngspice: str, repo_root: Path, git: dict | None = None
         "pdk": pdk.provenance(),
         "git": git if git is not None else git_provenance(repo_root),
     }
+    if tb is not None:
+        env["tran_reltol"], env["tran_reltol_source"] = effective_reltol(tb)
+    return env
 
 
 def matrix_conformance(tb: Testbench, points: list[PvtPoint]) -> dict:
@@ -397,7 +409,7 @@ def build_record(
         "subset_reason": subset_reason,
         "matrix": matrix_conformance(tb, points),
         "testbench": tb.provenance(),
-        "environment": environment(pdk, ngspice, repo_root, git),
+        "environment": environment(pdk, ngspice, repo_root, git, tb=tb),
         "grid": {
             "corners": corners,
             "temperatures_c": sorted({p.temp_c for p in points}),
@@ -623,6 +635,17 @@ def render_record(record: dict, experiment: str) -> str:
             "not citable as a clean-tree result"
         )
 
+    if "tran_reltol" in env:
+        # The source is carried explicitly by environment() above, never
+        # re-derived by comparing the value against DEFAULT_TRAN_RELTOL: a
+        # manifest that deliberately pins the same string as the current
+        # default is still an override, and a value comparison would label
+        # it "harness default".
+        source = env["tran_reltol_source"]
+        reltol_line = f"- Transient tolerance: reltol={env['tran_reltol']} ({source})"
+    else:
+        reltol_line = "- Transient tolerance: n/a (device-level testbench, no tb.json)"
+
     lines = [
         f"# Record {record_id}",
         "",
@@ -657,6 +680,7 @@ def render_record(record: dict, experiment: str) -> str:
         f"- PDK: {pdk.get('variant')} @ open_pdks `{pdk.get('open_pdks_version')}`"
         f" ({pdk.get('path')}, found via {pdk.get('discovered_via')})",
         f"- ngspice: {env['ngspice']}",
+        reltol_line,
         f"- Harness: sim/harness {env['harness_version']}, python {env['python']}",
         f"- git: `{git['commit']}` on `{git['branch']}`"
         + (" (dirty)" if git["dirty"] else " (clean)"),

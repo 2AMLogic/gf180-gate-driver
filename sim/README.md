@@ -154,6 +154,36 @@ This is implemented in [`sim/harness/report.py`](harness/report.py)
 for the manifest syntax and the load-time rules that keep such a bound from
 being declared where it could never fire.
 
+## Decision record: transient tolerance convention
+
+Every §2.3 gate-ceiling number recorded so far (decision records 0003, 0004,
+0005, 0006) is the peak of a narrow capacitive-coupling spike, measured by a
+generated `tran <tstep> <tstop>` deck with no maximum-timestep argument and
+ngspice's own factory-default `reltol` (1e-3). Re-solving the same point with
+a bounded maximum timestep, or a tighter `reltol`, moves the peak *outward*
+by ~25% — the harness-default figure is a **lower bound** on the true
+excursion, not an upper one, which is the opposite of what a conservative
+reliability bound needs (issue #156).
+
+| | |
+|---|---|
+| Worst-case point measured | `ss_125c_vlogic3p30v-vdrv6p00v` of `sim/gate-driver-core-drive/`, node `IN_DRV`, ngspice-46/gf180mcuD @ open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b` |
+| Options considered | (a) an explicit `tran` `maxstep` argument in the generated deck; (b) a tightened `.options reltol` default; (c) per-testbench overrides via the manifest's existing `options` key with no harness-wide default; (d) a documented "peaks are resolution-limited" caveat with no deck change |
+| Comparison table (single worst-case point) | harness default (`tran 0.1n 700n`): 6.11823 V (−118.2 mV margin) · `maxstep` 20 ps: 6.14362 V · `maxstep` 10 ps: 6.14767 V · `reltol` 1e-4: 6.14569 V · `reltol` 1e-5: 6.14801 V · `maxstep` ≤ 5 ps (± tighter `reltol`): run aborts ("timestep too small") at 57–133 ns of the 700 ns run |
+| Full-grid check (issue #156's own follow-up) | `reltol=1e-5` looked safe on the single worst-case point above but, run across all 60 mandated `sim/gate-driver-core-drive` points, aborted on 7 of 60 with ngspice's "Timestep too small" on `vimeas#branch`/`vgnd_logic#branch` — a *different* device/branch-equation failure mode than the sub-5 ps `maxstep` abort the single-point table found, and one single-point testing alone would not have caught. `reltol=1e-4` completed all 60 points with no aborts. |
+| Chosen | (b): a harness-wide default of `.options reltol=1e-4`, applied by `compose_deck` to every generated deck unless a testbench's own manifest already opts into a `reltol` value via `"options": ["reltol=..."]` (per-testbench override stays available for a future point that needs something tighter or looser) |
+| Rationale | `reltol=1e-4` recovers nearly all of the outward peak movement a tighter setting would (6.14569 V vs. 6.14801 V @ `reltol`=1e-5, both against the 6.11823 V harness-default baseline) with a one-line, deck-global change — no per-testbench `tran` edit — and, unlike `reltol=1e-5`, completes the full mandated PVT grid with zero aborts. A caveat-only fix (option d) was rejected because it leaves every *existing* recorded number silently understated; a per-testbench-only opt-in (option c) was rejected because every testbench in this repo's grid measures the same class of coupling-transient peak, so a harness-wide default is the more conservative choice by default, with the override still available for a testbench that needs to diverge |
+
+Every generated deck's `.options reltol=...` line, and whether it is the
+harness default or a manifest override, is recorded on the record's
+**Environment** block (`Transient tolerance: reltol=... (harness default |
+manifest override)`) — see the worked example below — so a later reader can
+tell which convention produced a given number without cross-referencing this
+repo's git history. Implemented in
+[`sim/harness/runner.py`](harness/runner.py) (`DEFAULT_TRAN_RELTOL`,
+`effective_reltol`, `compose_deck`) and
+[`sim/harness/report.py`](harness/report.py) (`environment`, `render_record`).
+
 ## Append-only rule
 
 `records/*.md` files are never edited or deleted after creation. A re-run or

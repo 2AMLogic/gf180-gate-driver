@@ -176,11 +176,26 @@ distinct claim under test, kebab-case.
   "stretch": false,
   "analyses": ["op"],
   "params": {"iload": "10u"},
-  "options": ["reltol=1e-5"],
+  "options": ["reltol=1e-6"],
   "measure": {"vout": "v(vout)", "iq_ua": "-i(vsup)*1e6"},
   "checks": {"vout": {"min": 4.9, "max": 5.1, "max_spread_pct": 2.0}}
 }
 ```
+
+`options` is a list of literal `.options ...` lines, appended to the deck
+verbatim. **Every generated deck already gets `.options reltol=1e-4`** by
+default (`runner.DEFAULT_TRAN_RELTOL`) — the harness-wide transient-tolerance
+convention `sim/README.md`'s "Decision record: transient tolerance
+convention" ratifies (issue #156): ngspice's own factory-default `reltol`
+(1e-3) under-resolves the narrow capacitive-coupling spikes every §2.3
+gate-ceiling record measures, and a tighter `reltol=1e-5` was tried and
+rejected -- it aborts ("timestep too small") on some points of this repo's
+full PVT grid, even though it looked safe on a single worst-case point.
+Declare `"options": ["reltol=..."]` in a manifest only to *override* that
+default with a different value for this testbench specifically, as in the
+example above (`reltol=1e-6`); the harness detects the override
+(case/whitespace-insensitive match on `reltol=`) and does not also append
+its own default line.
 
 `rails` is optional — omit it to get this repo's two default rails
 (`vlogic` 3.3 V, `vdrv` 5 V, both ±10 %, `vdrv` carrying the 6 V stretch

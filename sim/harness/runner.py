@@ -27,6 +27,78 @@ DEFAULT_TIMEOUT_S = 300
 _MEAS_RE = re.compile(r"^\s*m_(\w+)\s*=\s*([-+]?[0-9.]+(?:[eE][-+]?[0-9]+)?)\s*$")
 _ERROR_RE = re.compile(r"^\s*(?:Error|ERROR|Fatal|fatal error|doAnalyses:)", re.MULTILINE)
 
+#: Default ngspice ``reltol`` for every generated deck (issue #156).
+#:
+#: ngspice's own factory default (``reltol=1e-3``) leaves local-truncation-
+#: error control free to take timesteps wide enough to straddle -- and skip
+#: over the peak of -- a sub-nanosecond capacitive-coupling spike. Every
+#: recorded spec Sec.2.3 gate-ceiling number so far is the peak of exactly
+#: that kind of spike (decision records 0003-0006), so the harness-default
+#: deck was measuring a LOWER bound on the true excursion, not an upper one
+#: -- the opposite of what a conservative reliability bound needs.
+#:
+#: ``1e-4`` recovers nearly all of the ~25% outward peak movement a tighter
+#: setting would on this repo's worst-case recorded point
+#: (`sim/gate-driver-core-drive`'s `ss_125c_vlogic3p30v-vdrv6p00v`, node
+#: IN_DRV: 6.14569 V @ reltol=1e-4 vs. a 6.11823 V harness-default baseline
+#: and 6.14801 V @ reltol=1e-5), needs no per-testbench ``tran`` edit, and --
+#: unlike ``reltol=1e-5`` -- never hits ngspice's "timestep too small" abort
+#: anywhere across the mandated 60-point PVT grid. ``1e-5`` looked safe on
+#: that single worst-case point but was rejected after a full-grid run
+#: aborted on 7 of 60 points ("Timestep too small ... trouble with node
+#: vimeas#branch/vgnd_logic#branch") -- a different failure mode than the
+#: sub-5 ps ``maxstep`` abort the issue's own single-point table found, and
+#: one that single-point testing alone would not have caught. See
+#: ``sim/README.md``'s "Transient tolerance convention" section for the full
+#: comparison table and rationale.
+DEFAULT_TRAN_RELTOL = "1e-4"
+
+#: Matches an existing ``reltol=...`` (any case, any whitespace around ``=``)
+#: inside a manifest ``options`` entry, so a testbench that already opts into
+#: its own value is not double-set by :data:`DEFAULT_TRAN_RELTOL` below it --
+#: ngspice takes the *last* ``.options reltol=`` line in a deck, so a naive
+#: unconditional append would silently overrule a deliberate manifest choice.
+_RELTOL_OPTION_RE = re.compile(r"(?i)\breltol\s*=")
+
+
+#: How a record's ``reltol`` came to be: the harness-wide default, or a value
+#: the testbench's own manifest opted into. Recorded explicitly on every
+#: record's Environment block rather than re-derived by comparing the value
+#: against :data:`DEFAULT_TRAN_RELTOL` -- a manifest that deliberately pins
+#: the same string as the current default is still an *override*, and would
+#: be mislabelled by a value comparison (and would silently change meaning
+#: the day the default moves).
+RELTOL_SOURCE_DEFAULT = "harness default"
+RELTOL_SOURCE_MANIFEST = "manifest override"
+
+
+def reltol_is_manifest_override(tb: Testbench) -> bool:
+    """Whether ``tb``'s manifest opts into its own ``reltol``.
+
+    Single source of truth for the three places that must agree: whether
+    :func:`compose_deck` appends the harness default, what
+    :func:`effective_reltol` reports, and which source string
+    ``report.py`` writes onto the record.
+    """
+    return any(_RELTOL_OPTION_RE.search(option) for option in tb.options)
+
+
+def effective_reltol(tb: Testbench) -> tuple[str, str]:
+    """The ``reltol`` this testbench's decks run at, and where it came from.
+
+    A manifest may opt into its own value via ``"options": ["reltol=..."]``
+    (``sim/harness/README.md`` documents the syntax); otherwise every deck
+    gets the harness-wide :data:`DEFAULT_TRAN_RELTOL`. Returns
+    ``(value, source)`` where ``source`` is :data:`RELTOL_SOURCE_DEFAULT` or
+    :data:`RELTOL_SOURCE_MANIFEST`; ``report.py`` records both on the
+    record's Environment block, per issue #156's "record the tolerance
+    settings" ask.
+    """
+    for option in tb.options:
+        if _RELTOL_OPTION_RE.search(option):
+            return option.split("=", 1)[1].strip(), RELTOL_SOURCE_MANIFEST
+    return DEFAULT_TRAN_RELTOL, RELTOL_SOURCE_DEFAULT
+
 
 class NgspiceMissing(RuntimeError):
     pass
@@ -80,6 +152,10 @@ def compose_deck(tb: Testbench, pdk: Pdk, point: PvtPoint) -> str:
     ]
     for option in tb.options:
         lines.append(f".options {option}")
+    if not reltol_is_manifest_override(tb):
+        # Harness-wide transient-tolerance default -- see DEFAULT_TRAN_RELTOL
+        # above and sim/README.md's "Transient tolerance convention".
+        lines.append(f".options reltol={DEFAULT_TRAN_RELTOL}")
 
     if tb.dut is not None:
         lines += [

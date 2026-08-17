@@ -1,0 +1,103 @@
+* Frozen netlist snapshot for record 20260817-202802-d7bda87
+* source     : sim/output-stage-drive/testbench/output_stage_tb.spice
+* sha256     : e9243e7b21176ae71c8ad438482ce891357f5604c251c0e155b60d0292b51f8d
+* This is a verbatim copy taken at record time. Do not edit.
+* output-stage-drive -- stimulus + reference load for design/output_stage.sch
+* (issue #6), substantiating spec/gate-driver.md Sec.3's drive targets.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the
+* gf180mcu models, the corner .lib sections, .temp, this experiment's DUT
+* fragment (output_stage_dut.spice, .include'd ahead of this file -- see
+* tb.json's "dut" key), the .control block and .end.
+*
+* This testbench declares a SINGLE custom rail, `vdrv` (the output stage
+* has no 3.3V-domain devices at all -- spec Sec.2.5, every device in this
+* cell is nfet_06v0/pfet_06v0 -- so this repo's default second rail,
+* vlogic, does not apply here; see tb.json's "rails" override and
+* sim/README.md's own note that a testbench may declare a custom rail set).
+* The harness hands this fragment, per sim/harness/README.md:
+*   vdrv_val   this PVT point's VDD_DRV supply (nominal, +-tol, or the 6V
+*              stretch point)
+*   vdrv_nom   vdrv's nominal supply (5.0V), for ratio-style measurements
+*   temp_c     temperature for this PVT point (also applied via .temp)
+*
+* IN_DRV is driven as an idealized, already-level-shifted, rail-referenced
+* logic signal (spec's own framing for this cell's input -- issue #6: "this
+* cell's input is a drive-rail-referenced logic signal, not the 3.3V
+* input"). The 1ns 0-100% edge rate is a testbench assumption representing
+* a reasonably fast level-shifter output; the level shifter's own edge rate
+* and any additional delay it contributes are issue #7's concern, not
+* measured here -- see design/output-stage-sizing.md's propagation-delay
+* budget split.
+
+vsup_drv VDD_DRV 0 dc {vdrv_val}
+vgnd_drv GND_DRV 0 dc 0
+
+* IN_DRV: idealized rail-to-rail pulse. Starts low (0V) so the DUT settles
+* to a well-defined DC operating point (OUT low, non-inverting 6-stage
+* chain) before the first transient edge.
+vin IN_DRV 0 pulse(0 {vdrv_val} 20n 1n 1n 100n 300n)
+
+* 1 nF reference load (spec Sec.3), measured through a 0V ammeter so the
+* load current (source = positive, sink = negative) is directly probeable
+* as i(vimeas) without relying on a simulator-specific capacitor-current
+* accessor.
+vimeas OUT outcap 0
+cload outcap 0 1n
+
+* ---------------------------------------------------------------
+* DUT netlist included by this testbench (schematic)
+* source     : sim/output-stage-drive/testbench/output_stage_dut.spice
+* sha256     : 7a5fa93871c42279495f5836bd030f132b12ec65e045da49438597d85ca2b3ef
+* ---------------------------------------------------------------
+
+* output_stage_dut.spice -- DUT fragment for sim/output-stage-drive/
+*
+* Derived from design/netlist/output_stage.spice (xschem-generated from
+* design/output_stage.sch) by stripping the trailing `.end` directive (the
+* harness's DUT fragment rule, sim/harness/README.md: a DUT file may not
+* carry .control/.endc/.end/.lib/.temp) and the machine-local `sch_path`
+* comment xschem prepends. NOT hand-edited beyond that -- regenerate from
+* design/netlist/output_stage.spice if the schematic changes:
+*   grep -v -e '^\*\* sch_path:' -e '^\.end$' design/netlist/output_stage.spice \
+*     > sim/output-stage-drive/testbench/output_stage_dut.spice
+* (then re-add this header).
+*
+* Both filters match on line *content*, not line number. The committed
+* design/netlist/output_stage.spice no longer carries the `sch_path` line
+* (stripped at the source, issue #39 / design/README.md), so a positional
+* skip such as `tail -n +2` would now silently drop the first real line
+* (`**.subckt output_stage ...`); the `sch_path` pattern is kept here so the
+* recipe also works when run against a freshly netlisted file that still
+* has it.
+*
+**.subckt output_stage VDD_DRV IN_DRV OUT GND_DRV
+*.ipin IN_DRV
+*.ipin VDD_DRV
+*.ipin GND_DRV
+*.opin OUT
+XMP1 n1 IN_DRV VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=4.4u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN1 n1 IN_DRV GND_DRV GND_DRV nfet_06v0 L=0.70u W=2.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 n2 n1 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=18.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN2 n2 n1 GND_DRV GND_DRV nfet_06v0 L=0.70u W=8.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP3 n3 n2 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=73.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMN3 n3 n2 GND_DRV GND_DRV nfet_06v0 L=0.70u W=33.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP4 n4 n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=30
+XMN4 n4 n3 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=14
+XMP5 n5 n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=122
+XMN5 n5 n4 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=55
+XMP6 OUT n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=500
+XMN6 OUT n5 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=220
+**.ends
