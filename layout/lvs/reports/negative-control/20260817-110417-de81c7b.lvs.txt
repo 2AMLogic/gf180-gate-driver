@@ -1,0 +1,21 @@
+layout: ../../../gate_driver_core.gds
+reference: ../../../build/gate_driver_core.ref.one-device-short.spice
+top: gate_driver_core
+engine: klayout
+status: mismatch
+mismatches: 6
+  nets: layout=30  reference=30  matched=26
+  devices: layout=959  reference=958  matched=958
+  pins: layout=19  reference=19  matched=19
+
+category_counts:
+  device.body_unverified: 2
+  device.unmatched: 1
+  topology: 3
+
+[warning] device.body_unverified  (layout)  299 NMOS device body terminal(s) were compared against the 'vsubs' deck-synthesized substrate net, not a real schematic net -- no drawn substrate-tap geometry resolved these device(s)' body terminal to a real net (see docs/cli/extract.md, "Coverage")
+[warning] device.body_unverified  (layout)  660 PMOS device body terminal(s) were compared against an anonymous, deck-synthesized well net, not a real schematic net -- this deck has no distinct well-tap layer (see docs/cli/extract.md, "Coverage")
+[error] device.unmatched  (layout)  device has no counterpart on the other side
+[error] topology  (both)  nets were paired despite a name/identity conflict
+[error] topology  (both)  nets were paired despite a name/identity conflict
+[warning] topology  (layout)  device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch

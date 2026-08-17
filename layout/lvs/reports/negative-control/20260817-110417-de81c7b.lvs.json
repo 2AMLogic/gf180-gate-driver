@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "engine": "klayout",
+  "layout": "../../../gate_driver_core.gds",
+  "reference": "../../../build/gate_driver_core.ref.one-device-short.spice",
+  "top": "gate_driver_core",
+  "parameter_tolerance": null,
+  "status": "mismatch",
+  "mismatch_count": 6,
+  "category_counts": {
+    "device.body_unverified": 2,
+    "device.unmatched": 1,
+    "topology": 3
+  },
+  "counts": {
+    "nets": {
+      "layout": 30,
+      "reference": 30,
+      "matched": 26
+    },
+    "devices": {
+      "layout": 959,
+      "reference": 958,
+      "matched": 958
+    },
+    "pins": {
+      "layout": 19,
+      "reference": 19,
+      "matched": 19
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.10",
+    "layout_sha256": "8cdb7cb699ced7b323ecec4c10477bde97a66380bf70b84ae332358bde26dea3",
+    "reference_sha256": "dbce0fdf1cb815135994da79d909076954a6bb8e3e5c1da6332bfbdea9913484",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.2.0",
+    "klayout_version": "0.30.10",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:e2726af899d1837fe8c9a99688483f145b23c92ded07323f54d627d06bdb2bbf"
+    },
+    "input": null
+  },
+  "mismatches": [
+    {
+      "category": "device.body_unverified",
+      "severity": "warning",
+      "description": "299 NMOS device body terminal(s) were compared against the 'vsubs' deck-synthesized substrate net, not a real schematic net -- no drawn substrate-tap geometry resolved these device(s)' body terminal to a real net (see docs/cli/extract.md, \"Coverage\")",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "nfet"
+      },
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "device.body_unverified",
+      "severity": "warning",
+      "description": "660 PMOS device body terminal(s) were compared against an anonymous, deck-synthesized well net, not a real schematic net -- this deck has no distinct well-tap layer (see docs/cli/extract.md, \"Coverage\")",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": null,
+        "reference": null,
+        "class": "pfet"
+      },
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "$299",
+        "reference": null,
+        "class": "nfet"
+      },
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "vsubs",
+        "reference": "VSUBS"
+      },
+      "device": null,
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "x2_n5",
+        "reference": "X2_N5"
+      },
+      "device": null,
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch",
+      "side": "layout",
+      "net": null,
+      "device": null,
+      "property": null,
+      "details": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "GND_LOGIC",
+      "reference": "GND_LOGIC",
+      "pin": true
+    },
+    {
+      "layout": "IN",
+      "reference": "IN",
+      "pin": true
+    },
+    {
+      "layout": "IN_DRV",
+      "reference": "IN_DRV",
+      "pin": true
+    },
+    {
+      "layout": "$17",
+      "reference": "NWL_X1_XMPBUF1",
+      "pin": false
+    },
+    {
+      "layout": "$19",
+      "reference": "NWL_X1_XMPBUF2",
+      "pin": false
+    },
+    {
+      "layout": "$15",
+      "reference": "NWL_X1_XMPINV",
+      "pin": false
+    },
+    {
+      "layout": "$16",
+      "reference": "NWL_X1_XMPLATA",
+      "pin": false
+    },
+    {
+      "layout": "$18",
+      "reference": "NWL_X1_XMPLATB",
+      "pin": false
+    },
+    {
+      "layout": "$20",
+      "reference": "NWL_X2_XMP1",
+      "pin": false
+    },
+    {
+      "layout": "$21",
+      "reference": "NWL_X2_XMP2",
+      "pin": false
+    },
+    {
+      "layout": "$22",
+      "reference": "NWL_X2_XMP3",
+      "pin": false
+    },
+    {
+      "layout": "$24",
+      "reference": "NWL_X2_XMP4",
+      "pin": false
+    },
+    {
+      "layout": "$26",
+      "reference": "NWL_X2_XMP5",
+      "pin": false
+    },
+    {
+      "layout": "$29",
+      "reference": "NWL_X2_XMP6",
+      "pin": false
+    },
+    {
+      "layout": "VDD_DRV",
+      "reference": "VDD_DRV",
+      "pin": true
+    },
+    {
+      "layout": "VDD_LOGIC",
+      "reference": "VDD_LOGIC",
+      "pin": true
+    },
+    {
+      "layout": "x1_inb",
+      "reference": "X1_INB",
+      "pin": true
+    },
+    {
+      "layout": "x1_na",
+      "reference": "X1_NA",
+      "pin": true
+    },
+    {
+      "layout": "x1_nb",
+      "reference": "X1_NB",
+      "pin": true
+    },
+    {
+      "layout": "x1_nbuf1",
+      "reference": "X1_NBUF1",
+      "pin": true
+    },
+    {
+      "layout": "x1_nca",
+      "reference": "X1_NCA",
+      "pin": true
+    },
+    {
+      "layout": "x1_ncb",
+      "reference": "X1_NCB",
+      "pin": true
+    },
+    {
+      "layout": "x2_n1",
+      "reference": "X2_N1",
+      "pin": true
+    },
+    {
+      "layout": "x2_n2",
+      "reference": "X2_N2",
+      "pin": true
+    },
+    {
+      "layout": "x2_n3",
+      "reference": "X2_N3",
+      "pin": true
+    },
+    {
+      "layout": "x2_n4",
+      "reference": "X2_N4",
+      "pin": true
+    }
+  ]
+}
