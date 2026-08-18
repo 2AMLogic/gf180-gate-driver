@@ -68,6 +68,15 @@ MODEL_AND_BODY_BY_CLASS_L = {
     ("pfet", 0.55): ("pfet_06v0", "VDD_DRV"),
 }
 
+#: Extraction-deck device classes with no `_model_and_body` entry above and no
+#: body terminal at all -- issue #166's `XCCOMP` MiM series stack extracts as
+#: four two-terminal ``cap_mim_2f0_m4m5_noshield`` devices (``a``/``b``, no
+#: ``d``/``g``/``s``/``b``). Named explicitly, rather than "anything
+#: `_model_and_body` does not recognise", so an unexpected new device class
+#: still fails loudly through `_model_and_body` instead of silently being
+#: treated as a capacitor. See T7.
+CAP_CLASSES = {"cap_mim_2f0_m4m5_noshield"}
+
 #: Ground reference every net's parasitic ground capacitor ties to, replacing
 #: the deck's synthesized `vsubs` substrate net (`klt extract`'s single
 #: global body/ground-plane node -- there is no drawn p-substrate tap layer
@@ -226,6 +235,41 @@ TRANSFORMS = [
         "the point of being PVT-grid-infeasible within a bounded evidence "
         "run.",
     ),
+    (
+        "T7",
+        "(issue #166/#201) Passive cards: a CAP_CLASSES device (this design's "
+        "only case: the four-deep XCCOMP MiM series stack) has no d/g/s/b "
+        "terminals and no gf180mcu subcircuit to rebind to -- it is emitted "
+        "directly as an ngspice `C<n> a b <value>` card, `value` carried "
+        "through verbatim from the extractor's own measured `params.c_f` "
+        "(the same two-term area+perimeter model make_reference.py's "
+        "transform 6 restates over the schematic geometry). Never grouped by "
+        "--combine: with only four instances there is no simulation-cost "
+        "case for folding them, and each occupies a distinct position in the "
+        "series chain (distinct nets), so no two are ever combine-eligible "
+        "anyway. Its two terminals still route through T5's per-net leg "
+        "resistor the same as any MOS terminal when --parasitics is present "
+        "-- the merged-ground body-terminal skip below is scoped to MOS "
+        "devices only so it cannot mistake a capacitor's `b` terminal for a "
+        "MOS body leg.",
+    ),
+    (
+        "T8",
+        "(issue #201) Anonymous-net rename: any net the extractor names "
+        "`$N` (its own convention for a net with no schematic label -- this "
+        "design's first real case is T7's XCCOMP inter-cap nodes) is "
+        "rewritten to `ANON<N>` wherever it would otherwise appear as a "
+        "bare SPICE node token. `$` starting a token is an inline-comment "
+        "marker to ngspice, so left as-is these nets silently truncate "
+        "every card that names them -- no simulator error, just a per-card "
+        "`... is not a valid ... line, ignored!` warning outside this "
+        "script's or run_corners.py's own PASS/FAIL summary. Applied at "
+        "every point a raw extractor net name reaches a bare node position "
+        "(`leg_of()`'s return, and T5's per-net star loop); never applied "
+        "to a name only ever embedded inside a longer instance name (e.g. "
+        "an R-leg card's own `R$18__t0` name field), since a `$` that is "
+        "not a token's first character does not trigger this.",
+    ),
 ]
 
 BACK_ANNOTATIONS = [
@@ -249,6 +293,23 @@ BACK_ANNOTATIONS = [
 
 def _fmt(value: float) -> str:
     return f"{value:.6g}"
+
+
+#: `klt extract` names an internal net with no schematic label `$N` (its own
+#: anonymous-net numbering) -- this design's first real case is #166's XCCOMP
+#: series stack, whose three inter-cap nodes (schematic `nccomp1..3`) carry no
+#: label anywhere in the layout. A `$`-prefixed net is not just an odd
+#: spelling: a SPICE token that *starts* with `$` is an inline-comment marker
+#: to ngspice (confirmed directly -- `$18` mid-token, e.g. embedded in an
+#: instance name like `R$18__t0`, is fine; `$18` as its own bare
+#: whitespace-delimited token is not), so emitting one as a bare node
+#: silently truncates the rest of that card: no simulator error, just a
+#: `<card> is not a valid ... line, ignored!` warning `run_corners.py`'s own
+#: PASS/FAIL summary never surfaces (issue #201 -- caught only by manually
+#: reading ngspice's own log after the XCCOMP caps it should have added
+#: measured *zero* effect on every corner, bit-for-bit). See T8.
+def _spice_node(name: str) -> str:
+    return "ANON" + name[1:] if name.startswith("$") else name
 
 
 def _model_and_body(device_class: str, l_um: float) -> tuple[str, str]:
@@ -353,14 +414,20 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         """
         raw = legs.get((dev["name"], terminal), dev["nets"][terminal])
         if not _is_merged_ground(raw):
-            return raw
+            return _spice_node(raw)  # T8: e.g. XCCOMP's anonymous inter-cap nodes
         _assert_nmos_ground(dev, terminal, raw)
         if raw == MERGED_GROUND_RAW:
             return own_ground
         return MERGED_GROUND_NODE + raw[len(MERGED_GROUND_RAW) :]
 
+    # T7: CAP_CLASSES devices (this design's only case: the four `XCCOMP*` MiM
+    # caps) have no d/g/s/b terminals, so they are pulled out of the MOS
+    # loops below entirely rather than forced through `_model_and_body`.
+    mos_devices = [dev for dev in extract["devices"] if dev["class"] not in CAP_CLASSES]
+    cap_devices = [dev for dev in extract["devices"] if dev["class"] in CAP_CLASSES]
+
     if not combine:
-        for dev in sorted(extract["devices"], key=lambda d: (d["class"], d["name"])):
+        for dev in sorted(mos_devices, key=lambda d: (d["class"], d["name"])):
             cls, name, params = dev["class"], dev["name"], dev["params"]
             model, body = _model_and_body(cls, params["l_um"])
             counts[model] = counts.get(model, 0) + 1
@@ -374,7 +441,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             )
     else:
         grouped: dict[tuple, list[dict]] = {}
-        for dev in extract["devices"]:
+        for dev in mos_devices:
             cls, params = dev["class"], dev["params"]
             model, body = _model_and_body(cls, params["l_um"])
             key = (
@@ -393,6 +460,17 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                 f"L={_fmt(l_um)}U W={_fmt(w_um)}U nf=1 "
                 f"ad={_fmt(ad)}P as={_fmt(as_)}P "
                 f"pd={_fmt(pd)}U ps={_fmt(ps)}U m={len(members)}"
+            )
+
+    if cap_devices:
+        lines += ["", "* T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)"]
+        for dev in sorted(cap_devices, key=lambda d: d["name"]):
+            cls, name, params = dev["class"], dev["name"], dev["params"]
+            counts[cls] = counts.get(cls, 0) + 1
+            inst = name.lstrip("$")
+            lines.append(
+                f"C{inst} {leg_of(dev, 'a', dev['nets']['a'])} "
+                f"{leg_of(dev, 'b', dev['nets']['b'])} {_fmt(params['c_f'])}"
             )
 
     par_count = {"r": 0, "c": 0}
@@ -419,18 +497,22 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         # the pre-#132 topology, where each ground net's own `hub_net` WAS
         # that rail's node, at the same 297 legs (issue #184).
         #
-        # Body terminals stay excluded on every net, merged or not
+        # MOS body terminals stay excluded on every net, merged or not
         # (`terminal["terminal"] == "B"` -- they do carry a real measured
         # resistance now that issue #132 draws real tap geometry): `emit()`
         # never calls `leg_of()` for the body slot, T4 binds it directly to a
         # real rail with no series R, so a body leg node would be referenced
-        # by its R card alone.
+        # by its R card alone. Scoped to non-CAP_CLASSES (MOS) devices so a
+        # CAP_CLASSES device's own `b` terminal -- a real capacitor plate,
+        # not a body -- is never mistaken for one and dropped (issue
+        # #166/#201's T7).
         devices_by_name = {dev["name"]: dev for dev in extract["devices"]}
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
             merged = net["net"] == MERGED_GROUND_RAW
-            hub = net["hub_net"]
+            hub = _spice_node(net["hub_net"])  # T8: e.g. an XCCOMP inter-cap net's own hub
             for terminal in net["terminals"]:
-                if terminal["terminal"].upper() == "B":
+                term_dev = devices_by_name[terminal["device"]]
+                if term_dev["class"] not in CAP_CLASSES and terminal["terminal"].upper() == "B":
                     continue
                 leg = terminal["leg_net"]
                 leg_hub = hub
@@ -439,6 +521,8 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                     _assert_nmos_ground(dev, terminal["terminal"].lower(), leg)
                     leg_hub = _model_and_body(dev["class"], dev["params"]["l_um"])[1]
                     leg = MERGED_GROUND_NODE + leg[len(MERGED_GROUND_RAW) :]
+                else:
+                    leg = _spice_node(leg)  # T8: e.g. an XCCOMP inter-cap net's own leg
                 lines.append(f"R{leg} {leg} {leg_hub} {_fmt(terminal['resistance_ohm'])}")
                 par_count["r"] += 1
             if merged:
@@ -458,7 +542,8 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                 )
             else:
                 lines.append(
-                    f"C{net['net']} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}"
+                    f"C{_spice_node(net['net'])} {hub} {GROUND_REF} "
+                    f"{_fmt(net['capacitance_ff'] * 1e-15)}"
                 )
             par_count["c"] += 1
 
