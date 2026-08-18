@@ -203,43 +203,86 @@ class PassiveDeviceTest(unittest.TestCase):
     :class:`Passive` -- a distinct type from :class:`Device`, so it can never
     reach ``klt gen mos_array`` as if it were a transistor.
 
-    The capacitor is deliberately *not* drawn by the generator (``klt gen`` has
-    no capacitor generator, and the metal pair is a deferred layout-time
-    choice) -- issue #166 owns drawing it and re-running DRC/LVS. What this
-    suite pins is that the skip is explicit and visible: the passive appears in
-    ``parse_netlist_full``'s third return value, so ``build()`` can warn and
-    record it, and never in the MOS device list the layout is generated from.
+    Issue #192 (spec/decision-records/0014) then replaced that single device
+    with **four series** ``cap_mim_2f0_m4m5_noshield`` devices at the DRM
+    minimum 5.0 um x 5.0 um: ``gf180mcuD`` fixes the MiM density at
+    2 fF/um^2, so the ``cap_mim_1f0_*`` model has no fabricable or
+    LVS-recognizable device here, and DRM rule MIMTM.8a's 25 um^2 minimum MIM
+    area makes the smallest legal single device ~54.5 fF -- four times too
+    large for this node. This suite therefore also pins that the passive
+    *chain* is read end to end (``x1.ncb`` -> ``nccomp1..3`` -> ``IN_DRV``),
+    since a parser that silently dropped one link would leave a plausible but
+    wrong effective capacitance.
+
+    The capacitors are deliberately *not* drawn by the generator (``klt gen``
+    has no capacitor generator) -- issue #166 owns drawing them and re-running
+    DRC/LVS, and decision record 0014 re-scopes it from one ``cap_mim_1f0_*``
+    to these four. What this suite pins is that the skip is explicit and
+    visible: each passive appears in ``parse_netlist_full``'s third return
+    value, so ``build()`` can warn and record it, and never in the MOS device
+    list the layout is generated from.
     """
 
-    CAP_LINE = "XCCOMP ncb out cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u m=1"
+    CAP_LINE = "XCCOMP1 ncb nccomp1 cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1"
 
     def test_mim_cap_line_parses_as_a_passive(self):
         passive = _device_from_tokens(self.CAP_LINE.split(), {}, prefix="x1_")
         self.assertIsInstance(passive, Passive)
         self.assertNotIsInstance(passive, Device)
-        self.assertEqual(passive.name, "x1_XCCOMP")
-        self.assertEqual(passive.model, "cap_mim_1f0_m4m5_noshield")
-        self.assertAlmostEqual(passive.w_um, 3.0, places=9)
-        self.assertAlmostEqual(passive.l_um, 3.0, places=9)
+        self.assertEqual(passive.name, "x1_XCCOMP1")
+        self.assertEqual(passive.model, "cap_mim_2f0_m4m5_noshield")
+        self.assertAlmostEqual(passive.w_um, 5.0, places=9)
+        self.assertAlmostEqual(passive.l_um, 5.0, places=9)
         self.assertEqual(passive.multiplicity, 1)
 
     def test_passive_terminals_resolve_through_the_instance_mapping(self):
         # `out` is a formal port of level_shifter, wired to IN_DRV at the top
-        # level; `ncb` is internal, so it takes the instance prefix.
-        passive = _device_from_tokens(
-            self.CAP_LINE.split(), {"out": "IN_DRV"}, prefix="x1_"
+        # level; `ncb` and the stack's internal `nccomp*` nodes are internal,
+        # so they take the instance prefix.
+        last_link = (
+            "XCCOMP4 nccomp3 out cap_mim_2f0_m4m5_noshield "
+            "c_width=5.0u c_length=5.0u m=1"
         )
-        self.assertEqual(passive.plus, "x1_ncb")
+        passive = _device_from_tokens(
+            last_link.split(), {"out": "IN_DRV"}, prefix="x1_"
+        )
+        self.assertEqual(passive.plus, "x1_nccomp3")
         self.assertEqual(passive.minus, "IN_DRV")
 
-    def test_committed_netlist_has_exactly_one_undrawn_passive(self):
+    def test_committed_netlist_has_four_undrawn_passives_in_series(self):
         _ports, devices, passives = parse_netlist_full(NETLIST_PATH)
         self.assertEqual(len(devices), 24)
-        self.assertEqual([p.name for p in passives], ["x1_XCCOMP"])
-        self.assertEqual(passives[0].minus, "IN_DRV")
+        self.assertEqual(
+            [p.name for p in passives],
+            ["x1_XCCOMP1", "x1_XCCOMP2", "x1_XCCOMP3", "x1_XCCOMP4"],
+        )
+        # Every device is the one MIM `gf180mcuD` can actually build, at the
+        # DRM MIMTM.8a minimum area (25 um^2) -- decision record 0014.
+        for p in passives:
+            self.assertEqual(p.model, "cap_mim_2f0_m4m5_noshield")
+            self.assertAlmostEqual(p.w_um, 5.0, places=9)
+            self.assertAlmostEqual(p.l_um, 5.0, places=9)
+            self.assertGreaterEqual(p.w_um * p.l_um, 25.0)
+        # The chain must run end to end: x1.ncb -> nccomp1..3 -> IN_DRV. A
+        # dropped or mis-ordered link would still simulate, just at the wrong
+        # effective capacitance, so pin the topology and not only the count.
+        self.assertEqual(
+            [(p.plus, p.minus) for p in passives],
+            [
+                ("x1_ncb", "x1_nccomp1"),
+                ("x1_nccomp1", "x1_nccomp2"),
+                ("x1_nccomp2", "x1_nccomp3"),
+                ("x1_nccomp3", "IN_DRV"),
+            ],
+        )
         # The MOS list the layout is generated from must contain no passive.
         self.assertTrue(all(isinstance(d, Device) for d in devices))
-        self.assertNotIn("cap_mim_1f0_m4m5_noshield", {d.model for d in devices})
+        self.assertNotIn("cap_mim_2f0_m4m5_noshield", {d.model for d in devices})
+        # The non-fabricable 1 fF/um^2 model must not come back.
+        self.assertNotIn(
+            "cap_mim_1f0_m4m5_noshield",
+            {d.model for d in devices} | {p.model for p in passives},
+        )
 
     def test_passive_is_reported_in_full_but_hidden_from_the_mos_parser(self):
         ports_a, devices_a = parse_netlist(NETLIST_PATH)

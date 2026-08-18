@@ -26,7 +26,7 @@
 | `XMNBUF1` | `nfet_06v0` | thick | 5 V/6 V drive | `gnd_drv` (isolated pwell) | `DNWELL_DRV` |
 | `XMPBUF2` | `pfet_06v0` | thick | 5 V/6 V drive | `vdd_drv` (nwell) | `DNWELL_DRV` |
 | `XMNBUF2` | `nfet_06v0` | thick | 5 V/6 V drive | `gnd_drv` (isolated pwell) | `DNWELL_DRV` |
-| `XCCOMP` | `cap_mim_1f0_m4m5_noshield` (MIM, 1 fF/µm², M4-M5) | n/a — no silicon bulk/well terminal, isolated by inter-metal dielectric | 5 V/6 V drive (both terminals, `ncb` and `out`/`IN_DRV`, are `DNWELL_DRV`-group nodes) | n/a | co-located with `DNWELL_DRV` — a MIM cap has no diffusion/well terminal of its own to place inside or outside a DNWELL, so it adds no new isolation requirement beyond the domain boundary the 5 V/6 V group already forces |
+| `XCCOMP1`–`XCCOMP4` | `cap_mim_2f0_m4m5_noshield` ×4 in series (MIM, 2 fF/µm², M4-FuseTop-M5), each 5.0 µm × 5.0 µm | n/a — no silicon bulk/well terminal, isolated by inter-metal dielectric | 5 V/6 V drive (the stack's end terminals `ncb` and `out`/`IN_DRV`, and its three internal nodes `nccomp1`–`nccomp3`, are all `DNWELL_DRV`-group nodes) | n/a | co-located with `DNWELL_DRV` — a MIM cap has no diffusion/well terminal of its own to place inside or outside a DNWELL, so it adds no new isolation requirement beyond the domain boundary the 5 V/6 V group already forces |
 
 **Result**: two groups, no group mixes 3.3 V and 5 V/6 V devices — DRM 7.2
 satisfied by construction. The 3.3 V group (pre-driver inverter + both
@@ -39,28 +39,59 @@ node inside that group ever expected to differ from another by more than one
 rail's worth of headroom, so co-locating them in one DNWELL adds no new
 isolation requirement beyond what the domain boundary itself already forces.
 
-## Compensation capacitor (`XCCOMP`) — this cell's first passive
+## Compensation capacitor (`XCCOMP1`–`XCCOMP4`) — this cell's first passive
 
-`XCCOMP` (issue #155, [decision record
-0007](../spec/decision-records/0007-indrv-feedforward-compensation-capacitor.md))
+The compensation capacitor (issue #155, [decision record
+0007](../spec/decision-records/0007-indrv-feedforward-compensation-capacitor.md);
+re-modeled by issue #192, [decision record
+0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md))
 is the first passive component in this design. It has no diffusion or well
 terminal of its own — a MIM cap is a metal-metal stack sitting above the
 active area, isolated from the substrate by inter-metal dielectric — so DRM
 7.2's DNWELL-mixing rule, which governs diffusion/well devices, does not
-apply to it directly. Both of its plates connect to nodes (`ncb`, `out`)
-that already belong to the `DNWELL_DRV` group, so it introduces no new
-domain-crossing surface for layout to isolate.
+apply to it directly. Every node it touches (`ncb`, `out`, and the stack's
+internal `nccomp1`–`nccomp3`) already belongs to the `DNWELL_DRV` group, so
+it introduces no new domain-crossing surface for layout to isolate.
 
-**Metal-layer pair deferred to layout.** `cap_mim_1f0_m4m5_noshield` names
-the M4-M5 metal pair for *simulation* purposes only (all four pairs the PDK
-offers — M2-M3, M3-M4, M4-M5, M5-M6 — share the same characterized
-capacitance-per-area model, confirmed directly against
-`sm141064_mim.ngspice`, so the choice is electrically interchangeable at the
-schematic level). Per this document's own scope note above, no layout has
-been drawn for this cell yet; the final metal pair is a layout-time decision
-(driven by which metals are free for the compensation cap's small footprint
-once the cell's guard ring, power straps and cascode boundary routing are
-placed), not a schematic commitment carried forward from this record.
+**Four series devices, not one — and the metal pair is no longer free.**
+Decision record 0014 replaces decision record 0007's single
+`cap_mim_1f0_m4m5_noshield` at 3.0 µm × 3.0 µm with four series
+`cap_mim_2f0_m4m5_noshield` devices at 5.0 µm × 5.0 µm, for two independent
+reasons this document's earlier "metal pair deferred to layout" note did not
+anticipate:
+
+- **Density is a process option, not a drawing choice.** `gf180mcuD` is
+  wired for the 2.0 fF/µm² MiM option (`.config/nodeinfo.json` option
+  `MIM_2P0`; `libs.tech/klayout/lvs/run_lvs.py` binds `variant=D` to
+  `mim_cap=2`; `libs.tech/magic/gf180mcuD.tech` and
+  `libs.tech/netgen/gf180mcuD_setup.tcl` each define exactly one MIM device,
+  `cap_mim_2f0_m4m5_noshield`). The PDK's LVS deck extracts all three
+  densities from *identical* drawn layers, confirming the density is set by
+  the mask/process option, not by anything layout can draw.
+- **The metal pair follows the metal stack, and is therefore already
+  fixed.** The earlier note here said all four M(n)-M(n+1) pairs were
+  electrically interchangeable and the choice was a layout-time decision.
+  That is true of the *model cards*, but not of the *process*: DRM §10.4
+  defines exactly two mutually-exclusive MIM options — Option A (bottom
+  plate on Metal2, 3-metal-layer processes) and Option B (bottom plate on
+  Metal(n−1) of an n-metal stack) — and states they "can not be used in the
+  same process." `gf180mcuD` is a 5-metal Option-B build, so its MIM sits on
+  Metal4-FuseTop-Metal5 and nowhere else. `m4m5` in the device name is a
+  process fact for this PDK variant, not a simulation convenience.
+
+**Layout consequence carried forward.** DRM rule MIMTM.8a sets a 25 µm²
+minimum MIM area (FuseTop), which each 5.0 µm × 5.0 µm device meets exactly
+at the minimum. Four of them need four separate FuseTop plates with their
+own bottom plates: MIMTM.3 requires 0.6 µm bottom-plate overlap of the top
+plate on every side (a 6.2 µm × 6.2 µm Metal4 plate per device) and MIMTM.1
+requires 1.2 µm bottom-plate-to-adjacent-metal spacing, so a single row of
+four is roughly 28.4 µm × 6.2 µm ≈ 176 µm² of Metal4/Metal5 real estate.
+That area is over the cell, not beside it — the DRM's own §10.4.2 guideline
+is only that no *matching-sensitive* analog circuitry sit underneath, which
+this switching level shifter is not — but it does mean Metal4 and Metal5 are
+no longer freely available for routing above the shifter, and the three
+internal nodes `nccomp1`–`nccomp3` are floating-by-design plate-to-plate
+nets that layout must not accidentally strap or shield to anything.
 
 ## Guard-ring requirement
 

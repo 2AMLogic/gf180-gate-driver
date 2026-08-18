@@ -55,11 +55,15 @@ Known limitations of this first-cut layout (deliberately not fixed here -- see
 ``layout/README.md`` and issue #105, which owns DRC/LVS closure):
 
 * Passive devices are parsed but not drawn.  ``klt gen`` has no capacitor
-  generator, and ``XCCOMP``'s metal pair is an explicitly deferred layout-time
-  choice (design/level-shifter-partition.md), so the MIM cap added by issue
-  #155 is reported (a stderr warning plus a ``passives_not_drawn`` block in the
-  provenance record) rather than silently dropped.  Issue #166 owns drawing it
-  and re-running DRC/LVS.
+  generator, so the compensation capacitor added by issue #155 -- since issue
+  #192 / decision record 0014, a series stack of four
+  ``cap_mim_2f0_m4m5_noshield`` devices at the DRM MIMTM.8a minimum
+  5.0 um x 5.0 um -- is reported (a stderr warning plus a
+  ``passives_not_drawn`` block in the provenance record) rather than silently
+  dropped.  Issue #166 owns drawing them and re-running DRC/LVS.  Note the
+  metal pair is no longer a layout choice: ``gf180mcuD`` is a 5-metal DRM
+  Option-B build, so its MiM sits on Metal4-FuseTop-Metal5 and nowhere else
+  (design/level-shifter-partition.md).
 * No well/substrate taps, no guard ring around ``DNWELL_DRV``.  A closed tap
   ring around the drive domain has to be cut for every signal crossing the
   domain boundary, which is a routing plan, not a marker rectangle.
@@ -211,9 +215,8 @@ LV_MODELS = {"nfet_03v3", "pfet_03v3"}
 # parsed and reported, but *not* drawn: `klt gen` has no capacitor generator in
 # this repo's flow (`klt gen --list`: mos_array, diff_pair, guard_ring,
 # res_array, esd_device, bjt_array, bond_pad, resistor_strip -- none of which
-# is a MIM cap), and the metal-pair choice for `XCCOMP` is explicitly deferred
-# to layout time (design/level-shifter-partition.md).  Issue #166 owns drawing
-# it and re-running DRC/LVS; until then :func:`build` refuses to pretend the
+# is a MIM cap).  Issue #166 owns drawing the `XCCOMP*` stack
+# and re-running DRC/LVS; until then :func:`build` refuses to pretend the
 # generated GDS covers them -- see the warning it prints and the
 # `passives_not_drawn` block it writes into the provenance record.
 PASSIVE_MODEL_PREFIXES = ("cap_",)
@@ -335,9 +338,11 @@ class Device:
 class Passive:
     """One flattened two-terminal passive device, with top-level net names.
 
-    Today this is only the MIM capacitor ``XCCOMP``
-    (``cap_mim_1f0_m4m5_noshield``, issue #155 / decision record 0007), whose
-    geometry is ``c_width``/``c_length`` rather than a MOSFET's ``W``/``L``.
+    Today these are only the four series MIM capacitors ``XCCOMP1``..
+    ``XCCOMP4`` (``cap_mim_2f0_m4m5_noshield`` at 5.0 um x 5.0 um, issue #155 /
+    decision record 0007, re-modeled by issue #192 / decision record 0014),
+    whose geometry is ``c_width``/``c_length`` rather than a MOSFET's
+    ``W``/``L``.
 
     A ``Passive`` is deliberately **not** a :class:`Device`: nothing in this
     generator draws one (see :data:`PASSIVE_MODEL_PREFIXES`), so keeping the
@@ -1206,10 +1211,10 @@ def build(out_dir: str, pdk: str) -> dict:
     if passives:
         # Loud on purpose: this generator draws MOS devices only, so a netlist
         # passive means the GDS it is about to write does NOT implement the
-        # whole schematic.  Issue #166 owns drawing `XCCOMP` (and the
-        # metal-pair choice that goes with it) plus the DRC/LVS re-run; until
-        # then the gap is reported here and recorded in the provenance file
-        # rather than being discovered at LVS time.
+        # whole schematic.  Issue #166 owns drawing the `XCCOMP*` series stack
+        # plus the DRC/LVS re-run; until then the gap is reported here and
+        # recorded in the provenance file rather than being discovered at LVS
+        # time.
         print(
             "warning: "
             + f"{len(passives)} passive device(s) in "

@@ -23,6 +23,17 @@
     "let thinox_worst = max(max(max(mq1,mq2),max(mq3,mq4)),max(mq5,mq6))",
     "meas tran na_peak max v(na)",
     "meas tran nb_peak max v(nb)",
+    "let dvc1 = abs(v(ncb)-v(nccomp1))",
+    "let dvc2 = abs(v(nccomp1)-v(nccomp2))",
+    "let dvc3 = abs(v(nccomp2)-v(nccomp3))",
+    "let dvc4 = abs(v(nccomp3)-v(out))",
+    "let dvcstack = abs(v(ncb)-v(out))",
+    "meas tran mvc1 max dvc1",
+    "meas tran mvc2 max dvc2",
+    "meas tran mvc3 max dvc3",
+    "meas tran mvc4 max dvc4",
+    "meas tran vccomp_stack max dvcstack",
+    "let vccomp_dev = max(max(mvc1,mvc2),max(mvc3,mvc4))",
     "meas tran t_plh trig v(in) val=1.65 rise=1 targ v(out) val=2.5 rise=1",
     "meas tran t_phl trig v(in) val=1.65 fall=1 targ v(out) val=2.5 fall=1",
     "meas tran vout_hi_abs find v(out) at=59n",
@@ -35,6 +46,8 @@
     "vgate_thinox_max": "thinox_worst",
     "vna_peak": "na_peak",
     "vnb_peak": "nb_peak",
+    "vccomp_dev_max": "vccomp_dev",
+    "vccomp_stack_max": "vccomp_stack",
     "t_plh_ns": "t_plh*1e9",
     "t_phl_ns": "t_phl*1e9",
     "vout_hi_ratio": "outhi_ratio",
@@ -52,6 +65,10 @@
     "vout_lo_ratio": {
       "max": 0.05,
       "description": "IN held low (t=19ns, pre-edge) -> OUT must sit near GND_DRV (non-inverting, off state)."
+    },
+    "vccomp_dev_max": {
+      "max": 6.0,
+      "description": "decision record 0014: worst-case transient voltage across ANY ONE of XCCOMP1..XCCOMP4, against the gf180mcu MiM capacitor's 6V rating (gf180mcu-pdk docs/analog/model_parameters/LV/tables_clear/08_MIM.csv, which rates all three MiM densities identically at 'usable for Volt <=6V across capacitor'). The four-deep series stack exists to satisfy DRM MIMTM.8a's 25um2 minimum MIM area at a usable capacitance; dividing the stack voltage four ways is a second, independent benefit this check records."
     }
   }
 }

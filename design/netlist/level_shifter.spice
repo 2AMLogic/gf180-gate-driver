@@ -16,15 +16,30 @@
 * See design/level-shifter-partition.md for the device-by-device domain/DNWELL
 * partition table and the cascode-bias derivation.
 *
-* XCCOMP (issue #155, spec/decision-records/0007): ~12-14 fF MIM feedforward
-* compensation capacitor from `ncb` to `out` (the block-level IN_DRV net),
-* mitigating the gate-drive-feedthrough overshoot spec/decision-records/0006
-* characterizes. cap_mim_1f0_m4m5_noshield (1 fF/um2, rated to 20V -- ample
-* headroom over the ~6V stretch-rail swing across it) at 3.0um x 3.0um,
-* measured 11.56/12.84/14.13 fF at ff/tt/ss (mimcap_ff/typical/ss corner
-* sections, this repo's PVT harness already sweeps this device family). Sized
-* at the small end of decision record 0006's characterized effective range
-* (10-100 fF), not the middle -- see spec/decision-records/0007 for why.
+* XCCOMP1..XCCOMP4 (issues #155/#192, spec/decision-records/0007 + 0014):
+* ~12-15 fF MIM feedforward compensation capacitor from `ncb` to `out` (the
+* block-level IN_DRV net), mitigating the gate-drive-feedthrough overshoot
+* spec/decision-records/0006 characterizes. Realized as FOUR SERIES
+* cap_mim_2f0_m4m5_noshield devices, each at the DRM minimum 5.0um x 5.0um,
+* measured 12.27/13.63/14.99 fF end-to-end at ff/tt/ss (mimcap_ff/typical/ss
+* corner sections, this repo's PVT harness already sweeps this device
+* family). Sized at the small end of decision record 0006's characterized
+* effective range (10-100 fF), not the middle -- see 0007 for why.
+*
+* Why four in series rather than one device (decision record 0014, issue
+* #192). gf180mcuD fixes the MIM density at 2.0 fF/um2 -- `.config/nodeinfo.json`
+* option "MIM_2P0"; the PDK's own libs.tech/klayout/lvs/run_lvs.py binds
+* variant=D to mim_cap=2; libs.tech/magic/gf180mcuD.tech and
+* libs.tech/netgen/gf180mcuD_setup.tcl each define exactly ONE MIM device,
+* cap_mim_2f0_m4m5_noshield -- so decision record 0007's
+* cap_mim_1f0_m4m5_noshield is a simulation-only model with no fabricable or
+* LVS-recognizable device on this PDK build. And DRM rule MIMTM.8a sets a
+* 25um2 minimum MIM area (FuseTop), so the SMALLEST single MIM this process
+* can build is 5.0um x 5.0um = 54.52 fF (tt) -- four times larger than this
+* node can tolerate (decision record 0007's own sizing sweep). Four
+* minimum-area devices in series is the least-area MIM realization that
+* holds both ratified bounds; the split also puts only ~1.4 V across each
+* device against the DRM's 6 V MiM rating.
 
 **.subckt level_shifter in vdd_logic gnd_logic vdd_drv gnd_drv out
 
@@ -58,5 +73,8 @@ XMPBUF2 out nbuf1 vdd_drv vdd_drv pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2)
 + pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
 XMNBUF2 out nbuf1 gnd_drv gnd_drv nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
-XCCOMP ncb out cap_mim_1f0_m4m5_noshield c_width=3.0u c_length=3.0u m=1
+XCCOMP1 ncb nccomp1 cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1
+XCCOMP2 nccomp1 nccomp2 cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1
+XCCOMP3 nccomp2 nccomp3 cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1
+XCCOMP4 nccomp3 out cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1
 **.ends
