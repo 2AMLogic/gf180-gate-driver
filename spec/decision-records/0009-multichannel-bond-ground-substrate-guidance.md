@@ -99,16 +99,34 @@ that spirit, with a stated derating margin below.
 |---|---|
 | Options considered | (a) size one bond wire per channel exactly at the ~1 A/mil heuristic's rated point (minimum wire count); (b) derate to roughly half the heuristic's rated current per wire (≥2× margin) and/or use redundant parallel wires per high-current node; (c) leave wire count/gauge entirely to the assembly house's own design rules at tape-out, stating no guidance here. |
 | Trade-offs | (a) minimizes wire count and pad count but runs each channel's supply/return wire at the heuristic's own rated point with no margin for the heuristic's own stated sensitivity to wire length, ambient, and duty cycle — a bare-rule-of-thumb design point is not the same as a qualified/characterized rating, and this facet's load current (motor/solenoid/LED) is not guaranteed to be a clean DC value (motor inrush and solenoid pull-in both exceed steady-state current transiently). (c) matches decision record 0008's own conservative posture (not inventing numbers this repo cannot cite) but fails issue #181's explicit acceptance criterion to state a wire-count/gauge recommendation. (b) keeps a stated, reproducible design point while carrying margin against the heuristic's own caveats and against inrush/pull-in transients this facet's load types are known to produce. |
-| Chosen | (b) — derate to ≈0.5 A per standard 1 mil (25 µm) bond wire as this record's working design point (2× margin under the ~1 A/mil heuristic), and recommend **one dedicated bond wire per channel for `VDD_DRV`/cell-supply and one dedicated bond wire per channel for that channel's `GND_DRV` return** at the ~1 A/channel target current, i.e. 2 wires/channel minimum at the target current, scaling to more wires or a heavier wire gauge if the stretch load current or assembly house's own rated gauge differs from the 1 mil reference point assumed here. |
-| Rationale | 0.5 A/wire at ~1 A/channel means the minimum viable count (1 supply + 1 return wire per channel) already sits at the derated design point with no further margin measures needed for the ~1 A/channel target current stated in decision record 0008's framing; if a given design's actual load current is closer to the facet's stretch range, add a second parallel wire per rail rather than exceeding the 0.5 A/wire design point. This is stated as **this record's own conservative design point**, not a gf180mcu PDK figure — the assembly house's actual qualified bond-diagram rules (wire gauge, span length, bond-pad pitch) govern at tape-out and may differ; this number exists so a first-pass bond diagram and pad count can be planned before that assembly-house engagement happens, consistent with 0008's own posture of providing a starting point rather than a final number. |
+| Chosen | (b) — derate to **≤0.5 A per mil (25 µm) of bond-wire diameter** as this record's working design point (2× margin under the ~1 A/mil heuristic). Stated in the form actually needed to size a bond diagram: **a node carrying `I` amps requires at least `2 × I` mil of total bonded wire diameter, summed over the wires in parallel on that node.** Applied to this facet's ~1 A/channel target current, each channel's `VDD_DRV`/cell-supply path and each channel's `GND_DRV` return path individually carry the **full ~1 A** (they are in series with the channel's switch, not parallel paths sharing it), so each of those two paths needs ≥2 mil of bonded diameter: **one 2 mil (50 µm) wire, or two 1 mil (25 µm) wires in parallel, per rail per channel.** A single 1 mil wire per rail per channel is *not* sufficient at the stated design point — it would run at the raw, un-derated ~1 A/mil heuristic point with zero margin. |
+| Rationale | The sizing rule follows the current, not the pin count: the ~1 A of channel current flows through the channel's supply path and back out through its return path in series, so *both* see ~1 A, and neither is halved by the fact that there are two of them. Two parallel 1 mil wires per rail (or one 2 mil wire) is therefore the minimum that actually delivers the claimed 2× margin against the heuristic's own stated sensitivity to wire length, ambient, and duty cycle, and against the motor-inrush/solenoid-pull-in transients that exceed steady-state current on this facet's load types. Expressing the design point as diameter-per-amp rather than a fixed wire count is what makes it scale correctly to the shared-node rows of the table below, where the current on a node is *not* the per-channel current. The ~1 A/mil heuristic is applied here linearly in diameter, which is the conservative reading — bond-wire current capacity grows faster than linearly with diameter (fusing current scales roughly as `d^1.5`), so a 2 mil wire's true capacity is ≥2× a 1 mil wire's, not less. This is stated as **this record's own conservative design point**, not a gf180mcu PDK figure — the assembly house's actual qualified bond-diagram rules (wire gauge, span length, bond-pad pitch, and which gauges it bonds at all) govern at tape-out and may differ; this rule exists so a first-pass bond diagram and pad count can be planned before that assembly-house engagement happens, consistent with 0008's own posture of providing a starting point rather than a final number. |
 
 ### N = 1, 2, 4 channels at ~1 A/channel
 
-| N (channels) | Dedicated `VDD_DRV`/cell-supply wires | Dedicated `GND_DRV` return wires (see Decision 2) | Notes |
-|---|---|---|---|
-| 1 | 1 (shared supply node — nothing to split) | 1 | Degenerates to 0001's existing single-channel `GND_DRV` pin exactly (see "Consequences"). |
-| 2 | 1 shared `VDD_DRV`/cell-supply wire is acceptable if the two channels' combined inrush is bounded (motor/solenoid inrush budgeted below 1 A/wire aggregate is a per-design check, not assumed here) — 2 wires recommended if inrush margin is not separately verified | 2 (one per channel — see Decision 2, not shared) | Supply-side sharing is lower-risk than return-side sharing: `VDD_DRV` is a single low-impedance node upstream of each channel's own switch, not a shared return carrying the sum of independently-timed switching edges. |
-| 4 | 2 (parallel wires on the shared supply node, sized for the combined ~4 A worst case at the 0.5 A/wire design point) | 4 (one per channel — see Decision 2) | Supply-side wire count scales with combined current per the same 0.5 A/wire design point; return-side count scales with channel count per Decision 2, not combined current, because the point of per-channel return is noise segregation, not just current capacity. |
+Two independent things set the wire count in this table, and they must not be
+conflated (conflating them is precisely what makes a bond table read as
+self-consistent when it is not):
+
+- **Current capacity** sets the *bonded diameter* a node needs: ≥2 mil per amp
+  of current on that node, per Decision 1's design point. On the **shared**
+  supply node that current is `N × ~1 A`; on a **per-channel** return it is
+  that one channel's ~1 A regardless of `N`.
+- **Noise segregation** (Decision 2) sets the number of *distinct return
+  nets/pins*: one dedicated `GND_DRV_n` per channel, never shared. Bonding two
+  parallel wires to that same per-channel return pad to meet the diameter
+  requirement is still **one dedicated return per channel** in Decision 2's
+  sense — it adds capacity within that channel's own return domain and shares
+  nothing with any other channel.
+
+Counts below are given for 1 mil (25 µm) wire, with the equivalent 2 mil
+(50 µm) realization in parentheses; either satisfies the ≥2 mil/A rule.
+
+| N (channels) | Current on the shared `VDD_DRV`/cell-supply node | Supply-side bond wires (≥2 mil/A) | Dedicated `GND_DRV_n` returns (see Decision 2), each carrying ~1 A | Notes |
+|---|---|---|---|---|
+| 1 | ~1 A | ≥2 mil total: **2 × 1 mil** (or 1 × 2 mil) | **1** dedicated return, bonded with ≥2 mil total: 2 × 1 mil (or 1 × 2 mil) | Degenerates to 0001's existing single-channel `GND_DRV` pin exactly — one supply node, one dedicated drive return (see "Consequences"); this record adds only the bonded-diameter requirement on each, not a second return domain. |
+| 2 | ~2 A | ≥4 mil total: **4 × 1 mil** (or 2 × 2 mil) | **2** (one per channel — see Decision 2, not shared), each ≥2 mil total: 2 × 1 mil (or 1 × 2 mil) each | Sharing the supply *node* is lower-risk than sharing a return: `VDD_DRV` is a single low-impedance node upstream of each channel's own switch, not a shared return carrying the sum of independently-timed switching edges. But sharing the node does **not** reduce the current in it — the shared node carries the sum of both channels' current, so its bonded diameter scales with the combined ~2 A. Combined inrush above that steady-state figure is a further per-design check, not assumed away here. |
+| 4 | ~4 A | ≥8 mil total: **8 × 1 mil** (or 4 × 2 mil) | **4** (one per channel — see Decision 2), each ≥2 mil total: 2 × 1 mil (or 1 × 2 mil) each | Supply-side bonded diameter scales with **combined** current (`N × ~1 A`); return-side *net count* scales with channel count per Decision 2 (noise segregation, not current capacity), while each individual return's bonded diameter is set by its own single channel's ~1 A and therefore does **not** grow with `N`. |
 
 ## Decision 2 — Ground return topology
 
@@ -188,8 +206,9 @@ over them.
 - **N = 1 degenerates cleanly to 0001**: Decision 2 above is textually
   identical to 0001 Decision 1 when N = 1 (`GND_DRV_1` = `GND_DRV`), and
   Decision 1's bond-wire table's N = 1 row matches a conventional
-  single-channel gate-driver bond diagram (one supply wire, one dedicated
-  drive-return wire) — this record does not change anything about the
+  single-channel gate-driver bond diagram (one supply node, one dedicated
+  drive-return net; each bonded with ≥2 mil of wire diameter for the full
+  ~1 A channel current) — this record does not change anything about the
   already-ratified single-channel spec (`gate-driver.md`, decision record
   0001); it only extends guidance to N > 1, which was previously unstated.
 - **Open item, not resolved here**: whether a substrate-coupled transient
@@ -203,7 +222,8 @@ over them.
   blocker for this record's own guidance, per issue #181's explicit
   "stretch goal, not a blocker" framing.
 - **Bond wire and ground-return guidance is a starting design point, not an
-  assembly-qualified rating**: Decision 1's ~0.5 A/wire figure is this
+  assembly-qualified rating**: Decision 1's ≤0.5 A-per-mil-of-diameter figure
+  (equivalently, ≥2 mil of bonded wire diameter per amp on a node) is this
   record's own conservative derating of a general industry heuristic, not a
   gf180mcu-PDK-published number (§9.0 explicitly does not publish one) — the
   actual wire gauge, span, and bond-pad pitch remain the assembly house's
