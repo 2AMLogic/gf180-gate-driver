@@ -25,3 +25,13 @@ Ratified specs and decision records for this block.
     existing `sim/device-mv-fet` evidence. Does not amend `gate-driver.md`;
     the facet's own spec content is deferred to follow-on issues this
     record files.
+  - [`decision-records/0009-multichannel-bond-ground-substrate-guidance.md`](decision-records/0009-multichannel-bond-ground-substrate-guidance.md)
+    — ratified 2026-08-18: multi-channel guidance for the low-side
+    on-die power-NMOS facet (decision record 0008) — bond wire count/sizing
+    for N ∈ {1, 2, 4} channels at ~1 A/channel, per-channel dedicated
+    `GND_DRV_n` ground return extending decision record 0001's
+    `GND_LOGIC`/`GND_DRV` split, and a qualitative substrate-noise-coupling
+    treatment for the co-integrated UVLO comparator, with the
+    comparator-glitch magnitude question left as an explicit open item
+    pending a transistor-level sim. Does not amend `gate-driver.md` or
+    decision record 0001.
