@@ -68,6 +68,15 @@ MODEL_AND_BODY_BY_CLASS_L = {
     ("pfet", 0.55): ("pfet_06v0", "VDD_DRV"),
 }
 
+#: Extraction-deck device classes with no `_model_and_body` entry above and no
+#: body terminal at all -- issue #166's `XCCOMP` MiM series stack extracts as
+#: four two-terminal ``cap_mim_2f0_m4m5_noshield`` devices (``a``/``b``, no
+#: ``d``/``g``/``s``/``b``). Named explicitly, rather than "anything
+#: `_model_and_body` does not recognise", so an unexpected new device class
+#: still fails loudly through `_model_and_body` instead of silently being
+#: treated as a capacitor. See T7.
+CAP_CLASSES = {"cap_mim_2f0_m4m5_noshield"}
+
 #: Ground reference every net's parasitic ground capacitor ties to, replacing
 #: the deck's synthesized `vsubs` substrate net (`klt extract`'s single
 #: global body/ground-plane node -- there is no drawn p-substrate tap layer
@@ -226,6 +235,24 @@ TRANSFORMS = [
         "the point of being PVT-grid-infeasible within a bounded evidence "
         "run.",
     ),
+    (
+        "T7",
+        "(issue #166/#201) Passive cards: a CAP_CLASSES device (this design's "
+        "only case: the four-deep XCCOMP MiM series stack) has no d/g/s/b "
+        "terminals and no gf180mcu subcircuit to rebind to -- it is emitted "
+        "directly as an ngspice `C<n> a b <value>` card, `value` carried "
+        "through verbatim from the extractor's own measured `params.c_f` "
+        "(the same two-term area+perimeter model make_reference.py's "
+        "transform 6 restates over the schematic geometry). Never grouped by "
+        "--combine: with only four instances there is no simulation-cost "
+        "case for folding them, and each occupies a distinct position in the "
+        "series chain (distinct nets), so no two are ever combine-eligible "
+        "anyway. Its two terminals still route through T5's per-net leg "
+        "resistor the same as any MOS terminal when --parasitics is present "
+        "-- the merged-ground body-terminal skip below is scoped to MOS "
+        "devices only so it cannot mistake a capacitor's `b` terminal for a "
+        "MOS body leg.",
+    ),
 ]
 
 BACK_ANNOTATIONS = [
@@ -359,8 +386,14 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             return own_ground
         return MERGED_GROUND_NODE + raw[len(MERGED_GROUND_RAW) :]
 
+    # T7: CAP_CLASSES devices (this design's only case: the four `XCCOMP*` MiM
+    # caps) have no d/g/s/b terminals, so they are pulled out of the MOS
+    # loops below entirely rather than forced through `_model_and_body`.
+    mos_devices = [dev for dev in extract["devices"] if dev["class"] not in CAP_CLASSES]
+    cap_devices = [dev for dev in extract["devices"] if dev["class"] in CAP_CLASSES]
+
     if not combine:
-        for dev in sorted(extract["devices"], key=lambda d: (d["class"], d["name"])):
+        for dev in sorted(mos_devices, key=lambda d: (d["class"], d["name"])):
             cls, name, params = dev["class"], dev["name"], dev["params"]
             model, body = _model_and_body(cls, params["l_um"])
             counts[model] = counts.get(model, 0) + 1
@@ -374,7 +407,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             )
     else:
         grouped: dict[tuple, list[dict]] = {}
-        for dev in extract["devices"]:
+        for dev in mos_devices:
             cls, params = dev["class"], dev["params"]
             model, body = _model_and_body(cls, params["l_um"])
             key = (
@@ -393,6 +426,17 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                 f"L={_fmt(l_um)}U W={_fmt(w_um)}U nf=1 "
                 f"ad={_fmt(ad)}P as={_fmt(as_)}P "
                 f"pd={_fmt(pd)}U ps={_fmt(ps)}U m={len(members)}"
+            )
+
+    if cap_devices:
+        lines += ["", "* T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)"]
+        for dev in sorted(cap_devices, key=lambda d: d["name"]):
+            cls, name, params = dev["class"], dev["name"], dev["params"]
+            counts[cls] = counts.get(cls, 0) + 1
+            inst = name.lstrip("$")
+            lines.append(
+                f"C{inst} {leg_of(dev, 'a', dev['nets']['a'])} "
+                f"{leg_of(dev, 'b', dev['nets']['b'])} {_fmt(params['c_f'])}"
             )
 
     par_count = {"r": 0, "c": 0}
@@ -419,18 +463,22 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         # the pre-#132 topology, where each ground net's own `hub_net` WAS
         # that rail's node, at the same 297 legs (issue #184).
         #
-        # Body terminals stay excluded on every net, merged or not
+        # MOS body terminals stay excluded on every net, merged or not
         # (`terminal["terminal"] == "B"` -- they do carry a real measured
         # resistance now that issue #132 draws real tap geometry): `emit()`
         # never calls `leg_of()` for the body slot, T4 binds it directly to a
         # real rail with no series R, so a body leg node would be referenced
-        # by its R card alone.
+        # by its R card alone. Scoped to non-CAP_CLASSES (MOS) devices so a
+        # CAP_CLASSES device's own `b` terminal -- a real capacitor plate,
+        # not a body -- is never mistaken for one and dropped (issue
+        # #166/#201's T7).
         devices_by_name = {dev["name"]: dev for dev in extract["devices"]}
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
             merged = net["net"] == MERGED_GROUND_RAW
             hub = net["hub_net"]
             for terminal in net["terminals"]:
-                if terminal["terminal"].upper() == "B":
+                term_dev = devices_by_name[terminal["device"]]
+                if term_dev["class"] not in CAP_CLASSES and terminal["terminal"].upper() == "B":
                     continue
                 leg = terminal["leg_net"]
                 leg_hub = hub

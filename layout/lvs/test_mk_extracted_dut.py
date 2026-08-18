@@ -44,7 +44,18 @@ import mk_extracted_dut as mk  # noqa: E402  (path set above)
 
 REPORTS = Path(__file__).resolve().parent / "reports" / "gate_driver_core"
 
-#: The same two reports CI's `--check` step re-derives the committed DUTs from.
+#: A pre-#166 (pre-XCCOMP) pair of committed reports, pinned deliberately
+#: rather than tracked to whatever CI's `--check` step currently re-derives
+#: the committed DUTs from (issue #201): every count this module's assertions
+#: pin below (297 legs, 2877 R / 17 C, the 294/3 domain split, 16 "other"
+#: ground-referenced capacitors) is a fact about the merged-ground star
+#: transform on *MOS terminals*, and is unaffected by #166's XCCOMP MiM
+#: stack. Re-pointing these constants at a post-#166 report would also pull
+#: in T7's four series MiM device cards, which the "capacitors" fixture below
+#: cannot yet distinguish from T5's per-net ground-star cards (both emit `C*`
+#: cards) without the several assertions below being taught that
+#: distinction -- left as a real, separate refactor rather than folded into
+#: #201's netlist-regeneration scope.
 RC_REPORT = REPORTS / "20260817-232634-dc66e49.pex-extract.json"
 FLAT_REPORT = REPORTS / "20260817-232502-dc66e49.extract.json"
 

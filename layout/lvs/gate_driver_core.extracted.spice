@@ -1,11 +1,11 @@
 * Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
 *
-* extract report : layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json
+* extract report : layout/lvs/reports/gate_driver_core/20260818-092501-c2493cb.extract.json
 * layout gds     : layout/gate_driver_core.gds
 * extraction deck: gf180mcu (sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3)  (klt extract)
 * klt/klayout    : 0.2.0 / 0.30.10
-* devices        : 959 {'nfet': 299, 'pfet': 660} -> {'nfet_03v3': 3, 'nfet_06v0': 296, 'pfet_03v3': 1, 'pfet_06v0': 659}
-* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
+* devices        : 963 {'cap_mim_2f0_m4m5_noshield': 4, 'nfet': 299, 'pfet': 660} -> {'nfet_03v3': 3, 'nfet_06v0': 296, 'pfet_03v3': 1, 'pfet_06v0': 659, 'cap_mim_2f0_m4m5_noshield': 4}
+* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260818-092501-c2493cb.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
 *
 * ------------------------------------------------------------------
 * Mechanical transforms applied to the extractor's own output
@@ -84,6 +84,20 @@
 *     default) cost roughly three orders of magnitude more simulation time than
 *     the same circuit as `m=`-scaled instances, to the point of being
 *     PVT-grid-infeasible within a bounded evidence run.
+* T7. (issue #166/#201) Passive cards: a CAP_CLASSES device (this design's only
+*     case: the four-deep XCCOMP MiM series stack) has no d/g/s/b terminals and
+*     no gf180mcu subcircuit to rebind to -- it is emitted directly as an
+*     ngspice `C<n> a b <value>` card, `value` carried through verbatim from the
+*     extractor's own measured `params.c_f` (the same two-term area+perimeter
+*     model make_reference.py's transform 6 restates over the schematic
+*     geometry). Never grouped by --combine: with only four instances there is
+*     no simulation-cost case for folding them, and each occupies a distinct
+*     position in the series chain (distinct nets), so no two are ever
+*     combine-eligible anyway. Its two terminals still route through T5's
+*     per-net leg resistor the same as any MOS terminal when --parasitics is
+*     present -- the merged-ground body-terminal skip below is scoped to MOS
+*     devices only so it cannot mistake a capacitor's `b` terminal for a MOS
+*     body leg.
 *
 * ------------------------------------------------------------------
 * Back-annotated: terminals/nets the extraction deck cannot resolve
@@ -104,7 +118,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): c7002fe91ea17f7a762fa9c0c9440739
+* sha256 (this file, sans this line): fdd3a6d9d08ada6b76d8608be29095c2
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
@@ -154,3 +168,9 @@ X39 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=
 X40 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
 X41 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=60
 X42 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+
+* T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)
+C960 x1_ncb $18 5.4516e-14
+C961 $19 $18 5.4516e-14
+C962 $19 $20 5.4516e-14
+C963 IN_DRV $20 5.4516e-14
