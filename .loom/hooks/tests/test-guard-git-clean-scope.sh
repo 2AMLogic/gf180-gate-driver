@@ -7,10 +7,12 @@
 # a `defaults/` source tree — this consumer repo has no `defaults/` directory
 # (that only exists in the Loom source repo itself; see the header comment on
 # test-guard-worktree-paths.sh, which is inert here for exactly that reason).
-# `.loom/**` is intentionally excluded from this repo's own CI lint
+# `.loom/**` is intentionally excluded from this repo's own CI *lint*
 # (.github/scripts/lint.sh: "vendored .loom/… tree… installed and regenerated
-# by external tooling"), so this file is not wired into any CI job — it is a
-# standalone regression check to run manually after touching the guard.
+# by external tooling"), but this suite IS gated: the `test` job in
+# .github/workflows/ci.yml runs it (with the four other hook suites) under
+# `set -euo pipefail`, so a failing case fails the PR. Run it manually after
+# touching the guard too — it needs nothing but bash and jq.
 #
 # Usage:
 #   bash .loom/hooks/tests/test-guard-git-clean-scope.sh
@@ -45,6 +47,12 @@
 #   - `--body "example: \"\$(true; git clean -fd .)\""`          -> allow
 #   - the full PR #103 approval comment body that hit this live  -> allow
 #   - an UNESCAPED `$(...)`/backtick in the same position        -> ask
+#
+# Plus the #94 coexistence group:
+#   - a directly-recognized, CONFINED invocation coexisting with a
+#     hidden one inside a nested `$(...)`, in either order      -> ask
+#   - the same confined invocation alongside a prose-only
+#     substitution mention                                      -> allow
 #
 # Exit 0 = all pass, 1 = fail.
 
@@ -418,6 +426,40 @@ assert_decision \
 assert_decision \
     "prose mention inside a command-substitution body still allows" \
     "gh issue comment 1 --body \"\$(printf '%s' 'mentions git clean -fd only as prose')\"" \
+    "$WT" \
+    "allow"
+
+# --- Coexistence: confined direct target + hidden invocation (#94) ----------
+# The substitution-body re-scan above was originally reached ONLY when the
+# direct extraction returned zero targets. A command that pairs a
+# directly-recognized, CONFINED invocation with a second invocation hidden
+# inside a nested command substitution therefore skipped the re-scan
+# entirely: the confinement loop proved the one target it could see was
+# inside sim/**, saw no violation, and allowed — while the hidden,
+# unconfined invocation executed unseen. The re-scan now runs regardless of
+# whether the direct extraction found targets, and a hit there is an
+# INDEPENDENT reason to ask that a confined direct target cannot suppress.
+
+assert_decision \
+    "confined direct target does not mask a hidden invocation in a nested \$() (#94 repro)" \
+    "git clean -fd sim/device-mv-fet/corners/ && echo \"\$(true; git clean -fd /etc/passwordfile)\"" \
+    "$WT" \
+    "ask"
+
+# Order-independence: the same coexistence shape with the hidden invocation
+# FIRST must ask too — the re-scan is not positional.
+assert_decision \
+    "hidden invocation BEFORE the confined direct target still asks (reversed order)" \
+    "echo \"\$(true; git clean -fd /etc/passwordfile)\" && git clean -fd sim/device-mv-fet/corners/" \
+    "$WT" \
+    "ask"
+
+# Narrows, never widens: running the re-scan unconditionally must not turn a
+# confined invocation into an ask merely because some substitution elsewhere
+# in the command MENTIONS the phrase as prose.
+assert_decision \
+    "confined direct target plus a prose-only substitution mention still allows" \
+    "git clean -fd sim/device-mv-fet/corners/ && echo \"\$(printf '%s' 'mentions git clean -fd only as prose')\"" \
     "$WT" \
     "allow"
 
