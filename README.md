@@ -46,6 +46,31 @@ silicon. **Current position: spec ratified, schematic capture underway**
 (level shifter and low-side output stage captured and sized; full-schematic
 PVT corner simulation has not yet started).
 
+## Two facets, one shared device base
+
+This repo scopes **two** distinct power-driver use cases on the same
+gf180mcu medium-voltage devices, per
+[decision record 0008](spec/decision-records/0008-low-side-power-nmos-facet-scope-and-ronw-baseline.md):
+
+- **(a) High-voltage gate driver** (the block above) — an external-FET
+  pattern: 3.3 V logic in, level-shifted to a 5–6 V drive rail that sources
+  and sinks gate charge into an off-die power switch. This is the ratified
+  spec (`spec/gate-driver.md`).
+- **(b) Low-side on-die power-NMOS facet** (new) — direct low-side drive of
+  a small load (motor/solenoid/LED) straight from a single Li-ion cell,
+  where the switch is an **on-die** thick-oxide `nfet_06v0`, `Vgs` is the
+  cell's own 3.6–5 V range, and there is no HV rail and no level shifter.
+  This facet is **in scope in this repo, not a sibling one** — the device
+  characterization it needs (`Ron`, `Vt`, `Ioff`, thermal behavior of the
+  same `nfet_06v0`/`pfet_06v0` devices) is already being produced here for
+  facet (a)'s output stage. Decision record 0008 records the scope decision
+  and a `Ron·W` baseline derived from existing `sim/device-mv-fet` evidence;
+  the rest of this facet's spec content (EM/current-density guidance,
+  per-channel OCP/thermal-shutdown structures, flyback options: issue #179;
+  a shared-shuttle test-structure plan: issue #180; multi-channel
+  bond/ground/substrate-noise guidance: issue #181) is deferred to those
+  follow-on issues.
+
 ## Repo layout
 
 ```

@@ -18,3 +18,10 @@ Ratified specs and decision records for this block.
     — ratified 2026-08-08: the block's port list, input electrical spec,
     polarity/enable, UVLO parameters, UVLO output behavior and reference,
     and operating temperature range. Extends `gate-driver.md` §3 and §5.
+  - [`decision-records/0008-low-side-power-nmos-facet-scope-and-ronw-baseline.md`](decision-records/0008-low-side-power-nmos-facet-scope-and-ronw-baseline.md)
+    — ratified 2026-08-17: scopes a second facet into this repo — direct
+    low-side drive of a small load from a single Li-ion cell via an on-die
+    `nfet_06v0`, no HV rail — and ratifies a `Ron·W` baseline derived from
+    existing `sim/device-mv-fet` evidence. Does not amend `gate-driver.md`;
+    the facet's own spec content is deferred to follow-on issues this
+    record files.
