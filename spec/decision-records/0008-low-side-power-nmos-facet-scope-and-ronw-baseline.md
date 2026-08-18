@@ -149,19 +149,20 @@ an exact match for the same reason — different `Vgs`, and the issue's
   the full low-side facet spec. The remaining pieces of issue #178's
   suggested acceptance criteria are explicitly deferred to follow-on issues
   rather than silently dropped:
-  - A purpose-built `sim/` campaign at the facet's actual `Vgs` operating
-    points (3.6/4.2/5.0 V, single-cell range) and a full
+  - #179 — a purpose-built `sim/` campaign at the facet's actual `Vgs`
+    operating points (3.6/4.2/5.0 V, single-cell range) and a full
     `spec/low-side-power-switch.md` covering `Ron·W` there, EM/current-
     density guidance for the tm11k/tm30k top-metal options, and
     per-channel OCP-comparator + thermal-sense reference structures and
     flyback options (body diode / junction diode / synchronous PMOS) with
     their area/loss trade.
-  - A test-structure plan sized for a shared shuttle slot (e.g. wafer.space
-    quarter slot, next submission window per the issue), covering one or
-    two channels plus protection plus three flyback variants.
-  - Multi-channel guidance: what N channels of ~1 A low-side drive imply
-    for bond wires, ground return, and substrate noise into co-integrated
-    analog.
+  - #180 — a test-structure plan sized for a shared shuttle slot (e.g.
+    wafer.space quarter slot, next submission window per the issue),
+    covering one or two channels plus protection plus three flyback
+    variants. Blocked on #179 (the structures implement that spec).
+  - #181 — multi-channel guidance: what N channels of ~1 A low-side drive
+    imply for bond wires, ground return, and substrate noise into
+    co-integrated analog.
   Each is filed as its own issue referencing this record, per this record's
   "Alternatives considered" note on why they are not resolved inline here.
 - No existing `sim/` record is edited or superseded — the `Ron·W` table

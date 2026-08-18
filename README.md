@@ -66,9 +66,10 @@ gf180mcu medium-voltage devices, per
   facet (a)'s output stage. Decision record 0008 records the scope decision
   and a `Ron·W` baseline derived from existing `sim/device-mv-fet` evidence;
   the rest of this facet's spec content (EM/current-density guidance,
-  per-channel OCP/thermal-shutdown structures, flyback options, a
-  shared-shuttle test-structure plan, multi-channel bond/ground guidance) is
-  deferred to follow-on issues referenced from that record.
+  per-channel OCP/thermal-shutdown structures, flyback options: issue #179;
+  a shared-shuttle test-structure plan: issue #180; multi-channel
+  bond/ground/substrate-noise guidance: issue #181) is deferred to those
+  follow-on issues.
 
 ## Repo layout
 
