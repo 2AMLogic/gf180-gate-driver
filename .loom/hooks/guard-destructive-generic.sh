@@ -2723,6 +2723,22 @@ resolve_stash_cwd() {
 # `--jq` filter merely quotes a dangerous phrase as a substring/regex test
 # (never executing it) tripped the catastrophic sql-ddl deny.
 #
+# Issue #134: a THIRD alternative handles `gh api`'s `-f`/`-F`/`--raw-field`/
+# `--field NAME=<value>` shape — e.g. `gh api -X GET search/issues -f
+# q='repo:... "git push --force origin main" in:title,body'`. This is a
+# read-only GitHub search query value, never an invocation, but it doesn't
+# fit either existing shape above: unlike `--body "<value>"` the flag and
+# quoted value aren't adjacent tokens (gh api's `-f` takes ONE token of the
+# form `NAME=VALUE`, so `=` sits directly between an unquoted field name and
+# the opening quote, with no space), and unlike `--arg NAME "<value>"` the
+# name and the quote aren't whitespace-separated either — they're joined by
+# `=`. The third alternative matches that `NAME=<quoted value>` shape
+# directly after `-f`/`-F`/`--raw-field`/`--field`, so a search-query string
+# that merely QUOTES a dangerous phrase as data no longer hard-denies. A real
+# `gh api ... -f q=$(...)` command-substitution payload, or an unquoted live
+# invocation, is untouched by this addition and still denies — same
+# `$(`/backtick floor as the flags above.
+#
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
 #     is never redacted and its payload stays caught by the raw scan.
@@ -3080,6 +3096,16 @@ strip_literal_text() {
         FLAG_RE_MID = "[ \t\n](--message|--body|--notes|--title|--comment|--search|--jq|-m)[ \t]*=?[ \t]*$"
         JQ_RE_BOL = "(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
         JQ_RE_MID = "[ \t\n](--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
+        #
+        # Third alternative (issue #134): `gh api -f NAME=<value>` / `-F
+        # NAME=<value>` / `--raw-field NAME=<value>` / `--field NAME=<value>`
+        # -- the gh api raw-field flag joins NAME and the quoted value with
+        # `=` and no space, unlike the --arg/--argjson shape above (whitespace
+        # before the quote) or the --body/-m shape (an optional `=` then
+        # optional whitespace). See the header comment above strip_literal_text
+        # for why this alternative is needed.
+        GH_API_RE_BOL = "(^|[ \t\n])(-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
+        GH_API_RE_MID = "[ \t\n](-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -3113,9 +3139,9 @@ strip_literal_text() {
             flagged = 0
             if (k > 1 && segtype[k - 1] == "U") {
                 if (k - 1 == 1) {
-                    if (segtxt[k - 1] ~ FLAG_RE_BOL || segtxt[k - 1] ~ JQ_RE_BOL) flagged = 1
+                    if (segtxt[k - 1] ~ FLAG_RE_BOL || segtxt[k - 1] ~ JQ_RE_BOL || segtxt[k - 1] ~ GH_API_RE_BOL) flagged = 1
                 } else {
-                    if (segtxt[k - 1] ~ FLAG_RE_MID || segtxt[k - 1] ~ JQ_RE_MID) flagged = 1
+                    if (segtxt[k - 1] ~ FLAG_RE_MID || segtxt[k - 1] ~ JQ_RE_MID || segtxt[k - 1] ~ GH_API_RE_MID) flagged = 1
                 }
             }
             if (!flagged) { out = out segtxt[k]; continue }
@@ -3383,7 +3409,25 @@ mask_catastrophic_positional_args() {
         # why that is safe on this (catastrophic-tier) working copy.
         # ./.loom/scripts/check-duplicate.sh (#5838) is added for the same
         # reason mask_ask_positional_args() already carries it below.
-        cmdre = "(grep|egrep|fgrep|rg|\\./\\.loom/scripts/check-duplicate\\.sh)"
+        # jq (issue #134) is added for the same reason: its filter argument is
+        # jq-language data evaluated against JSON input, never shell syntax, so
+        # a filter that merely QUOTES a dangerous phrase as a comparand (e.g.
+        # jq -c select(.pattern == "catastrophic:git push --force origin
+        # main") .loom/logs/guard-decisions.log, read-only log introspection
+        # for this guard own pattern name) can safely be masked without hiding
+        # a real invocation from the scan.
+        #
+        # EXCEPTION (issue #137): `jq -n`/`--null-input` is excluded from this
+        # allowlist entry below (see jq_null_input) — with -n, jq needs no
+        # input at all and can manufacture arbitrary literal output purely
+        # from the filter argument this masking pass would otherwise redact.
+        # Combined with `-r` (raw output), a masked filter becomes directly
+        # shell-executable via `$(...)` or a pipe to a shell, defeating the
+        # ALWAYS_BLOCK_PATTERNS scan entirely — not just for force-push, but
+        # for every catastrophic-tier phrase. grep/egrep/fgrep/rg/
+        # check-duplicate.sh carry no equivalent risk (they only ever emit
+        # substrings of real input) so only jq needs this carve-out.
+        cmdre = "(grep|egrep|fgrep|rg|jq|\\./\\.loom/scripts/check-duplicate\\.sh)"
         flagre = "([ \t]+-[A-Za-z0-9_-]+)*"
         anchor = "(^|[ \t\n;&|`(])" cmdre flagre "[ \t]+"
         buf = ""
@@ -3397,6 +3441,15 @@ mask_catastrophic_positional_args() {
             matched = substr(s, RSTART, RLENGTH)
             rest    = substr(s, RSTART + RLENGTH)
             out = out pre matched
+            # jq -n/--null-input carve-out (issue #137): determine whether
+            # this anchors command name is jq and, if so, whether -n or
+            # --null-input appears among its flags. See the cmdre
+            # BEGIN-block comment above for why only jq needs this check.
+            jq_null_input = 0
+            if (match(matched, cmdre) && substr(matched, RSTART, RLENGTH) == "jq" && \
+                matched ~ /(^|[ \t])(-n|--null-input)([ \t]|$)/) {
+                jq_null_input = 1
+            }
             # Mask every consecutive quoted positional argument immediately
             # following the anchor (whitespace-separated). Stops at the first
             # non-quote-starting token, so anything after the argument list
@@ -3411,7 +3464,7 @@ mask_catastrophic_positional_args() {
                 }
                 if (endpos == 0) break
                 inner = substr(rest, 2, endpos - 2)
-                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
+                if (index(inner, "$(") == 0 && index(inner, "`") == 0 && !jq_null_input) {
                     gsub(/./, "X", inner)
                 }
                 out = out qc inner qc
@@ -3639,17 +3692,37 @@ fi
 # chained/piped check-duplicate.sh invocation (the bare single-command shape
 # is already covered by the #3687 read-only fast path, which doesn't apply
 # once the command is chained onto something else, e.g. inside a loop body).
+# Issue #134 adds "jq" to both the gate and mask_catastrophic_positional_args()'s
+# own command allowlist: a `jq '<filter>' file` invocation's filter argument is
+# jq-language data (never shell-executed), so masking it can't blind this scan
+# to a real invocation the way it could for a command that actually runs its
+# argument. This closes the false deny on `jq -c 'select(.pattern ==
+# "catastrophic:git push --force origin main")' .loom/logs/guard-decisions.log`
+# — read-only log introspection for the exact pattern name this guard emits,
+# recommended by the Guard-Decision Telemetry Review policy in auditor.md.
 if [[ "$COMMAND" == *"grep"* || "$COMMAND" == *"rg "* || \
-      "$COMMAND" == *"check-duplicate"* ]]; then
+      "$COMMAND" == *"check-duplicate"* || "$COMMAND" == *"jq"* ]]; then
     COMMAND_NO_LITERAL_TEXT=$(mask_catastrophic_positional_args "$COMMAND_NO_LITERAL_TEXT")
 fi
 # #5797: "--arg" as a substring gate also covers "--argjson" (a superset
 # spelling of "--arg"), so no separate "--argjson" check is needed here.
+# Issue #134: "-f " (trailing space, so "--force"/"--force-with-lease" -- which
+# contain "-f" but never "-f " -- don't spuriously widen this gate) covers gh
+# api's `-f NAME=<value>` raw-field shape; "-F "/"--raw-field"/"--field" cover
+# its sibling flag spellings. See strip_literal_text()'s own header comment
+# for why this third regex alternative is needed (the flag/value pairing shape
+# for `-f`/`-F` differs from both `--body "<value>"` and `--arg NAME
+# "<value>"`). Deliberately NOT added to the COMMAND_GH_API_RAWFIELD_SCAN gate
+# below (~3800) or the COMMAND_ASK_SCAN gate (~3935) -- out of scope for this
+# fix, which targets only the catastrophic ALWAYS_BLOCK_PATTERNS force-push
+# false denial.
 if [[ "$COMMAND" == *"--body"* || "$COMMAND" == *"--message"* || \
       "$COMMAND" == *"--title"* || "$COMMAND" == *"--notes"* || \
       "$COMMAND" == *"--comment"* || "$COMMAND" == *"-m"* || \
       "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* || \
-      "$COMMAND" == *"--jq"* ]]; then
+      "$COMMAND" == *"--jq"* || \
+      "$COMMAND" == *"-f "* || "$COMMAND" == *"-F "* || \
+      "$COMMAND" == *"--raw-field"* || "$COMMAND" == *"--field"* ]]; then
     COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
 fi
 
