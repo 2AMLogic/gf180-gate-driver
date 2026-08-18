@@ -181,7 +181,18 @@ TRANSFORMS = [
         "Net-to-net coupling capacitance (`parasitics.nets[].coupled`) is "
         "NOT emitted -- a documented scope reduction, not a silent drop; "
         "every ground-referenced term is measured, every coupling term is "
-        "omitted, stated once here rather than per-record.",
+        "omitted, stated once here rather than per-record. One further "
+        "reduction since issue #132: the extraction deck now reports BOTH "
+        "ground rails as one merged net (klayout-tools #1128), whose star is "
+        "skipped here because every terminal on it is rebound per-device to a "
+        "real GND_LOGIC/GND_DRV (T4/BA1) and its hub would be left dangling. "
+        "So the two ground rails are modeled as ideal zero-ohm nodes -- 297 "
+        "fewer R legs and the GND_DRV<->GND_LOGIC coupling cap, versus the "
+        "pre-#132 RC DUT. That is OPTIMISTIC, not conservative, for ground "
+        "bounce and n1_min_v undershoot: it removes the rail IR drop those "
+        "checks measure. It changes no recorded verdict today (~10x margin on "
+        "the worst RC n1_min_v corner); it is carried as a stated fidelity "
+        "gap in layout/README.md's 'Known gaps' with a follow-up issue.",
     ),
     (
         "T6",
@@ -363,10 +374,22 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         # == "B"`, which does get a real measured resistance in this net's
         # `terminals` list now that issue #132 draws real tap geometry) --
         # `emit()` never calls `leg_of()` for the body slot either (T4 rebinds
-        # it directly with no series R), so modeling real body-tap leg
-        # resistance stays a fidelity improvement out of this issue's scope,
-        # not a correctness gap (an omitted series R is a conservative --
-        # zero-resistance -- tie, not a fabricated connection).
+        # it directly with no series R).
+        #
+        # Be precise about which way this errs, because it is NOT conservative:
+        # since issue #132 merged both grounds into this one raw identity, the
+        # skip drops the whole ground-rail parasitic star (297 R legs and the
+        # GND_DRV<->GND_LOGIC coupling cap, measured against the pre-#132 RC
+        # DUT), leaving both rails as ideal zero-ohm nodes. For a ground-bounce
+        # or `n1_min_v` undershoot measurement that is *optimistic*: it removes
+        # exactly the rail IR drop and inter-rail coupling those checks exist
+        # to catch, so the RC record understates undershoot rather than
+        # overstating it. It does not change any recorded verdict today (RC
+        # worst-case `n1_min_v` is -0.0068 V against a -0.05 V limit, ~10x
+        # margin, and the RC record's failure set is unchanged), which is why
+        # it is recorded as a stated fidelity gap -- layout/README.md's "Known
+        # gaps" and the follow-up issue linked there -- rather than silently
+        # carried or hand-waved as a safe direction to be wrong in.
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
             if net["net"] == MERGED_GROUND_RAW:
                 continue

@@ -1000,8 +1000,15 @@ class Interconnect:
         *extractor's* model, not this layout's routing: the two ground rails
         are drawn as separate Metal2 nets and stay separate in the drawn
         interconnect, which ``check_gate_driver_core.py``'s
-        ``ground_rail_isolation`` check asserts independently (`klt components`
-        over the routed metal only, no deck globals).  It is also electrically
+        ``ground_rail_isolation`` check asserts independently -- `klt
+        components` over Metal1/Via1/Metal2 only, net names from the Metal2
+        text layer, no deck globals and no device recognition, so it rules on
+        the drawn interconnect rather than on the extractor's substrate model.
+        That check is what covers this gap now that neither `klt lvs` nor
+        ``check_gate_driver_core.py``'s own ``devices`` check can still tell
+        the two rails apart, and DRC cannot either (two overlapping same-layer
+        shapes on different nets merge into one polygon and raise no spacing
+        violation).  It is also electrically
         the node the block already declares: ``spec/decision-records/0001``
         Decision 1 ratifies ``GND_LOGIC``/``GND_DRV`` as **one** electrical
         reference node, split into two pins only at the pad ring (option (c),

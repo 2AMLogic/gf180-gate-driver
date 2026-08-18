@@ -4,9 +4,21 @@
     python3 layout/test_gen_gate_driver_core.py     # or: python3 -m unittest ...
 
 Standard-library ``unittest`` only, and deliberately **PDK-free and klt-free**:
-everything under test here is pure netlist arithmetic in
-``gen_gate_driver_core.py``, so this suite runs on a bare runner (the `test` job
-in ``.github/workflows/ci.yml``) with nothing but ``python3``.
+everything under test here is pure arithmetic over a netlist or over an already
+captured `klt` response, so this suite runs on a bare runner (the `test` job in
+``.github/workflows/ci.yml``) with nothing but ``python3``.
+
+Two things are pinned here, for two different reasons:
+
+* the **netlist interpretation** in ``gen_gate_driver_core.py`` (issue #129) --
+  see below;
+* the **ground-rail isolation verdict** in ``check_gate_driver_core.py``
+  (issue #132) -- ``ground_rail_isolation_verdict()`` is the only remaining
+  automated signal that would catch a real short between ``GND_LOGIC`` and
+  ``GND_DRV`` in the drawn interconnect, and its failing directions cannot be
+  produced from the committed (correct) GDS, so they are exercised against
+  synthetic ``klt components`` responses instead.  That function is pure by
+  design precisely so this suite can reach it.
 
 Why this file exists (issue #129)
 ---------------------------------
@@ -50,6 +62,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from check_gate_driver_core import (  # noqa: E402  (path set above)
+    ground_rail_isolation_verdict,
+    routed_nets,
+)
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     NETLIST_PATH,
     Device,
@@ -259,6 +275,105 @@ class MalformedDeviceLineTest(unittest.TestCase):
                 {},
                 "x1_",
             )
+
+
+class GroundRailIsolationVerdictTest(unittest.TestCase):
+    """``check_gate_driver_core.ground_rail_isolation_verdict`` rules correctly.
+
+    Issue #132 draws real substrate-tie geometry for both grounds, which makes
+    `klt extract` report ``GND_LOGIC``/``GND_DRV`` as one merged net
+    (klayout-tools #1128).  Neither ``klt lvs`` nor the ``devices`` check can
+    tell the two rails apart any more, and DRC never could (two overlapping
+    same-layer shapes on different nets merge into one polygon with no spacing
+    violation to raise).  The ``ground_rail_isolation`` check is the only thing
+    left that would catch a real short in the drawn interconnect -- so its
+    *failing* directions have to be pinned, not just its passing one.
+
+    The failing cases cannot be produced from the committed stream by
+    construction (the layout is correct), so they are exercised here against
+    synthetic ``klt components`` responses.  The verdict function is pure --
+    response dict in, check record out -- so this stays PDK-free and klt-free
+    like the rest of this suite, and runs on the bare CI runner.
+    """
+
+    NETS = ["GND_DRV", "GND_LOGIC", "OUT", "VDD_DRV"]
+
+    @staticmethod
+    def _component(cid, nets):
+        return {
+            "id": cid,
+            "labels": list(nets),
+            "conductors": [
+                {"name": "m1", "layer": [34, 0], "shape_count": 7},
+                {"name": "m2", "layer": [36, 0], "shape_count": 2},
+            ],
+            "vias": [{"name": "via1", "layer": [35, 0], "shape_count": 4}],
+        }
+
+    def _response(self, grouping):
+        return {
+            "components": [
+                self._component(f"gate_driver_core:{index}", nets)
+                for index, nets in enumerate(grouping)
+            ]
+        }
+
+    def test_one_component_per_net_passes(self):
+        """The shape the committed GDS actually has: 4 nets, 4 components."""
+        verdict = ground_rail_isolation_verdict(
+            self._response([[net] for net in self.NETS]), self.NETS
+        )
+        self.assertTrue(verdict["passed"], verdict["failures"])
+        self.assertEqual(verdict["failures"], [])
+        self.assertEqual(verdict["component_count"], 4)
+        self.assertNotEqual(
+            verdict["ground_components"]["GND_DRV"],
+            verdict["ground_components"]["GND_LOGIC"],
+        )
+
+    def test_shorted_grounds_fail(self):
+        """The exact failure this check exists for -- and LVS can no longer see."""
+        verdict = ground_rail_isolation_verdict(
+            self._response([["GND_DRV", "GND_LOGIC"], ["OUT"], ["VDD_DRV"]]), self.NETS
+        )
+        self.assertFalse(verdict["passed"])
+        joined = " ".join(verdict["failures"])
+        self.assertIn("GND_DRV", joined)
+        self.assertIn("GND_LOGIC", joined)
+        self.assertIn("shorted", joined)
+
+    def test_shorted_signal_pair_also_fails(self):
+        """The ruling is over all nets, not special-cased to the two grounds."""
+        verdict = ground_rail_isolation_verdict(
+            self._response([["GND_DRV"], ["GND_LOGIC"], ["OUT", "VDD_DRV"]]), self.NETS
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertIn("OUT, VDD_DRV", " ".join(verdict["failures"]))
+
+    def test_missing_net_fails_instead_of_passing_vacuously(self):
+        """A dropped rail/label must fail, not make "no two names" trivially true."""
+        verdict = ground_rail_isolation_verdict(
+            self._response([["GND_DRV"], ["OUT"], ["VDD_DRV"]]), self.NETS
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertIn("GND_LOGIC", " ".join(verdict["failures"]))
+
+    def test_split_net_fails(self):
+        """One net across two unconnected components is a drawn open."""
+        verdict = ground_rail_isolation_verdict(
+            self._response([["GND_DRV"], ["GND_LOGIC"], ["OUT"], ["VDD_DRV"], ["OUT"]]),
+            self.NETS,
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertIn("split across 2", " ".join(verdict["failures"]))
+
+    def test_routed_nets_matches_the_generators_own_rail_set(self):
+        """The expected-net list is the same {d, g, s} set the generator rails."""
+        _ports, devices = parse_netlist(NETLIST_PATH)
+        nets = routed_nets(devices)
+        self.assertEqual(nets, sorted(set(nets)))
+        for ground in ("GND_LOGIC", "GND_DRV"):
+            self.assertIn(ground, nets)
 
 
 if __name__ == "__main__":

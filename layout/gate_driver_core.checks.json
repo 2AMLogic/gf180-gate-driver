@@ -59,6 +59,185 @@
       "failures": []
     },
     {
+      "name": "ground_rail_isolation",
+      "passed": true,
+      "component_count": 18,
+      "expected_nets": 18,
+      "ground_components": {
+        "GND_DRV": [
+          "gate_driver_core:17"
+        ],
+        "GND_LOGIC": [
+          "gate_driver_core:16"
+        ]
+      },
+      "components": [
+        {
+          "component": "gate_driver_core:17",
+          "nets": [
+            "GND_DRV"
+          ],
+          "m1_shapes": 351,
+          "m2_shapes": 2,
+          "via1_shapes": 20
+        },
+        {
+          "component": "gate_driver_core:16",
+          "nets": [
+            "GND_LOGIC"
+          ],
+          "m1_shapes": 25,
+          "m2_shapes": 2,
+          "via1_shapes": 10
+        },
+        {
+          "component": "gate_driver_core:15",
+          "nets": [
+            "IN"
+          ],
+          "m1_shapes": 15,
+          "m2_shapes": 2,
+          "via1_shapes": 5
+        },
+        {
+          "component": "gate_driver_core:14",
+          "nets": [
+            "IN_DRV"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:13",
+          "nets": [
+            "OUT"
+          ],
+          "m1_shapes": 729,
+          "m2_shapes": 2,
+          "via1_shapes": 4
+        },
+        {
+          "component": "gate_driver_core:12",
+          "nets": [
+            "VDD_DRV"
+          ],
+          "m1_shapes": 721,
+          "m2_shapes": 2,
+          "via1_shapes": 22
+        },
+        {
+          "component": "gate_driver_core:11",
+          "nets": [
+            "VDD_LOGIC"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:10",
+          "nets": [
+            "x1_inb"
+          ],
+          "m1_shapes": 13,
+          "m2_shapes": 2,
+          "via1_shapes": 5
+        },
+        {
+          "component": "gate_driver_core:9",
+          "nets": [
+            "x1_na"
+          ],
+          "m1_shapes": 9,
+          "m2_shapes": 2,
+          "via1_shapes": 4
+        },
+        {
+          "component": "gate_driver_core:8",
+          "nets": [
+            "x1_nb"
+          ],
+          "m1_shapes": 9,
+          "m2_shapes": 2,
+          "via1_shapes": 4
+        },
+        {
+          "component": "gate_driver_core:7",
+          "nets": [
+            "x1_nbuf1"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:6",
+          "nets": [
+            "x1_nca"
+          ],
+          "m1_shapes": 13,
+          "m2_shapes": 2,
+          "via1_shapes": 5
+        },
+        {
+          "component": "gate_driver_core:5",
+          "nets": [
+            "x1_ncb"
+          ],
+          "m1_shapes": 21,
+          "m2_shapes": 2,
+          "via1_shapes": 7
+        },
+        {
+          "component": "gate_driver_core:4",
+          "nets": [
+            "x2_n1"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:3",
+          "nets": [
+            "x2_n2"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:2",
+          "nets": [
+            "x2_n3"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:1",
+          "nets": [
+            "x2_n4"
+          ],
+          "m1_shapes": 61,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:0",
+          "nets": [
+            "x2_n5"
+          ],
+          "m1_shapes": 195,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        }
+      ],
+      "failures": []
+    },
+    {
       "name": "voltage_domain",
       "passed": true,
       "marker_shape_counts": {

@@ -15,6 +15,8 @@ layout/
   gate_driver_core.checks.json      the checks below, as run on the committed GDS
   gen_gate_driver_core.py           the generator
   check_gate_driver_core.py         the checker
+  ground_rail_negative_control.py   known-good/known-bad control for the
+                                    ground_rail_isolation check (#132)
   build/                            generator scratch (gitignored)
   common/report_id.py               shared <record-id> minting for the run scripts
   drc/                              klt drc runner + committed reports (#105)
@@ -185,10 +187,15 @@ that remains, follows from reading `klayout-tools`' own
   This merge is the *extractor's* model, not this layout's own routing: the
   two ground rails are drawn as separate Metal2 nets and stay separate in the
   drawn interconnect end to end, which
-  `check_gate_driver_core.py`'s `dnwell_partition` check (`klt components`
-  over the routed metal only, no deck globals) and this repo's DRC/LVS
-  negative controls both verify independently of the extractor's own
-  substrate-identity model.
+  `check_gate_driver_core.py`'s [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132)
+  check verifies independently of the extractor's substrate-identity model —
+  `klt components` over Metal1/Via1/Metal2 only, net names off the Metal2 text
+  layer, no deck globals. That check is the *only* remaining automated signal
+  that would catch a real short between the two domains (`klt lvs` cannot,
+  because of this very merge; DRC cannot, because two overlapping same-layer
+  shapes raise no spacing violation), so it carries its own known-good/
+  known-bad control — `ground_rail_negative_control.py` — exactly like the
+  DRC and LVS verdicts do.
 - **PCOMP guard ring — closed, and contacted on two of its four strokes.** A
   closed rectangular Comp+Pplus ring around `DNWELL_DRV`, offset far enough
   out to leave a real, non-touching gap from both `DNWELL_DRV`'s own marker
@@ -234,7 +241,7 @@ polygon in the design.
 
 ## Checks
 
-`check_gate_driver_core.py` runs three checks against the *committed* GDS via
+`check_gate_driver_core.py` runs four checks against the *committed* GDS via
 `klt` — it never reads the generator's internal state, so it audits the stream
 rather than replaying how it was made. Its output is committed as
 `gate_driver_core.checks.json`.
@@ -243,7 +250,48 @@ rather than replaying how it was made. Its output is committed as
 |---|---|
 | `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `nf=N m=M` must appear as `N*M` transistors of width `W/N` and the same L, whose gate net and unordered source/drain pair match. Passing means 959/959 with no missing and no unexpected device. |
 | `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. Asserts exactly 40 active regions inside (20 5 V/6 V devices + 20 of their own body-tie taps, issue #132) and 12 outside (4 3.3 V devices + 4 of their own taps + 4 guard-ring strokes). |
+| `ground_rail_isolation` | `klt components` over the **routed metal only** — Metal1 (34/0) and Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge, net names from the Metal2 text layer (36/10). No deck, no device recognition, no substrate global. Asserts no component carries two distinct net names, every routed net resolves to exactly one component, and `GND_LOGIC`/`GND_DRV` land in different components — 18 nets, 18 components. See [why this check exists](#why-ground_rail_isolation-exists-132). |
 | `voltage_domain` | `klt layers --flattened` for the marker layers, plus the `voltage_domain_warnings` block `klt extract` returns — see the deck caveat below. |
+
+#### Why `ground_rail_isolation` exists (#132)
+
+Drawing real substrate ties for *both* grounds removed the only two automated
+signals that used to distinguish them, at the same time:
+
+* `klt extract` — and therefore `klt lvs` — now reports `GND_LOGIC` and
+  `GND_DRV` as one merged net no matter what the metal does, because
+  gf180mcu's curated deck ties every NMOS body to one hardcoded substrate
+  global ([klayout-tools #1128](https://github.com/2AMLogic/klayout-tools/issues/1128),
+  and [Known gaps](#known-gaps));
+* the `devices` check normalises that same merge away (`_canon_net`) so it can
+  still compare against the schematic.
+
+DRC does not cover the gap either: two same-layer shapes on **different** nets
+that overlap merge into one polygon, so no spacing rule fires — the failure is
+invisible to a spacing check by construction. `ground_rail_isolation` is
+therefore the only thing left that would catch a genuine short between the two
+domains in the drawn interconnect, and it rules on the drawn metal rather than
+on the extractor's model of the substrate. Its ruling is stated over *all*
+nets, not just the two grounds, so an `OUT`/`VDD_DRV` short fails it the same
+way.
+
+Its PASS has a committed negative control, like the DRC and LVS verdicts:
+
+```bash
+python3 layout/ground_rail_negative_control.py    # needs klt, no PDK
+```
+
+[`ground_rail_negative_control.py`](ground_rail_negative_control.py) `klt
+draw`s a two-rail fixture in two variants — isolated, and bridged by a Metal1
+bar through two Via1 cuts (every shape individually legal, i.e. exactly the
+case DRC cannot see) — and runs the **same** layer stack and the **same**
+verdict function the block's own report was produced with. It must pass the
+first and fail the second, naming both rails. The verdict function itself is
+pure (response dict in, check record out), so its failing directions are also
+pinned in CI by
+[`test_gen_gate_driver_core.py`](test_gen_gate_driver_core.py) against
+synthetic `klt components` responses — those cases cannot be produced from the
+committed, correct GDS.
 
 This is a device-count/connectivity check, **not** LVS — it compares the
 extraction against a device list derived from the netlist by the generator's
@@ -387,7 +435,7 @@ built from the same layout:
 | File | Built from | Contents | Used for |
 |---|---|---|---|
 | [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2580 R / 16 C per-net ground stars (the merged `GND_DRV\|GND_LOGIC` net's own star is intentionally not emitted — see below); **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2580 R / 16 C per-net ground stars (the merged `GND_DRV\|GND_LOGIC` net's own star is intentionally not emitted, which leaves **both ground rails ideal** — an optimistic, not conservative, simplification for undershoot: [Known gaps](#known-gaps), issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)); **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
 
 Both DUTs still back-annotate every body terminal (BA1/BA2) rather than
 reading it off the extractor's own merged `GND_DRV|GND_LOGIC` net directly —
@@ -498,9 +546,12 @@ record 0007 the way the schematic side already does is #166's (and #164's).
   into one net (`GND_DRV|GND_LOGIC` in its own raw output). That merge is the
   *extractor's* model, not this layout's own routing — `GND_LOGIC` and
   `GND_DRV` are drawn and stay as two separate Metal2 nets end to end, which
-  `check_gate_driver_core.py`'s `dnwell_partition` check and this repo's DRC/
-  LVS negative controls verify independently of the extractor's substrate
-  model — and it is also the electrical fact `spec/decision-records/0001`
+  `check_gate_driver_core.py`'s
+  [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132) check (added
+  by this same issue, precisely because the merge takes `klt lvs` out of the
+  picture for this one property) verifies independently of the extractor's
+  substrate model, with its own known-good/known-bad control — and it is also
+  the electrical fact `spec/decision-records/0001`
   Decision 1 already ratifies (one electrical reference node, split into two
   pins only at the pad ring). Filed upstream as the underlying tool
   limitation: klayout-tools
@@ -514,6 +565,25 @@ record 0007 the way the schematic side already does is #166's (and #164's).
   unmeasured any more (it now matches real extraction on both flavors), but
   because the testbench needs a net literally named `GND_LOGIC`/`GND_DRV` to
   drive, and the deck's own raw merged label is not one.
+- **The RC DUT models both ground rails as ideal zero-ohm nodes — which is
+  optimistic, not conservative (issue
+  [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)).** Because
+  the extraction deck now reports the two grounds as one merged net (previous
+  gap), `mk_extracted_dut.py`'s T5 skips that merged net's parasitic star —
+  every terminal on it is rebound per-device to a real `GND_LOGIC`/`GND_DRV`
+  (T4/BA1), so the merged hub would be left dangling. The cost, measured
+  against the pre-#132 RC DUT: **297 R legs on the two ground rails and the
+  `GND_DRV`↔`GND_LOGIC` coupling cap are gone** (2877 → 2580 R, 18 → 16 C).
+  Be precise about the direction of that error: for ground bounce and
+  `n1_min_v` undershoot an ideal ground is **optimistic** — it removes exactly
+  the rail IR drop those checks measure — so the RC record understates
+  undershoot rather than overstating it. It changes no recorded verdict today
+  (worst-case RC `n1_min_v` is −0.0068 V against a −0.05 V limit, ~10x margin,
+  and the RC record's failure set is unchanged at 2), which is why it is
+  carried here as a stated gap with a follow-up rather than blocking. Fixing
+  it means emitting the merged star with each leg's *hub* rebound per-device
+  too; a shared/fixed-name hub is known wrong (see `MERGED_GROUND_RAW`'s
+  docstring).
 - **klt's gf180mcu deck does not model `Dualgate` scoping.** Every thick-oxide
   device in this layout extracts against the **3.3 V** model
   (`nfet_03v3`/`pfet_03v3`) and is DRC-checked against 3.3 V thresholds, even

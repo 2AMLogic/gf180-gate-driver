@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check ``layout/gate_driver_core.gds`` against its source schematic netlist.
 
-Three checks, all run against the *committed* GDS through `klt` -- none of
+Four checks, all run against the *committed* GDS through `klt` -- none of
 them reads the generator's internal state, so this is an independent audit of
 the stream, not a replay of how it was built:
 
@@ -44,6 +44,31 @@ the stream, not a replay of how it was built:
     gap outside DNWELL_DRV specifically so it never joins either component
     and needs no such adjustment.
 
+``ground_rail_isolation``
+    ``klt components`` over the *routed metal only* -- Metal1 (34/0) and
+    Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge between them,
+    net names read from the Metal2 text layer (36/10).  No PDK deck, no device
+    recognition, and above all no deck-declared substrate global: this is a
+    purely geometric connectivity ruling over the drawn interconnect.
+
+    It asserts that **no component carries two distinct net names** (which
+    generalizes past the two grounds for free -- any drawn short between any
+    two named rails fails it) and, explicitly, that ``GND_LOGIC`` and
+    ``GND_DRV`` land in *different* components.  It also asserts every routed
+    net's label resolves to exactly one component, so the no-two-names ruling
+    cannot pass vacuously because a label or a rail went missing.
+
+    This check exists because issue #132's real substrate-tie geometry
+    **removed the two automated signals that used to cover the same ground**:
+    `klt extract` now reports ``GND_LOGIC``/``GND_DRV`` as one merged net
+    (klayout-tools #1128 -- the extraction deck ties every NMOS body to one
+    hardcoded substrate global, see ``_canon_net`` below), so neither
+    ``klt lvs`` nor this file's own ``devices`` check can still tell the two
+    rails apart.  DRC does not cover it either: two same-layer shapes on
+    different nets that *overlap* merge into one polygon and raise no spacing
+    violation.  Without this check, an accidental short between the two
+    domains in the drawn interconnect would be caught by nothing at all.
+
 ``voltage_domain``
     ``klt layers --flattened`` for the marker layers, plus the
     ``voltage_domain_warnings`` block ``klt extract`` returns.  gf180mcu's
@@ -74,6 +99,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     GUARD_RING_STROKE_COUNT,
     HERE,
+    L_METAL1,
+    L_METAL2,
+    L_METAL2_LABEL,
+    L_VIA1,
     LV_MODELS,
     MV_MODELS,
     NETLIST_PATH,
@@ -334,6 +363,148 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
     }
 
 
+def routed_nets(devices: list[Device]) -> list[str]:
+    """The net names the generator routes a labeled Metal2 rail pair for.
+
+    Re-derived here with the same expression ``gen_gate_driver_core.build()``
+    uses (``{d, g, s}`` over every device), so the isolation check below knows
+    how many labeled rails it is *supposed* to find rather than only auditing
+    whatever labels happen to be in the stream.
+    """
+    return sorted({n for device in devices for n in (device.d, device.g, device.s)})
+
+
+def ground_rail_isolation_verdict(response: dict, expected_nets: list[str]) -> dict:
+    """Rule on a ``klt components`` response: no drawn short between two nets.
+
+    Split out from :func:`check_ground_rail_isolation` so the ruling itself is
+    pure -- it takes the response dict and returns the check record, touching
+    neither `klt`, the PDK, nor the GDS.  That is what lets
+    ``layout/test_gen_gate_driver_core.py`` exercise it (including the failing
+    cases, which cannot be produced from the committed stream by construction)
+    on this repo's PDK-free CI runner, next to the other layout unit tests.
+
+    Three rulings, in the order their failure messages read best:
+
+    1. **No component carries two distinct net names.**  This is the ruling
+       that replaces what `klt lvs` can no longer see: two rails joined by any
+       drawn Metal1/Via1/Metal2 path land in one component and carry both
+       labels.  It is deliberately stated over *all* nets rather than only the
+       two grounds -- the general form costs nothing and catches, say, an
+       ``OUT``/``VDD_DRV`` short the same way.
+    2. **Every expected net resolves to exactly one component.**  Zero means
+       the rail or its label vanished (which would make ruling 1 pass
+       vacuously); more than one means the net is drawn open, split across
+       unconnected islands.
+    3. **``GND_LOGIC`` and ``GND_DRV`` are in different components**, stated
+       explicitly so the failure names the two rails this check exists for
+       even though ruling 1 already implies it.
+    """
+    components = response.get("components", [])
+    by_net: dict[str, list[str]] = collections.defaultdict(list)
+    per_component: list[dict] = []
+    failures: list[str] = []
+
+    for component in components:
+        names = sorted({label for label in component.get("labels", []) if label})
+        conductors = {
+            conductor["name"]: conductor.get("shape_count", 0)
+            for conductor in component.get("conductors", [])
+        }
+        vias = {
+            via["name"]: via.get("shape_count", 0) for via in component.get("vias", [])
+        }
+        per_component.append(
+            {
+                "component": component.get("id"),
+                "nets": names,
+                "m1_shapes": conductors.get("m1", 0),
+                "m2_shapes": conductors.get("m2", 0),
+                "via1_shapes": vias.get("via1", 0),
+            }
+        )
+        for name in names:
+            by_net[name].append(component.get("id"))
+        if len(names) > 1:
+            failures.append(
+                f"component {component.get('id')} carries {len(names)} distinct net "
+                f"names ({', '.join(names)}) -- these nets are shorted together in "
+                "the drawn Metal1/Via1/Metal2 interconnect"
+            )
+
+    for net in expected_nets:
+        owners = by_net.get(net, [])
+        if len(owners) == 0:
+            failures.append(
+                f"net {net} has no labeled metal component -- its rail or its "
+                "Metal2 label is missing from the stream"
+            )
+        elif len(owners) > 1:
+            failures.append(
+                f"net {net} is split across {len(owners)} unconnected metal "
+                f"components ({', '.join(owners)}) -- drawn open"
+            )
+
+    ground_owners = {net: by_net.get(net, []) for net in sorted(_GROUND_NETS)}
+    if all(len(owners) == 1 for owners in ground_owners.values()):
+        if len({owners[0] for owners in ground_owners.values()}) == 1:
+            failures.append(
+                "GND_LOGIC and GND_DRV share one drawn metal component "
+                f"({ground_owners['GND_DRV'][0]}) -- the two ground domains are "
+                "shorted in the drawn interconnect, which `klt lvs` can no "
+                "longer see (klayout-tools #1128 merges them in the extracted "
+                "netlist regardless)"
+            )
+
+    return {
+        "name": "ground_rail_isolation",
+        "passed": not failures,
+        "component_count": len(components),
+        "expected_nets": len(expected_nets),
+        "ground_components": {net: owners for net, owners in ground_owners.items()},
+        "components": sorted(per_component, key=lambda entry: entry["nets"]),
+        "failures": failures,
+    }
+
+
+def routed_metal_components(gds: str, top: str = TOP_CELL) -> dict:
+    """``klt components`` over the routed metal stack, with net names attached.
+
+    The layer stack lives here, in one place, so
+    ``layout/ground_rail_negative_control.py`` can prove *this* invocation
+    (these conductors, this via, this label layer) is capable of reporting a
+    short, rather than proving it about a re-typed copy of it.
+    """
+    return _klt(
+        "components",
+        gds,
+        "--top",
+        top,
+        "--conductors",
+        json.dumps(
+            [
+                {"name": "m1", "layer": list(L_METAL1)},
+                {"name": "m2", "layer": list(L_METAL2)},
+            ]
+        ),
+        "--vias",
+        json.dumps(
+            [{"name": "via1", "layer": list(L_VIA1), "between": ["m1", "m2"]}]
+        ),
+        "--label-layers",
+        json.dumps([{"name": "m2_label", "layer": list(L_METAL2_LABEL)}]),
+    )
+
+
+def check_ground_rail_isolation(gds: str, devices: list[Device]) -> dict:
+    """Assert the drawn interconnect keeps every net -- both grounds especially
+    -- electrically separate, independently of `klt extract`'s substrate model.
+    """
+    return ground_rail_isolation_verdict(
+        routed_metal_components(gds), routed_nets(devices)
+    )
+
+
 def check_voltage_domain(gds: str, extract_report: dict) -> dict:
     response = _klt("layers", gds, "--top", TOP_CELL, "--flattened")
     by_layer = {
@@ -389,6 +560,7 @@ def run(gds: str, pdk: str, work_dir: str) -> dict:
     checks = [
         device_check,
         check_dnwell_partition(gds, devices),
+        check_ground_rail_isolation(gds, devices),
         check_voltage_domain(gds, extract_report),
     ]
     return {
@@ -431,7 +603,10 @@ def main(argv: list[str] | None = None) -> int:
         status = "PASS" if check["passed"] else "FAIL"
         print(f"[{status}] {check['name']}")
         for key, value in check.items():
-            if key in ("name", "passed", "failures", "missing", "unexpected"):
+            # "components" is ground_rail_isolation's per-net evidence table --
+            # one row per routed net, useful in the committed JSON report but
+            # far too wide for the console summary.
+            if key in ("name", "passed", "failures", "missing", "unexpected", "components"):
                 continue
             print(f"         {key}: {value}")
         for failure in check.get("failures", []):
