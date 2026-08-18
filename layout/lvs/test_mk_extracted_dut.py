@@ -260,5 +260,96 @@ class MergedGroundParasiticsTest(unittest.TestCase):
             mk.emit(extract)
 
 
+class AnonymousNetNameTest(unittest.TestCase):
+    """``klt extract`` names an internal net with no schematic label ``$N``
+    (its own anonymous-net convention) -- this design's first real case is
+    issue #166's XCCOMP series stack, whose three inter-cap nodes (schematic
+    ``nccomp1..3``) carry no label anywhere in the layout. A bare SPICE
+    token that *starts* with ``$`` is an inline-comment marker to ngspice, so
+    emitting one of these nets directly as a node silently truncates the
+    rest of that card -- no simulator error, just a per-card ``... is not a
+    valid ... line, ignored!`` warning outside this script's or
+    ``run_corners.py``'s own PASS/FAIL summary (confirmed against a real
+    post-#166 extraction: all four XCCOMP capacitor cards, plus every R/C
+    leg on their own inter-cap nets, were silently dropped, and the
+    resulting DUT measured *zero* effect from XCCOMP on any PVT corner,
+    bit-for-bit -- issue #201). Built from a synthetic extract dict (not the
+    RC_REPORT/FLAT_REPORT fixtures above, which predate #166 and carry no
+    anonymous net) so this pins the transform even if those fixtures are
+    never refreshed.
+    """
+
+    def test_spice_node_rewrites_a_leading_dollar(self) -> None:
+        self.assertEqual(mk._spice_node("$18"), "ANON18")
+        self.assertEqual(mk._spice_node("GND_DRV"), "GND_DRV")
+        self.assertEqual(mk._spice_node("x1_ncb"), "x1_ncb")
+        # mid-token '$' (e.g. an already-safe leg/instance name) is untouched
+        self.assertEqual(mk._spice_node("R$18__t0"), "R$18__t0")
+
+    @staticmethod
+    def _synthetic_extract(*, with_parasitics: bool) -> dict:
+        devices = [
+            {
+                "class": "nfet",
+                "name": "M1",
+                "params": {
+                    "l_um": 0.28, "w_um": 5.0,
+                    "ad_um2": 1.0, "as_um2": 1.0, "pd_um": 1.0, "ps_um": 1.0,
+                },
+                "nets": {"d": "$5", "g": "IN", "s": "GND_LOGIC", "b": "GND_LOGIC"},
+            },
+            {
+                "class": "cap_mim_2f0_m4m5_noshield",
+                "name": "$6",
+                "params": {"c_f": 1e-14},
+                "nets": {"a": "$5", "b": "OUT"},
+            },
+        ]
+        extract: dict = {"devices": devices, "parasitics": None}
+        if with_parasitics:
+            extract["parasitics"] = {
+                "nets": [
+                    {
+                        "net": "$5",
+                        "hub_net": "$5",
+                        "capacitance_ff": 1.0,
+                        "terminals": [
+                            {
+                                "device": "M1", "terminal": "D",
+                                "leg_net": "$5__t0", "resistance_ohm": 1.0,
+                            },
+                            {
+                                "device": "$6", "terminal": "a",
+                                "leg_net": "$5__t1", "resistance_ohm": 1.0,
+                            },
+                        ],
+                    },
+                ],
+            }
+        return extract
+
+    def _assert_no_bare_dollar_token(self, lines: list[str]) -> None:
+        for line in lines:
+            if not line or line.startswith("*"):
+                continue
+            for token in line.split():
+                self.assertFalse(
+                    token.startswith("$"),
+                    f"bare node/instance token starts with '$' (an ngspice "
+                    f"inline-comment marker -- silently truncates the rest "
+                    f"of the card): {line!r}",
+                )
+
+    def test_no_bare_dollar_token_without_parasitics(self) -> None:
+        lines, _ = mk.emit(self._synthetic_extract(with_parasitics=False))
+        self.assertTrue(lines)
+        self._assert_no_bare_dollar_token(lines)
+
+    def test_no_bare_dollar_token_with_parasitics(self) -> None:
+        lines, _ = mk.emit(self._synthetic_extract(with_parasitics=True))
+        self.assertTrue(lines)
+        self._assert_no_bare_dollar_token(lines)
+
+
 if __name__ == "__main__":
     unittest.main()

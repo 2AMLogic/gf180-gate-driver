@@ -253,6 +253,23 @@ TRANSFORMS = [
         "devices only so it cannot mistake a capacitor's `b` terminal for a "
         "MOS body leg.",
     ),
+    (
+        "T8",
+        "(issue #201) Anonymous-net rename: any net the extractor names "
+        "`$N` (its own convention for a net with no schematic label -- this "
+        "design's first real case is T7's XCCOMP inter-cap nodes) is "
+        "rewritten to `ANON<N>` wherever it would otherwise appear as a "
+        "bare SPICE node token. `$` starting a token is an inline-comment "
+        "marker to ngspice, so left as-is these nets silently truncate "
+        "every card that names them -- no simulator error, just a per-card "
+        "`... is not a valid ... line, ignored!` warning outside this "
+        "script's or run_corners.py's own PASS/FAIL summary. Applied at "
+        "every point a raw extractor net name reaches a bare node position "
+        "(`leg_of()`'s return, and T5's per-net star loop); never applied "
+        "to a name only ever embedded inside a longer instance name (e.g. "
+        "an R-leg card's own `R$18__t0` name field), since a `$` that is "
+        "not a token's first character does not trigger this.",
+    ),
 ]
 
 BACK_ANNOTATIONS = [
@@ -276,6 +293,23 @@ BACK_ANNOTATIONS = [
 
 def _fmt(value: float) -> str:
     return f"{value:.6g}"
+
+
+#: `klt extract` names an internal net with no schematic label `$N` (its own
+#: anonymous-net numbering) -- this design's first real case is #166's XCCOMP
+#: series stack, whose three inter-cap nodes (schematic `nccomp1..3`) carry no
+#: label anywhere in the layout. A `$`-prefixed net is not just an odd
+#: spelling: a SPICE token that *starts* with `$` is an inline-comment marker
+#: to ngspice (confirmed directly -- `$18` mid-token, e.g. embedded in an
+#: instance name like `R$18__t0`, is fine; `$18` as its own bare
+#: whitespace-delimited token is not), so emitting one as a bare node
+#: silently truncates the rest of that card: no simulator error, just a
+#: `<card> is not a valid ... line, ignored!` warning `run_corners.py`'s own
+#: PASS/FAIL summary never surfaces (issue #201 -- caught only by manually
+#: reading ngspice's own log after the XCCOMP caps it should have added
+#: measured *zero* effect on every corner, bit-for-bit). See T8.
+def _spice_node(name: str) -> str:
+    return "ANON" + name[1:] if name.startswith("$") else name
 
 
 def _model_and_body(device_class: str, l_um: float) -> tuple[str, str]:
@@ -380,7 +414,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         """
         raw = legs.get((dev["name"], terminal), dev["nets"][terminal])
         if not _is_merged_ground(raw):
-            return raw
+            return _spice_node(raw)  # T8: e.g. XCCOMP's anonymous inter-cap nodes
         _assert_nmos_ground(dev, terminal, raw)
         if raw == MERGED_GROUND_RAW:
             return own_ground
@@ -475,7 +509,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         devices_by_name = {dev["name"]: dev for dev in extract["devices"]}
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
             merged = net["net"] == MERGED_GROUND_RAW
-            hub = net["hub_net"]
+            hub = _spice_node(net["hub_net"])  # T8: e.g. an XCCOMP inter-cap net's own hub
             for terminal in net["terminals"]:
                 term_dev = devices_by_name[terminal["device"]]
                 if term_dev["class"] not in CAP_CLASSES and terminal["terminal"].upper() == "B":
@@ -487,6 +521,8 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                     _assert_nmos_ground(dev, terminal["terminal"].lower(), leg)
                     leg_hub = _model_and_body(dev["class"], dev["params"]["l_um"])[1]
                     leg = MERGED_GROUND_NODE + leg[len(MERGED_GROUND_RAW) :]
+                else:
+                    leg = _spice_node(leg)  # T8: e.g. an XCCOMP inter-cap net's own leg
                 lines.append(f"R{leg} {leg} {leg_hub} {_fmt(terminal['resistance_ohm'])}")
                 par_count["r"] += 1
             if merged:
@@ -506,7 +542,8 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                 )
             else:
                 lines.append(
-                    f"C{net['net']} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}"
+                    f"C{_spice_node(net['net'])} {hub} {GROUND_REF} "
+                    f"{_fmt(net['capacitance_ff'] * 1e-15)}"
                 )
             par_count["c"] += 1
 

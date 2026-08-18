@@ -99,6 +99,19 @@
 *     present -- the merged-ground body-terminal skip below is scoped to MOS
 *     devices only so it cannot mistake a capacitor's `b` terminal for a MOS
 *     body leg.
+* T8. (issue #201) Anonymous-net rename: any net the extractor names `$N` (its
+*     own convention for a net with no schematic label -- this design's first
+*     real case is T7's XCCOMP inter-cap nodes) is rewritten to `ANON<N>`
+*     wherever it would otherwise appear as a bare SPICE node token. `$`
+*     starting a token is an inline-comment marker to ngspice, so left as-is
+*     these nets silently truncate every card that names them -- no simulator
+*     error, just a per-card `... is not a valid ... line, ignored!` warning
+*     outside this script's or run_corners.py's own PASS/FAIL summary. Applied
+*     at every point a raw extractor net name reaches a bare node position
+*     (`leg_of()`'s return, and T5's per-net star loop); never applied to a name
+*     only ever embedded inside a longer instance name (e.g. an R-leg card's own
+*     `R$18__t0` name field), since a `$` that is not a token's first character
+*     does not trigger this.
 *
 * ------------------------------------------------------------------
 * Back-annotated: terminals/nets the extraction deck cannot resolve
@@ -119,7 +132,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): 18930845cd590200a6ca0dc2415180ea
+* sha256 (this file, sans this line): e565fd8c5f079ef3a6d41f92788ac2f3
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
@@ -1088,21 +1101,21 @@ X958 VDD_DRV__t976 x2_n5__t707 OUT__t713 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad
 X959 OUT__t470 x2_n5__t720 VDD_DRV__t668 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
 
 * T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)
-C960 x1_ncb__t4 $18__t0 5.4516e-14
-C961 $19__t1 $18__t1 5.4516e-14
-C962 $19__t0 $20__t1 5.4516e-14
-C963 IN_DRV__t4 $20__t0 5.4516e-14
+C960 x1_ncb__t4 ANON18__t0 5.4516e-14
+C961 ANON19__t1 ANON18__t1 5.4516e-14
+C962 ANON19__t0 ANON20__t1 5.4516e-14
+C963 IN_DRV__t4 ANON20__t0 5.4516e-14
 
 * T5: per-net parasitic star (klt extract --parasitics), coupling excluded
-R$18__t0 $18__t0 $18 0.252
-R$18__t1 $18__t1 $18 0.252
-C$18 $18 GND_LOGIC 5.78214e-16
-R$19__t0 $19__t0 $19 0.1955
-R$19__t1 $19__t1 $19 0.1955
-C$19 $19 GND_LOGIC 1.85211e-15
-R$20__t0 $20__t0 $20 0.252
-R$20__t1 $20__t1 $20 0.252
-C$20 $20 GND_LOGIC 5.78214e-16
+RANON18__t0 ANON18__t0 ANON18 0.252
+RANON18__t1 ANON18__t1 ANON18 0.252
+CANON18 ANON18 GND_LOGIC 5.78214e-16
+RANON19__t0 ANON19__t0 ANON19 0.1955
+RANON19__t1 ANON19__t1 ANON19 0.1955
+CANON19 ANON19 GND_LOGIC 1.85211e-15
+RANON20__t0 ANON20__t0 ANON20 0.252
+RANON20__t1 ANON20__t1 ANON20 0.252
+CANON20 ANON20 GND_LOGIC 5.78214e-16
 RGND_DRV_GND_LOGIC__t299 GND_DRV_GND_LOGIC__t299 GND_LOGIC 9.3317
 RGND_DRV_GND_LOGIC__t300 GND_DRV_GND_LOGIC__t300 GND_LOGIC 10.0058
 RGND_DRV_GND_LOGIC__t301 GND_DRV_GND_LOGIC__t301 GND_DRV 4.7676

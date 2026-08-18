@@ -98,6 +98,19 @@
 *     present -- the merged-ground body-terminal skip below is scoped to MOS
 *     devices only so it cannot mistake a capacitor's `b` terminal for a MOS
 *     body leg.
+* T8. (issue #201) Anonymous-net rename: any net the extractor names `$N` (its
+*     own convention for a net with no schematic label -- this design's first
+*     real case is T7's XCCOMP inter-cap nodes) is rewritten to `ANON<N>`
+*     wherever it would otherwise appear as a bare SPICE node token. `$`
+*     starting a token is an inline-comment marker to ngspice, so left as-is
+*     these nets silently truncate every card that names them -- no simulator
+*     error, just a per-card `... is not a valid ... line, ignored!` warning
+*     outside this script's or run_corners.py's own PASS/FAIL summary. Applied
+*     at every point a raw extractor net name reaches a bare node position
+*     (`leg_of()`'s return, and T5's per-net star loop); never applied to a name
+*     only ever embedded inside a longer instance name (e.g. an R-leg card's own
+*     `R$18__t0` name field), since a `$` that is not a token's first character
+*     does not trigger this.
 *
 * ------------------------------------------------------------------
 * Back-annotated: terminals/nets the extraction deck cannot resolve
@@ -118,7 +131,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): fdd3a6d9d08ada6b76d8608be29095c2
+* sha256 (this file, sans this line): d8884afdf1c522cd470689dda75f6a16
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
@@ -170,7 +183,7 @@ X41 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=
 X42 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
 
 * T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)
-C960 x1_ncb $18 5.4516e-14
-C961 $19 $18 5.4516e-14
-C962 $19 $20 5.4516e-14
-C963 IN_DRV $20 5.4516e-14
+C960 x1_ncb ANON18 5.4516e-14
+C961 ANON19 ANON18 5.4516e-14
+C962 ANON19 ANON20 5.4516e-14
+C963 IN_DRV ANON20 5.4516e-14
