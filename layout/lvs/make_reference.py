@@ -93,6 +93,17 @@ and does not cover" for the full rationale):
    now surfacing on ordinary device terminals instead of only body
    terminals, so the reference must merge the two net *names* -- not just
    the body assignment -- to match.
+6. **MiM capacitors carry an extracted capacitance, not a schematic one
+   (issue #166).** The schematic states the ``XCCOMP*`` stack as geometry
+   (``c_width``/``c_length``), because that is what a layout can draw and
+   what ``spec/decision-records/0014`` ratified; the layout side of the
+   compare carries whatever `klt extract` *measures*, and
+   ``kdb.NetlistComparer`` compares a matched device pair's parameters
+   directly. So the reference restates the same geometry through the
+   extraction deck's own published two-term MiM model
+   (:data:`MIM_AREA_CAP_F_UM2` / :data:`MIM_PERIM_CAP_F_UM`, below), which is
+   a *derivation* from the netlist's own numbers -- not a value copied back
+   out of an extraction, which would make the compare circular.
 
 Usage::
 
@@ -130,6 +141,40 @@ MERGED_GROUND_NET = "|".join(sorted(_MERGED_GROUND_NETS))
 
 TOP = "gate_driver_core"
 
+#: The two coefficients of gf180mcu's 2.0 fF/um^2 MiM model, as `klt`'s own
+#: gf180mcu extraction deck publishes them
+#: (``decks/gf180mcu.py``'s ``EXTRACTION_DECK.capacitors`` ->
+#: ``cap_mim_2f0_m4m5_noshield``: ``area_cap_f_um2=1.99e-15``,
+#: ``perim_cap_f_um=2.383e-16``), which that deck in turn transcribes from the
+#: PDK's own ``libs.tech/ngspice/sm141064.ngspice`` ``.subckt cap_mim_2f0fF``
+#: (``c_cox = 1.99e-3 F/m^2``, ``c_capsw = 2.383e-10 F/m``).
+#:
+#: Hard-coded rather than imported, deliberately: this script runs in CI
+#: (``lvs/test_make_reference.py``) on a runner with neither `klt` nor the PDK
+#: installed, and the whole point of the reference netlist is to be derivable
+#: from the *schematic* without the layout toolchain. A drift between these
+#: numbers and the deck's own would surface immediately as a
+#: ``device.property`` LVS mismatch on all four capacitors, not silently.
+MIM_AREA_CAP_F_UM2 = 1.99e-15
+MIM_PERIM_CAP_F_UM = 2.383e-16
+
+
+def mim_capacitance_f(width_um: float, length_um: float) -> float:
+    """The two-term MiM capacitance of a ``width_um`` x ``length_um`` plate.
+
+    ``C = area_cap * A + perim_cap * P`` -- the same expression `klt extract`
+    evaluates over the *drawn* plate overlap (KLayout's own
+    ``DeviceExtractorCapacitor`` contributes the area term; the deck's
+    ``perim_cap_f_um`` post-correction adds the fringe term). Here it is
+    evaluated over the plate the *netlist* asks for, so the two agree only if
+    the layout actually drew the geometry the schematic specified -- which is
+    exactly the thing LVS is supposed to be checking.
+    """
+    return (
+        MIM_AREA_CAP_F_UM2 * width_um * length_um
+        + MIM_PERIM_CAP_F_UM * 2.0 * (width_um + length_um)
+    )
+
 
 def _canon(net: str) -> str:
     """Apply transform 5: fold ``GND_LOGIC``/``GND_DRV`` to one merged net."""
@@ -137,10 +182,12 @@ def _canon(net: str) -> str:
 
 
 def build_reference() -> tuple[str, dict]:
-    _top_ports, devices = generator.parse_netlist(generator.NETLIST_PATH)
+    _top_ports, devices, passives = generator.parse_netlist_full(
+        generator.NETLIST_PATH
+    )
 
     lines: list[str] = []
-    counts = {"nfet": 0, "pfet": 0}
+    counts = {"nfet": 0, "pfet": 0, "cap": 0}
     used_nets: set[str] = set()
 
     for device in devices:
@@ -166,6 +213,23 @@ def build_reference() -> tuple[str, dict]:
                 f"{device.flavor} L={device.l_um:g}U W={device.w_um:g}U"
             )
 
+    # Transform 6: the MiM stack. Written in the plain-element form
+    # `NetlistSpiceReader` turns into a device class named after the model
+    # (`C<name> <a> <b> <model> C=<value>` -- the *only* C-card spelling that
+    # names a class rather than falling back to the generic `CAP`, or reading
+    # the model token as a third, bulk terminal). The class name is what pairs
+    # this side with `klt extract`'s own `cap_mim_2f0_m4m5_noshield` devices;
+    # KLayout matches device-class names case-insensitively, so the reader's
+    # up-casing is harmless.
+    for passive in passives:
+        plus, minus = (_canon(n) for n in (passive.plus, passive.minus))
+        used_nets.update((plus, minus))
+        counts["cap"] += 1
+        lines.append(
+            f"C{passive.name} {plus} {minus} {passive.model} "
+            f"C={mim_capacitance_f(passive.w_um, passive.l_um):.6g}"
+        )
+
     # Pins: every net named directly on a device terminal (`klt extract`
     # promotes every such labeled net to a top-level pin when the layout is
     # flat with no sub-cell instances left to demote them -- confirmed
@@ -177,6 +241,15 @@ def build_reference() -> tuple[str, dict]:
     # to real labeled metal instead of leaving it an anonymous placeholder --
     # `vsubs` does not appear anywhere in a real extraction of this layout
     # any more.
+    #
+    # The MiM stack's own interior nodes (``x1_nccomp1``..``3``) are
+    # deliberately *not* pins and deliberately not labeled in the layout
+    # either: each is one floating plate-to-plate metal polygon with two
+    # capacitor terminals on it and nothing else (issue #166 /
+    # ``gen_gate_driver_core.Interconnect.mim_caps``), so `klt extract` leaves
+    # them as internal, unnamed nets. They still have to *match*, which is the
+    # point -- the comparer has to find the four-deep series chain
+    # topologically, anchored at the two named ends.
     named_nets = {d.d for d in devices} | {d.g for d in devices} | {d.s for d in devices}
     named_nets |= {d.b for d in devices}
     pins = sorted({_canon(n) for n in named_nets})
@@ -186,11 +259,13 @@ def build_reference() -> tuple[str, dict]:
         "*",
         "* Produced by layout/lvs/make_reference.py from",
         "* design/netlist/gate_driver_core.spice via",
-        "* layout/gen_gate_driver_core.py's own parse_netlist(), applying the five",
-        "* mechanical transforms documented in that script's module docstring.",
+        "* layout/gen_gate_driver_core.py's own parse_netlist_full(), applying the",
+        "* six mechanical transforms documented in that script's module docstring.",
         "*",
         f"* MOS devices: {counts['nfet']} nfet + {counts['pfet']} pfet "
         f"({len(devices)} schematic instances, expanded to drawn finger count)",
+        f"* MiM caps  : {counts['cap']} ({len(passives)} schematic instances, "
+        "1:1 -- one drawn plate pair each)",
         "",
         f".SUBCKT {TOP} " + " ".join(pins),
     ]
@@ -200,6 +275,7 @@ def build_reference() -> tuple[str, dict]:
         "pins": pins,
         "nets": sorted(used_nets),
         "devices": len(devices),
+        "passives": len(passives),
     }
 
 
@@ -218,6 +294,7 @@ def main() -> int:
     Path(args.output).write_text(text)
     print(f"wrote {args.output}")
     print(f"  devices : {info['devices']} schematic instances -> {info['counts']} fingers")
+    print(f"  passives: {info['passives']} MiM cap(s)")
     print(f"  pins    : {' '.join(info['pins'])}")
     print(f"  nets    : {len(info['nets'])}")
     return 0

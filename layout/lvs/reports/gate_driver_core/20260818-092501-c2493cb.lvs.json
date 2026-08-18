@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "engine": "klayout",
+  "layout": "../../../gate_driver_core.gds",
+  "reference": "../../gate_driver_core.ref.spice",
+  "top": "gate_driver_core",
+  "parameter_tolerance": null,
+  "status": "match",
+  "mismatch_count": 1,
+  "category_counts": {
+    "topology": 1
+  },
+  "counts": {
+    "nets": {
+      "layout": 20,
+      "reference": 20,
+      "matched": 20
+    },
+    "devices": {
+      "layout": 963,
+      "reference": 963,
+      "matched": 963
+    },
+    "pins": {
+      "layout": 17,
+      "reference": 17,
+      "matched": 17
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.10",
+    "layout_sha256": "0656ab4c377c3bb1643d867842ff04488a3d9a0a452aa8da7c7a7f990fa3a564",
+    "reference_sha256": "8621b6309eca148dd883e3c4b66d0c5d36d33bbee923c7e3a0c0f75d2be51efb",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.2.0",
+    "klayout_version": "0.30.10",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3"
+    },
+    "input": null
+  },
+  "mismatches": [
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch",
+      "side": "layout",
+      "net": null,
+      "device": null,
+      "property": null,
+      "details": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "GND_DRV|GND_LOGIC",
+      "reference": "GND_DRV|GND_LOGIC",
+      "pin": true
+    },
+    {
+      "layout": "IN",
+      "reference": "IN",
+      "pin": true
+    },
+    {
+      "layout": "IN_DRV",
+      "reference": "IN_DRV",
+      "pin": true
+    },
+    {
+      "layout": "OUT",
+      "reference": "OUT",
+      "pin": true
+    },
+    {
+      "layout": "VDD_DRV",
+      "reference": "VDD_DRV",
+      "pin": true
+    },
+    {
+      "layout": "VDD_LOGIC",
+      "reference": "VDD_LOGIC",
+      "pin": true
+    },
+    {
+      "layout": "x1_inb",
+      "reference": "X1_INB",
+      "pin": true
+    },
+    {
+      "layout": "x1_na",
+      "reference": "X1_NA",
+      "pin": true
+    },
+    {
+      "layout": "x1_nb",
+      "reference": "X1_NB",
+      "pin": true
+    },
+    {
+      "layout": "x1_nbuf1",
+      "reference": "X1_NBUF1",
+      "pin": true
+    },
+    {
+      "layout": "x1_nca",
+      "reference": "X1_NCA",
+      "pin": true
+    },
+    {
+      "layout": "x1_ncb",
+      "reference": "X1_NCB",
+      "pin": true
+    },
+    {
+      "layout": "$18",
+      "reference": "X1_NCCOMP1",
+      "pin": false
+    },
+    {
+      "layout": "$19",
+      "reference": "X1_NCCOMP2",
+      "pin": false
+    },
+    {
+      "layout": "$20",
+      "reference": "X1_NCCOMP3",
+      "pin": false
+    },
+    {
+      "layout": "x2_n1",
+      "reference": "X2_N1",
+      "pin": true
+    },
+    {
+      "layout": "x2_n2",
+      "reference": "X2_N2",
+      "pin": true
+    },
+    {
+      "layout": "x2_n3",
+      "reference": "X2_N3",
+      "pin": true
+    },
+    {
+      "layout": "x2_n4",
+      "reference": "X2_N4",
+      "pin": true
+    },
+    {
+      "layout": "x2_n5",
+      "reference": "X2_N5",
+      "pin": true
+    }
+  ]
+}

@@ -10,8 +10,10 @@ leaving everything else byte-identical -- re-runs the same ``klt lvs`` engine
 against the same extracted layout, and asserts the comparator notices.
 
 That single-device perturbation is deliberately the smallest one available:
-if `klt lvs` catches a 959-vs-958 device delta, it is comparing device by
-device rather than pattern-matching a summary.
+if `klt lvs` catches a 963-vs-962 device delta, it is comparing device by
+device rather than pattern-matching a summary.  The expected count is read
+off the reference itself rather than written down here, so this control keeps
+stating "one fewer than whatever the schematic has" as the design changes.
 
 The perturbed reference is written under ``layout/build/`` (git-ignored
 generator scratch, ``layout/README.md``); the **report** is committed under
@@ -32,6 +34,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -76,10 +79,19 @@ def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    kept, dropped = [], 0
+    kept, dropped, total = [], 0, 0
     for line in REFERENCE.read_text().splitlines():
+        # Every reference device card, whichever class: `M...` transistors and
+        # (since issue #166) `C...` MiM capacitors.  Counted rather than
+        # hard-coded so this control states "one fewer than whatever the
+        # reference has" -- a count baked in here would have to be edited every
+        # time the schematic gains a device, and would fail *this* control
+        # rather than the thing it is meant to be watching.
+        if re.fullmatch(r"[MC]\S+", line.split(" ", 1)[0] or ""):
+            total += 1
         if line.split(" ", 1)[0] == DROPPED_DEVICE:
             dropped += 1
+            total -= 1
             continue
         kept.append(line)
     if dropped != 1:
@@ -133,7 +145,7 @@ def main() -> int:
 
     payload = json.loads(proc.stdout)
     print(f"record id      : {record_id}")
-    print(f"dropped device : {DROPPED_DEVICE} (1 of 959 reference cards)")
+    print(f"dropped device : {DROPPED_DEVICE} (1 of {total + 1} reference cards)")
     print(f"status         : {payload['status']}")
     print(f"mismatch_count : {payload['mismatch_count']}")
     print(f"report (json)  : {(REPORTS_DIR / f'{record_id}.lvs.json').relative_to(REPO_ROOT)}")
@@ -146,9 +158,9 @@ def main() -> int:
             "expected at least one 'device.unmatched' finding, got "
             f"{payload['category_counts']!r}"
         )
-    if payload["counts"]["devices"]["reference"] != 958:
+    if payload["counts"]["devices"]["reference"] != total:
         failures.append(
-            "expected 958 reference devices after the drop, got "
+            f"expected {total} reference devices after the drop, got "
             f"{payload['counts']['devices']['reference']}"
         )
     if failures:
@@ -163,9 +175,9 @@ def main() -> int:
         return 1
 
     print(
-        "ok: dropping one of 959 reference devices flips the verdict to "
-        "'mismatch' with a device.unmatched finding -- 'status: match' on the "
-        "block is a real verdict"
+        f"ok: dropping one of {total + 1} reference devices flips the verdict "
+        "to 'mismatch' with a device.unmatched finding -- 'status: match' on "
+        "the block is a real verdict"
     )
     return 0
 

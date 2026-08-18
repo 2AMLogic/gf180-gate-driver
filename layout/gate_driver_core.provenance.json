@@ -2,17 +2,17 @@
   "top_cell": "gate_driver_core",
   "layout": {
     "path": "layout/gate_driver_core.gds",
-    "sha256": "70ca45b75109e913f93ca759da9bac866f9bfd05025f05e4a4614f97fe49066b",
+    "sha256": "0656ab4c377c3bb1643d867842ff04488a3d9a0a452aa8da7c7a7f990fa3a564",
     "bbox_um": {
       "x0": -33.6,
       "y0": -2.0,
       "x1": 519.17,
-      "y1": 492.72
+      "y1": 510.92
     }
   },
   "source_netlist": {
     "path": "design/netlist/gate_driver_core.spice",
-    "sha256": "0bc2bed8d33f04b0833331f61bb713a04b390529e2bcb61f300e827c3c8c42b3",
+    "sha256": "fbf94883ef318dcb5c438e279f8633ffdffb7559fae222b6dc27ae1c31bb5971",
     "top_ports": [
       "VDD_LOGIC",
       "GND_LOGIC",
@@ -23,23 +23,170 @@
     ],
     "device_count": 24,
     "transistor_count": 959,
-    "passives_not_drawn": [
+    "passive_count": 4,
+    "passives_not_drawn": [],
+    "passives_drawn": [
       {
-        "name": "x1_XCCOMP",
-        "model": "cap_mim_1f0_m4m5_noshield",
-        "c_width_um": 3.0,
-        "c_length_um": 3.0,
+        "name": "x1_XCCOMP1",
+        "model": "cap_mim_2f0_m4m5_noshield",
+        "c_width_um": 5.0,
+        "c_length_um": 5.0,
         "m": 1,
         "nets": {
           "plus": "x1_ncb",
+          "minus": "x1_nccomp1"
+        },
+        "plates": {
+          "bottom": {
+            "layer": [
+              46,
+              0
+            ],
+            "net": "x1_ncb",
+            "rect_um": [
+              0.0,
+              504.72,
+              6.2,
+              510.92
+            ]
+          },
+          "top": {
+            "layer": [
+              75,
+              0
+            ],
+            "net": "x1_nccomp1",
+            "rect_um": [
+              0.6,
+              505.32,
+              5.6,
+              510.32
+            ]
+          }
+        }
+      },
+      {
+        "name": "x1_XCCOMP2",
+        "model": "cap_mim_2f0_m4m5_noshield",
+        "c_width_um": 5.0,
+        "c_length_um": 5.0,
+        "m": 1,
+        "nets": {
+          "plus": "x1_nccomp1",
+          "minus": "x1_nccomp2"
+        },
+        "plates": {
+          "bottom": {
+            "layer": [
+              46,
+              0
+            ],
+            "net": "x1_nccomp2",
+            "rect_um": [
+              7.4,
+              504.72,
+              13.6,
+              510.92
+            ]
+          },
+          "top": {
+            "layer": [
+              75,
+              0
+            ],
+            "net": "x1_nccomp1",
+            "rect_um": [
+              8.0,
+              505.32,
+              13.0,
+              510.32
+            ]
+          }
+        }
+      },
+      {
+        "name": "x1_XCCOMP3",
+        "model": "cap_mim_2f0_m4m5_noshield",
+        "c_width_um": 5.0,
+        "c_length_um": 5.0,
+        "m": 1,
+        "nets": {
+          "plus": "x1_nccomp2",
+          "minus": "x1_nccomp3"
+        },
+        "plates": {
+          "bottom": {
+            "layer": [
+              46,
+              0
+            ],
+            "net": "x1_nccomp2",
+            "rect_um": [
+              14.8,
+              504.72,
+              21.0,
+              510.92
+            ]
+          },
+          "top": {
+            "layer": [
+              75,
+              0
+            ],
+            "net": "x1_nccomp3",
+            "rect_um": [
+              15.4,
+              505.32,
+              20.4,
+              510.32
+            ]
+          }
+        }
+      },
+      {
+        "name": "x1_XCCOMP4",
+        "model": "cap_mim_2f0_m4m5_noshield",
+        "c_width_um": 5.0,
+        "c_length_um": 5.0,
+        "m": 1,
+        "nets": {
+          "plus": "x1_nccomp3",
           "minus": "IN_DRV"
+        },
+        "plates": {
+          "bottom": {
+            "layer": [
+              46,
+              0
+            ],
+            "net": "IN_DRV",
+            "rect_um": [
+              22.2,
+              504.72,
+              28.4,
+              510.92
+            ]
+          },
+          "top": {
+            "layer": [
+              75,
+              0
+            ],
+            "net": "x1_nccomp3",
+            "rect_um": [
+              22.8,
+              505.32,
+              27.8,
+              510.32
+            ]
+          }
         }
       }
     ]
   },
   "generator": {
     "path": "layout/gen_gate_driver_core.py",
-    "sha256": "e1a25315df982da69c76453037f5f6f9171a16d3090e4d0b59f526597fc58fd9"
+    "sha256": "c6096bdeae086867753d7bb4c1f15e5b8604e5c9cec450226d3cfc11448cffd1"
   },
   "tools": {
     "klt_version": "klt 0.2.0",
@@ -51,8 +198,8 @@
     "note": "the klayout build and the extraction deck's content hash are recorded in gate_driver_core.checks.json (klt extract's own provenance block)"
   },
   "git": {
-    "commit": "ab373704bc7cfdb6728bb72e6dfc92c84f80c6da",
-    "describe": "ab37370-dirty"
+    "commit": "6ba5edece2cf5fbf849340700e481b39d311272e",
+    "describe": "6ba5ede-dirty"
   },
   "placement": [
     {

@@ -25,8 +25,13 @@ script never links klayout itself and needs nothing but the standard library):
     is ``M`` fingers of width ``W``.
 3.  ``klt draw`` once for the interconnect/marker cell: the Metal2 net rails,
     the Metal1 device stubs and gate routes, the Via1 stack between them, the
-    net-name labels, and the two voltage-domain marker regions
-    (``DNWELL``/``LVPWELL`` over the 5V/6V group, ``Dualgate`` over the same).
+    net-name labels, the two voltage-domain marker regions
+    (``DNWELL``/``LVPWELL`` over the 5V/6V group, ``Dualgate`` over the same),
+    and the ``XCCOMP*`` MiM capacitor stack -- Metal4 bottom plates, FuseTop
+    top plates with their ``CAP_MK``/``MIM_L_MK`` recognition markers, the
+    Metal5 straps over their Via4s, and the Via3/Metal3/Via2 escape down to
+    the two Metal2 rails the series chain terminates on
+    (:meth:`Interconnect.mim_caps`).
 4.  ``klt gen-compose`` (``placement.strategy: "explicit"``) merges every
     device cell plus the interconnect cell into one ``gate_driver_core`` top
     cell at the origins this script computed.
@@ -51,19 +56,17 @@ edge (facing 0) and the gate pad on its top edge (facing 90), so:
 Metal1 stubs therefore cross *under* unrelated Metal2 rails with no via, which
 is what keeps a purely orthogonal, no-router wiring scheme short-free.
 
+The ``XCCOMP*`` MiM series stack sits in its own single row of four plates,
+placed north of every drawn shape in the block (above the guard ring's own
+north stroke, over bare substrate), so nothing at all -- least of all anything
+matching-sensitive, per DRM 10.4.2 -- sits underneath it.  It reaches the two
+Metal2 rails its chain terminates on through Metal3, on a layer stack that
+crosses over the whole interconnect without a single via into it.  See
+:meth:`Interconnect.mim_caps`.
+
 Known limitations of this first-cut layout (deliberately not fixed here -- see
 ``layout/README.md`` and issue #105, which owns DRC/LVS closure):
 
-* Passive devices are parsed but not drawn.  ``klt gen`` has no capacitor
-  generator, so the compensation capacitor added by issue #155 -- since issue
-  #192 / decision record 0014, a series stack of four
-  ``cap_mim_2f0_m4m5_noshield`` devices at the DRM MIMTM.8a minimum
-  5.0 um x 5.0 um -- is reported (a stderr warning plus a
-  ``passives_not_drawn`` block in the provenance record) rather than silently
-  dropped.  Issue #166 owns drawing them and re-running DRC/LVS.  Note the
-  metal pair is no longer a layout choice: ``gf180mcuD`` is a 5-metal DRM
-  Option-B build, so its MiM sits on Metal4-FuseTop-Metal5 and nowhere else
-  (design/level-shifter-partition.md).
 * No well/substrate taps, no guard ring around ``DNWELL_DRV``.  A closed tap
   ring around the drive domain has to be cut for every signal crossing the
   domain boundary, which is a routing plan, not a marker rectangle.
@@ -126,6 +129,24 @@ L_METAL1_LABEL = (34, 10)
 L_VIA1 = (35, 0)
 L_METAL2 = (36, 0)
 L_METAL2_LABEL = (36, 10)
+
+# Upper routing stack + the MiM capacitor's own layers (issue #166).  Numbers
+# are `klt`'s own gf180mcu deck (`decks/gf180mcu.py`'s `LAYER_NAMES` and
+# `EXTRACTION_DECK.metals`/`vias`), which transcribes them from the PDK's
+# `main.drc` via-layer derivations -- the same table the Metal1/Via1/Metal2
+# triple above comes from.  `metals` is the full Metal1..Metal5 stack and
+# `vias[i]` joins `metals[i]` to `metals[i+1]`, so Via2/Metal3/Via3 is the
+# only escape path from a Metal4 bottom plate down to this layout's Metal2
+# rails.
+L_VIA2 = (38, 0)  # Via2  -- Metal2 <-> Metal3
+L_METAL3 = (42, 0)
+L_VIA3 = (40, 0)  # Via3  -- Metal3 <-> Metal4
+L_METAL4 = (46, 0)  # MiM bottom plate ("topmin1_metal" for the 5LM stack)
+L_VIA4 = (41, 0)  # Via4  -- Metal4 <-> Metal5, and FuseTop <-> Metal5
+L_METAL5 = (81, 0)
+L_FUSETOP = (75, 0)  # MiM top plate
+L_CAP_MK = (117, 5)  # MiM device-recognition marker
+L_MIM_L_MK = (117, 10)  # MiM device-recognition marker (second of the pair)
 
 # --------------------------------------------------------------------------- #
 # Floorplan constants (um)
@@ -203,6 +224,45 @@ GUARD_RING_JUMPER_CLEARANCE_UM = 1.0  # north stroke's own metal1.space.1
 # metal1.space.1 minimum, no reason to cut it close against a check that
 # only needs to run once per regeneration).
 
+# MiM capacitor row (issue #166 / spec/decision-records/0014).  Every number
+# below is a DRM 10.4.2 "MIM Option B" rule minimum or a clearance derived
+# from one; `klt`'s curated gf180mcu DRC deck transcribes three of them
+# (MIMTM.1 -> `mim.space.1`, MIMTM.2 -> `mim.enclosing.via4.1`, MIMTM.3 ->
+# `mim.enclosing.fusetop.1`), and the rest are honoured here because the DRM
+# states them even though this deck does not yet check them -- see
+# Interconnect.mim_caps()'s docstring.
+MIM_BOTTOM_OVERLAP_UM = 0.6  # MIMTM.3: min. Metal4 bottom-plate overlap of the
+# FuseTop top plate, on every side -- a 5.0um top plate therefore needs a
+# 5.0 + 2*0.6 = 6.2um bottom plate.
+MIM_PLATE_SPACE_UM = 1.2  # MIMTM.1: min. bottom-plate spacing to adjacent
+# bottom-plate-or-routing Metal4.  Sets the row pitch (6.2 + 1.2 = 7.4um) and
+# the clearance every non-plate Metal4 shape keeps from a plate.
+MIM_TOP_VIA_ENCLOSURE_UM = 0.4  # MIMTM.5 (top plate over Via4) / MIMTM.2 (the
+# virtual bottom plate over Via4).  The Via4 is drawn at the plate centre, so
+# both enclosures come out at ~2.4/~3.0um rather than being set by this
+# number -- mim_caps() checks the drawn geometry against it instead of laying
+# out to it, so a future plate small enough to violate either rule fails the
+# generator rather than the DRC run.
+MIM_ROW_MARGIN_UM = 12.0  # bottom of the Metal4 plate row, above the whole
+# block's own northmost drawn edge (the guard ring's north stroke).  Puts the
+# row over bare substrate: DRM 10.4.2 asks that no matching-sensitive analog
+# circuitry sit under a MiM, and "nothing at all" is the strongest form of
+# that.  Also keeps the Metal3 escape lanes clear of the Metal2 rails' own
+# top edge, so the only Metal3-to-Metal2 interaction anywhere is the two
+# deliberate Via2 taps.
+MIM_TAIL_WIDTH_UM = 1.0  # Metal4 stub out of an end plate, down to its Via3.
+MIM_TAIL_DROP_UM = 0.5  # how far past the Via3 centre that stub runs.
+MIM_BRIDGE_HEIGHT_UM = 3.0  # Metal4 bridge that makes two adjacent bottom
+# plates one polygon (an interior series node -- see mim_caps()).
+MIM_BRIDGE_OVERLAP_UM = 0.1  # bridge/strap overlap into the shape it merges
+# with, so the union is one polygon rather than two abutting ones.
+MIM_STRAP_WIDTH_UM = 1.0  # Metal5 strap over two adjacent top plates' Via4s.
+MIM_STRAP_EXTEND_UM = 0.5  # how far past the outer Via4 centres it runs.
+MIM_LANE_WIDTH_UM = 0.42  # Metal3 escape route (metal3.width.1 is 0.28).
+MIM_LANE_GAP_UM = 4.0  # first Metal3 escape lane, below the plate row.
+MIM_LANE_PITCH_UM = 3.0  # spacing between the two escape lanes.
+MIM_RAIL_TAP_DROP_UM = 1.0  # Via2 tap point, below a Metal2 rail's own top.
+
 # Thick-oxide (medium-voltage) model names -- the ones that must sit inside
 # DNWELL_DRV + Dualgate and must never share a DNWELL with the 3.3V devices
 # (spec/gate-driver.md 2.4, DRM 7.2, design/level-shifter-partition.md).
@@ -211,15 +271,21 @@ LV_MODELS = {"nfet_03v3", "pfet_03v3"}
 
 # Passive (non-MOS) device model families this netlist may contain.  gf180mcu
 # spells its capacitor primitives `cap_mim_*` / `cap_nmos*` / `cap_pmos*`, and
-# they carry `c_width`/`c_length` rather than a MOSFET's `W`/`L`.  They are
-# parsed and reported, but *not* drawn: `klt gen` has no capacitor generator in
-# this repo's flow (`klt gen --list`: mos_array, diff_pair, guard_ring,
-# res_array, esd_device, bjt_array, bond_pad, resistor_strip -- none of which
-# is a MIM cap).  Issue #166 owns drawing the `XCCOMP*` stack
-# and re-running DRC/LVS; until then :func:`build` refuses to pretend the
-# generated GDS covers them -- see the warning it prints and the
-# `passives_not_drawn` block it writes into the provenance record.
+# they carry `c_width`/`c_length` rather than a MOSFET's `W`/`L`.
 PASSIVE_MODEL_PREFIXES = ("cap_",)
+
+# The one passive model this generator can *draw* (issue #166).  `klt gen` has
+# no capacitor generator in this repo's flow (`klt gen --list`: mos_array,
+# diff_pair, guard_ring, res_array, esd_device, bjt_array, bond_pad,
+# resistor_strip -- none of which is a MiM cap), so
+# :meth:`Interconnect.mim_caps` draws the plate/marker/via geometry directly
+# through `klt draw`, on exactly the layers `klt`'s own gf180mcu extraction
+# deck recognises this device on (`decks/gf180mcu.py`'s
+# `EXTRACTION_DECK.capacitors`, transcribed from the PDK's own
+# `mimcap_extraction.lvs`).  A netlist passive of any *other* model still
+# raises rather than being silently dropped -- see :func:`build`, which
+# refuses to write a GDS that does not implement its own source netlist.
+MIM_MODEL = "cap_mim_2f0_m4m5_noshield"
 
 
 class GenError(RuntimeError):
@@ -344,11 +410,12 @@ class Passive:
     whose geometry is ``c_width``/``c_length`` rather than a MOSFET's
     ``W``/``L``.
 
-    A ``Passive`` is deliberately **not** a :class:`Device`: nothing in this
-    generator draws one (see :data:`PASSIVE_MODEL_PREFIXES`), so keeping the
-    two types distinct is what stops a capacitor from being silently fed to
-    ``klt gen mos_array`` as if it were a transistor -- or, worse, silently
-    dropped, leaving a GDS that claims to implement a netlist it does not.
+    A ``Passive`` is deliberately **not** a :class:`Device`: it is drawn by
+    :meth:`Interconnect.mim_caps` (plate geometry through ``klt draw``), never
+    by ``klt gen mos_array``, so keeping the two types distinct is what stops a
+    capacitor from being fed to the MOS generator as if it were a transistor --
+    or, worse, silently dropped, leaving a GDS that claims to implement a
+    netlist it does not.
     """
 
     def __init__(
@@ -732,11 +799,21 @@ def _vbar(layer, y0: float, y1: float, x: float, width: float, name=None):
 class Interconnect:
     """Builds the ``klt draw`` request for the wiring + marker cell."""
 
-    def __init__(self, placements: list[Placement], nets: list[str]):
+    def __init__(
+        self,
+        placements: list[Placement],
+        nets: list[str],
+        passives: list["Passive"] | None = None,
+    ):
         self.placements = placements
         self.nets = nets
+        self.passives = list(passives or [])
         self.shapes: list[dict] = []
         self.labels: list[dict] = []
+        #: Provenance for the drawn MiM stack, filled in by :meth:`mim_caps`
+        #: and echoed into ``gate_driver_core.provenance.json`` -- one entry
+        #: per drawn capacitor, naming the plate rectangles it was drawn as.
+        self.mim_records: list[dict] = []
         # guard_ring()'s ring is strapped to the 3.3V group's own ground
         # rail -- this block's substrate reference, since the 3.3V devices
         # sit directly on native substrate outside every DNWELL (see that
@@ -760,6 +837,11 @@ class Interconnect:
         }
         self.rail_y0 = self.stack_bottom - 2.0
         self.rail_y1 = max(self.jumper_y.values()) + 2.0
+        #: Northmost drawn edge so far.  :meth:`guard_ring` raises it to its
+        #: own north stroke; :meth:`mim_caps` stacks the MiM row above
+        #: whatever it ends up being, so the row never lands on top of drawn
+        #: circuitry regardless of how the floorplan below it grows.
+        self.north_edge_y = self.rail_y1
 
     # -- primitives -------------------------------------------------------- #
 
@@ -1104,6 +1186,7 @@ class Interconnect:
         if self.jumper_y:
             jumper_top = max(self.jumper_y.values()) + JUMPER_WIDTH_UM / 2.0
             y1 = max(y1, jumper_top + GUARD_RING_JUMPER_CLEARANCE_UM + w)
+        self.north_edge_y = max(self.north_edge_y, y1)
         strokes = [
             (x0, y0, x1, y0 + w),  # S
             (x0, y1 - w, x1, y1),  # N
@@ -1131,6 +1214,332 @@ class Interconnect:
                 )
                 x += GUARD_RING_CONTACT_PITCH_UM
 
+    # -- MiM capacitor stack (issue #166) ---------------------------------- #
+
+    def _mim_series_chain(self) -> list[str]:
+        """Validate the netlist passives as one series chain; return its nodes.
+
+        Returns ``[n0, n1, ... nN]`` for ``N`` capacitors, where capacitor
+        ``i`` spans ``n[i]``..``n[i+1]``.  Everything this method rejects is a
+        :class:`GenError` rather than a best-effort draw: a stack drawn from a
+        misread chain would still be four legal-looking capacitors, would still
+        pass DRC, and would silently implement a different effective
+        capacitance than ``spec/decision-records/0014`` ratified.
+        """
+        passives = self.passives
+        for passive in passives:
+            if passive.model != MIM_MODEL:
+                raise GenError(
+                    f"{passive.name}: this generator can only draw "
+                    f"{MIM_MODEL} (got {passive.model}) -- gf180mcuD is a "
+                    "5-metal DRM Option-B build whose only MiM device is the "
+                    "2.0 fF/um^2 flavour on Metal4-FuseTop-Metal5"
+                )
+            if passive.multiplicity != 1:
+                raise GenError(
+                    f"{passive.name}: m={passive.multiplicity} is not drawn -- "
+                    "this generator draws one plate pair per netlist device"
+                )
+        if len(passives) % 2 != 0:
+            # An even count is what makes every interior series node land on
+            # a *shared plate* (see mim_caps()'s docstring): caps 2k/2k+1
+            # share a Metal5 strap, caps 2k+1/2k+2 share a Metal4 bottom
+            # plate, and both chain ends come out on Metal4.  An odd count
+            # would leave one end on Metal5, needing a Metal5->Metal4->Metal3
+            # escape whose Via4 would have to be kept clear of every virtual
+            # bottom plate (MIMTM.2).  That is drawable, but it is not drawn
+            # here, and guessing would be worse than refusing.
+            raise GenError(
+                f"{len(passives)} series MiM capacitor(s): this generator "
+                "draws an even-length chain only (each interior node is a "
+                "shared plate), see Interconnect.mim_caps()"
+            )
+        nodes = [passives[0].plus]
+        for passive in passives:
+            if passive.plus != nodes[-1]:
+                raise GenError(
+                    f"{passive.name}: expected its first terminal to be "
+                    f"{nodes[-1]!r} (the previous capacitor's second "
+                    f"terminal), got {passive.plus!r} -- the netlist's "
+                    f"{MIM_MODEL} devices are not one series chain"
+                )
+            nodes.append(passive.minus)
+        if len(set(nodes)) != len(nodes):
+            # A repeated node is a loop, not a series chain: shorting one
+            # capacitor out changes the effective capacitance without changing
+            # the device count, so it must never be drawn as if it were a
+            # chain.
+            raise GenError(f"series MiM chain revisits a node: {nodes}")
+        for endpoint in (nodes[0], nodes[-1]):
+            if endpoint not in self.left_rail_x:
+                raise GenError(
+                    f"series MiM chain terminates on {endpoint!r}, which has "
+                    "no drawn Metal2 rail (it is on no MOS terminal) -- there "
+                    "is nothing to escape to"
+                )
+        return nodes
+
+    def mim_caps(self) -> None:
+        """Draw the ``XCCOMP*`` MiM series stack (issue #166, decision record 0014).
+
+        ``klt gen`` ships no capacitor generator, so the plates are drawn
+        directly as ``klt draw`` rectangles -- on exactly the layers `klt`'s
+        own gf180mcu **extraction** deck recognises this device on
+        (``decks/gf180mcu.py``'s ``EXTRACTION_DECK.capacitors``, itself
+        transcribed from the PDK's ``mimcap_extraction.lvs``), so the result is
+        a real, extractable, LVS-comparable device rather than decorative
+        geometry:
+
+        ==================  =========  =====================================
+        role                layer      why
+        ==================  =========  =====================================
+        top plate           FuseTop    ``capacitors[].top_plate`` (75/0)
+        recognition marker  CAP_MK     ``top_plate_requires`` (117/5)
+        recognition marker  MIM_L_MK   ``top_plate_requires`` (117/10)
+        bottom plate        Metal4     ``bottom_plate`` (46/0) -- gf180mcuD is
+                                       a 5-metal DRM Option-B build, so
+                                       ``topmin1_metal`` *is* Metal4 and the
+                                       metal pair is fixed by the process, not
+                                       chosen here
+        top-plate contact   Via4       ``top_plate_via`` (41/0)
+        top-plate metal     Metal5     ``top_plate_via_metal`` (81/0)
+        ==================  =========  =====================================
+
+        **Series topology: every interior node is a shared plate.**  With an
+        even-length chain the capacitors alternate orientation, so no interior
+        node needs a via at all:
+
+        * capacitors ``2k`` and ``2k+1`` share one **Metal5 strap** laid over
+          both their Via4s -- that is the odd-numbered node;
+        * capacitors ``2k+1`` and ``2k+2`` share one **Metal4 polygon**, their
+          two bottom plates joined by a bridge -- that is the even-numbered
+          interior node;
+        * both chain ends therefore come out on Metal4, and escape through
+          Via3 -> Metal3 -> Via2 down to the Metal2 rail each end net already
+          has.
+
+        That is what keeps ``nccomp1``/``nccomp2``/``nccomp3`` **floating by
+        construction** rather than by inspection (the correctness risk issue
+        #166 calls out): an interior node is one metal polygon with two plate
+        terminals on it and nothing else -- no via, no strap, no tie, no
+        shield.  There is no geometry that *could* connect them to anything
+        else, so the "did we accidentally strap a floating node" question has
+        a structural answer here, not just a visual one.  The Via4s under a
+        Metal5 strap do not short it to the bottom plate either, and that is
+        the extractor's own model rather than an assumption: ``klt extract``
+        cuts each top-plate Via4's overlap with the recognised bottom plate
+        out of the generic Via4 connectivity precisely so a DRM-legal MiM
+        stack does not read as a plate-to-plate short.
+
+        **DRM 10.4.2 "MIM Option B" rules honoured** (the three `klt`'s
+        curated DRC deck transcribes are re-checked by ``layout/drc``; the
+        rest are honoured here because the DRM states them, and are recorded
+        so a future deck update finds them already satisfied):
+
+        * **MIMTM.1** (1.2 um bottom-plate spacing to adjacent bottom-plate or
+          routing Metal4) -- the row pitch is ``6.2 + 1.2``, and the only other
+          Metal4 in the design is each end plate's own escape stub, which is
+          part of that plate's own polygon.
+        * **MIMTM.2** (0.4 um virtual-bottom-plate overlap of Via4) and
+          **MIMTM.5** (0.4 um top-plate overlap of Via4) -- the Via4 sits at
+          the plate centre, ~2.4 um and ~2.9 um inside respectively.
+        * **MIMTM.3** (0.6 um bottom-plate overlap of the top plate) -- the
+          Metal4 plate is the FuseTop plate grown by exactly that on all four
+          sides.
+        * **MIMTM.8a** (25 um^2 minimum MiM area) -- comes from the netlist's
+          own ``c_width``/``c_length`` (5.0 x 5.0), asserted here rather than
+          assumed.
+        * **MIMTM.10** ("Via(n-2)", i.e. Via3 on this 5LM stack, may not touch
+          the bottom plate) -- an end plate's Via3 sits on a stub that runs
+          well clear of the *virtual* bottom plate (the DRM's own
+          ``FuseTop`` sized by 1.06 um, intersected with Metal4), not on the
+          plate itself.
+        * **10.4.2's "no matching-sensitive analog circuitry underneath"** --
+          the row is north of every other drawn shape in the block, over bare
+          substrate.
+        """
+        passives = self.passives
+        if not passives:
+            return
+        nodes = self._mim_series_chain()
+
+        top_w = passives[0].w_um
+        top_l = passives[0].l_um
+        for passive in passives:
+            if (passive.w_um, passive.l_um) != (top_w, top_l):
+                raise GenError(
+                    "series MiM capacitors must all be the same size (this "
+                    f"row is drawn on one pitch): {passive.name} is "
+                    f"{passive.w_um}x{passive.l_um}um, expected {top_w}x{top_l}um"
+                )
+            if passive.w_um * passive.l_um < 25.0:
+                raise GenError(
+                    f"{passive.name}: {passive.w_um}x{passive.l_um}um is "
+                    f"{passive.w_um * passive.l_um:g}um^2, below DRM MIMTM.8a's "
+                    "25um^2 minimum MiM area -- not a drawable device"
+                )
+
+        # MIMTM.5 / MIMTM.2: the Via4 lands at the plate centre, so both
+        # enclosures are half the smaller plate dimension minus half the via.
+        # Checked rather than laid out to -- a plate this generator could not
+        # legally contact must fail here, not at DRC time.
+        via_enclosure = (min(top_w, top_l) - VIA_SIZE_UM) / 2.0
+        if via_enclosure < MIM_TOP_VIA_ENCLOSURE_UM:
+            raise GenError(
+                f"a {top_w}x{top_l}um MiM top plate encloses its centred "
+                f"{VIA_SIZE_UM}um Via4 by only {via_enclosure:g}um, under DRM "
+                f"MIMTM.5/MIMTM.2's {MIM_TOP_VIA_ENCLOSURE_UM}um"
+            )
+
+        bottom_w = top_w + 2 * MIM_BOTTOM_OVERLAP_UM
+        bottom_l = top_l + 2 * MIM_BOTTOM_OVERLAP_UM
+        pitch = bottom_w + MIM_PLATE_SPACE_UM
+        row_x0 = 0.0  # left-aligned with the device column, like every strip
+        row_y0 = self.north_edge_y + MIM_ROW_MARGIN_UM
+        cy = row_y0 + bottom_l / 2.0
+        centre_x = [row_x0 + bottom_w / 2.0 + index * pitch for index in range(len(passives))]
+
+        half_via = VIA_SIZE_UM / 2.0
+        for index, passive in enumerate(passives):
+            cx = centre_x[index]
+            # Bottom plate (Metal4), top plate (FuseTop) and the two
+            # recognition markers the extraction deck requires the top plate
+            # to interact with.
+            self.shapes.append(
+                _rect(
+                    L_METAL4,
+                    cx - bottom_w / 2.0,
+                    cy - bottom_l / 2.0,
+                    cx + bottom_w / 2.0,
+                    cy + bottom_l / 2.0,
+                    name=f"MIM_BOTTOM_{passive.name}",
+                )
+            )
+            for layer in (L_FUSETOP, L_CAP_MK, L_MIM_L_MK):
+                self.shapes.append(
+                    _rect(
+                        layer,
+                        cx - top_w / 2.0,
+                        cy - top_l / 2.0,
+                        cx + top_w / 2.0,
+                        cy + top_l / 2.0,
+                        name=f"MIM_TOP_{passive.name}",
+                    )
+                )
+            # Top-plate contact: Via4 straight up off the FuseTop plate.
+            self.shapes.append(
+                _rect(L_VIA4, cx - half_via, cy - half_via, cx + half_via, cy + half_via)
+            )
+            # Orientation, per the shared-plate scheme in the docstring: an
+            # even-indexed capacitor takes its first terminal on the bottom
+            # plate, an odd-indexed one takes it on the top plate.
+            bottom_net, top_net = (
+                (nodes[index], nodes[index + 1])
+                if index % 2 == 0
+                else (nodes[index + 1], nodes[index])
+            )
+            self.mim_records.append(
+                {
+                    "name": passive.name,
+                    "model": passive.model,
+                    "c_width_um": passive.w_um,
+                    "c_length_um": passive.l_um,
+                    "m": passive.multiplicity,
+                    "nets": {"plus": passive.plus, "minus": passive.minus},
+                    "plates": {
+                        "bottom": {
+                            "layer": list(L_METAL4),
+                            "net": bottom_net,
+                            "rect_um": [
+                                round(cx - bottom_w / 2.0, 4),
+                                round(cy - bottom_l / 2.0, 4),
+                                round(cx + bottom_w / 2.0, 4),
+                                round(cy + bottom_l / 2.0, 4),
+                            ],
+                        },
+                        "top": {
+                            "layer": list(L_FUSETOP),
+                            "net": top_net,
+                            "rect_um": [
+                                round(cx - top_w / 2.0, 4),
+                                round(cy - top_l / 2.0, 4),
+                                round(cx + top_w / 2.0, 4),
+                                round(cy + top_l / 2.0, 4),
+                            ],
+                        },
+                    },
+                }
+            )
+
+        # Interior odd nodes: one Metal5 strap over capacitors 2k and 2k+1's
+        # Via4s.  Interior even nodes: one Metal4 bridge merging capacitors
+        # 2k+1 and 2k+2's bottom plates into a single polygon.
+        for index in range(0, len(passives) - 1, 2):
+            self.shapes.append(
+                _hbar(
+                    L_METAL5,
+                    centre_x[index] - MIM_STRAP_EXTEND_UM,
+                    centre_x[index + 1] + MIM_STRAP_EXTEND_UM,
+                    cy,
+                    MIM_STRAP_WIDTH_UM,
+                    name=nodes[index + 1],
+                )
+            )
+        for index in range(1, len(passives) - 1, 2):
+            self.shapes.append(
+                _hbar(
+                    L_METAL4,
+                    centre_x[index] + bottom_w / 2.0 - MIM_BRIDGE_OVERLAP_UM,
+                    centre_x[index + 1] - bottom_w / 2.0 + MIM_BRIDGE_OVERLAP_UM,
+                    cy,
+                    MIM_BRIDGE_HEIGHT_UM,
+                    name=nodes[index + 1],
+                )
+            )
+
+        # Chain ends: Metal4 stub -> Via3 -> Metal3 lane -> Via2 -> the rail
+        # each end net already has.  The end whose rail sits furthest left
+        # takes the *upper* lane, so its horizontal run passes above -- never
+        # through -- the other end's vertical drop.
+        ends = [(0, nodes[0]), (len(passives) - 1, nodes[-1])]
+        ends.sort(key=lambda entry: self.left_rail_x[entry[1]])
+        tap_y = self.rail_y1 - MIM_RAIL_TAP_DROP_UM
+        for lane, (index, net) in enumerate(ends):
+            lane_y = row_y0 - MIM_LANE_GAP_UM - lane * MIM_LANE_PITCH_UM
+            cx = centre_x[index]
+            rail_x = self.left_rail_x[net]
+            # Metal4 stub out of the plate's south edge, down past the Via3.
+            self.shapes.append(
+                _vbar(
+                    L_METAL4,
+                    lane_y - MIM_TAIL_DROP_UM,
+                    cy - bottom_l / 2.0 + MIM_BRIDGE_OVERLAP_UM,
+                    cx,
+                    MIM_TAIL_WIDTH_UM,
+                    name=net,
+                )
+            )
+            # Metal3 lane: across to the rail, then down the rail to the tap.
+            self.shapes.append(
+                _hbar(L_METAL3, rail_x, cx, lane_y, MIM_LANE_WIDTH_UM, name=net)
+            )
+            self.shapes.append(
+                _vbar(L_METAL3, tap_y, lane_y, rail_x, MIM_LANE_WIDTH_UM, name=net)
+            )
+            for x, y, via_layer in ((cx, lane_y, L_VIA3), (rail_x, tap_y, L_VIA2)):
+                self.shapes.append(
+                    _rect(
+                        L_METAL3,
+                        x - LANDING_UM / 2,
+                        y - LANDING_UM / 2,
+                        x + LANDING_UM / 2,
+                        y + LANDING_UM / 2,
+                    )
+                )
+                self.shapes.append(
+                    _rect(via_layer, x - half_via, y - half_via, x + half_via, y + half_via)
+                )
+
     def build(self) -> dict:
         self.rails()
         self.jumpers()
@@ -1138,6 +1547,7 @@ class Interconnect:
         self.voltage_domain_markers()
         self.body_ties()
         self.guard_ring()
+        self.mim_caps()
         # `klt draw --params` takes the *params* object itself (dbu_um /
         # shapes / labels); the CLI wraps it in the request envelope.
         return {"dbu_um": 0.001, "shapes": self.shapes, "labels": self.labels}
@@ -1208,28 +1618,26 @@ def build(out_dir: str, pdk: str) -> dict:
     os.makedirs(work_dir, exist_ok=True)
 
     top_ports, devices, passives = parse_netlist_full(NETLIST_PATH)
-    if passives:
-        # Loud on purpose: this generator draws MOS devices only, so a netlist
-        # passive means the GDS it is about to write does NOT implement the
-        # whole schematic.  Issue #166 owns drawing the `XCCOMP*` series stack
-        # plus the DRC/LVS re-run; until then the gap is reported here and
-        # recorded in the provenance file rather than being discovered at LVS
-        # time.
-        print(
-            "warning: "
-            + f"{len(passives)} passive device(s) in "
+    undrawable = [p for p in passives if p.model != MIM_MODEL]
+    if undrawable:
+        # Loud on purpose: a passive this generator cannot draw means the GDS
+        # it is about to write would NOT implement the whole schematic.  It
+        # refuses to write one rather than shipping a layout whose own
+        # provenance has to disclaim it (which is what the pre-#166
+        # `passives_not_drawn` block did).
+        raise GenError(
+            f"{len(undrawable)} passive device(s) in "
             + os.path.relpath(NETLIST_PATH, REPO_ROOT)
-            + " are NOT drawn by this generator: "
-            + ", ".join(f"{p.name} ({p.model})" for p in passives)
-            + " -- the generated layout is incomplete with respect to the "
-            + "netlist until issue #166 lands",
-            file=sys.stderr,
+            + " cannot be drawn by this generator: "
+            + ", ".join(f"{p.name} ({p.model})" for p in undrawable)
+            + f" -- only {MIM_MODEL} is drawable (Interconnect.mim_caps)"
         )
     reports = generate_device_cells(devices, work_dir, pdk)
     placements = place_devices(devices, reports)
 
     nets = sorted({n for d in devices for n in (d.d, d.g, d.s)})
-    interconnect_request = Interconnect(placements, nets).build()
+    interconnect = Interconnect(placements, nets, passives)
+    interconnect_request = interconnect.build()
     request_path = os.path.join(work_dir, "draw-request.json")
     with open(request_path, "w", encoding="utf-8") as handle:
         json.dump(interconnect_request, handle, indent=1)
@@ -1271,10 +1679,17 @@ def build(out_dir: str, pdk: str) -> dict:
             "top_ports": top_ports,
             "device_count": len(devices),
             "transistor_count": sum(d.fingers for d in devices),
-            # Netlist devices this generator does not draw (issue #166). An
-            # empty list is the "layout covers the whole netlist" statement;
-            # a non-empty one records exactly what the GDS is missing.
-            "passives_not_drawn": [p.as_dict() for p in passives],
+            "passive_count": len(passives),
+            # Netlist devices this generator does not draw. An empty list is
+            # the "layout covers the whole netlist" statement; it has been
+            # empty since issue #166 drew the `XCCOMP*` MiM stack, and
+            # `build()` now refuses to write a GDS that would make it
+            # non-empty rather than shipping a disclaimed layout.
+            "passives_not_drawn": [],
+            # The drawn MiM stack, one entry per netlist capacitor, naming the
+            # plate rectangle and the series node each terminal landed on
+            # (issue #166 / spec/decision-records/0014).
+            "passives_drawn": interconnect.mim_records,
         },
         "generator": {
             "path": os.path.relpath(os.path.abspath(__file__), REPO_ROOT),
@@ -1360,7 +1775,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     print(f"netlist devs : {len(result['devices'])}")
     print(f"transistors  : {sum(d.fingers for d in result['devices'])}")
-    print(f"not drawn    : {len(result['passives'])} passive(s) (see issue #166)")
+    print(
+        f"passives     : {len(result['passives'])} MiM cap(s) drawn "
+        f"({', '.join(p.name for p in result['passives']) or 'none'})"
+    )
     return 0
 
 

@@ -18,7 +18,7 @@
       "content_hash": "sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3"
     },
     "input": {
-      "content_hash": "sha256:70ca45b75109e913f93ca759da9bac866f9bfd05025f05e4a4614f97fe49066b"
+      "content_hash": "sha256:0656ab4c377c3bb1643d867842ff04488a3d9a0a452aa8da7c7a7f990fa3a564"
     }
   },
   "passed": true,
@@ -30,13 +30,51 @@
       "expected_transistors": 959,
       "extracted_transistors": 959,
       "extracted_device_counts": {
+        "cap_mim_2f0_m4m5_noshield": 4,
         "nfet": 299,
         "pfet": 660
       },
-      "extracted_net_count": 17,
+      "extracted_net_count": 20,
       "extracted_netlist": "layout/gate_driver_core.extracted.spice",
       "missing": [],
       "unexpected": []
+    },
+    {
+      "name": "mim_stack",
+      "passed": true,
+      "schematic_capacitors": 4,
+      "extracted_capacitors": 4,
+      "models": [
+        "cap_mim_2f0_m4m5_noshield"
+      ],
+      "chain": [
+        "x1_ncb",
+        "$18",
+        "$19",
+        "$20",
+        "IN_DRV"
+      ],
+      "interior_nodes": [
+        {
+          "net": "$18",
+          "capacitor_terminals": 2,
+          "on_transistor": false,
+          "is_pin": false
+        },
+        {
+          "net": "$19",
+          "capacitor_terminals": 2,
+          "on_transistor": false,
+          "is_pin": false
+        },
+        {
+          "net": "$20",
+          "capacitor_terminals": 2,
+          "on_transistor": false,
+          "is_pin": false
+        }
+      ],
+      "failures": []
     },
     {
       "name": "dnwell_partition",

@@ -2,12 +2,17 @@
 *
 * Produced by layout/lvs/make_reference.py from
 * design/netlist/gate_driver_core.spice via
-* layout/gen_gate_driver_core.py's own parse_netlist(), applying the five
-* mechanical transforms documented in that script's module docstring.
+* layout/gen_gate_driver_core.py's own parse_netlist_full(), applying the
+* six mechanical transforms documented in that script's module docstring.
 *
 * MOS devices: 299 nfet + 660 pfet (24 schematic instances, expanded to drawn finger count)
+* MiM caps  : 4 (4 schematic instances, 1:1 -- one drawn plate pair each)
 
 .SUBCKT gate_driver_core GND_DRV|GND_LOGIC IN IN_DRV OUT VDD_DRV VDD_LOGIC x1_inb x1_na x1_nb x1_nbuf1 x1_nca x1_ncb x2_n1 x2_n2 x2_n3 x2_n4 x2_n5
+Cx1_XCCOMP1 x1_ncb x1_nccomp1 cap_mim_2f0_m4m5_noshield C=5.4516e-14
+Cx1_XCCOMP2 x1_nccomp1 x1_nccomp2 cap_mim_2f0_m4m5_noshield C=5.4516e-14
+Cx1_XCCOMP3 x1_nccomp2 x1_nccomp3 cap_mim_2f0_m4m5_noshield C=5.4516e-14
+Cx1_XCCOMP4 x1_nccomp3 IN_DRV cap_mim_2f0_m4m5_noshield C=5.4516e-14
 Mx1_XMNBUF1_0 x1_nbuf1 x1_ncb GND_DRV|GND_LOGIC GND_DRV|GND_LOGIC nfet L=0.7U W=5U
 Mx1_XMNBUF2_0 IN_DRV x1_nbuf1 GND_DRV|GND_LOGIC GND_DRV|GND_LOGIC nfet L=0.7U W=15U
 Mx1_XMNCASA_0 x1_nca VDD_LOGIC x1_na GND_DRV|GND_LOGIC nfet L=0.7U W=20U
