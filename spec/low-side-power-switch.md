@@ -387,6 +387,14 @@ Items 1–6 are the input to
 test-structure plan. Per `CLAUDE.md` ("no claim without a testbench"), they
 are open questions, not soft targets.
 
+That plan is now ratified: [decision record
+0012](decision-records/0012-low-side-power-switch-shuttle-test-structure-plan.md)
+sizes a single reduced-scale reference channel plus the three flyback
+variants for a wafer.space GF180MCU quarter slot, maps each structure to
+which of items 1–6 above it retires (fully, partially, or not at all this
+round), and states plainly that items 2 (UVLO threshold), and the unretired
+halves of items 4 and 5, stay open after this shuttle round.
+
 ## 7. Relationship to `spec/gate-driver.md`
 
 `gate-driver.md` is **unchanged** by this document, and this document does

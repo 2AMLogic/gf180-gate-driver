@@ -57,3 +57,16 @@ Ratified specs and decision records for this block.
     `diode_pd2nw_06v0` clamp (≥ 10⁴ µm²/A), rejecting the implicit
     high-side-PMOS body diode and the synchronous PMOS. Extends
     `low-side-power-switch.md` §5.
+  - [`decision-records/0012-low-side-power-switch-shuttle-test-structure-plan.md`](decision-records/0012-low-side-power-switch-shuttle-test-structure-plan.md)
+    — ratified 2026-08-18: a shuttle test-structure plan for facet (b) on a
+    wafer.space GF180MCU quarter slot (1.73 mm² core, 56 pads) — a single
+    reduced-scale (`W` = 1 mm) reference channel with per-channel OCP and
+    thermal-sense reference structures and dedicated trip-point probe
+    access, plus all three §5.2 flyback variants as two structures (the
+    channel's own embedded diode, and one shared `pfet_06v0` structure that
+    measures the body-diode and synchronous-PMOS options via its gate bias).
+    Maps each structure to which of `low-side-power-switch.md` §6's six open
+    items it retires, states which stay open, and is explicit about what a
+    single-lot shuttle sample can and cannot confirm against the ratified
+    PVT grid. Plan only — schematic, layout, and DRC/LVS closure are a
+    follow-on issue.
