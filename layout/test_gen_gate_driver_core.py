@@ -8,7 +8,7 @@ everything under test here is pure arithmetic over a netlist or over an already
 captured `klt` response, so this suite runs on a bare runner (the `test` job in
 ``.github/workflows/ci.yml``) with nothing but ``python3``.
 
-Two things are pinned here, for two different reasons:
+Three things are pinned here, for three different reasons:
 
 * the **netlist interpretation** in ``gen_gate_driver_core.py`` (issue #129) --
   see below;
@@ -18,7 +18,14 @@ Two things are pinned here, for two different reasons:
   ``GND_DRV`` in the drawn interconnect, and its failing directions cannot be
   produced from the committed (correct) GDS, so they are exercised against
   synthetic ``klt components`` responses instead.  That function is pure by
-  design precisely so this suite can reach it.
+  design precisely so this suite can reach it;
+* the **MiM stack verdict** in ``check_gate_driver_core.py`` (issue #166) --
+  ``mim_stack_verdict()`` is what states, mechanically, that the compensation
+  stack's interior nodes are genuinely floating and that the four capacitors
+  are in *series* rather than merely present.  Same argument as above: every
+  one of its failing directions is unreachable from the committed GDS, so they
+  are exercised from synthetic extraction facts, and the function is pure so
+  they can be.
 
 Why this file exists (issue #129)
 ---------------------------------
@@ -64,17 +71,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from check_gate_driver_core import (  # noqa: E402  (path set above)
     ground_rail_isolation_verdict,
+    mim_stack_verdict,
     routed_nets,
 )
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     NETLIST_PATH,
     Device,
     GenError,
+    Interconnect,
     Passive,
     _device_from_tokens,
     parse_netlist,
     parse_netlist_full,
 )
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lvs"))
+
+from make_reference import mim_capacitance_f  # noqa: E402  (path set above)
 
 
 def _device_line(params: str) -> list[str]:
@@ -214,13 +227,13 @@ class PassiveDeviceTest(unittest.TestCase):
     since a parser that silently dropped one link would leave a plausible but
     wrong effective capacitance.
 
-    The capacitors are deliberately *not* drawn by the generator (``klt gen``
-    has no capacitor generator) -- issue #166 owns drawing them and re-running
-    DRC/LVS, and decision record 0014 re-scopes it from one ``cap_mim_1f0_*``
-    to these four. What this suite pins is that the skip is explicit and
-    visible: each passive appears in ``parse_netlist_full``'s third return
-    value, so ``build()`` can warn and record it, and never in the MOS device
-    list the layout is generated from.
+    Issue #166 then drew them: ``klt gen`` still has no capacitor generator,
+    so ``Interconnect.mim_caps()`` draws the plate/marker/via geometry through
+    ``klt draw`` instead.  What this suite pins is the *parsing* half of that
+    handoff -- each capacitor appears in ``parse_netlist_full``'s third return
+    value (a :class:`Passive`, never a :class:`Device`), which is what keeps
+    it out of ``klt gen mos_array``'s hands and gives ``mim_caps()`` the chain
+    it draws from.
     """
 
     CAP_LINE = "XCCOMP1 ncb nccomp1 cap_mim_2f0_m4m5_noshield c_width=5.0u c_length=5.0u m=1"
@@ -249,7 +262,7 @@ class PassiveDeviceTest(unittest.TestCase):
         self.assertEqual(passive.plus, "x1_nccomp3")
         self.assertEqual(passive.minus, "IN_DRV")
 
-    def test_committed_netlist_has_four_undrawn_passives_in_series(self):
+    def test_committed_netlist_has_four_passives_in_series(self):
         _ports, devices, passives = parse_netlist_full(NETLIST_PATH)
         self.assertEqual(len(devices), 24)
         self.assertEqual(
@@ -417,6 +430,235 @@ class GroundRailIsolationVerdictTest(unittest.TestCase):
         self.assertEqual(nets, sorted(set(nets)))
         for ground in ("GND_LOGIC", "GND_DRV"):
             self.assertIn(ground, nets)
+
+
+class MimStackVerdictTest(unittest.TestCase):
+    """``check_gate_driver_core.mim_stack_verdict`` rules correctly (issue #166).
+
+    The compensation stack's three interior nodes (``nccomp1``..``3``) are
+    floating plate-to-plate nets with no DC path.  A stray strap, tie or
+    shield on one of them changes the effective series capacitance without
+    necessarily failing anything else: DRC rules on geometry, and LVS compares
+    against a reference built from the same netlist.  ``mim_stack_verdict()``
+    is what states the property mechanically -- so, exactly like the
+    ground-rail verdict above, its *failing* directions have to be pinned even
+    though the committed GDS cannot produce them.
+
+    The function is pure (extraction facts in, check record out), so this
+    stays PDK-free and klt-free.
+    """
+
+    CHAIN = ["x1_ncb", "x1_nccomp1", "x1_nccomp2", "x1_nccomp3", "IN_DRV"]
+    #: The three interior nodes as `klt extract` actually reports them: the
+    #: layout labels none of them, so they come back as generated names.
+    ANON = ["$18", "$19", "$20"]
+
+    def _passives(self):
+        return [
+            Passive(
+                name=f"x1_XCCOMP{index + 1}",
+                model="cap_mim_2f0_m4m5_noshield",
+                w_um=5.0,
+                l_um=5.0,
+                multiplicity=1,
+                plus=self.CHAIN[index],
+                minus=self.CHAIN[index + 1],
+            )
+            for index in range(4)
+        ]
+
+    @staticmethod
+    def _cap(name, a, b, width="5U", length="5U"):
+        return {
+            "name": name,
+            "model": "cap_mim_2f0_m4m5_noshield",
+            "a": a,
+            "b": b,
+            "params": {"c_width": width, "c_length": length},
+        }
+
+    def _series(self):
+        """The shape the committed GDS actually has: a 4-deep series chain."""
+        nodes = ["x1_ncb", *self.ANON, "IN_DRV"]
+        return [
+            self._cap(f"X$96{index}", nodes[index], nodes[index + 1])
+            for index in range(4)
+        ]
+
+    PINS = ["x1_ncb", "IN_DRV", "OUT"]
+    MOS_NETS = {"x1_ncb", "IN_DRV", "OUT", "VDD_DRV"}
+
+    def _verdict(self, capacitors, mos_nets=None, pins=None):
+        return mim_stack_verdict(
+            capacitors,
+            self.MOS_NETS if mos_nets is None else mos_nets,
+            self.PINS if pins is None else pins,
+            self._passives(),
+        )
+
+    def test_series_chain_passes(self):
+        verdict = self._verdict(self._series())
+        self.assertTrue(verdict["passed"], verdict["failures"])
+        self.assertEqual(verdict["chain"], ["x1_ncb", *self.ANON, "IN_DRV"])
+        self.assertEqual(
+            [node["capacitor_terminals"] for node in verdict["interior_nodes"]],
+            [2, 2, 2],
+        )
+
+    def test_missing_capacitor_fails(self):
+        verdict = self._verdict(self._series()[:3])
+        self.assertFalse(verdict["passed"])
+        self.assertIn("3 capacitor(s) extracted", " ".join(verdict["failures"]))
+
+    def test_parallel_stack_fails_despite_the_right_device_count(self):
+        """Four caps between the same two nodes: same count, wrong topology."""
+        verdict = self._verdict(
+            [self._cap(f"X$96{index}", "x1_ncb", "IN_DRV") for index in range(4)]
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertIn("unvisited capacitor", " ".join(verdict["failures"]))
+
+    def test_interior_node_tied_to_a_transistor_fails(self):
+        """The primary correctness risk: a floating node that is not floating."""
+        verdict = self._verdict(
+            self._series(), mos_nets=self.MOS_NETS | {self.ANON[1]}
+        )
+        self.assertFalse(verdict["passed"])
+        joined = " ".join(verdict["failures"])
+        self.assertIn(self.ANON[1], joined)
+        self.assertIn("not floating", joined)
+
+    def test_interior_node_promoted_to_a_pin_fails(self):
+        """A label (or a real connection) on a plate-to-plate node."""
+        verdict = self._verdict(self._series(), pins=[*self.PINS, self.ANON[0]])
+        self.assertFalse(verdict["passed"])
+        self.assertIn("top-level pin", " ".join(verdict["failures"]))
+
+    def test_wrong_plate_geometry_fails(self):
+        """A plate drawn at the pre-#192 size would still extract and still be
+        wrong -- 3.0 x 3.0 um is 9 um^2, under DRM MIMTM.8a's 25 um^2 floor."""
+        capacitors = self._series()
+        capacitors[2] = self._cap(
+            capacitors[2]["name"],
+            capacitors[2]["a"],
+            capacitors[2]["b"],
+            width="3U",
+            length="3U",
+        )
+        verdict = self._verdict(capacitors)
+        self.assertFalse(verdict["passed"])
+        self.assertIn("which no schematic capacitor asks for", " ".join(verdict["failures"]))
+
+
+class MimSeriesChainDrawTest(unittest.TestCase):
+    """``Interconnect._mim_series_chain`` refuses to draw a chain it misread.
+
+    ``mim_caps()``'s whole scheme -- every interior series node is a *shared
+    plate*, so it cannot be strapped to anything -- only holds if the passives
+    really are one even-length series chain.  Drawing from a misread chain
+    would produce four legal-looking, DRC-clean capacitors implementing a
+    different effective capacitance than spec/decision-records/0014 ratified,
+    so each way of misreading it raises instead.
+    """
+
+    @staticmethod
+    def _cap(name, plus, minus, model="cap_mim_2f0_m4m5_noshield", m=1):
+        return Passive(
+            name=name, model=model, w_um=5.0, l_um=5.0, multiplicity=m,
+            plus=plus, minus=minus,
+        )
+
+    def _interconnect(self, passives):
+        """An ``Interconnect`` with only the two attributes the chain check reads."""
+        obj = Interconnect.__new__(Interconnect)
+        obj.passives = passives
+        obj.left_rail_x = {"a": -6.0, "e": -7.6}
+        return obj
+
+    def _chain(self, passives):
+        return Interconnect._mim_series_chain(self._interconnect(passives))
+
+    def test_valid_chain_returns_its_nodes(self):
+        nodes = self._chain(
+            [
+                self._cap("C1", "a", "b"),
+                self._cap("C2", "b", "c"),
+                self._cap("C3", "c", "d"),
+                self._cap("C4", "d", "e"),
+            ]
+        )
+        self.assertEqual(nodes, ["a", "b", "c", "d", "e"])
+
+    def test_broken_link_raises(self):
+        with self.assertRaises(GenError):
+            self._chain(
+                [
+                    self._cap("C1", "a", "b"),
+                    self._cap("C2", "x", "c"),
+                    self._cap("C3", "c", "d"),
+                    self._cap("C4", "d", "e"),
+                ]
+            )
+
+    def test_loop_raises(self):
+        with self.assertRaises(GenError):
+            self._chain(
+                [
+                    self._cap("C1", "a", "b"),
+                    self._cap("C2", "b", "a"),
+                    self._cap("C3", "a", "b"),
+                    self._cap("C4", "b", "e"),
+                ]
+            )
+
+    def test_odd_length_chain_raises(self):
+        # Odd counts would leave one chain end on Metal5, which mim_caps()
+        # does not draw an escape for -- it refuses rather than guessing.
+        with self.assertRaises(GenError):
+            self._chain([self._cap("C1", "a", "b"), self._cap("C2", "b", "e")][:1])
+
+    def test_unknown_model_raises(self):
+        with self.assertRaises(GenError):
+            self._chain(
+                [
+                    self._cap("C1", "a", "b", model="cap_mim_1f0_m4m5_noshield"),
+                    self._cap("C2", "b", "e"),
+                ]
+            )
+
+    def test_endpoint_without_a_rail_raises(self):
+        with self.assertRaises(GenError):
+            self._chain([self._cap("C1", "a", "b"), self._cap("C2", "b", "nowhere")])
+
+
+class MimReferenceCapacitanceTest(unittest.TestCase):
+    """``make_reference.mim_capacitance_f`` restates the deck's two-term model.
+
+    The LVS reference has to carry the *same* capacitance `klt extract`
+    measures, because ``kdb.NetlistComparer`` compares a matched pair's
+    parameters directly -- but it must get there by deriving from the
+    schematic's own geometry, not by copying an extracted number back (which
+    would make the compare circular).  These are hand-computed from the two
+    published coefficients.
+    """
+
+    def test_five_by_five_plate(self):
+        # 1.99e-15 F/um^2 * 25 um^2 + 2.383e-16 F/um * 20 um
+        #   = 4.975e-14 + 4.766e-15 = 5.4516e-14 F
+        self.assertAlmostEqual(
+            mim_capacitance_f(5.0, 5.0), 5.4516e-14, delta=1e-19
+        )
+
+    def test_area_and_perimeter_terms_are_both_present(self):
+        """A one-term (area-only) model would give 4.975e-14 -- 8.7% low."""
+        self.assertGreater(mim_capacitance_f(5.0, 5.0), 1.99e-15 * 25.0)
+
+    def test_committed_stack_is_about_twelve_femtofarads_in_series(self):
+        """Four of these in series is decision record 0014's ~12-14 fF target."""
+        single = mim_capacitance_f(5.0, 5.0)
+        series = single / 4.0
+        self.assertGreater(series, 12e-15)
+        self.assertLess(series, 14e-15)
 
 
 if __name__ == "__main__":

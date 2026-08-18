@@ -11,6 +11,12 @@ appear, generic ``nfet``/``pfet`` device-class tokens) so a change to the
 flattening/body-retargeting logic that would silently break the committed
 ``status: match`` LVS evidence is caught here first, without needing
 `klt`/the PDK to run this test.
+
+Since issue #166 that also covers the ``XCCOMP*`` MiM stack (transform 6): the
+C-card spelling that names a device class rather than inventing a third
+terminal, the deck's own two-term capacitance value, the series node order,
+and the fact that the stack's three interior nodes stay internal rather than
+being promoted to pins.
 """
 
 from __future__ import annotations
@@ -30,9 +36,11 @@ class MakeReferenceTest(unittest.TestCase):
         self.text, self.info = make_reference.build_reference()
 
     def test_device_and_finger_counts_match_layout_provenance(self) -> None:
-        # gate_driver_core.provenance.json: 24 netlist devices, 959 transistors.
+        # gate_driver_core.provenance.json: 24 netlist devices, 959 transistors,
+        # plus the four-deep MiM compensation stack (issue #166).
         self.assertEqual(self.info["devices"], 24)
-        self.assertEqual(self.info["counts"], {"nfet": 299, "pfet": 660})
+        self.assertEqual(self.info["passives"], 4)
+        self.assertEqual(self.info["counts"], {"nfet": 299, "pfet": 660, "cap": 4})
 
     def test_nfet_bodies_all_tie_to_the_merged_ground_net(self) -> None:
         """Every extracted NMOS body compares against the one merged ground.
@@ -151,6 +159,74 @@ class MakeReferenceTest(unittest.TestCase):
         self.assertEqual(len(device_lines), 959)
         for line in device_lines:
             self.assertRegex(line, pattern)
+
+    # -- transform 6: the MiM compensation stack (issue #166) --------------- #
+
+    def _cap_lines(self) -> list[str]:
+        return [line for line in self.text.splitlines() if line.startswith("C")]
+
+    def test_capacitor_cards_name_the_extraction_decks_own_device_class(self) -> None:
+        """``C<name> <a> <b> <model> C=<value>`` -- the one spelling that works.
+
+        ``NetlistSpiceReader`` reads ``C1 a b model value`` as a *three*-
+        terminal capacitor-with-bulk (taking the model token for a third net)
+        and ``C1 a b value`` as the generic ``CAP`` class; only the explicit
+        ``C=`` form names a device class the layout side's own
+        ``cap_mim_2f0_m4m5_noshield`` can pair with. Pinned here because the
+        failure mode is silent -- both wrong spellings parse.
+        """
+        pattern = re.compile(
+            r"^C\S+ \S+ \S+ cap_mim_2f0_m4m5_noshield C=[\d.e+-]+$"
+        )
+        lines = self._cap_lines()
+        self.assertEqual(len(lines), 4)
+        for line in lines:
+            self.assertRegex(line, pattern)
+
+    def test_capacitor_value_is_the_decks_two_term_mim_model(self) -> None:
+        """5.4516e-14 F -- ``1.99e-15 * 25 + 2.383e-16 * 20``, hand-computed.
+
+        ``kdb.NetlistComparer`` compares a matched device pair's parameters
+        directly, so an area-only (one-term) value here would report a
+        ``device.property`` mismatch on all four capacitors even though the
+        layout is right.
+        """
+        for line in self._cap_lines():
+            value = float(line.split("C=")[1])
+            self.assertAlmostEqual(value, 5.4516e-14, delta=1e-19)
+
+    def test_capacitor_chain_is_series_end_to_end(self) -> None:
+        """x1_ncb -> nccomp1 -> nccomp2 -> nccomp3 -> IN_DRV, in that order.
+
+        A parallel (or partly shorted) stack would have the same four cards
+        and the same four values, and only the node sequence tells them apart
+        -- the same property ``check_gate_driver_core``'s ``mim_stack`` check
+        asserts on the *extracted* side.
+        """
+        by_name = {line.split()[0]: line.split()[1:3] for line in self._cap_lines()}
+        self.assertEqual(
+            [by_name[f"Cx1_XCCOMP{index}"] for index in range(1, 5)],
+            [
+                ["x1_ncb", "x1_nccomp1"],
+                ["x1_nccomp1", "x1_nccomp2"],
+                ["x1_nccomp2", "x1_nccomp3"],
+                ["x1_nccomp3", "IN_DRV"],
+            ],
+        )
+
+    def test_interior_series_nodes_are_not_pins(self) -> None:
+        """The stack's floating nodes stay internal on both sides of the compare.
+
+        The layout labels none of them (they are plate-to-plate metal with no
+        via on it at all), so `klt extract` leaves them unnamed and internal;
+        promoting them here would leave the reference with 20 pins against the
+        layout's 17.
+        """
+        header = next(line for line in self.text.splitlines() if line.startswith(".SUBCKT"))
+        pins = header.split()[2:]
+        for node in ("x1_nccomp1", "x1_nccomp2", "x1_nccomp3"):
+            self.assertNotIn(node, pins)
+            self.assertIn(node, self.info["nets"])
 
 
 if __name__ == "__main__":

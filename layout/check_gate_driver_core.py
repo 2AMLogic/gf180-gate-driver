@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check ``layout/gate_driver_core.gds`` against its source schematic netlist.
 
-Four checks, all run against the *committed* GDS through `klt` -- none of
+Five checks, all run against the *committed* GDS through `klt` -- none of
 them reads the generator's internal state, so this is an independent audit of
 the stream, not a replay of how it was built:
 
@@ -21,6 +21,25 @@ the stream, not a replay of how it was built:
     against that interpretation but cannot audit the interpretation itself.
     ``layout/test_gen_gate_driver_core.py`` is the independent half of that
     (issue #129).
+
+``mim_stack``
+    The same ``klt extract`` output, read for the ``XCCOMP*`` MiM capacitors
+    the level shifter's compensation stack is built from (issue #166,
+    spec/decision-records/0014).  Asserts the count, each device's *extracted*
+    ``c_width``/``c_length`` against the schematic's, and -- the part DRC and
+    LVS between them do not fully cover -- that the stack's interior nodes are
+    genuinely **floating**: each one must touch exactly two capacitor
+    terminals, no transistor terminal, and no top-level pin.
+
+    That last ruling is the one this check exists for.  A stray strap, tie or
+    shield on ``nccomp1``/``nccomp2``/``nccomp3`` changes the effective series
+    capacitance, and neither verdict next door would necessarily catch it:
+    DRC rules on geometry, not on intent, and LVS compares against a reference
+    derived from the same netlist -- a *short* would show up there, but a
+    connection to an otherwise-unused node, or a plate tied to something the
+    reference also happens to model, need not.  Stating the floating property
+    as its own mechanical assertion is cheaper than re-deriving it by eye
+    every time the layout is regenerated.
 
 ``dnwell_partition``
     ``klt components`` with ``DNWELL`` (12/0) declared both as a conductor and
@@ -110,9 +129,10 @@ from gen_gate_driver_core import (  # noqa: E402  (path set above)
     TOP_CELL,
     Device,
     GenError,
+    Passive,
     _klt,
     _spice_number,
-    parse_netlist,
+    parse_netlist_full,
 )
 
 L_DNWELL = (12, 0)
@@ -175,14 +195,8 @@ def expected_devices(devices: list[Device]) -> collections.Counter:
     return expected
 
 
-def extracted_devices(spice_path: str) -> collections.Counter:
-    """Multiset of transistors ``klt extract`` found in the layout.
-
-    KLayout writes a 4-terminal MOS as ``X<id> <t1> <gate> <t3> <bulk>
-    <model>``; ``t1``/``t3`` are the drain/source pair, whose order is not
-    meaningful for a symmetric MOS (a folded device alternates them finger to
-    finger), so they are compared as an unordered pair.
-    """
+def _extracted_lines(spice_path: str) -> list[str]:
+    """``spice_path``'s logical lines: ``+`` continuations joined, comments cut."""
     lines: list[str] = []
     with open(spice_path, encoding="utf-8") as handle:
         for raw in handle:
@@ -194,6 +208,18 @@ def extracted_devices(spice_path: str) -> collections.Counter:
                     lines[-1] += " " + stripped[1:].strip()
                 continue
             lines.append(stripped)
+    return lines
+
+
+def extracted_devices(spice_path: str) -> collections.Counter:
+    """Multiset of transistors ``klt extract`` found in the layout.
+
+    KLayout writes a 4-terminal MOS as ``X<id> <t1> <gate> <t3> <bulk>
+    <model>``; ``t1``/``t3`` are the drain/source pair, whose order is not
+    meaningful for a symmetric MOS (a folded device alternates them finger to
+    finger), so they are compared as an unordered pair.
+    """
+    lines = _extracted_lines(spice_path)
 
     found: collections.Counter = collections.Counter()
     for line in lines:
@@ -223,6 +249,215 @@ def extracted_devices(spice_path: str) -> collections.Counter:
 def _describe(key: tuple) -> str:
     flavor, w_um, l_um, gate, ds = key
     return f"{flavor} W={w_um}u L={l_um}u g={gate} d/s={{{', '.join(sorted(ds))}}}"
+
+
+def _clean_net(token: str) -> str:
+    """One extracted terminal token as a plain net name.
+
+    KLayout's SPICE writer escapes a generated (unlabeled) net's name with a
+    backslash -- ``\\$18`` -- and joins two labels on one net with ``|``. The
+    backslash is escaping, not part of the name; the merge is normalized by
+    :func:`_canon_net` like everywhere else in this module.
+    """
+    return _canon_net(token.replace("\\", ""))
+
+
+def extracted_capacitors(spice_path: str) -> list[dict]:
+    """Every extracted capacitor: ``{name, model, a, b, params}``, in file order.
+
+    ``klt extract --pdk`` writes a two-terminal PDK device as
+    ``X<id> <t1> <t2> <model> <param>=<value> ...``, so a MiM capacitor comes
+    back carrying the *same* ``c_width``/``c_length`` parameter names the
+    schematic states it with -- which is what makes a per-device geometry
+    comparison possible here rather than only a count.
+    """
+    found: list[dict] = []
+    for line in _extracted_lines(spice_path):
+        if not line.upper().startswith("X"):
+            continue
+        tokens = line.split()
+        if len(tokens) < 4:
+            continue
+        param_start = next(
+            (i for i, token in enumerate(tokens) if "=" in token), len(tokens)
+        )
+        model = tokens[param_start - 1]
+        if not model.startswith("cap_"):
+            continue
+        terminals = tokens[1 : param_start - 1]
+        if len(terminals) != 2:
+            continue
+        found.append(
+            {
+                "name": tokens[0],
+                "model": model,
+                "a": _clean_net(terminals[0]),
+                "b": _clean_net(terminals[1]),
+                "params": dict(_PARAM_RE.findall(" ".join(tokens[param_start:]))),
+            }
+        )
+    return found
+
+
+def extracted_mos_nets(spice_path: str) -> set[str]:
+    """Every net any extracted *transistor* terminal lands on."""
+    nets: set[str] = set()
+    for line in _extracted_lines(spice_path):
+        if not line.upper().startswith("X"):
+            continue
+        tokens = line.split()
+        if len(tokens) < 6:
+            continue
+        model = tokens[5]
+        if not (model.startswith("nfet") or model.startswith("pfet")):
+            continue
+        nets.update(_clean_net(token) for token in tokens[1:5])
+    return nets
+
+
+def extracted_pins(spice_path: str) -> list[str]:
+    """The extracted top cell's own pin list, off its ``.SUBCKT`` header."""
+    for line in _extracted_lines(spice_path):
+        if line.lower().startswith(".subckt "):
+            return [_clean_net(token) for token in line.split()[2:]]
+    return []
+
+
+def mim_stack_verdict(
+    capacitors: list[dict],
+    mos_nets: set[str],
+    pins: list[str],
+    passives: list[Passive],
+) -> dict:
+    """Rule on the extracted MiM stack: right devices, genuinely floating nodes.
+
+    Pure (extraction facts in, check record out) for the same reason
+    :func:`ground_rail_isolation_verdict` is -- its *failing* directions
+    cannot be produced from the committed, correct GDS, so they are exercised
+    from synthetic inputs in ``layout/test_gen_gate_driver_core.py`` on this
+    repo's PDK-free CI runner.
+
+    Four rulings:
+
+    1. **Count and model.** One extracted capacitor per schematic capacitor,
+       all of the model the schematic names.
+    2. **Geometry, device by device.** Each extracted ``c_width``/
+       ``c_length`` equals the schematic's -- the DRM MIMTM.8a minimum
+       5.0 x 5.0 um that spec/decision-records/0014 ratified, read back off
+       the drawn plates rather than assumed from the generator's intent.
+    3. **Series topology.** Walking from the schematic chain's first node
+       must traverse every capacitor exactly once and arrive at its last
+       node.  A stack wired in parallel, or with one link shorted out, has
+       the same device count and the same plate geometry -- only the walk
+       tells them apart.
+    4. **Interior nodes are floating.** Every node the walk passes through
+       must touch exactly two capacitor terminals, no transistor terminal,
+       and no top-level pin.  This is the ruling the issue calls the primary
+       correctness risk: a stray strap, tie or shield there silently changes
+       the effective series capacitance.
+    """
+    failures: list[str] = []
+    models = sorted({cap["model"] for cap in capacitors})
+    expected_models = sorted({p.model for p in passives})
+    if len(capacitors) != len(passives):
+        failures.append(
+            f"{len(capacitors)} capacitor(s) extracted, expected {len(passives)}"
+        )
+    if models != expected_models:
+        failures.append(
+            f"extracted capacitor model(s) {models}, expected {expected_models}"
+        )
+
+    for cap in capacitors:
+        try:
+            width = _spice_number(cap["params"]["c_width"]) * 1e6
+            length = _spice_number(cap["params"]["c_length"]) * 1e6
+        except (KeyError, GenError):
+            failures.append(
+                f"extracted capacitor {cap['name']} carries no readable "
+                f"c_width/c_length ({cap['params']})"
+            )
+            continue
+        if not any(
+            round(width, 3) == round(p.w_um, 3) and round(length, 3) == round(p.l_um, 3)
+            for p in passives
+        ):
+            failures.append(
+                f"extracted capacitor {cap['name']} is {width}x{length}um, "
+                "which no schematic capacitor asks for"
+            )
+
+    # Rulings 3 and 4: walk the chain the schematic states, over the graph the
+    # extraction reports.
+    chain: list[str] = []
+    interior: list[dict] = []
+    if passives and len(capacitors) == len(passives):
+        start = _canon_net(passives[0].plus)
+        end = _canon_net(passives[-1].minus)
+        incident: dict[str, list[dict]] = collections.defaultdict(list)
+        for cap in capacitors:
+            incident[cap["a"]].append(cap)
+            incident[cap["b"]].append(cap)
+        node = start
+        remaining = list(capacitors)
+        chain = [node]
+        while remaining:
+            options = [cap for cap in incident[node] if cap in remaining]
+            if len(options) != 1:
+                failures.append(
+                    f"net {node} touches {len(options)} unvisited capacitor "
+                    "terminal(s) walking the series chain, expected exactly 1 "
+                    f"-- the extracted stack is not the schematic's series "
+                    f"chain {[_canon_net(p.plus) for p in passives] + [end]}"
+                )
+                break
+            cap = options[0]
+            remaining.remove(cap)
+            node = cap["b"] if cap["a"] == node else cap["a"]
+            chain.append(node)
+        else:
+            if node != end:
+                failures.append(
+                    f"the series chain from {start} ends at {node}, expected {end}"
+                )
+
+        pin_set = set(pins)
+        for node in chain[1:-1]:
+            terminals = len(incident[node])
+            record = {
+                "net": node,
+                "capacitor_terminals": terminals,
+                "on_transistor": node in mos_nets,
+                "is_pin": node in pin_set,
+            }
+            interior.append(record)
+            if terminals != 2:
+                failures.append(
+                    f"interior series node {node} touches {terminals} capacitor "
+                    "terminal(s), expected exactly 2"
+                )
+            if record["on_transistor"]:
+                failures.append(
+                    f"interior series node {node} also lands on a transistor "
+                    "terminal -- it is not floating, and the stack's effective "
+                    "capacitance is not the schematic's"
+                )
+            if record["is_pin"]:
+                failures.append(
+                    f"interior series node {node} is a top-level pin -- it "
+                    "carries a label or a connection it should not have"
+                )
+
+    return {
+        "name": "mim_stack",
+        "passed": not failures,
+        "schematic_capacitors": len(passives),
+        "extracted_capacitors": len(capacitors),
+        "models": models,
+        "chain": chain,
+        "interior_nodes": interior,
+        "failures": failures,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -262,7 +497,20 @@ def check_devices(gds: str, pdk: str, devices: list[Device], work_dir: str) -> d
         "missing": [{"device": _describe(k), "count": v} for k, v in missing.items()],
         "unexpected": [{"device": _describe(k), "count": v} for k, v in extra.items()],
         "extract_report": report,
+        # Popped by run() before the record is written: the two keys above are
+        # this run's shared extraction, not part of the `devices` verdict.
+        "extracted_path": spice_path,
     }
+
+
+def check_mim_stack(spice_path: str, passives: list[Passive]) -> dict:
+    """Rule on the MiM compensation stack in the same extraction (issue #166)."""
+    return mim_stack_verdict(
+        extracted_capacitors(spice_path),
+        extracted_mos_nets(spice_path),
+        extracted_pins(spice_path),
+        passives,
+    )
 
 
 def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
@@ -554,11 +802,13 @@ def _redact_local_paths(value):
 
 
 def run(gds: str, pdk: str, work_dir: str) -> dict:
-    _, devices = parse_netlist(NETLIST_PATH)
+    _, devices, passives = parse_netlist_full(NETLIST_PATH)
     device_check = check_devices(gds, pdk, devices, work_dir)
     extract_report = device_check.pop("extract_report")
+    extracted_path = device_check.pop("extracted_path")
     checks = [
         device_check,
+        check_mim_stack(extracted_path, passives),
         check_dnwell_partition(gds, devices),
         check_ground_rail_isolation(gds, devices),
         check_voltage_domain(gds, extract_report),
@@ -606,7 +856,14 @@ def main(argv: list[str] | None = None) -> int:
             # "components" is ground_rail_isolation's per-net evidence table --
             # one row per routed net, useful in the committed JSON report but
             # far too wide for the console summary.
-            if key in ("name", "passed", "failures", "missing", "unexpected", "components"):
+            if key in (
+                "name",
+                "passed",
+                "failures",
+                "missing",
+                "unexpected",
+                "components",
+            ):
                 continue
             print(f"         {key}: {value}")
         for failure in check.get("failures", []):
