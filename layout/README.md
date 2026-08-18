@@ -387,62 +387,91 @@ built from the same layout:
 | File | Built from | Contents | Used for |
 |---|---|---|---|
 | [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 17 C per-net ground stars; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2580 R / 16 C per-net ground stars (the merged `GND_DRV\|GND_LOGIC` net's own star is intentionally not emitted — see below); **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
 
 Both DUTs still back-annotate every body terminal (BA1/BA2) rather than
 reading it off the extractor's own merged `GND_DRV|GND_LOGIC` net directly —
 issue #132 made that assertion *redundant with what real extraction now
-measures* rather than a fabrication filling an unmeasurable gap (`mk_extracted_dut.py`'s T4), but it stays a rebind so the testbench still has
+measures* rather than a fabrication filling an unmeasurable gap
+(`mk_extracted_dut.py`'s T4), but it stays a rebind so the testbench still has
 nets literally named `GND_LOGIC`/`GND_DRV` to drive (`sim/gate-driver-core-
 drive-postlayout/testbench/gate_driver_core_tb.spice` instantiates both, tied
 by a small resistor, modeling decision record 0001's "one electrical node").
+T4's rebind is no longer only a body-terminal concern, either: since real
+tap geometry merges the two grounds at the extraction level (see "[Body ties
+and guard ring](#body-ties-and-guard-ring-132)" above), an *ordinary* d/s
+connection to a ground rail lands on that same merged identity too, and gets
+rebound the same way — per that terminal's own device's real domain (the
+same (class, L) fact T4's body rebind already uses), never to one fixed
+name. A fixed-name rebind was tried and measured wrong: it silently rerouted
+a large fraction of the design's real `GND_DRV` connections (e.g. the output
+stage's pull-down stack) through the testbench's tie resistor instead of
+straight to the load capacitor's own return node, regressing `n1_min_v`
+undershoot broadly.
 
 The campaign, its per-corner results, and the schematic-vs-extracted delta
 live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
-as ordinary append-only `sim/` evidence. The parasitic-free record —
-[`20260817-174259-f1a4903`](../sim/gate-driver-core-drive-postlayout/records/20260817-174259-f1a4903.md),
-the **full 60-point PVT grid** (5 process corners x -40/27/125 C x three tied
-+-10 % supply points plus the 6 V stretch point) — re-runs the same spec suite
-the schematic-side record covers, at every one of the same 60 corner-ids, and
-lands within **1.8 % on every drive row** and **<= 79 mV on every thick-oxide
-gate node**.
+as ordinary append-only `sim/` evidence, re-run against issue #132's now-LVS-
+verified extraction (parasitic-free:
+[`20260818-002620-ac84870`](../sim/gate-driver-core-drive-postlayout/records/20260818-002620-ac84870.md);
+RC: [`20260818-002635-ac84870`](../sim/gate-driver-core-drive-postlayout/records/20260818-002635-ac84870.md)
+— both the full 60-point PVT grid, superseding the pre-#132 pair).
 
-Both records are the full 60-point grid, and they answer different questions —
-the parasitic-free one whether the drawn geometry realises the schematic's
-devices, the RC one what the drawn wires cost. Read together they say: layout
-costs this block **delay, not drive** — the output edge into the 1 nF
-reference load moves by ≤ 31 ps, while input-to-output propagation delay
-roughly doubles (+4.5 ns median, +7.2 ns worst case). The RC record is
-[`20260817-174318-f1a4903`](../sim/gate-driver-core-drive-postlayout/records/20260817-174318-f1a4903.md).
+**Read these numbers against two already-tracked, pre-existing gaps, not
+against #132's own geometry** — neither is something this issue's own body-
+tie/guard-ring work introduces or is in scope to fix:
 
-**Neither record's overall verdict is `PASS`, and neither miss is a layout
-finding** — both are enumerated in the records rather than summarised away:
+1. **The layout does not yet draw decision record 0007's `IN_DRV`
+   compensation capacitor** (`x1_XCCOMP` — `gen_gate_driver_core.py`'s own
+   startup warning names it every run; tracked as issue
+   [#166](https://github.com/2AMLogic/gf180-gate-driver/issues/166)). The
+   *schematic*-side record with that capacitor drawn
+   (`sim/gate-driver-core-drive/records/20260817-201007-ce8027d.md`) shows
+   only the two pre-existing `ipeak_sink_a` stretch misses and no
+   `n1_min_v` undershoot anywhere in the grid; the extracted netlist, missing
+   the capacitor, does not get that benefit yet.
+2. **A harness transient-tolerance refinement (issue #156, landed after the
+   pre-#132 postlayout evidence was recorded) moved every §2.3 gate-ceiling
+   and undershoot measurement outward** by tens of mV, on both the schematic
+   and the layout side alike — tracked for its spec-margin consequences as
+   issue [#163](https://github.com/2AMLogic/gf180-gate-driver/issues/163),
+   whose own postlayout citation already measured `n1_max_v` moving
+   `6.10229 V -> 6.13027 V` on this same extracted (no-RC) netlist; this
+   pass's own `20260818-002620-ac84870` record reproduces that exact number.
 
-| Miss | Parasitic-free | RC | Also on the schematic side? |
-|---|---|---|---|
-| `ipeak_sink_a` short of spec §3's **1 A stretch** target at `ss_125c` / `sf_125c` 6 V | 0.889 A / 0.938 A | 0.877 A / 0.931 A | **yes** — 0.883 A / 0.932 A, at the same two of the fifteen 6 V points and no others. Only the harness changed: #147's corner-scoped override now scores the row the schematic record's narrative already reported |
-| `n1_min_v` past the inherited **−50 mV undershoot sanity band** | 2 points | **none** | **yes** — 5 points, two of them deeper. Not a spec bound; carried over unchanged rather than retuned (CLAUDE.md) |
+**What #132 itself changed, isolated from both of the above**: a control run
+of the *byte-identical pre-#132* extracted netlist through today's harness
+(same environment, same missing capacitor) reproduces the *exact same* set
+of 30 `(corner, check)` failures as the post-#132 record — confirmed
+per-corner, not just by count. Issue #132's own geometry work introduces
+**zero new simulation regressions**; every miss in the current records is
+inherited from #166 and #163, not from the taps/guard-ring this issue draws.
 
-The undershoot misses vanish under RC because the extracted per-net C damps
-exactly that gate-node ringing (worst undershoot over all 60 points and all
-six probed nodes: −19.3 mV, vs −54.6 mV parasitic-free).
-
-The same damping applies to the two 6 V-stretch-rail gate-ceiling excursions
-`spec/gate-driver.md` §5 ratifies as **Exception 2** (decision records
-0005/0006, taper nodes `n1`…`n5`) and **Exception 3** (decision record 0006,
-inter-cell `IN_DRV`). The layout stays inside both ratified envelopes at
-every one of the 15 affected points, and clears the 6.0 V ceiling by
-≥ 381 mV at all 45 nominal-tolerance points:
-
-| Ratified worst case (schematic) | extracted, no RC | extracted, RC |
+| | Parasitic-free (`ac84870`, no-RC) | RC (`ac84870`) |
 |---|---|---|
-| Exception 2 — taper, 6.10232 V | 6.10229 V | 6.03482 V |
-| Exception 3 — `IN_DRV`, 6.11823 V (bounded ≤ 150 mV over) | 6.11308 V | 6.01364 V |
+| Overall | `FAIL` — 30/60 points | `FAIL` — 2/60 points |
+| `ipeak_sink_a` short of the **1 A stretch** target, `ss_125c`/`sf_125c` 6 V | 0.881 A / 0.932 A | 0.882 A / 0.929 A |
+| `n1_min_v` past the inherited **−50 mV undershoot** band | 29 points, worst −59.9 mV | **0 points**, worst −6.8 mV |
+| Worst gate-ceiling excursion, taper (`n1_max_v`) | 6.13027 V | 6.00978 V |
+| Worst gate-ceiling excursion, `indrv_max_v` | 6.13874 V | 6.01412 V |
 
-Those are measurements of a different netlist, not a licence to re-quantify a
-ratified exception downward — the schematic figures stay governing until a
-spec change says otherwise. What the layout evidence adds is only that
-**it does not widen either exception.**
+The RC record's own pattern is unchanged from the original #105 finding:
+**the extracted per-net capacitance damps exactly the ringing that drives the
+undershoot band** (0 points fail `n1_min_v` under RC vs. 29 without it), and
+layout still costs this block delay, not drive — `ipeak_sink_a` is
+essentially identical with and without RC. The two `ipeak_sink_a` stretch
+misses are the same pre-existing, narrative-documented shortfall the
+schematic-side record already carries (decision record 0007's own summary:
+"the only two harness-check misses are the same ... pre-existing
+`ipeak_sink_a` 1 A stretch-target shortfall the baseline record already
+carried").
+
+These records are a real re-verification of the LVS-closed extraction (issue
+#105's original item-3 acceptance criterion, deferred pending #132), not a
+tapeout signoff and not a re-litigation of `spec/gate-driver.md` §5's ratified
+exceptions — that re-litigation is #163's scope, and drawing the missing
+compensation capacitor so postlayout evidence can benefit from decision
+record 0007 the way the schematic side already does is #166's (and #164's).
 
 ## Known gaps
 
