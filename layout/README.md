@@ -470,9 +470,17 @@ against #132's own geometry** — neither is something this issue's own body-
 tie/guard-ring work introduces or is in scope to fix:
 
 1. **The layout does not yet draw decision record 0007's `IN_DRV`
-   compensation capacitor** (`x1_XCCOMP` — `gen_gate_driver_core.py`'s own
-   startup warning names it every run; tracked as issue
-   [#166](https://github.com/2AMLogic/gf180-gate-driver/issues/166)). The
+   compensation capacitor** (`x1_XCCOMP*` — `gen_gate_driver_core.py`'s own
+   startup warning names them every run; tracked as issue
+   [#166](https://github.com/2AMLogic/gf180-gate-driver/issues/166), whose
+   scope changed with issue #192 / [decision record
+   0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md):
+   it now draws **four** series `cap_mim_2f0_m4m5_noshield` devices at the
+   DRM MIMTM.8a minimum 5.0 µm × 5.0 µm, rather than one
+   `cap_mim_1f0_m4m5_noshield` that `gf180mcuD` cannot build, extract or LVS
+   at all. The committed `gate_driver_core.gds` and its
+   `gate_driver_core.provenance.json` predate that change and still name the
+   single old device). The
    *schematic*-side record with that capacitor drawn
    (`sim/gate-driver-core-drive/records/20260817-201007-ce8027d.md`) shows
    only the two pre-existing `ipeak_sink_a` stretch misses and no
