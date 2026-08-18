@@ -36,7 +36,7 @@ yet, this document says so instead of inferring — see §6.
 | Switch device | `nfet_06v0` (thick-oxide 6 V NMOS). Same device family `gate-driver.md` §2.5 selects, for the reasons recorded there. |
 | Protection | Per-channel overcurrent (OCP) and a thermal sense — §4. |
 | Flyback | An on-die recirculation path from the switch drain back to the cell rail — §5. |
-| **Not** in scope here | High-side / half-bridge operation, level shifting from a lower logic domain (that is facet (a), `gate-driver.md`), the shuttle test-structure plan ([#180](https://github.com/2AMLogic/gf180-gate-driver/issues/180)), and multi-channel bond-wire / ground-return / substrate-noise guidance ([#181](https://github.com/2AMLogic/gf180-gate-driver/issues/181)). |
+| **Not** in scope here | High-side / half-bridge operation, level shifting from a lower logic domain (that is facet (a), `gate-driver.md`), the shuttle test-structure plan ([#180](https://github.com/2AMLogic/gf180-gate-driver/issues/180)), and everything from the pad outwards — multi-channel bond-wire, ground-return and substrate-noise guidance, which is ratified separately by [decision record 0009](decision-records/0009-multichannel-bond-ground-substrate-guidance.md). |
 
 ## 2. On-resistance
 
@@ -213,8 +213,14 @@ Ratified consequences:
   gets is [#180](https://github.com/2AMLogic/gf180-gate-driver/issues/180)'s
   problem.
 - Bond-wire and package current limits are deliberately **not** ratified
-  here — that is [#181](https://github.com/2AMLogic/gf180-gate-driver/issues/181)'s
-  scope. The on-die budget above stops at the pad.
+  here. **The on-die budget above stops at the pad**; from the pad outwards —
+  bond-wire count and sizing for N channels, per-channel `GND_DRV_n` ground
+  return, and substrate-noise coupling into the co-integrated analog — is
+  ratified separately by
+  [decision record 0009](decision-records/0009-multichannel-bond-ground-substrate-guidance.md),
+  which extends decision record 0008 for the same facet. The two are meant to
+  be read together: 0009 answers what happens once N channels share a die and
+  a package, this document answers what one channel costs on-die.
 
 ## 4. Protection scope
 
