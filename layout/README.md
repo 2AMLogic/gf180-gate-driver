@@ -617,14 +617,28 @@ decoration.
 
 The LVS-extracted netlist is turned into a simulatable DUT by
 [`lvs/mk_extracted_dut.py`](lvs/mk_extracted_dut.py), whose module docstring
-and generated file header list every transform (T1…T6) and every
+and generated file header list every transform (T1…T8) and every
 back-annotation (BA1…BA3) applied to the extractor's own output. Two DUTs are
-built from the same layout:
+built from the same layout, and both now carry the XCCOMP MiM stack (#166):
 
 | File | Built from | Contents | Used for |
 |---|---|---|---|
-| [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 17 C per-net ground stars, **including both ground rails** — the merged `GND_DRV\|GND_LOGIC` net's star is emitted with each leg's hub rebound to that leg's *own* device's rail (297 ground-rail legs, issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)), and its one measured capacitance placed between the two real rails; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+| [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 MOS cards, parallel-identical fingers folded back to `m=<n>`, plus the 4 `XCCOMP*` MiM series capacitors (never folded — T7); drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + the 4 `XCCOMP*` caps + 2885 R / 20 C per-net ground stars, **including both ground rails** — the merged `GND_DRV\|GND_LOGIC` net's star is emitted with each leg's hub rebound to that leg's *own* device's rail (297 ground-rail legs, issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)), and its one measured capacitance placed between the two real rails; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+
+Both DUTs' anonymous, unlabeled internal nets — `klt extract`'s own `$N`
+naming for a net with no schematic label, this design's first real case
+being XCCOMP's three inter-cap nodes — are rewritten to `ANON<N>` (T8, issue
+#201): a bare SPICE token starting with `$` is an inline-comment marker to
+ngspice, so left as-is these nets silently truncated every card that named
+them (confirmed directly: the first post-#166 regeneration measured *zero*
+effect from XCCOMP on any PVT corner, bit-for-bit identical to the
+pre-#166 evidence, with no simulator error — only a per-card `... is not a
+valid ... line, ignored!` warning in the raw ngspice log, outside
+`run_corners.py`'s own PASS/FAIL summary). `mk_extracted_dut.py`'s own
+`AnonymousNetNameTest` pins this transform against a synthetic extract dict
+so it stays covered independent of whether a real committed report happens
+to exercise it.
 
 Both DUTs still back-annotate every body terminal (BA1/BA2) rather than
 reading it off the extractor's own merged `GND_DRV|GND_LOGIC` net directly —
@@ -648,92 +662,86 @@ undershoot broadly.
 
 The campaign, its per-corner results, and the schematic-vs-extracted delta
 live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
-as ordinary append-only `sim/` evidence, re-run against issue #132's now-LVS-
-verified extraction (parasitic-free:
-[`20260818-002620-ac84870`](../sim/gate-driver-core-drive-postlayout/records/20260818-002620-ac84870.md);
-RC: [`20260818-002635-ac84870`](../sim/gate-driver-core-drive-postlayout/records/20260818-002635-ac84870.md)
-— both the full 60-point PVT grid, superseding the pre-#132 pair).
+as ordinary append-only `sim/` evidence, re-run against the post-#166
+(XCCOMP-drawn) extraction, fixed for T8's anonymous-net rename (issue #201;
+parasitic-free:
+[`20260818-110622-9d8e74d`](../sim/gate-driver-core-drive-postlayout/records/20260818-110622-9d8e74d.md);
+RC: [`20260818-110637-9d8e74d`](../sim/gate-driver-core-drive-postlayout/records/20260818-110637-9d8e74d.md)
+— both the full 60-point PVT grid, superseding the pre-#166 pair).
 
-**Read these numbers against two already-tracked, pre-existing gaps, not
-against #132's own geometry** — neither is something this issue's own body-
-tie/guard-ring work introduces or is in scope to fix:
+**Read these numbers against one remaining, already-tracked, pre-existing
+gap, not against #166's own geometry or #201's own regeneration**:
 
-1. **These records predate the compensation capacitor being drawn.** The two
-   post-layout records cited above were run against the pre-#166 extraction,
-   which had no `x1_XCCOMP*` in it at all. The layout **does** carry the stack
-   now — four series `cap_mim_2f0_m4m5_noshield` devices at the DRM MIMTM.8a
-   minimum 5.0 µm × 5.0 µm, per issue #192 /
-   [decision record 0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md),
-   drawn and LVS-matched by issue
-   [#166](https://github.com/2AMLogic/gf180-gate-driver/issues/166) (see
-   "[The XCCOMP MiM compensation stack](#the-xccomp-mim-compensation-stack-166)"
-   above) — but **regenerating the extracted DUTs and re-running both 60-point
-   PVT grids against them is separate, follow-on work**, deliberately not
-   folded into #166's own scope (which is the geometry plus the DRC/LVS
-   re-verification). Until that happens, read the numbers below as measuring a
-   netlist without the capacitor. For the size of the benefit being left on
-   the table: the *schematic*-side record that does have it
-   (`sim/gate-driver-core-drive/records/20260817-201007-ce8027d.md`) shows only
-   the two pre-existing `ipeak_sink_a` stretch misses and no `n1_min_v`
-   undershoot anywhere in the grid.
-2. **A harness transient-tolerance refinement (issue #156, landed after the
-   pre-#132 postlayout evidence was recorded) moved every §2.3 gate-ceiling
-   and undershoot measurement outward** by tens of mV, on both the schematic
-   and the layout side alike — tracked for its spec-margin consequences as
-   issue [#163](https://github.com/2AMLogic/gf180-gate-driver/issues/163),
-   whose own postlayout citation already measured `n1_max_v` moving
-   `6.10229 V -> 6.13027 V` on this same extracted (no-RC) netlist; this
-   pass's own `20260818-002620-ac84870` record reproduces that exact number.
+- **A harness transient-tolerance refinement (issue #156, landed after the
+  pre-#132 postlayout evidence was recorded) moved every §2.3 gate-ceiling
+  and undershoot measurement outward** by tens of mV, on both the schematic
+  and the layout side alike — tracked for its spec-margin consequences as
+  issue [#163](https://github.com/2AMLogic/gf180-gate-driver/issues/163).
 
-**What #132 itself changed, isolated from both of the above**: a control run
-of the *byte-identical pre-#132* extracted netlist through today's harness
-(same environment, same missing capacitor) reproduces the *exact same* set
-of 30 `(corner, check)` failures as the post-#132 record — confirmed
-per-corner, not just by count. Issue #132's own geometry work introduces
-**zero new simulation regressions**; every miss in the current records is
-inherited from the missing capacitor and from #163, not from the
-taps/guard-ring that issue draws.
+**What #201 itself changed, isolated from that**: regenerating the DUTs
+against the post-#166 extraction (and fixing T8's anonymous-net rename, which
+the first regeneration attempt needed before XCCOMP had any measurable
+effect at all) delivers the benefit decision records 0007/0014 already showed
+on the schematic side — `n1_min_v` undershoot drops from 29/60 points to
+**0/60** under RC, and from 29/60 to 12/60 (all `ss` corner) even
+parasitic-free. The two `ipeak_sink_a` stretch misses are untouched by
+XCCOMP (they are a pre-existing drive-strength shortfall, not a
+gate-ceiling/undershoot one) and remain the *only* misses under RC.
 
-| | Parasitic-free (`ac84870`, no-RC) | RC (`ac84870`) |
+| | Parasitic-free (`9d8e74d`, no-RC) | RC (`9d8e74d`) |
 |---|---|---|
-| Overall | `FAIL` — 30/60 points | `FAIL` — 2/60 points |
-| `ipeak_sink_a` short of the **1 A stretch** target, `ss_125c`/`sf_125c` 6 V | 0.881 A / 0.932 A | 0.882 A / 0.929 A |
-| `n1_min_v` past the inherited **−50 mV undershoot** band | 29 points, worst −59.9 mV | **0 points**, worst −6.8 mV |
-| Worst gate-ceiling excursion, taper (`n1_max_v`) | 6.13027 V | 6.00978 V |
-| Worst gate-ceiling excursion, `indrv_max_v` | 6.13874 V | 6.01412 V |
+| Overall | `FAIL` — 13/60 points (one point fails both rows below) | `FAIL` — 2/60 points |
+| `ipeak_sink_a` short of the **1 A stretch** target, `ss_125c`/`sf_125c` 6 V | 0.883 A / 0.931 A | 0.880 A / 0.925 A |
+| `n1_min_v` past the inherited **−50 mV undershoot** band | 12 points (all `ss`), worst −53.6 mV | **0 points**, worst −6.8 mV |
+| Worst gate-ceiling excursion, taper (`n1_max_v`) | 6.11425 V | 6.00988 V |
+| Worst gate-ceiling excursion, `indrv_max_v` | 6.00194 V | 6.0004 V |
 
 The RC record's own pattern is unchanged from the original #105 finding:
 **the extracted per-net capacitance damps exactly the ringing that drives the
-undershoot band** (0 points fail `n1_min_v` under RC vs. 29 without it), and
+undershoot band** (0 points fail `n1_min_v` under RC vs. 12 without it), and
 layout still costs this block delay, not drive — `ipeak_sink_a` is
 essentially identical with and without RC. The two `ipeak_sink_a` stretch
 misses are the same pre-existing, narrative-documented shortfall the
 schematic-side record already carries (decision record 0007's own summary:
 "the only two harness-check misses are the same ... pre-existing
 `ipeak_sink_a` 1 A stretch-target shortfall the baseline record already
-carried").
+carried"). `indrv_max_v`'s worst excursion also drops well inside the 6.6 V
+thin-oxide ceiling on both DUTs now — pre-#201 (pre-capacitor) it read
+6.13874 V parasitic-free — consistent with XCCOMP's own purpose (mitigating
+decision record 0006's gate-drive-feedthrough overshoot).
 
-These records are a real re-verification of the LVS-closed extraction (issue
-#105's original item-3 acceptance criterion, deferred pending #132), not a
-tapeout signoff and not a re-litigation of `spec/gate-driver.md` §5's ratified
-exceptions — that re-litigation is #163's scope. Re-running them against the
-now-capacitor-bearing extraction, so post-layout evidence gets the benefit
-decision records 0007/0014 already show on the schematic side, is the
-follow-on gap noted in item 1 above (and #164's).
+Three anonymous internal nets in the RC DUT (XCCOMP's three inter-cap nodes,
+which have no DC path by construction — see "[Why `mim_stack`
+exists](#why-mim_stack-exists-166)" above) make ngspice's DC operating-point
+solve report `singular matrix` warnings and fall back through gmin/source
+stepping before finding the transient operating point directly; every one of
+the 60 RC-DUT corners still completes and produces a physically sensible
+trajectory (see the raw per-corner logs under
+`sim/gate-driver-core-drive-postlayout/corners/20260818-110637-9d8e74d/`) —
+noted here since it is visible in the evidence, not because it is a new
+finding: it is exactly what "floating by construction" (the `mim_stack`
+check's own premise) predicts for a first-order DC solve.
+
+These records are a real re-verification of the LVS-closed, capacitor-bearing
+extraction (issue #105's original item-3 acceptance criterion, most recently
+deferred pending #166's own geometry), not a tapeout signoff and not a
+re-litigation of `spec/gate-driver.md` §5's ratified exceptions — that
+re-litigation is #163's scope.
 
 ## Known gaps
 
-- **The committed post-layout DUT netlists predate the MiM stack (#166).**
-  [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice)
-  and [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice)
-  — and therefore both `sim/gate-driver-core-drive-postlayout/` records — were
-  derived from the pre-#166 extraction, which had no `x1_XCCOMP*` in it. They
-  are still internally consistent with the `klt extract` reports they name
-  (CI's `mk_extracted_dut.py --check` step verifies exactly that), and nothing
-  about them is *wrong*; they simply describe an older stream. Regenerating
-  them and re-running both 60-point PVT grids is follow-on work, kept out of
-  #166 so that issue stays "draw the device and re-verify it with DRC/LVS".
-  See "[Post-layout simulation](#post-layout-simulation)" item 1.
+- **`test_mk_extracted_dut.py`'s merged-ground fixture reports still predate
+  the MiM stack (#166), deliberately (#201).** Its `RC_REPORT`/`FLAT_REPORT`
+  constants are pinned to the pre-#166 extraction rather than re-pointed at
+  the committed DUTs' current source: every count its assertions pin (297
+  merged-ground legs, 2877 R / 17 C, the 294/3 domain split, 16 "other"
+  ground-referenced capacitors) is a fact about the merged-ground star
+  transform on MOS terminals specifically, unaffected by XCCOMP, and
+  re-pointing them would also pull in T7's four MiM device cards, which that
+  fixture's "capacitors" list cannot yet distinguish from T5's per-net
+  ground-star cards without teaching several assertions that distinction.
+  Left as a real, separate refactor (see the constant's own comment in that
+  file), not folded into #201's netlist-regeneration scope.
 - **DRC is clean within a deck scope, not against the full DRM.** The deck
   ships no rules for `DNWELL`/`LVPWELL`, and every rule but `DF.1a`/`DF.3a`
   still applies 3.3 V thresholds to thick-oxide geometry — see the coverage
