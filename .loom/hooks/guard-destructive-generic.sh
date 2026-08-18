@@ -645,6 +645,153 @@ fastpath_grep_pipe_admits() {
     return 1
 }
 
+# Multi-statement structural fastpath (#198). Pure bash builtins, zero forks.
+#
+# GAP THIS CLOSES: a multi-line/multi-statement block where EVERY individual
+# statement already independently matches one of the two admitted shapes above
+# (a bare fastpath_builtin_admits() command, or the #5263/#109
+# `<search> | <read-only-sink>` pipe) was still falling through to the full
+# path, because fastpath_structural_ok() rejects the WHOLE command outright the
+# moment it sees a `;`, `&&`, or newline anywhere in it — with no notion that
+# those separators might just be joining several already-safe statements. On
+# the full path, SQL_DDL_PATTERN does a blanket substring scan of the entire
+# command text and matches a DDL phrase sitting inside `grep`'s own quoted
+# search argument on one otherwise-unrelated statement, denying a block that
+# is 100% read-only (see the header comment above _fastpath_pipe_split() and
+# issue #198's Reproduction section).
+#
+# FIX DIRECTION (see #198's "Curator Enhancement" for the rejected
+# alternative): this widens what the STRUCTURAL fastpath ADMITS — it does NOT
+# touch COMMAND_ASK_SCAN, strip_literal_text(), mask_ask_positional_args(), or
+# SQL_DDL_PATTERN in any way. A previous attempt fixed this general shape by
+# extending mask_ask_positional_args() to also redact grep/egrep/fgrep/rg
+# pattern arguments on the full path — that was reverted (see that function's
+# header comment at ~3295-3309) because it blinds SQL_DDL_PATTERN's full-path
+# scan to a `grep '<phrase>' file` invocation's own argument text for EVERY
+# command shape that reaches the full path, including ones that are NOT
+# provably composed entirely of already-admitted narrow statements. This fix
+# cannot reintroduce that regression by construction: it only changes WHICH
+# commands are recognized as fastpath-eligible before REPO_ROOT/COMMAND_ASK_SCAN
+# are even computed; every command that fails this per-statement decomposition
+# — including any single statement that is not itself a bare-admitted command
+# or a `<search>|<sink>` pipe — still falls through to the untouched full path,
+# where SQL_DDL_PATTERN sees the complete, unredacted command text exactly as
+# before. (See test-guard-sql-ddl-jq-prose.sh cases (c)-(e) and
+# test-guard-readonly-fastpath-pipe.sh case (k), both of which pin that the
+# safety floor for non-decomposable / live-DDL commands is unaffected.)
+#
+# ADMISSION RULE: split the command into statements on unquoted `;`, newline,
+# or `&&` (see _fastpath_split_statements() below) and require EVERY resulting
+# statement — trimmed of surrounding whitespace — to independently satisfy
+# fastpath_builtin_admits() or fastpath_grep_pipe_admits(). Both of those are
+# already narrow, well-tested admission predicates; this function adds no new
+# per-statement leniency, it only lets a SEQUENCE of them stand in for the
+# single-statement case fastpath_structural_ok() alone recognizes.
+#
+# FAIL-SAFE BY CONSTRUCTION: any statement that itself contains an unadmitted
+# shape (a live command, a second/stray pipe, a redirection, a substitution, an
+# unlisted sink, …) is declined by fastpath_builtin_admits()/
+# fastpath_grep_pipe_admits() exactly as it already is today, which fails the
+# whole decomposition and falls through unchanged. An unterminated quote or a
+# lone `&` (backgrounding — NOT a simple sequencer, changes execution
+# semantics) anywhere in the command also declines via
+# _fastpath_split_statements() below.
+fastpath_multistatement_admits() {
+    local cmd="$1"
+    _fastpath_split_statements "$cmd" || return 1
+    # Require at least two statements: a single statement is already covered
+    # (and rejected, if it reaches here) by the two checks above — no need to
+    # re-derive that outcome through this slower path.
+    (( ${#_FASTPATH_STATEMENTS[@]} >= 2 )) || return 1
+    local st trimmed
+    for st in "${_FASTPATH_STATEMENTS[@]}"; do
+        trimmed="${st#"${st%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        if fastpath_builtin_admits "$trimmed"; then
+            continue
+        elif fastpath_grep_pipe_admits "$trimmed"; then
+            continue
+        else
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Quote-aware statement splitter backing fastpath_multistatement_admits()
+# above. Pure bash, no forks. Splits `$1` into individual statements on
+# unquoted `;`, newline, or `&&` (two consecutive unquoted `&` bytes) using the
+# same single-pass quote-tracking scan as _fastpath_pipe_split() (`\` escapes
+# the next byte outside quotes and inside a double-quoted span; a single-quoted
+# span has no escapes; the BSQ apostrophe idiom falls out for free).
+#
+# On success, sets the global array _FASTPATH_STATEMENTS to the statements (NOT
+# trimmed — the caller trims) and returns 0. Declines (returns 1, fail-safe —
+# the caller then falls through to the full path exactly as before this fix)
+# on:
+#   * an unterminated quote (the parse could disagree with bash's own),
+#   * a lone unquoted `&` — background-job syntax, not a simple sequencer, and
+#     changes execution semantics (the statement before it no longer blocks
+#     the shell), so it is deliberately NOT treated as `;`'s equivalent here,
+#   * any empty/whitespace-only statement (a leading/trailing/doubled
+#     separator, e.g. `;;`, a trailing `;`, or `&&&&`) — ambiguous enough that
+#     declining and falling through to the full path is the safer call.
+# A stray `|`, `<`, `>`, backtick, or `$(` is NOT special to this splitter at
+# all — it stays embedded in whichever statement contains it, and that
+# statement's own admission check (fastpath_builtin_admits() /
+# fastpath_grep_pipe_admits(), both of which independently re-validate
+# structure via fastpath_structural_ok() or their own raw/quote-aware pipe
+# scan) is what declines it if it is not one of the two admitted shapes.
+_fastpath_split_statements() {
+    local s="$1" n i c q='' start=0
+    _FASTPATH_STATEMENTS=()
+    n=${#s}
+    for (( i = 0; i < n; i++ )); do
+        c="${s:i:1}"
+        case "$q" in
+            "'")
+                [[ "$c" == "'" ]] && q=''
+                ;;
+            '"')
+                if [[ "$c" == '\' ]]; then
+                    i=$(( i + 1 ))
+                elif [[ "$c" == '"' ]]; then
+                    q=''
+                fi
+                ;;
+            *)
+                case "$c" in
+                    '\') i=$(( i + 1 )) ;;
+                    "'") q="'" ;;
+                    '"') q='"' ;;
+                    ';'|$'\n')
+                        _FASTPATH_STATEMENTS+=("${s:start:i-start}")
+                        start=$(( i + 1 ))
+                        ;;
+                    '&')
+                        if [[ "${s:i+1:1}" == '&' ]]; then
+                            _FASTPATH_STATEMENTS+=("${s:start:i-start}")
+                            i=$(( i + 1 ))
+                            start=$(( i + 1 ))
+                        else
+                            return 1   # lone `&` (background) — decline
+                        fi
+                        ;;
+                esac
+                ;;
+        esac
+    done
+    [[ -z "$q" ]] || return 1        # unterminated quote — decline
+    _FASTPATH_STATEMENTS+=("${s:start:n-start}")
+    local st trimmed
+    for st in "${_FASTPATH_STATEMENTS[@]}"; do
+        trimmed="${st#"${st%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        [[ -n "$trimmed" ]] || return 1   # empty statement — decline
+    done
+    return 0
+}
+
 # Optional extend-only escape hatch: guards.readOnlyFastPathExtra is an array of
 # literal first-word commands. Read lazily (only when the built-in list did not
 # admit) and cached. Each entry is a full-generality bypass for that word.
@@ -717,6 +864,10 @@ if [[ "$_fastpath_env" != "0" && "$_fastpath_env" != "false" && "$_fastpath_env"
         # Read-only search piped to a read-only sink (#5263) — same silent allow.
         fastpath_enabled && exit 0
     elif fastpath_extra_admits "$COMMAND"; then
+        fastpath_enabled && exit 0
+    elif fastpath_multistatement_admits "$COMMAND"; then
+        # Every statement in a `;`/newline/`&&`-joined sequence independently
+        # matches one of the two checks above (#198) — same silent allow.
         fastpath_enabled && exit 0
     fi
 fi
