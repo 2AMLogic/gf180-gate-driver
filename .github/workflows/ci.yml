@@ -125,8 +125,9 @@ jobs:
         run: python3 layout/test_gen_gate_driver_core.py
 
       - name: LVS reference-netlist unit tests
-        # layout/lvs/test_make_reference.py pins the structural facts (11
-        # anonymous PMOS well nets, one shared NMOS substrate net, generic
+        # layout/lvs/test_make_reference.py pins the structural facts (PMOS
+        # bodies tie to the schematic's own VDD_LOGIC/VDD_DRV -- issue #132's
+        # well-tie geometry -- one shared NMOS substrate net, generic
         # nfet/pfet device classes) that make_reference.py's deck-compatible
         # reference build depends on -- issue #105. Pure stdlib arithmetic on
         # top of gen_gate_driver_core.parse_netlist, no klt/PDK/GDS, so it
@@ -145,10 +146,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 layout/lvs/mk_extracted_dut.py --check \
-            --extract layout/lvs/reports/gate_driver_core/20260817-093733-de81c7b.extract.json \
+            --extract layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json \
             --combine -o layout/lvs/gate_driver_core.extracted.spice
           python3 layout/lvs/mk_extracted_dut.py --check \
-            --extract layout/lvs/reports/gate_driver_core/20260817-094138-de81c7b.pex-extract.json \
+            --extract layout/lvs/reports/gate_driver_core/20260817-232634-dc66e49.pex-extract.json \
             -o layout/lvs/gate_driver_core.extracted-rc.spice
 
       - name: Environment check (informational -- no PDK on this runner)

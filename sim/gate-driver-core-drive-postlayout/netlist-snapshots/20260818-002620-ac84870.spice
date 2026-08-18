@@ -1,0 +1,203 @@
+* Frozen netlist snapshot for record 20260818-002620-ac84870
+* source     : sim/gate-driver-core-drive-postlayout/testbench/gate_driver_core_tb.spice
+* sha256     : 823936f7ab5b6552d2640d0960539d81e3a74ce09135e318c4e941b517918ee6
+* This is a verbatim copy taken at record time. Do not edit.
+* gate-driver-core-drive-postlayout -- byte-identical stimulus/load copy of
+* sim/gate-driver-core-drive/testbench/gate_driver_core_tb.spice (issue #105:
+* post-layout re-run of that end-to-end campaign against the LVS-extracted
+* netlist -- see this directory's tb.json). Copied rather than shared because
+* sim/README.md's convention is one owned testbench/ per experiment
+* directory; the only thing that differs between the two experiments is
+* tb.json's "dut" and internal-node probe names (x2.n1..n5 -> x2_n1..n5,
+* since the extracted DUT is flat -- no x2 sub-circuit boundary survives
+* extraction, see layout/lvs/mk_extracted_dut.py's T1). This stimulus file
+* itself never references an internal x2 node, so it needs no change at all
+* -- verbatim copy.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the
+* gf180mcu models, the corner .lib sections, .temp, this experiment's DUT
+* fragment (layout/lvs/gate_driver_core.extracted.spice, .include'd ahead of
+* this file -- see tb.json's "dut" key), the .control block and .end.
+*
+* This testbench uses this repo's default two rails (vlogic 3.3V logic
+* supply, vdrv 5V/6V drive rail -- tb.json omits "rails" to get
+* corners.DEFAULT_RAILS), matching the block's two actual supply domains
+* (design/gate_driver_core.sch's VDD_LOGIC/GND_LOGIC and VDD_DRV/GND_DRV
+* pins) -- both of which are real top-level pins on the extracted netlist
+* too (layout/lvs/mk_extracted_dut.py never renames a named net).
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1: "tied together with
+* minimal impedance close to the device (star point)") -- modeled here as
+* a milliohm-scale tie, matching the schematic-side testbench's convention.
+*
+* IN is driven at the block's actual 3.3V logic input pin, an idealized
+* rail-to-rail pulse referenced to GND_LOGIC, swinging the full vlogic_val
+* rail (0 -> vlogic_val). Starts low so the whole chain settles to a
+* well-defined DC operating point before the first transient edge.
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 1n 1n 300n 700n)
+
+* 1 nF reference load (spec Sec.3), measured through a 0V ammeter so the
+* load current (source = positive, sink = negative) is directly probeable
+* as i(vimeas) without relying on a simulator-specific capacitor-current
+* accessor -- matches the schematic-side testbench's convention, referenced
+* here to GND_DRV (the drive-rail domain's own return) rather than the
+* global node 0, since GND_DRV is only tied to 0 through
+* rgndtie/vgnd_logic in this fragment, not identical to it.
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* ---------------------------------------------------------------
+* DUT netlist included by this testbench (extracted)
+* source     : layout/lvs/gate_driver_core.extracted.spice
+* sha256     : fc9717e7c69b847f62a0d4a3f1e3e4837fc6b8747e156ebf52dca81f3502a0b8
+* ---------------------------------------------------------------
+
+* Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
+*
+* extract report : layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json
+* layout gds     : layout/gate_driver_core.gds
+* extraction deck: gf180mcu (sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3)  (klt extract)
+* klt/klayout    : 0.2.0 / 0.30.10
+* devices        : 959 {'nfet': 299, 'pfet': 660} -> {'nfet_03v3': 3, 'nfet_06v0': 296, 'pfet_03v3': 1, 'pfet_06v0': 659}
+* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
+*
+* ------------------------------------------------------------------
+* Mechanical transforms applied to the extractor's own output
+* ------------------------------------------------------------------
+* T1. Flattening: the extractor's `.SUBCKT gate_driver_core ... .ENDS` wrapper
+*     is dropped -- every device/parasitic card is emitted at deck level,
+*     matching this repo's existing DUT-fragment convention
+*     (design/netlist/gate_driver_core.spice's own top .subckt line is commented
+*     out for the identical reason -- design/README.md).
+* T2. MOS cards: the extractor's `M<n> d g s b nfet|pfet L=..U W=..U` is rebound
+*     to the real gf180mcu `nfet_03v3`/`nfet_06v0`/`pfet_03v3`/`pfet_06v0`
+*     subcircuit, selected by (device class, drawn L) -- the extraction deck's
+*     generic `nfet`/`pfet` device class does not distinguish voltage flavor
+*     (gate_driver_core.checks.json's voltage_domain_warnings; also
+*     layout/lvs/make_reference.py's transform 2), but this design's drawn L
+*     cleanly disjoint-identifies it. `nf=1 m=1`: each extracted device is one
+*     drawn finger, so the schematic's `nf`/`m` multipliers are already spent as
+*     real, separately-extracted geometry. Emitted as an `X<n>` subcircuit call,
+*     matching design/netlist/gate_driver_core.spice's own device cards, because
+*     those PDK models ARE .subckts: ngspice will resolve an `M` card against a
+*     subcircuit of that name, but then expands `m=<n>` into n separate
+*     subcircuit instances instead of passing m down to the model -- measured at
+*     3.32 s of CPU for the `X` form of this netlist versus ~2200 s for the `M`
+*     form, at bit-identical measured results.
+* T3. MOS junction geometry: AS/AD/PS/PD are carried through verbatim from the
+*     extractor's own measured `as_um2`/`ad_um2`/`ps_um`/`pd_um` (unlike
+*     gf180-bandgap's deck, this deck's gf180mcu extractor reports these
+*     directly -- no recomputation needed).
+* T4. MOS body terminal: rebound to the real rail this design's schematic ties
+*     that flavor to -- GND_LOGIC/GND_DRV for NMOS, VDD_LOGIC/VDD_DRV for PMOS,
+*     selected by the same (class, L) binning as T2. Issue #132 drew real
+*     per-device body-tie geometry for every device (both flavors), and a real
+*     `klt extract` of that geometry now measures exactly this assignment on its
+*     own (PMOS: each device's own real Nwell-tie net; NMOS: the deck's global
+*     substrate identity, which is itself now wired to real labeled
+*     GND_LOGIC/GND_DRV metal instead of floating -- klayout-tools #1128,
+*     layout/lvs/make_reference.py's transform 3/5) -- so this transform is now
+*     a redundant assertion of an already-measured fact, not a fabrication
+*     filling a gap the deck cannot see. It stays a rebind (rather than reading
+*     `dev['nets']['b']` directly) so GND_LOGIC and GND_DRV keep their own
+*     separate names here -- the deck's own raw extraction merges both grounds
+*     into one synthesized joined label (`GND_DRV|GND_LOGIC`) it has no
+*     equivalent synthesized label for on the supply side, and T5's per-net
+*     parasitic stars are keyed by the schematic's own real net names, not that
+*     merged one. See BA1/BA2 and layout/README.md.
+* T5. Parasitics (only when `klt extract --parasitics` was used): each named
+*     net's own per-terminal star (device leg -> resistor -> hub) and hub ->
+*     capacitor -> ground-reference are carried through verbatim from
+*     `parasitics.nets[]`, renaming only the ground reference itself (`vsubs` ->
+*     GND_LOGIC, T4/BA3, since the deck reports no parasitics entry for `vsubs`
+*     as a net in its own right). Net-to-net coupling capacitance
+*     (`parasitics.nets[].coupled`) is NOT emitted -- a documented scope
+*     reduction, not a silent drop; every ground-referenced term is measured,
+*     every coupling term is omitted, stated once here rather than per-record.
+* T6. (only with --combine, and only on a non-parasitic extraction) Device
+*     folding: parallel-identical fingers of one schematic device (exactly
+*     matching (model, d, g, s, body, L, W, AD, AS, PD, PS) after T2/T4) are
+*     folded back into one `m=<n>` card. This is a simulation- cost
+*     optimization, not a fidelity change -- an ideal parallel combination of n
+*     identical devices *is* `m=n` in SPICE -- needed because 959
+*     individually-instantiated fingers (one per drawn finger, this script's
+*     default) cost roughly three orders of magnitude more simulation time than
+*     the same circuit as `m=`-scaled instances, to the point of being
+*     PVT-grid-infeasible within a bounded evidence run.
+*
+* ------------------------------------------------------------------
+* Back-annotated: terminals/nets the extraction deck cannot resolve
+* ------------------------------------------------------------------
+* BA1  NMOS body -> GND_LOGIC (3.3V flavor) / GND_DRV (6V flavor)
+*      (issue #132: real substrate-tie geometry now measures this same
+*       assignment directly -- klt lvs reports zero device.body_unverified
+*       mismatches for either flavor. Kept as a rebind, not a fabrication,
+*       so GND_LOGIC/GND_DRV keep separate names here -- see T4)
+* BA2  PMOS body -> VDD_LOGIC (3.3V flavor) / VDD_DRV (6V flavor)
+*      (issue #132: real well-tie geometry now measures this same
+*       assignment directly, per device -- redundant with T4, not a gap)
+* BA3  parasitic ground-cap reference `vsubs` -> GND_LOGIC
+*      (GND_LOGIC/GND_DRV are one electrical node by design intent;
+*       GND_LOGIC is the documented, arbitrary choice of the two. `vsubs`
+*       itself no longer appears in a real extraction of this layout --
+*       see make_reference.py transform 3 -- but a --parasitics run's
+*       own per-net table is still keyed by the schematic's pre-merge
+*       net names, so this rename is still the correct lookup key)
+*
+* sha256 (this file, sans this line): 9be1e0f5f0863c20f75778b07a2f3aff
+* Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
+* drain/gate/source connectivity, and (when present) the per-net
+* ground-referenced RC parasitics -- is measured, not asserted.
+
+* FLAT form: device/parasitic cards at deck level, no `.SUBCKT` wrapper --
+* matches this repo's existing DUT-fragment convention (T1).
+
+X1 x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X2 x1_na IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X3 x1_nb x1_inb GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X4 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X5 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X6 GND_DRV x2_n4 x2_n5 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=27
+X7 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X8 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X9 IN_DRV x1_nbuf1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X10 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X11 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X12 x1_nbuf1 x1_ncb GND_DRV GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X13 x1_nca VDD_LOGIC x1_na GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X14 x1_ncb VDD_LOGIC x1_nb GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X15 x2_n1 IN_DRV GND_DRV GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
+X16 x2_n2 x2_n1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
+X17 x2_n3 x2_n2 GND_DRV GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
+X18 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X19 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X20 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=26
+X21 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X22 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X23 x1_inb IN VDD_LOGIC VDD_LOGIC pfet_03v3 L=0.28U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
+X24 IN_DRV x1_nbuf1 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X25 OUT x2_n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=249
+X26 OUT x2_n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X27 VDD_DRV x2_n3 x2_n4 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=14
+X28 VDD_DRV x2_n3 x2_n4 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X29 VDD_DRV x2_n4 x2_n5 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=60
+X30 VDD_DRV x2_n4 x2_n5 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X31 VDD_DRV x2_n5 OUT VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=249
+X32 VDD_DRV x2_n5 OUT VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X33 x1_nbuf1 x1_ncb VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X34 x1_nca x1_ncb VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
+X35 x1_ncb x1_nca VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
+X36 x2_n1 IN_DRV VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=4.4U nf=1 ad=1.848P as=1.848P pd=9.64U ps=9.64U m=1
+X37 x2_n2 x2_n1 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=18U nf=1 ad=7.56P as=7.56P pd=36.84U ps=36.84U m=1
+X38 x2_n3 x2_n2 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=73U nf=1 ad=30.66P as=30.66P pd=146.84U ps=146.84U m=1
+X39 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=14
+X40 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X41 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=60
+X42 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1

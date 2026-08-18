@@ -1,11 +1,11 @@
 * Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
 *
-* extract report : layout/lvs/reports/gate_driver_core/20260817-093733-de81c7b.extract.json
+* extract report : layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json
 * layout gds     : layout/gate_driver_core.gds
-* extraction deck: gf180mcu (sha256:e2726af899d1837fe8c9a99688483f145b23c92ded07323f54d627d06bdb2bbf)  (klt extract)
+* extraction deck: gf180mcu (sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3)  (klt extract)
 * klt/klayout    : 0.2.0 / 0.30.10
 * devices        : 959 {'nfet': 299, 'pfet': 660} -> {'nfet_03v3': 3, 'nfet_06v0': 296, 'pfet_03v3': 1, 'pfet_06v0': 659}
-* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260817-093733-de81c7b.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
+* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
 *
 * ------------------------------------------------------------------
 * Mechanical transforms applied to the extractor's own output
@@ -34,15 +34,23 @@
 *     extractor's own measured `as_um2`/`ad_um2`/`ps_um`/`pd_um` (unlike
 *     gf180-bandgap's deck, this deck's gf180mcu extractor reports these
 *     directly -- no recomputation needed).
-* T4. MOS body terminal: rebound from the deck-synthesized floating net (a
-*     single global `vsubs` for every NMOS, one anonymous,
-*     un-merged-per-instance well island for every PMOS -- layout/README.md's
-*     "no well or substrate taps drawn" gap) to the real rail this design's
-*     schematic ties that flavor to -- GND_LOGIC/GND_DRV for NMOS,
-*     VDD_LOGIC/VDD_DRV for PMOS, selected by the same (class, L) binning as T2.
-*     This asserts the *intended* body bias; it does not model the drawn
-*     (absent) tap geometry that would carry it in real silicon -- see BA1/BA2
-*     and layout/README.md.
+* T4. MOS body terminal: rebound to the real rail this design's schematic ties
+*     that flavor to -- GND_LOGIC/GND_DRV for NMOS, VDD_LOGIC/VDD_DRV for PMOS,
+*     selected by the same (class, L) binning as T2. Issue #132 drew real
+*     per-device body-tie geometry for every device (both flavors), and a real
+*     `klt extract` of that geometry now measures exactly this assignment on its
+*     own (PMOS: each device's own real Nwell-tie net; NMOS: the deck's global
+*     substrate identity, which is itself now wired to real labeled
+*     GND_LOGIC/GND_DRV metal instead of floating -- klayout-tools #1128,
+*     layout/lvs/make_reference.py's transform 3/5) -- so this transform is now
+*     a redundant assertion of an already-measured fact, not a fabrication
+*     filling a gap the deck cannot see. It stays a rebind (rather than reading
+*     `dev['nets']['b']` directly) so GND_LOGIC and GND_DRV keep their own
+*     separate names here -- the deck's own raw extraction merges both grounds
+*     into one synthesized joined label (`GND_DRV|GND_LOGIC`) it has no
+*     equivalent synthesized label for on the supply side, and T5's per-net
+*     parasitic stars are keyed by the schematic's own real net names, not that
+*     merged one. See BA1/BA2 and layout/README.md.
 * T5. Parasitics (only when `klt extract --parasitics` was used): each named
 *     net's own per-terminal star (device leg -> resistor -> hub) and hub ->
 *     capacitor -> ground-reference are carried through verbatim from
@@ -52,6 +60,17 @@
 *     (`parasitics.nets[].coupled`) is NOT emitted -- a documented scope
 *     reduction, not a silent drop; every ground-referenced term is measured,
 *     every coupling term is omitted, stated once here rather than per-record.
+*     One further reduction since issue #132: the extraction deck now reports
+*     BOTH ground rails as one merged net (klayout-tools #1128), whose star is
+*     skipped here because every terminal on it is rebound per-device to a real
+*     GND_LOGIC/GND_DRV (T4/BA1) and its hub would be left dangling. So the two
+*     ground rails are modeled as ideal zero-ohm nodes -- 297 fewer R legs and
+*     the GND_DRV<->GND_LOGIC coupling cap, versus the pre-#132 RC DUT. That is
+*     OPTIMISTIC, not conservative, for ground bounce and n1_min_v undershoot:
+*     it removes the rail IR drop those checks measure. It changes no recorded
+*     verdict today (~10x margin on the worst RC n1_min_v corner); it is carried
+*     as a stated fidelity gap in layout/README.md's 'Known gaps' with a
+*     follow-up issue.
 * T6. (only with --combine, and only on a non-parasitic extraction) Device
 *     folding: parallel-identical fingers of one schematic device (exactly
 *     matching (model, d, g, s, body, L, W, AD, AS, PD, PS) after T2/T4) are
@@ -67,14 +86,22 @@
 * Back-annotated: terminals/nets the extraction deck cannot resolve
 * ------------------------------------------------------------------
 * BA1  NMOS body -> GND_LOGIC (3.3V flavor) / GND_DRV (6V flavor)
-*      (deck has no p-substrate tap layer to key on)
+*      (issue #132: real substrate-tie geometry now measures this same
+*       assignment directly -- klt lvs reports zero device.body_unverified
+*       mismatches for either flavor. Kept as a rebind, not a fabrication,
+*       so GND_LOGIC/GND_DRV keep separate names here -- see T4)
 * BA2  PMOS body -> VDD_LOGIC (3.3V flavor) / VDD_DRV (6V flavor)
-*      (deck has no well-tap layer to key on)
+*      (issue #132: real well-tie geometry now measures this same
+*       assignment directly, per device -- redundant with T4, not a gap)
 * BA3  parasitic ground-cap reference `vsubs` -> GND_LOGIC
 *      (GND_LOGIC/GND_DRV are one electrical node by design intent;
-*       GND_LOGIC is the documented, arbitrary choice of the two)
+*       GND_LOGIC is the documented, arbitrary choice of the two. `vsubs`
+*       itself no longer appears in a real extraction of this layout --
+*       see make_reference.py transform 3 -- but a --parasitics run's
+*       own per-net table is still keyed by the schematic's pre-merge
+*       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): e68a41dba2f6347fb059505f52cd8791
+* sha256 (this file, sans this line): d75cbb2254df9baced59a89c6be73730
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.

@@ -2,17 +2,17 @@
   "top_cell": "gate_driver_core",
   "layout": {
     "path": "layout/gate_driver_core.gds",
-    "sha256": "8cdb7cb699ced7b323ecec4c10477bde97a66380bf70b84ae332358bde26dea3",
+    "sha256": "70ca45b75109e913f93ca759da9bac866f9bfd05025f05e4a4614f97fe49066b",
     "bbox_um": {
       "x0": -33.6,
       "y0": -2.0,
       "x1": 519.17,
-      "y1": 492.42
+      "y1": 492.72
     }
   },
   "source_netlist": {
     "path": "design/netlist/gate_driver_core.spice",
-    "sha256": "bf863872ac4ba5fcca2ae114f1ed338c4ce1161f278174e3dc27b8ab32d9d1ba",
+    "sha256": "0bc2bed8d33f04b0833331f61bb713a04b390529e2bcb61f300e827c3c8c42b3",
     "top_ports": [
       "VDD_LOGIC",
       "GND_LOGIC",
@@ -22,24 +22,37 @@
       "GND_DRV"
     ],
     "device_count": 24,
-    "transistor_count": 959
+    "transistor_count": 959,
+    "passives_not_drawn": [
+      {
+        "name": "x1_XCCOMP",
+        "model": "cap_mim_1f0_m4m5_noshield",
+        "c_width_um": 3.0,
+        "c_length_um": 3.0,
+        "m": 1,
+        "nets": {
+          "plus": "x1_ncb",
+          "minus": "IN_DRV"
+        }
+      }
+    ]
   },
   "generator": {
     "path": "layout/gen_gate_driver_core.py",
-    "sha256": "f83c0942e12b3dc545f81ea4727861a15efd48fc82ef1a4832fb973c48c03334"
+    "sha256": "e1a25315df982da69c76453037f5f6f9171a16d3090e4d0b59f526597fc58fd9"
   },
   "tools": {
     "klt_version": "klt 0.2.0",
     "pdk": {
       "name": "gf180mcuD",
       "variant": "gf180mcuD",
-      "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
     },
     "note": "the klayout build and the extraction deck's content hash are recorded in gate_driver_core.checks.json (klt extract's own provenance block)"
   },
   "git": {
-    "commit": "43fe367909d27ee5f605737cacd82a491b4e8944",
-    "describe": "43fe367-dirty"
+    "commit": "ab373704bc7cfdb6728bb72e6dfc92c84f80c6da",
+    "describe": "ab37370-dirty"
   },
   "placement": [
     {

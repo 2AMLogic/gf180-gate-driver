@@ -102,6 +102,21 @@ DEFAULT_PDK = "gf180mcuD"
 L_DNWELL = (12, 0)
 L_LVPWELL = (204, 0)
 L_DUALGATE = (55, 0)
+L_COMP = (22, 0)  # Comp -- gf180mcu's single diffusion/active/tap layer; klt's
+# curated deck resolves both "active" and "tap" roles to this same number, so
+# a body-tie tap is drawn on it exactly like ordinary MOS active (see
+# body_ties()'s docstring for why that single-layer choice matters for LVS).
+L_CONTACT = (33, 0)  # Contact -- Comp/Poly2 <-> Metal1
+L_NWELL = (21, 0)  # Nwell -- pfet body / well-tap layer
+L_PPLUS = (31, 0)  # Pplus -- substrate/p-well tie implant
+L_NPLUS = (32, 0)  # Nplus -- gf180mcu's `tap_nplus` derivation input (klt
+# issue #1084): `tap_nplus & active & nwell` is what `klt extract` recognises
+# as a genuine well tie for this deck (it has no distinct tap mask -- see
+# body_ties()'s docstring). Without this layer, an ordinary Comp+Contact+
+# Metal tap inside Nwell reads as indistinguishable from ordinary PMOS
+# source/drain diffusion and is *not* derived into a tap at all -- confirmed
+# empirically (a first pass of this generator without L_NPLUS still extracted
+# every PMOS body onto its own anonymous net, unchanged).
 L_METAL1 = (34, 0)
 L_METAL1_LABEL = (34, 10)
 L_VIA1 = (35, 0)
@@ -124,8 +139,65 @@ JUMPER_WIDTH_UM = 0.6  # Metal1 left-rail <-> right-rail jumper
 JUMPER_PITCH_UM = 1.4
 JUMPER_BAND_GAP_UM = 4.0  # stack top -> first jumper
 DNWELL_MARGIN_UM = 4.0  # DNWELL_DRV enclosure of the 5V/6V group
-LVPWELL_MARGIN_UM = 1.0  # LVPWELL enclosure of one 5V/6V nfet strip
+LVPWELL_MARGIN_UM = 1.2  # LVPWELL enclosure of one 5V/6V nfet strip -- also
+# the enclosure every per-device WELL_TIE_MARGIN_UM rectangle uses (bumped
+# from the original 1.0 so a body tap -- offset TAP_LEFT_OFFSET_UM/
+# TAP_TOP_OFFSET_UM outside the device's own bbox -- lands comfortably inside
+# it; still well under half of CHANNEL_UM (1.6), so it never reaches a
+# vertically-stacked neighbour's own bbox, and leaves >=0.6um clear of an
+# *adjacent* pfet's own WELL_TIE_MARGIN_UM rectangle when two same-flavor
+# devices are stacked back to back (3.2 - 2*1.2 = 0.8 > nwell.space.1's
+# 0.6um "merge below this" threshold -- see body_ties()).
 DUALGATE_MARGIN_UM = 2.0  # Dualgate enclosure of the 5V/6V group
+
+# Per-device body-tie tap (body_ties()) and PMOS well-tie rectangle sizing.
+# CONTACT_SIZE_UM/ENCLOSURE_MARGIN_UM/WELL_ENCLOSURE_MARGIN_UM below mirror
+# klayout-tools' own generator constants (gen.py) so a hand-drawn tap clears
+# the same gf180mcu DRC thresholds `klt gen`'s own generators are sized
+# against, without re-deriving them independently.
+CONTACT_SIZE_UM = 0.22  # contact.width.1 (CO.1)
+ENCLOSURE_MARGIN_UM = 0.10  # comp.enclosing.contact.1 / poly2.enclosing.contact.1 (CO.3/CO.4)
+TAP_COMP_UM = CONTACT_SIZE_UM + 2 * ENCLOSURE_MARGIN_UM  # 0.42um Comp tap pad
+TAP_LEFT_OFFSET_UM = 0.6  # tap center, left of the device's own bbox.x0
+TAP_TOP_OFFSET_UM = 0.6  # tap center, above the device's own bbox.y1
+WELL_TIE_MARGIN_UM = 1.2  # PMOS per-device Nwell-tie rectangle margin --
+# same value/rationale as LVPWELL_MARGIN_UM above (both must clear the tap
+# offset and stay under half of CHANNEL_UM / away from nwell.space.1).
+GUARD_RING_MARGIN_UM = 5.5  # PCOMP guard ring offset -- genuinely *outside*
+# DNWELL_MARGIN_UM=4.0 so the ring sits around the DNWELL_DRV marker (DRM
+# 7.2's own intent: a P+ ring in the substrate surrounding the deep-nwell,
+# not inside it) with a real, non-touching 0.5um gap from DNWELL_DRV's own
+# edge -- `klt components`/`check_gate_driver_core.py`'s `dnwell_partition`
+# check groups any Comp shape *touching* a DNWELL region into that DNWELL's
+# own component (the same mechanism the check itself uses to assert 3.3V/
+# 5V/6V separation), so a ring that merely abutted DNWELL_DRV would pull
+# every one of its 4 strokes into that count -- confirmed empirically (a
+# margin of 4.5, one edge touching, inflated `active_regions_in_dnwell` by
+# the ring's own 4 raw rectangles on top of the expected per-tap adjustment
+# below). Also far enough from every per-device body_ties() tap (offset only
+# TAP_LEFT_OFFSET_UM/TAP_TOP_OFFSET_UM=0.6um past a device's own bbox) to
+# clear comp.space.1 (0.28um) between the ring's Comp and a tap's own Comp --
+# worst case (a device that itself defines the group bbox edge) leaves
+# (5.5 - GUARD_RING_WIDTH_UM) - (TAP_LEFT_OFFSET_UM + TAP_COMP_UM/2)
+# = 4.5 - 0.81 = 3.69um clearance, comfortably over 0.28um. The ring's own
+# Metal1-layer neighbours (the jumper band, gate-route channels) never
+# interact with it at all since it draws bare Comp only -- see guard_ring().
+GUARD_RING_WIDTH_UM = 1.0  # PCOMP guard ring stroke width
+GUARD_RING_STROKE_COUNT = 4  # N/S/E/W rects guard_ring() draws (one Comp
+# "active" shape each, positioned entirely outside DNWELL_DRV -- exported
+# so check_gate_driver_core.py's dnwell_partition check can account for them
+# in its own expected "active regions outside DNWELL" arithmetic).
+GUARD_RING_STRAP_WIDTH_UM = STUB_WIDTH_UM  # Metal1 strap along the ring's own
+# contacted N/S strokes -- same width as every other Metal1 stub/strap this
+# generator draws, wide enough to enclose CONTACT_SIZE_UM with margin.
+GUARD_RING_CONTACT_PITCH_UM = 2.0  # contact-row pitch along the ring's N/S
+# strokes -- comfortably above contact.space (CO.2, 0.28um: pitch leaves a
+# 2.0 - CONTACT_SIZE_UM = 1.78um gap between adjacent contacts).
+GUARD_RING_JUMPER_CLEARANCE_UM = 1.0  # north stroke's own metal1.space.1
+# clearance above jumpers()'s topmost jumper bar -- see guard_ring()'s own
+# comment for why this can be needed at all (well over the deck's actual
+# metal1.space.1 minimum, no reason to cut it close against a check that
+# only needs to run once per regeneration).
 
 # Thick-oxide (medium-voltage) model names -- the ones that must sit inside
 # DNWELL_DRV + Dualgate and must never share a DNWELL with the 3.3V devices
@@ -660,6 +732,11 @@ class Interconnect:
         self.nets = nets
         self.shapes: list[dict] = []
         self.labels: list[dict] = []
+        # guard_ring()'s ring is strapped to the 3.3V group's own ground
+        # rail -- this block's substrate reference, since the 3.3V devices
+        # sit directly on native substrate outside every DNWELL (see that
+        # method's docstring).
+        self.substrate_net = "GND_LOGIC"
 
         column_x1 = max(p.x1 for p in placements)
         self.left_rail_x = {
@@ -841,11 +918,221 @@ class Interconnect:
                 )
             )
 
+    def _tap(self, x: float, y: float, implant: tuple[int, int], net: str) -> None:
+        """One body-tie tap at ``(x, y)``: Comp + implant + Contact + Metal1 pad,
+        strapped west on Metal1 to ``net``'s own left rail and via'd up to it.
+
+        ``implant`` selects which body the tap ties: ``L_NPLUS`` (n+ diffusion
+        inside an Nwell -> a *well* tie) or ``L_PPLUS`` (p+ diffusion outside
+        every Nwell -> a *substrate/p-well* tie).  gf180mcu draws no dedicated
+        tap mask, so that implant choice is the only thing that distinguishes a
+        tie from ordinary source/drain diffusion -- both for the foundry and
+        for `klt extract`, whose gf180mcu deck derives its tap region as
+        ``(tap_nplus & active & nwell) | (tap_pplus & (active - nwell))``
+        (klayout-tools #1084).  Drawing the implant *only* over the tap
+        footprint (never as a blanket rectangle over a device) is therefore
+        load-bearing: a Pplus rectangle covering an nfet's own diffusion would
+        turn its source and drain into substrate ties and short the block.
+
+        The Metal1 strap crosses *under* whichever unrelated Metal2 rails sit
+        between the tap and ``net``'s rail with no via, the same crossing
+        scheme :meth:`device_wiring` uses for every source/gate stub.
+        """
+        half_comp = TAP_COMP_UM / 2.0
+        half_contact = CONTACT_SIZE_UM / 2.0
+        self.shapes.append(_rect(L_COMP, x - half_comp, y - half_comp, x + half_comp, y + half_comp))
+        self.shapes.append(_rect(implant, x - half_comp, y - half_comp, x + half_comp, y + half_comp))
+        self.shapes.append(
+            _rect(L_CONTACT, x - half_contact, y - half_contact, x + half_contact, y + half_contact)
+        )
+        self.shapes.append(
+            _rect(L_METAL1, x - LANDING_UM / 2, y - LANDING_UM / 2, x + LANDING_UM / 2, y + LANDING_UM / 2)
+        )
+        rail = self.left_rail_x[net]
+        self.shapes.append(_hbar(L_METAL1, rail, x + STUB_WIDTH_UM / 2, y, STUB_WIDTH_UM, name=net))
+        self._via_stack(rail, y)
+
+    def body_ties(self) -> None:
+        """Per-device body tap for every drawn transistor (issue #132).
+
+        Each device gets its own tap just outside its own bbox
+        (``TAP_LEFT_OFFSET_UM`` left of ``x0``, ``TAP_TOP_OFFSET_UM`` above
+        ``y1``), wired to the net the netlist itself names as that device's
+        body (``device.b``) -- so every one of the 959 drawn transistors has a
+        real, drawn, contacted body tie rather than a floating well or an
+        extractor-synthesized placeholder.  Which implant a tap carries, and
+        which body region it therefore ties, follows the device's own flavor
+        and voltage domain:
+
+        =============================  ===========  =====================================
+        device                         implant      ties
+        =============================  ===========  =====================================
+        pfet (either domain)           ``Nplus``    its own Nwell -> ``VDD_LOGIC``/``VDD_DRV``
+        nfet, 3.3 V group              ``Pplus``    the native p-substrate -> ``GND_LOGIC``
+        nfet, 5 V/6 V group            ``Pplus``    the ``LVPWELL`` patch inside
+                                                    ``DNWELL_DRV`` -> ``GND_DRV``
+        =============================  ===========  =====================================
+
+        **pfet taps** additionally draw a fresh Nwell rectangle that is a
+        strict *superset* of the device's own reported ``bbox_um`` (with
+        ``WELL_TIE_MARGIN_UM`` margin on every side): `klt gen mos_array`'s own
+        internal Nwell for a ``flavor: "pfet"`` device cannot extend past its
+        own reported bbox by definition, so a redundant rectangle containing
+        the whole bbox is guaranteed to overlap (merge with) it once flattened
+        -- the same "redundant enclosing rectangle" technique
+        :meth:`voltage_domain_markers` already uses for LVPWELL/DNWELL, per
+        device instead of per group.  `klt extract`'s pfet body terminal *is*
+        the Nwell region a device's active sits in, so tying that per-device
+        Nwell island to a real net through an n+ tap resolves that device's own
+        body to ``VDD_LOGIC``/``VDD_DRV`` independently of every other device's
+        island.
+
+        **nfet taps** are drawn the same way but land on a body region
+        gf180mcu's `klt` extraction deck does not model as a region at all: it
+        declares one deck-wide ``substrate_net`` global and ties *every* nfet
+        body terminal to it with KLayout's ``connect_global``, with no
+        ``DNWELL``/``LVPWELL`` in its connectivity graph (``204/0`` is reported
+        in `klt extract`'s own ``ignored_layers``).  Every drawn p+ tie in the
+        design -- the 3.3 V group's substrate taps, the isolated ``LVPWELL``
+        taps inside ``DNWELL_DRV``, and :meth:`guard_ring`'s ring -- therefore
+        lands on that single global identity, so the extractor reports
+        ``GND_LOGIC`` and ``GND_DRV`` as one merged net.  That merge is the
+        *extractor's* model, not this layout's routing: the two ground rails
+        are drawn as separate Metal2 nets and stay separate in the drawn
+        interconnect, which ``check_gate_driver_core.py``'s
+        ``ground_rail_isolation`` check asserts independently -- `klt
+        components` over Metal1/Via1/Metal2 only, net names from the Metal2
+        text layer, no deck globals and no device recognition, so it rules on
+        the drawn interconnect rather than on the extractor's substrate model.
+        That check is what covers this gap now that neither `klt lvs` nor
+        ``check_gate_driver_core.py``'s own ``devices`` check can still tell
+        the two rails apart, and DRC cannot either (two overlapping same-layer
+        shapes on different nets merge into one polygon and raise no spacing
+        violation).  It is also electrically
+        the node the block already declares: ``spec/decision-records/0001``
+        Decision 1 ratifies ``GND_LOGIC``/``GND_DRV`` as **one** electrical
+        reference node, split into two pins only at the pad ring (option (c),
+        genuinely isolated grounds, was considered and rejected).  See
+        ``layout/lvs/make_reference.py``'s transform 3 and ``layout/README.md``
+        for how the LVS reference models it and what that costs.
+        """
+        for placement in self.placements:
+            device = placement.device
+            tap_x = placement.x0 - TAP_LEFT_OFFSET_UM
+            tap_y = placement.y1 + TAP_TOP_OFFSET_UM
+            if device.flavor == "pfet":
+                self._tap(tap_x, tap_y, L_NPLUS, device.b)
+                self.shapes.append(
+                    _rect(
+                        L_NWELL,
+                        placement.x0 - WELL_TIE_MARGIN_UM,
+                        placement.y0 - WELL_TIE_MARGIN_UM,
+                        placement.x1 + WELL_TIE_MARGIN_UM,
+                        placement.y1 + WELL_TIE_MARGIN_UM,
+                        name=f"NWELL_TIE_{device.name}",
+                    )
+                )
+            else:
+                self._tap(tap_x, tap_y, L_PPLUS, device.b)
+
+    def guard_ring(self) -> None:
+        """Closed, contacted PCOMP guard ring around ``DNWELL_DRV`` (DN.3).
+
+        gf180mcu's own DRC deck states the rule this draws, and states it as a
+        connectivity requirement rather than a geometry one -- ``DN.3``: *"Each
+        DNWELL shall be directly surrounded by PCOMP guard ring tied to the
+        P-substrate potential"* (the PDK's ``dnwell.rb`` implements it as
+        ``dnwell.not_inside(pcomp.holes.not(pcomp).interacting(dnwell, 1..1)``
+        ``.extents)``, i.e. the DNWELL must sit inside the *hole* of a closed
+        PCOMP annulus).  So the ring is:
+
+        * **closed** -- four overlapping Comp+Pplus strokes merge into one
+          annulus whose hole contains all of ``DNWELL_DRV``;
+        * **PCOMP**, not bare Comp -- ``pcomp = comp AND pplus`` in the PDK's
+          own derivation, so the Pplus stroke is what makes this a guard ring
+          rather than a rectangle of undoped diffusion;
+        * **tied to the P-substrate potential** -- contacted on a
+          ``GUARD_RING_CONTACT_PITCH_UM`` pitch along its north and south
+          strokes and strapped on Metal1 to the 3.3 V group's own ground rail,
+          which is this block's substrate reference (the 3.3 V devices sit
+          directly on native substrate, outside every DNWELL);
+        * placed ``GUARD_RING_MARGIN_UM`` outside the 5 V/6 V group's bbox,
+          which clears ``DF.18`` (min. DNWELL space to PCOMP outside Nwell and
+          DNWELL, 2.5 um) against the ``DNWELL_MARGIN_UM``-sized DNWELL_DRV
+          marker with margin to spare.
+
+        The **east and west strokes carry no contacts**, and that is the
+        "closed ring has to be cut for every signal crossing the domain
+        boundary" problem ``layout/README.md`` predicted, landing exactly where
+        it was predicted to: every 5 V/6 V device's source, gate and drain stub
+        leaves the domain horizontally on Metal1 and crosses those two strokes,
+        so a Metal1 strap along them would short all of them together.  Comp
+        and Metal1 do not interact without a Contact bridging them, so the
+        crossings themselves are harmless -- the strokes are tied through the
+        ring's own continuous p+ diffusion instead of through metal, which
+        keeps the ring closed (DN.3) and grounded, at a higher tie resistance
+        on the two vertical strokes than a fully-strapped ring would have.
+        Distributing contacts along them needs a Metal2 crossover per stub,
+        i.e. a routing-channel redesign; it is recorded in ``layout/README.md``
+        rather than bolted on here.
+        """
+        mv = [p for p in self.placements if p.device.is_mv]
+        if not mv:
+            return
+        x0 = min(p.x0 for p in mv) - GUARD_RING_MARGIN_UM - GUARD_RING_WIDTH_UM
+        x1 = max(p.x1 for p in mv) + GUARD_RING_MARGIN_UM + GUARD_RING_WIDTH_UM
+        y0 = min(p.y0 for p in mv) - GUARD_RING_MARGIN_UM - GUARD_RING_WIDTH_UM
+        y1 = max(p.y1 for p in mv) + GUARD_RING_MARGIN_UM + GUARD_RING_WIDTH_UM
+        w = GUARD_RING_WIDTH_UM
+        # When the 5V/6V group's own y1 sits at (or near) the whole device
+        # stack's own top -- true for this netlist's placement order -- the
+        # margin-derived north stroke lands inside jumpers()'s own band
+        # (every net's Metal1 jumper bar, drawn above `stack_top`): the
+        # narrow gaps *between* individual jumper bars are too tight for this
+        # stroke's own contact/strap Metal1 to clear metal1.space.1 from its
+        # neighbours on both sides at once (confirmed empirically -- a naive
+        # margin-only y1 landed two `metal1.space.1` violations against the
+        # nearest jumpers' own via-landing pads). DN.3 sets no *maximum*
+        # ring-to-DNWELL distance, so it is always safe to push the north
+        # stroke up past the jumper band entirely instead of threading it
+        # through -- the strap then never shares a y-band with any jumper.
+        if self.jumper_y:
+            jumper_top = max(self.jumper_y.values()) + JUMPER_WIDTH_UM / 2.0
+            y1 = max(y1, jumper_top + GUARD_RING_JUMPER_CLEARANCE_UM + w)
+        strokes = [
+            (x0, y0, x1, y0 + w),  # S
+            (x0, y1 - w, x1, y1),  # N
+            (x0, y0, x0 + w, y1),  # W
+            (x1 - w, y0, x1, y1),  # E
+        ]
+        for rect in strokes:
+            self.shapes.append(_rect(L_COMP, *rect, name="GUARD_RING_DRV"))
+            self.shapes.append(_rect(L_PPLUS, *rect, name="GUARD_RING_DRV"))
+
+        # Contact row + Metal1 strap on the north and south strokes only (see
+        # the docstring for why not east/west), tied to the substrate net.
+        net = self.substrate_net
+        rail = self.left_rail_x[net]
+        half_contact = CONTACT_SIZE_UM / 2.0
+        for y in (y0 + w / 2.0, y1 - w / 2.0):
+            self.shapes.append(
+                _hbar(L_METAL1, min(rail, x0), x1, y, GUARD_RING_STRAP_WIDTH_UM, name=net)
+            )
+            self._via_stack(rail, y)
+            x = x0 + GUARD_RING_CONTACT_PITCH_UM / 2.0
+            while x <= x1 - GUARD_RING_CONTACT_PITCH_UM / 2.0:
+                self.shapes.append(
+                    _rect(L_CONTACT, x - half_contact, y - half_contact, x + half_contact, y + half_contact)
+                )
+                x += GUARD_RING_CONTACT_PITCH_UM
+
     def build(self) -> dict:
         self.rails()
         self.jumpers()
         self.device_wiring()
         self.voltage_domain_markers()
+        self.body_ties()
+        self.guard_ring()
         # `klt draw --params` takes the *params* object itself (dbu_um /
         # shapes / labels); the CLI wraps it in the request envelope.
         return {"dbu_um": 0.001, "shapes": self.shapes, "labels": self.labels}

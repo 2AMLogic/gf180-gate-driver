@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check ``layout/gate_driver_core.gds`` against its source schematic netlist.
 
-Three checks, all run against the *committed* GDS through `klt` -- none of
+Four checks, all run against the *committed* GDS through `klt` -- none of
 them reads the generator's internal state, so this is an independent audit of
 the stream, not a replay of how it was built:
 
@@ -31,6 +31,44 @@ the stream, not a replay of how it was built:
     3.3V (``*_03v3``) device's active region is outside it -- DRM 7.2 /
     spec/gate-driver.md 2.4, the "no shared DNWELL" acceptance criterion.
 
+    Issue #132's per-device body-tie taps
+    (``gen_gate_driver_core.Interconnect.body_ties()``) also draw Comp shapes
+    -- one per device (both flavors: an Nplus well tie for every PMOS, a
+    Pplus substrate/LVPWELL tie for every NMOS), deliberately on the *same*
+    Comp layer this check inspects, since gf180mcu's curated deck derives
+    both kinds of tie from ordinary active diffusion (see that method's
+    docstring) -- so the raw Comp shape count in/outside DNWELL is no longer
+    "one per device"; the expected counts below add exactly one tap per
+    device (of either flavor) on each side of the boundary. The guard ring
+    (``Interconnect.guard_ring()``) is positioned with a real, non-touching
+    gap outside DNWELL_DRV specifically so it never joins either component
+    and needs no such adjustment.
+
+``ground_rail_isolation``
+    ``klt components`` over the *routed metal only* -- Metal1 (34/0) and
+    Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge between them,
+    net names read from the Metal2 text layer (36/10).  No PDK deck, no device
+    recognition, and above all no deck-declared substrate global: this is a
+    purely geometric connectivity ruling over the drawn interconnect.
+
+    It asserts that **no component carries two distinct net names** (which
+    generalizes past the two grounds for free -- any drawn short between any
+    two named rails fails it) and, explicitly, that ``GND_LOGIC`` and
+    ``GND_DRV`` land in *different* components.  It also asserts every routed
+    net's label resolves to exactly one component, so the no-two-names ruling
+    cannot pass vacuously because a label or a rail went missing.
+
+    This check exists because issue #132's real substrate-tie geometry
+    **removed the two automated signals that used to cover the same ground**:
+    `klt extract` now reports ``GND_LOGIC``/``GND_DRV`` as one merged net
+    (klayout-tools #1128 -- the extraction deck ties every NMOS body to one
+    hardcoded substrate global, see ``_canon_net`` below), so neither
+    ``klt lvs`` nor this file's own ``devices`` check can still tell the two
+    rails apart.  DRC does not cover it either: two same-layer shapes on
+    different nets that *overlap* merge into one polygon and raise no spacing
+    violation.  Without this check, an accidental short between the two
+    domains in the drawn interconnect would be caught by nothing at all.
+
 ``voltage_domain``
     ``klt layers --flattened`` for the marker layers, plus the
     ``voltage_domain_warnings`` block ``klt extract`` returns.  gf180mcu's
@@ -59,7 +97,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
+    GUARD_RING_STROKE_COUNT,
     HERE,
+    L_METAL1,
+    L_METAL2,
+    L_METAL2_LABEL,
+    L_VIA1,
     LV_MODELS,
     MV_MODELS,
     NETLIST_PATH,
@@ -84,9 +127,40 @@ DEFAULT_PDK = "gf180mcuD"
 
 _PARAM_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)")
 
+#: GND_LOGIC (3.3V group) and GND_DRV (5V/6V group) -- two drawn Metal2 nets,
+#: two schematic pins, but the one electrical reference node
+#: spec/decision-records/0001 Decision 1 ratifies. See `_canon_net` below.
+_GROUND_NETS = frozenset({"GND_LOGIC", "GND_DRV"})
+
+
+def _canon_net(net: str) -> str:
+    """Collapse ``GND_LOGIC``/``GND_DRV`` (and klt's own merged label for the
+    two, e.g. ``"GND_DRV|GND_LOGIC"``) to one canonical token, for comparison
+    purposes only.
+
+    Issue #132 draws real substrate-tie geometry for *both* of this design's
+    grounds (``GND_LOGIC`` for the 3.3V group, ``GND_DRV`` for the 5V/6V
+    group -- ``Interconnect.body_ties()``). gf180mcu's curated `klt`
+    extraction deck ties every NMOS body to one hardcoded global substrate
+    identity regardless of DNWELL/LVPWELL enclosure (klayout-tools #1128,
+    confirmed by reading `extract.py`'s own `connect_global` handling) -- so
+    once both grounds carry a real tie, `klt extract` also reports every
+    device terminal actually wired to either rail as one merged net (its own
+    synthesized ``"GND_DRV|GND_LOGIC"``-style label), not the two separate
+    rails the schematic and the drawn metal both keep distinct. That merge is
+    the *extractor's* model, not a real short in the drawn interconnect (see
+    `body_ties()`'s docstring and `layout/README.md`'s "Known gaps"), so it
+    is normalized away here for this check's device-connectivity comparison
+    the same way `layout/lvs/make_reference.py` normalizes it for `klt lvs`.
+    Every other net name is returned unchanged.
+    """
+    if set(net.split("|")) & _GROUND_NETS:
+        return "|".join(sorted(_GROUND_NETS))
+    return net
+
 
 def _device_key(flavor: str, w_um: float, l_um: float, gate: str, ds: frozenset) -> tuple:
-    return (flavor, round(w_um, 3), round(l_um, 3), gate, ds)
+    return (flavor, round(w_um, 3), round(l_um, 3), _canon_net(gate), frozenset(_canon_net(n) for n in ds))
 
 
 def expected_devices(devices: list[Device]) -> collections.Counter:
@@ -231,6 +305,25 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
     lv_devices = [d for d in devices if d.model in LV_MODELS]
     unknown = [d.model for d in devices if d.model not in MV_MODELS | LV_MODELS]
 
+    # Issue #132: body_ties() draws one Comp tap per *every* device (both
+    # flavors), not just PMOS -- an nfet tap (Pplus implant) and a pfet tap
+    # (Nplus implant) both land on this same Comp layer this check inspects,
+    # so the raw Comp shape count in/outside DNWELL gains one extra shape per
+    # device, regardless of flavor -- see this function's module-docstring
+    # entry above.
+    mv_pfet_taps = sum(1 for d in mv_devices if d.flavor == "pfet")
+    lv_pfet_taps = sum(1 for d in lv_devices if d.flavor == "pfet")
+    mv_nfet_taps = sum(1 for d in mv_devices if d.flavor == "nfet")
+    lv_nfet_taps = sum(1 for d in lv_devices if d.flavor == "nfet")
+    # guard_ring() draws GUARD_RING_STROKE_COUNT more Comp shapes, positioned
+    # with a real, non-touching gap outside DNWELL_DRV (see that method's
+    # docstring) -- so they land in the "outside" bucket too, but only when
+    # there is an MV group for it to enclose (guard_ring() itself no-ops
+    # otherwise).
+    guard_ring_shapes = GUARD_RING_STROKE_COUNT if mv_devices else 0
+    expected_in_dnwell = len(mv_devices) + mv_pfet_taps + mv_nfet_taps
+    expected_outside = len(lv_devices) + lv_pfet_taps + lv_nfet_taps + guard_ring_shapes
+
     active_in_dnwell = sum(counts(c).get("active", 0) for c in in_dnwell)
     active_outside = sum(counts(c).get("active", 0) for c in outside)
 
@@ -239,15 +332,19 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
         failures.append(f"device model(s) not classified as 3.3V or 5V/6V: {sorted(set(unknown))}")
     if len(in_dnwell) != 1:
         failures.append(f"expected exactly one DNWELL region, found {len(in_dnwell)}")
-    if active_in_dnwell != len(mv_devices):
+    if active_in_dnwell != expected_in_dnwell:
         failures.append(
             f"{active_in_dnwell} active region(s) inside DNWELL, expected "
-            f"{len(mv_devices)} (one per 5V/6V device)"
+            f"{expected_in_dnwell} ({len(mv_devices)} 5V/6V device(s) + "
+            f"{mv_pfet_taps} PMOS well-tie tap(s) + {mv_nfet_taps} NMOS "
+            "substrate-tie tap(s))"
         )
-    if active_outside != len(lv_devices):
+    if active_outside != expected_outside:
         failures.append(
             f"{active_outside} active region(s) outside every DNWELL, expected "
-            f"{len(lv_devices)} (one per 3.3V device)"
+            f"{expected_outside} ({len(lv_devices)} 3.3V device(s) + "
+            f"{lv_pfet_taps} PMOS well-tie tap(s) + {lv_nfet_taps} NMOS "
+            f"substrate-tie tap(s) + {guard_ring_shapes} guard-ring stroke(s))"
         )
     return {
         "name": "dnwell_partition",
@@ -255,11 +352,157 @@ def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
         "dnwell_regions": len(in_dnwell),
         "mv_devices": len(mv_devices),
         "lv_devices": len(lv_devices),
+        "mv_pfet_taps": mv_pfet_taps,
+        "lv_pfet_taps": lv_pfet_taps,
+        "mv_nfet_taps": mv_nfet_taps,
+        "lv_nfet_taps": lv_nfet_taps,
         "active_regions_in_dnwell": active_in_dnwell,
         "active_regions_outside_dnwell": active_outside,
         "dnwell_bbox_um": in_dnwell[0]["bbox_um"] if in_dnwell else None,
         "failures": failures,
     }
+
+
+def routed_nets(devices: list[Device]) -> list[str]:
+    """The net names the generator routes a labeled Metal2 rail pair for.
+
+    Re-derived here with the same expression ``gen_gate_driver_core.build()``
+    uses (``{d, g, s}`` over every device), so the isolation check below knows
+    how many labeled rails it is *supposed* to find rather than only auditing
+    whatever labels happen to be in the stream.
+    """
+    return sorted({n for device in devices for n in (device.d, device.g, device.s)})
+
+
+def ground_rail_isolation_verdict(response: dict, expected_nets: list[str]) -> dict:
+    """Rule on a ``klt components`` response: no drawn short between two nets.
+
+    Split out from :func:`check_ground_rail_isolation` so the ruling itself is
+    pure -- it takes the response dict and returns the check record, touching
+    neither `klt`, the PDK, nor the GDS.  That is what lets
+    ``layout/test_gen_gate_driver_core.py`` exercise it (including the failing
+    cases, which cannot be produced from the committed stream by construction)
+    on this repo's PDK-free CI runner, next to the other layout unit tests.
+
+    Three rulings, in the order their failure messages read best:
+
+    1. **No component carries two distinct net names.**  This is the ruling
+       that replaces what `klt lvs` can no longer see: two rails joined by any
+       drawn Metal1/Via1/Metal2 path land in one component and carry both
+       labels.  It is deliberately stated over *all* nets rather than only the
+       two grounds -- the general form costs nothing and catches, say, an
+       ``OUT``/``VDD_DRV`` short the same way.
+    2. **Every expected net resolves to exactly one component.**  Zero means
+       the rail or its label vanished (which would make ruling 1 pass
+       vacuously); more than one means the net is drawn open, split across
+       unconnected islands.
+    3. **``GND_LOGIC`` and ``GND_DRV`` are in different components**, stated
+       explicitly so the failure names the two rails this check exists for
+       even though ruling 1 already implies it.
+    """
+    components = response.get("components", [])
+    by_net: dict[str, list[str]] = collections.defaultdict(list)
+    per_component: list[dict] = []
+    failures: list[str] = []
+
+    for component in components:
+        names = sorted({label for label in component.get("labels", []) if label})
+        conductors = {
+            conductor["name"]: conductor.get("shape_count", 0)
+            for conductor in component.get("conductors", [])
+        }
+        vias = {
+            via["name"]: via.get("shape_count", 0) for via in component.get("vias", [])
+        }
+        per_component.append(
+            {
+                "component": component.get("id"),
+                "nets": names,
+                "m1_shapes": conductors.get("m1", 0),
+                "m2_shapes": conductors.get("m2", 0),
+                "via1_shapes": vias.get("via1", 0),
+            }
+        )
+        for name in names:
+            by_net[name].append(component.get("id"))
+        if len(names) > 1:
+            failures.append(
+                f"component {component.get('id')} carries {len(names)} distinct net "
+                f"names ({', '.join(names)}) -- these nets are shorted together in "
+                "the drawn Metal1/Via1/Metal2 interconnect"
+            )
+
+    for net in expected_nets:
+        owners = by_net.get(net, [])
+        if len(owners) == 0:
+            failures.append(
+                f"net {net} has no labeled metal component -- its rail or its "
+                "Metal2 label is missing from the stream"
+            )
+        elif len(owners) > 1:
+            failures.append(
+                f"net {net} is split across {len(owners)} unconnected metal "
+                f"components ({', '.join(owners)}) -- drawn open"
+            )
+
+    ground_owners = {net: by_net.get(net, []) for net in sorted(_GROUND_NETS)}
+    if all(len(owners) == 1 for owners in ground_owners.values()):
+        if len({owners[0] for owners in ground_owners.values()}) == 1:
+            failures.append(
+                "GND_LOGIC and GND_DRV share one drawn metal component "
+                f"({ground_owners['GND_DRV'][0]}) -- the two ground domains are "
+                "shorted in the drawn interconnect, which `klt lvs` can no "
+                "longer see (klayout-tools #1128 merges them in the extracted "
+                "netlist regardless)"
+            )
+
+    return {
+        "name": "ground_rail_isolation",
+        "passed": not failures,
+        "component_count": len(components),
+        "expected_nets": len(expected_nets),
+        "ground_components": {net: owners for net, owners in ground_owners.items()},
+        "components": sorted(per_component, key=lambda entry: entry["nets"]),
+        "failures": failures,
+    }
+
+
+def routed_metal_components(gds: str, top: str = TOP_CELL) -> dict:
+    """``klt components`` over the routed metal stack, with net names attached.
+
+    The layer stack lives here, in one place, so
+    ``layout/ground_rail_negative_control.py`` can prove *this* invocation
+    (these conductors, this via, this label layer) is capable of reporting a
+    short, rather than proving it about a re-typed copy of it.
+    """
+    return _klt(
+        "components",
+        gds,
+        "--top",
+        top,
+        "--conductors",
+        json.dumps(
+            [
+                {"name": "m1", "layer": list(L_METAL1)},
+                {"name": "m2", "layer": list(L_METAL2)},
+            ]
+        ),
+        "--vias",
+        json.dumps(
+            [{"name": "via1", "layer": list(L_VIA1), "between": ["m1", "m2"]}]
+        ),
+        "--label-layers",
+        json.dumps([{"name": "m2_label", "layer": list(L_METAL2_LABEL)}]),
+    )
+
+
+def check_ground_rail_isolation(gds: str, devices: list[Device]) -> dict:
+    """Assert the drawn interconnect keeps every net -- both grounds especially
+    -- electrically separate, independently of `klt extract`'s substrate model.
+    """
+    return ground_rail_isolation_verdict(
+        routed_metal_components(gds), routed_nets(devices)
+    )
 
 
 def check_voltage_domain(gds: str, extract_report: dict) -> dict:
@@ -317,6 +560,7 @@ def run(gds: str, pdk: str, work_dir: str) -> dict:
     checks = [
         device_check,
         check_dnwell_partition(gds, devices),
+        check_ground_rail_isolation(gds, devices),
         check_voltage_domain(gds, extract_report),
     ]
     return {
@@ -359,7 +603,10 @@ def main(argv: list[str] | None = None) -> int:
         status = "PASS" if check["passed"] else "FAIL"
         print(f"[{status}] {check['name']}")
         for key, value in check.items():
-            if key in ("name", "passed", "failures", "missing", "unexpected"):
+            # "components" is ground_rail_isolation's per-net evidence table --
+            # one row per routed net, useful in the committed JSON report but
+            # far too wide for the console summary.
+            if key in ("name", "passed", "failures", "missing", "unexpected", "components"):
                 continue
             print(f"         {key}: {value}")
         for failure in check.get("failures", []):

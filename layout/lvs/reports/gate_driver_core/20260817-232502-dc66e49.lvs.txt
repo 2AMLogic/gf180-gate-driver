@@ -1,0 +1,14 @@
+layout: ../../../gate_driver_core.gds
+reference: ../../gate_driver_core.ref.spice
+top: gate_driver_core
+engine: klayout
+status: match
+mismatches: 1
+  nets: layout=17  reference=17  matched=17
+  devices: layout=959  reference=959  matched=959
+  pins: layout=17  reference=17  matched=17
+
+category_counts:
+  topology: 1
+
+[warning] topology  (layout)  device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch
