@@ -13,7 +13,16 @@
   (`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`, Finding
   3). The argument text below is left exactly as ratified — see the
   "Amendment" section at the end of this file, and decision record 0006's
-  "Amendment to decision record 0005" section, for the correction.
+  "Amendment to decision record 0005" section, for the correction. Further
+  amended by [decision record
+  0013](0013-output-stage-taper-node-gate-ceiling-bound.md), 2026-08-18 —
+  **quantification and bound**. Under the harness's post-issue-#156
+  `reltol=1e-4` tolerance, the same node re-measures worse still: `n1` =
+  6.14803 V (margin −148.0 mV) at `ss_-40c_vlogic3p30v-vdrv6p00v`, and
+  decision record 0013 additionally gives this exception its first explicit
+  ceiling bound (≤ 175 mV above the 6.0 V ceiling), mirroring decision
+  record 0006's Exception 3 bound. This record's argument text is, again,
+  left exactly as ratified.
 - **Supersedes**: none. **Extends** decision record 0004 (does not reopen or
   contradict it — 0004's own "Consequences" section explicitly deferred this
   exact choice to a follow-up issue; this record is that follow-up, and it

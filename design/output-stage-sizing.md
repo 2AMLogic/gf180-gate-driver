@@ -428,6 +428,24 @@ at `sf_-40c_vlogic3p30v-vdrv6p00v`, not n5 = 6.0538 V (−53.8 mV) measured here
 with an ideal 1 ns edge; this record's own idealized-edge results remain the
 authoritative baseline for `sim/output-stage-drive/`.
 
+**Further amended by issue #163**: after issue #156 fixed the sim harness's
+default transient tolerance (`reltol=1e-4`, previously ngspice's own
+under-resolved default), the same end-to-end campaign re-measures a worse
+case still: n1 = 6.14803 V (margin **−148.0 mV**) at
+`ss_-40c_vlogic3p30v-vdrv6p00v`,
+`sim/gate-driver-core-drive/records/20260817-202640-d7bda87.md` — an
+outward move of ~45.7 mV attributable entirely to the harness fix, not a
+design change (a companion extracted-DUT, no-RC-parasitic postlayout re-run
+corroborates a smaller excursion at the same corner, 6.13027 V / −130.3 mV,
+`sim/gate-driver-core-drive-postlayout/records/20260818-002620-ac84870.md`).
+[Decision record 0013](../spec/decision-records/0013-output-stage-taper-node-gate-ceiling-bound.md)
+gives Exception 2 its first explicit ceiling — **bounded at ≤ 175 mV above
+the 6.0 V ceiling** — mirroring the bound decision record 0006 already gave
+`IN_DRV`'s Exception 3, sized wider to cover deck-fidelity resolution this
+node has not yet had swept as deeply. This record's own idealized-edge
+results remain unchanged and are still the authoritative baseline for
+`sim/output-stage-drive/`; only the end-to-end citation above moves.
+
 ## 7. Cross-conduction / shoot-through (captured, no spec limit)
 
 Per issue #6 ("Also report... the peak cross-conduction (shoot-through)
