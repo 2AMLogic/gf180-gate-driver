@@ -71,8 +71,13 @@ gf180mcu medium-voltage devices, per
   0008's `Ron·W` baseline was a stopgap measured at the wrong gate drive and
   has been replaced as the design baseline by that document's §2.1.
   Everything from the pad outwards — multi-channel bond wires, ground return
-  and substrate noise — is decision record 0009. One piece is still deferred
-  to a follow-on issue: a shared-shuttle test-structure plan (issue #180).
+  and substrate noise — is decision record 0009. The remaining piece, a
+  shared-shuttle test-structure plan, is also now ratified: [decision record
+  0012](spec/decision-records/0012-low-side-power-switch-shuttle-test-structure-plan.md)
+  sizes a single reduced-scale reference channel and all three flyback
+  variants for a wafer.space GF180MCU quarter slot (issue #180). Schematic
+  capture, layout, and DRC/LVS closure for those structures are follow-on
+  work, not yet started.
 
   The headline result so far: **a 1 A on-die low-side channel in this
   process is area-dominated** — ~45.7 mm of `nfet_06v0` gate width to hold
