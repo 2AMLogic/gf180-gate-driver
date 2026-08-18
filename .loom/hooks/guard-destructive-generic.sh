@@ -380,11 +380,22 @@ fastpath_enabled() {
 
 # Shared structural pre-check: reject any chaining/piping/redirection/
 # substitution/newline. Pure bash builtins, zero forks.
+#
+# Every metacharacter here EXCEPT `|` is a raw byte scan, deliberately: `;`,
+# `&`, `<`, `>`, backtick, and `$(` all genuinely change bash's parse or expand
+# their contents even inside double quotes, so relaxing them for quoted
+# occurrences would be a real fastpath bypass (e.g. `echo "$(rm -rf /)"`), not
+# a false-positive fix. See _fastpath_has_unquoted_pipe()'s own comment (#127)
+# for why `|` is the one exception: a `|` byte inside a properly quoted
+# argument (ERE alternation, e.g. `grep -n "DROP TABLE\|foo" f`) is never live
+# to bash, so ignoring quoted ones can only ever narrow a false positive —
+# while an ambiguous/unterminated quote still fails safe (declines).
 fastpath_structural_ok() {
     case "$1" in
-        *';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
+        *';'*|*'&'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
     esac
     [[ "$1" == *$'\n'* ]] && return 1
+    _fastpath_has_unquoted_pipe "$1" && return 1
     return 0
 }
 
@@ -507,22 +518,23 @@ fastpath_builtin_admits() {
 _FASTPATH_PIPE_SINKS_ANYARG=" head tail wc "     # already fully allowlisted → any args
 _FASTPATH_PIPE_SINKS_STDIN=" cat less more "     # stdin-only → no positional operand
 
-# Quote-aware "split at THE single shell-level pipe" (#109). Pure bash, no forks.
+# Quote-aware shell-level-pipe scanner, shared by _fastpath_pipe_split() and
+# _fastpath_has_unquoted_pipe() below (#109, #127). Pure bash, no forks.
 #
-# The original spelling of this step was `left="${cmd%%|*}"` / `right="${cmd#*|}"`
-# plus `case "$right" in *'|'*) return 1`, a RAW byte scan that splits at the
-# FIRST `|` byte anywhere in the string with no notion of quoting. That is wrong
-# the moment the search PATTERN itself contains a `|` — which is exactly what ERE
-# alternation looks like, and the single most useful way to write a multi-term
-# search: `grep -n "DROP TABLE\|foo" schema.sql | head -3`. There the leftmost
-# `|` byte sits INSIDE grep's quoted argument, so the split landed mid-argument
-# and `right` still held the real shell pipe, tripping the "second pipe" decline.
-# The command then fell through to the full path where SQL_DDL_PATTERN matched
-# the phrase inside grep's own argument and denied at the catastrophic tier — the
-# precise false positive #5263's carve-out exists to prevent, reappearing as soon
-# as a second search term is added.
+# The original spelling of the pipe-count step was `left="${cmd%%|*}"` /
+# `right="${cmd#*|}"` plus `case "$right" in *'|'*) return 1`, a RAW byte scan
+# that splits at the FIRST `|` byte anywhere in the string with no notion of
+# quoting. That is wrong the moment a quoted argument contains a `|` — which is
+# exactly what ERE alternation looks like, and the single most useful way to
+# write a multi-term search: `grep -n "DROP TABLE\|foo" schema.sql | head -3`.
+# There the leftmost `|` byte sits INSIDE grep's quoted argument, so the split
+# landed mid-argument. #109 fixed this for the piped form
+# (fastpath_grep_pipe_admits()); #127 fixed the same class of bug for the BARE
+# (unpiped) form, where fastpath_structural_ok()'s own raw `*'|'*` byte scan
+# disqualified the command from the built-in allowlist before
+# fastpath_grep_pipe_admits() was ever consulted.
 #
-# So the pipe count has to agree with what bash itself would parse. This walks
+# So pipe detection has to agree with what bash itself would parse. This walks
 # the string once tracking quote state the way bash does:
 #   * outside quotes: `\` escapes the next byte; `'` and `"` open a span;
 #     a bare `|` is a REAL pipe.
@@ -532,25 +544,22 @@ _FASTPATH_PIPE_SINKS_STDIN=" cat less more "     # stdin-only → no positional 
 # The BSQ apostrophe idiom (`'a'\''b'`, #56) falls out of these rules for free:
 # close, escaped bare quote, reopen — the scan ends balanced, as bash does.
 #
-# On success sets _FASTPATH_PIPE_L / _FASTPATH_PIPE_R to the text either side of
-# that one pipe and returns 0. FAIL-SAFE in the declining direction for every
-# other outcome — zero real pipes, two or more real pipes (`grep a | grep b |
-# head`, and `||` which is two `|` bytes), or an unterminated quote (where our
-# parse and bash's could disagree) all return 1, so the caller falls through to
-# the full path exactly as before. This function only ever narrows a FALSE
-# positive: nothing it admits was reachable through the old raw split, because a
-# command with exactly one unquoted pipe and no quoted `|` splits identically
-# under both.
-_fastpath_pipe_split() {
+# Sets _FASTPATH_PIPE_COUNT to the number of REAL (unquoted) pipes found,
+# _FASTPATH_PIPE_POS to the offset of the first one (-1 if none), and
+# _FASTPATH_PIPE_UNTERMINATED=1 if the string ends inside an open quote span
+# (where our parse and bash's could disagree). Always returns 0 — callers
+# interpret the outputs; this function itself never "declines".
+_fastpath_scan_pipes() {
     # NOTE: separate statements on purpose — under `set -u` bash declares every
     # name in a single `local` list before running any of its initializers, so
     # `local s="$1" n=${#s}` errors with "s: unbound variable". This file does
     # not set -u, but its test harness sources these functions into one that does.
     local s="$1"
     local n=${#s}
-    local i c q='' pos=-1
-    _FASTPATH_PIPE_L=''
-    _FASTPATH_PIPE_R=''
+    local i c q=''
+    _FASTPATH_PIPE_COUNT=0
+    _FASTPATH_PIPE_POS=-1
+    _FASTPATH_PIPE_UNTERMINATED=0
     # Every branch below ends on an assignment or an `if`, never on a bare
     # `(( … ))`. That matters because the natural spelling of the escape branch,
     # `(( i++ ))`, evaluates to the PRE-increment value: at offset 0 (`\grep …`)
@@ -580,20 +589,55 @@ _fastpath_pipe_split() {
                     "'") q="'" ;;
                     '"') q='"' ;;
                     '|')
-                        if (( pos >= 0 )); then
-                            return 1   # a second REAL pipe — decline
-                        fi
-                        pos=$i
+                        (( _FASTPATH_PIPE_COUNT++ ))
+                        (( _FASTPATH_PIPE_POS < 0 )) && _FASTPATH_PIPE_POS=$i
                         ;;
                 esac
                 ;;
         esac
     done
-    [[ -z "$q" ]] || return 1        # unterminated quote — decline
-    (( pos >= 0 )) || return 1       # no shell-level pipe at all — decline
+    [[ -z "$q" ]] || _FASTPATH_PIPE_UNTERMINATED=1
+    return 0
+}
+
+# "Split at THE single shell-level pipe" (#109), built on _fastpath_scan_pipes()
+# above. On success sets _FASTPATH_PIPE_L / _FASTPATH_PIPE_R to the text either
+# side of that one pipe and returns 0. FAIL-SAFE in the declining direction for
+# every other outcome — zero real pipes, two or more real pipes (`grep a | grep
+# b | head`, and `||` which is two `|` bytes), or an unterminated quote all
+# return 1, so the caller falls through to the full path exactly as before.
+# This function only ever narrows a FALSE positive: nothing it admits was
+# reachable through the old raw split, because a command with exactly one
+# unquoted pipe and no quoted `|` splits identically under both.
+_fastpath_pipe_split() {
+    local s="$1"
+    _FASTPATH_PIPE_L=''
+    _FASTPATH_PIPE_R=''
+    _fastpath_scan_pipes "$s"
+    (( _FASTPATH_PIPE_UNTERMINATED == 0 )) || return 1   # unterminated quote — decline
+    (( _FASTPATH_PIPE_COUNT == 1 )) || return 1          # zero or 2+ real pipes — decline
+    local pos=$_FASTPATH_PIPE_POS
     _FASTPATH_PIPE_L="${s:0:pos}"
     _FASTPATH_PIPE_R="${s:pos+1}"
     return 0
+}
+
+# Quote-aware "is there a LIVE (unquoted) pipe on this line" predicate (#127),
+# built on _fastpath_scan_pipes() above. Used by fastpath_structural_ok() so a
+# `|` byte that lives entirely inside a quoted argument (ERE alternation, e.g.
+# `grep -n "DROP TABLE\|foo" f` with no shell pipe at all) does not disqualify
+# a command from the fastpath, while an actual shell-level pipe still does.
+#
+# Returns 0 (true — decline the fastpath) if there is at least one unquoted
+# pipe, OR the string ends inside an unterminated quote span (ambiguous — the
+# fail-safe direction is to treat that as "has a pipe" and decline, same as
+# _fastpath_pipe_split()'s fail-safe). Returns 1 (false — no live pipe, safe to
+# continue) only when the scan completed with balanced quotes and zero
+# unquoted pipes.
+_fastpath_has_unquoted_pipe() {
+    _fastpath_scan_pipes "$1"
+    (( _FASTPATH_PIPE_UNTERMINATED == 0 )) || return 0   # unterminated quote — treat as "has pipe"
+    (( _FASTPATH_PIPE_COUNT > 0 ))
 }
 
 fastpath_grep_pipe_admits() {
