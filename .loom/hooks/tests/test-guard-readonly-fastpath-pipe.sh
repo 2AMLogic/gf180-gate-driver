@@ -27,7 +27,7 @@
 # as pipes, and declines (fail-safe, falls through to the full path unchanged)
 # on zero pipes, two-or-more pipes, or an unterminated quote.
 #
-# This suite is split into two parts:
+# This suite is split into three parts:
 #
 #   PART 1 -- direct unit tests of _fastpath_pipe_split() and
 #   fastpath_grep_pipe_admits(). The two functions plus their sink allowlists
@@ -36,8 +36,17 @@
 #   the _MASKHEREDOC_AWK library. This pins the admission predicate itself,
 #   including the shapes that must keep DECLINING.
 #
+#   PART 1b -- direct unit tests of fastpath_multistatement_admits() /
+#   _fastpath_split_statements() (issue #198): the widened structural fastpath
+#   that recognizes a `;`/newline/`&&`-joined SEQUENCE of statements as
+#   fastpath-eligible when every statement independently matches one of the
+#   two single-statement admitted shapes above. See that function's own header
+#   comment in the hook source for why this direction does not reintroduce the
+#   mask_ask_positional_args() regression documented at ~3295-3309 there.
+#
 #   PART 2 -- end-to-end hook decision tests (ALLOW/ASK/DENY) through the real
-#   PreToolUse JSON protocol, including the issue's two literal repro commands.
+#   PreToolUse JSON protocol, including the issue's two literal repro commands
+#   and (issue #198) the multi-statement repro/safety-floor cases.
 #
 # The hook under test is the canonical source at .loom/hooks/ (this repo ships
 # no defaults/ tree -- see the file's own banner), copied into an isolated temp
@@ -194,6 +203,117 @@ else
 fi
 
 # =============================================================================
+# PART 1b -- fastpath_multistatement_admits() / _fastpath_split_statements()
+# unit tests (#198)
+# =============================================================================
+echo
+echo "=== fastpath multi-statement unit tests (#198) ==="
+
+MULTI_LIB="$(mktemp)"
+trap 'rm -f "$FASTPATH_LIB" "$MULTI_LIB"' EXIT
+
+# Extract from fastpath_structural_ok() (the shared structural pre-check)
+# through the closing brace of _fastpath_split_statements() -- covers
+# fastpath_structural_ok(), fastpath_builtin_admits(), the pipe-sink
+# allowlists, _fastpath_pipe_split(), fastpath_grep_pipe_admits(),
+# fastpath_multistatement_admits(), and _fastpath_split_statements(), all of
+# fastpath_multistatement_admits()'s own dependencies in one contiguous span.
+awk '
+    /^fastpath_structural_ok\(\) \{/ { emit = 1 }
+    emit { print }
+    /^_fastpath_split_statements\(\) \{/ { infunc = 1 }
+    infunc && /^\}$/ { exit }
+' "$SRC_HOOK" > "$MULTI_LIB"
+
+if ! grep -q '^fastpath_multistatement_admits() {' "$MULTI_LIB"; then
+    fail "could not extract fastpath_multistatement_admits()/_fastpath_split_statements() from $SRC_HOOK"
+else
+    # shellcheck disable=SC1090
+    source "$MULTI_LIB"
+
+    # --- _fastpath_split_statements(): quote-aware statement splitter -------
+    split_stmts_ok() {   # split_stmts_ok <desc> <cmd> <expected-statement>...
+        local desc="$1" cmd="$2"; shift 2
+        local -a want=("$@")
+        if _fastpath_split_statements "$cmd"; then
+            if [[ "${#_FASTPATH_STATEMENTS[@]}" -eq "${#want[@]}" ]]; then
+                local i ok=1
+                for (( i = 0; i < ${#want[@]}; i++ )); do
+                    [[ "${_FASTPATH_STATEMENTS[i]}" == "${want[i]}" ]] || ok=0
+                done
+                if [[ "$ok" -eq 1 ]]; then
+                    pass "$desc"
+                else
+                    fail "$desc (statements=[${_FASTPATH_STATEMENTS[*]}], wanted=[${want[*]}])"
+                fi
+            else
+                fail "$desc (got ${#_FASTPATH_STATEMENTS[@]} statements [${_FASTPATH_STATEMENTS[*]}], wanted ${#want[@]} [${want[*]}])"
+            fi
+        else
+            fail "$desc (split declined, expected admission)"
+        fi
+    }
+    split_stmts_declines() {
+        local desc="$1" cmd="$2"
+        if _fastpath_split_statements "$cmd"; then
+            fail "$desc (split ACCEPTED, expected decline; statements=[${_FASTPATH_STATEMENTS[*]}])"
+        else
+            pass "$desc"
+        fi
+    }
+
+    split_stmts_ok "(29) two ';'-separated statements split cleanly" \
+        'echo "a"; echo "b"' 'echo "a"' ' echo "b"'
+    split_stmts_ok "(30) newline-separated statements split cleanly" \
+        $'echo "a"\necho "b"' 'echo "a"' 'echo "b"'
+    split_stmts_ok "(31) '&&'-separated statements split cleanly" \
+        'echo "a" && echo "b"' 'echo "a" ' ' echo "b"'
+    split_stmts_ok "(32) three statements mixing ';' and newline, no doubled separator" \
+        $'echo "a"\necho "b"; echo "c"' 'echo "a"' 'echo "b"' ' echo "c"'
+    split_stmts_ok "(33) ';' inside a quoted argument is not a separator" \
+        'echo "a; b"' 'echo "a; b"'
+    split_stmts_ok "(34) '&&' would-be split with the DDL phrase safely inside quotes" \
+        "echo \"${DDL}\" && echo done" "echo \"${DDL}\" " ' echo done'
+
+    split_stmts_declines "(35) unterminated quote declines (fail-safe)" 'echo "a; echo "b"'
+    split_stmts_declines "(36) a lone '&' (backgrounding) declines -- not a simple sequencer" \
+        'echo "a" & echo "b"'
+    split_stmts_declines "(37) trailing ';' yields an empty statement -- declines" 'echo "a";'
+    split_stmts_declines "(38) leading ';' yields an empty statement -- declines" ';echo "a"'
+    split_stmts_declines "(39) doubled ';;' yields an empty statement -- declines" 'echo "a";;echo "b"'
+    split_stmts_declines "(39b) ';' immediately followed by newline yields an empty statement -- declines" \
+        $'echo "a";\necho "b"'
+
+    # --- fastpath_multistatement_admits(): full admission predicate ---------
+    multi_admits() {
+        local desc="$1" cmd="$2"
+        if fastpath_multistatement_admits "$cmd"; then pass "$desc"
+        else fail "$desc (expected ADMIT, got decline)"; fi
+    }
+    multi_declines() {
+        local desc="$1" cmd="$2"
+        if fastpath_multistatement_admits "$cmd"; then fail "$desc (expected DECLINE, got admit)"
+        else pass "$desc"; fi
+    }
+
+    multi_admits "(40) #198 repro: echo + grep|head over the DDL phrase (newline-joined)" \
+        "echo \"a\"
+grep -n \"${DDL}\" f.sql | head -5"
+    multi_admits "(41) ';'-joined echo + grep|head over the DDL phrase" \
+        "echo \"a\"; grep -n \"${DDL}\" f.sql | head -5"
+    multi_admits "(42) three admitted statements ('&&'-joined) all bare builtins" \
+        'echo "a" && ls && echo "b"'
+    multi_declines "(43) a single statement (no separator at all) declines -- not this fastpath's job" \
+        "grep -n \"${DDL}\" f.sql"
+    multi_declines "(44) SECURITY: one admitted statement + one live-DDL statement still declines" \
+        "echo \"a\"; psql -c \"${DDL} users\""
+    multi_declines "(45) SECURITY: an unadmitted statement anywhere in the sequence still declines" \
+        'echo "a"; curl http://example.com; echo "b"'
+    multi_declines "(46) unterminated quote anywhere in the block declines (fail-safe)" \
+        "echo \"a\"; grep -n \"${DDL} f.sql | head"
+fi
+
+# =============================================================================
 # PART 2 -- end-to-end hook decision tests (ALLOW/ASK/DENY)
 # =============================================================================
 echo
@@ -317,6 +437,26 @@ assert_decision "(j) SECURITY: real DDL execution, no pipe -> deny" "$result" de
 result=$(run_hook "grep -n \"a\\|b\" ${TARGET} | head -3; ${DDL} users")
 assert_decision "(k) SECURITY: quoted | plus a chained DDL command -> deny" \
     "$result" deny "$DDL"
+
+# --- (l) issue #198: the same admitted grep|head statement, but preceded by
+# an unrelated read-only echo statement on its own line -- was previously
+# denied on the full path (fell out of both single-statement carve-outs);
+# must now ALLOW via fastpath_multistatement_admits().
+result=$(run_hook "echo \"checking hook source\"
+grep -n \"${DDL}\" ${TARGET} | head -5")
+assert_allow "(l) #198: echo statement + admitted grep|head statement (newline-joined) -> allow" "$result"
+
+# --- (m) issue #198: same shape, ';'-joined with a trailing read-only
+# statement too, confirming the fix generalizes beyond exactly two statements
+result=$(run_hook "echo \"start\"; grep -n \"${DDL}\" ${TARGET} | head -5; echo \"done\"")
+assert_allow "(m) #198: 3-statement ';'-joined block over the DDL phrase -> allow" "$result"
+
+# --- (n) issue #198 safety floor: a multi-statement block where the DDL
+# phrase appears in a live, non-grep/rg-executed statement must still deny --
+# confirms the widened fastpath is scoped to already-admitted per-statement
+# shapes, not a general loosening of multi-statement scanning.
+result=$(run_hook "echo \"about to migrate\"; psql -c \"${DDL} users\"")
+assert_decision "(n) #198 SECURITY: echo + live psql DDL statement -> still deny" "$result" deny "$DDL"
 
 # =============================================================================
 echo

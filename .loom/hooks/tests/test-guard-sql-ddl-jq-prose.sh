@@ -52,6 +52,14 @@
 #       command substitution nested directly INSIDE the `--jq` value itself
 #       -> still DENY (the `$(`-floor applies to `--jq`'s own quoted span,
 #       not just other flags')
+#   (f)-(i) issue #198: a multi-line/multi-statement command block where a
+#       read-only `grep '<DDL phrase>' file | head` statement sits alongside
+#       other read-only statements (separated by newline/`;`/`&&`) was still
+#       denied on the full path even though every statement is read-only,
+#       because it qualified for neither of the two single-statement fastpath
+#       carve-outs. See fastpath_multistatement_admits() in the hook source
+#       for the fix and why it does not touch the redaction this file's
+#       safety-floor cases (c)-(e) above depend on.
 #
 # The hook under test is the canonical source at .loom/hooks/ (this repo
 # ships no defaults/ tree -- see the file's own banner), copied into an
@@ -177,6 +185,35 @@ assert_deny "(d) safety floor: DDL smuggled via \$(...) inside --body, --jq pres
 # $(-floor must apply to --jq's own quoted span, not just other flags'.
 result=$(run_hook "gh api foo --jq \"\$(psql -c '${DROPTBL} users')\"")
 assert_deny "(e) safety floor: DDL smuggled via \$(...) directly inside --jq's own value -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (f) issue #198 Reproduction: a multi-line block -- a read-only `echo`
+# statement, then a read-only `grep '<DDL phrase>' file | head` statement on
+# the next line -- must ALLOW even though the DDL phrase appears in the block,
+# because it only ever appears inside grep's own quoted search argument.
+result=$(run_hook "echo \"a\"
+grep -n \"${DROPTBL}\" .loom/hooks/guard-destructive-generic.sh | head -5")
+assert_allow "(f) #198 repro: multi-line echo + grep|head over the DDL phrase -> allow" "$result"
+
+# --- (g) issue #198: the same shape but ';'-separated on one line, with a
+# THIRD read-only statement thrown in, confirming the fix isn't newline-only.
+result=$(run_hook "echo \"start\"; grep -n \"${DROPTBL}\" .loom/hooks/guard-destructive-generic.sh | head -5; echo \"done\"")
+assert_allow "(g) #198: ';'-separated 3-statement block over the DDL phrase -> allow" "$result"
+
+# --- (h) issue #198 safety floor: a multi-statement block where the DDL
+# phrase appears in a NON-grep/rg context (a real live psql invocation, not
+# just quoted search text) must still DENY -- confirms the fix is scoped to
+# grep/rg pattern text specifically, not a general loosening of
+# multi-statement scanning.
+result=$(run_hook "echo \"about to run migration\"; psql -c \"${DROPTBL} users\"")
+assert_deny "(h) #198 safety floor: echo + live psql DDL in the same block -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (i) issue #198 safety floor: mixing an admitted read-only grep/pipe
+# statement with a genuinely live DDL statement in the same block must still
+# DENY -- the presence of one safe statement must not launder an unsafe one.
+result=$(run_hook "grep -n \"${DROPTBL}\" .loom/hooks/guard-destructive-generic.sh | head -5; psql -c \"${DROPTBL} users\"")
+assert_deny "(i) #198 safety floor: admitted grep|head statement + live psql DDL statement -> still deny" "$result" \
     "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
