@@ -492,13 +492,16 @@ mismatch means the deck build itself has moved, not that this layout changed.
 
 ### DRC (`klt drc`)
 
-Latest report: [`layout/drc/reports/gate_driver_core/20260818-075725-6ba5ede.drc.json`](drc/reports/gate_driver_core/20260818-075725-6ba5ede.drc.json)
+Latest report: [`layout/drc/reports/gate_driver_core/20260818-092452-c2493cb.drc.json`](drc/reports/gate_driver_core/20260818-092452-c2493cb.drc.json)
 — `status: clean`, `violation_count: 0`, deck `gf180mcu`, run against the
 stream whose content hash is the committed `gate_driver_core.provenance.json`'s
 (issue #166: the four-deep `XCCOMP*` MiM stack and its Metal3/Metal4/Metal5
 escape routing, still DRC-clean — including all three MIM Option B rules the
 deck ships). Re-running `klt drc` on the committed GDS reproduces that report
-byte for byte.
+byte for byte (confirmed fresh after rebasing onto issue #190's reproducibility
+re-verification, same `provenance.deck.content_hash` as the prior
+[`20260818-075725-6ba5ede`](drc/reports/gate_driver_core/20260818-075725-6ba5ede.drc.json)
+report it supersedes).
 
 #### What the DRC verdict covers
 
@@ -529,8 +532,12 @@ A deck that returns `clean` for everything would fail that control.
 
 ### LVS (`klt extract` + `klt lvs`)
 
-Latest report: [`layout/lvs/reports/gate_driver_core/20260818-075733-6ba5ede.lvs.json`](lvs/reports/gate_driver_core/20260818-075733-6ba5ede.lvs.json)
-— engine **`klayout`** (klayout 0.30.10), `status: match`:
+Latest report: [`layout/lvs/reports/gate_driver_core/20260818-092501-c2493cb.lvs.json`](lvs/reports/gate_driver_core/20260818-092501-c2493cb.lvs.json)
+— engine **`klayout`** (klayout 0.30.10), `status: match` (confirmed fresh
+after rebasing onto issue #190's reproducibility re-verification, same
+`provenance.deck.content_hash` as the prior
+[`20260818-075733-6ba5ede`](lvs/reports/gate_driver_core/20260818-075733-6ba5ede.lvs.json)
+report it supersedes):
 
 | | layout | reference | matched |
 |---|---|---|---|
