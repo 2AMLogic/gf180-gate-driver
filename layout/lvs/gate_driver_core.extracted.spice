@@ -90,7 +90,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): 1abd20265a36b86ac50a2a1e6b075b40
+* sha256 (this file, sans this line): 9be1e0f5f0863c20f75778b07a2f3aff
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
@@ -101,25 +101,25 @@
 X1 x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
 X2 x1_na IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
 X3 x1_nb x1_inb GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X4 GND_LOGIC x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
-X5 GND_LOGIC x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
-X6 GND_LOGIC x2_n4 x2_n5 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=27
-X7 GND_LOGIC x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
-X8 GND_LOGIC x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
-X9 IN_DRV x1_nbuf1 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
-X10 OUT x2_n5 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
-X11 OUT x2_n5 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X12 x1_nbuf1 x1_ncb GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X4 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X5 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X6 GND_DRV x2_n4 x2_n5 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=27
+X7 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X8 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X9 IN_DRV x1_nbuf1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X10 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X11 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X12 x1_nbuf1 x1_ncb GND_DRV GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
 X13 x1_nca VDD_LOGIC x1_na GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
 X14 x1_ncb VDD_LOGIC x1_nb GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X15 x2_n1 IN_DRV GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
-X16 x2_n2 x2_n1 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
-X17 x2_n3 x2_n2 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
-X18 x2_n4 x2_n3 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
-X19 x2_n4 x2_n3 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X20 x2_n5 x2_n4 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=26
-X21 x2_n5 x2_n4 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X22 x2_n5 x2_n4 GND_LOGIC GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X15 x2_n1 IN_DRV GND_DRV GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
+X16 x2_n2 x2_n1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
+X17 x2_n3 x2_n2 GND_DRV GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
+X18 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X19 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X20 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=26
+X21 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X22 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
 X23 x1_inb IN VDD_LOGIC VDD_LOGIC pfet_03v3 L=0.28U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
 X24 IN_DRV x1_nbuf1 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
 X25 OUT x2_n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=249

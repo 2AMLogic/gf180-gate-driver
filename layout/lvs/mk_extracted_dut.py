@@ -80,28 +80,38 @@ GROUND_REF = "GND_LOGIC"
 
 #: Issue #132's own body-tie geometry ties both grounds' Pplus substrate taps
 #: to the deck's one global substrate identity (klayout-tools #1128), so a
-#: real `klt extract` of this layout also merges every *ordinary* device
+#: real `klt extract` of this layout also merges every *ordinary* NMOS
 #: terminal (not just body) that is directly wired to GND_LOGIC or GND_DRV
 #: metal into one synthesized joined net name -- confirmed against a real
-#: extraction: `"|".join(sorted(("GND_DRV", "GND_LOGIC")))`. This repo's own
-#: testbenches (e.g. sim/gate-driver-core-drive-postlayout/testbench/
-#: gate_driver_core_tb.spice) instantiate `GND_LOGIC` and `GND_DRV` as their
-#: own named nodes (bridged by a small tie resistor, modeling decision record
-#: 0001 Decision 1's "one electrical node") -- a DUT that kept the deck's own
-#: merged label verbatim would have *no* net literally named `GND_LOGIC` or
-#: `GND_DRV` for that stimulus to connect to, silently floating every
-#: terminal on either rail. So every occurrence of this merged label --
-#: not just the body terminal GROUND_REF already covers -- is canonicalized
-#: back to `GROUND_REF` before emission; see `_canon_net`.
+#: extraction: `"|".join(sorted(("GND_DRV", "GND_LOGIC")))`. Folding every
+#: occurrence of that merged label to one fixed name (an earlier version of
+#: this script did exactly that) is wrong, not just imprecise: this design's
+#: two ground domains are drawn -- and this repo's own postlayout testbench
+#: (`sim/gate-driver-core-drive-postlayout/testbench/gate_driver_core_tb.spice`)
+#: deliberately *simulates* -- as two nodes bridged by a milliohm-scale tie
+#: resistor (decision record 0001 Decision 1's "tied together with minimal
+#: impedance close to the device (star point)"), not one node outright. A
+#: substantial fraction of this design's NMOS terminals are ordinary d/s
+#: connections *to* a ground rail (e.g. the output stage's pull-down stack,
+#: `M<n> ... GND_DRV GND_DRV nfet_06v0 ...`) -- folding all of those to one
+#: fixed name would silently reroute that stack's real sink-current path
+#: through the testbench's tie resistor instead of straight to the load
+#: capacitor's own return node, injecting a fabricated ground-bounce path a
+#: real, unmerged silicon net would not have (confirmed by a full-PVT-grid
+#: regression: the fixed-fold version measured *worse* undershoot at nearly
+#: every corner, not just the one pre-existing marginal corner this repo's
+#: schematic-side record already carries).
+#:
+#: Every one of this design's NMOS devices belongs to exactly one ground
+#: domain, disjointly, by (class, L) -- the same fact `MODEL_AND_BODY_BY_CLASS_L`
+#: already encodes for the body terminal, and confirmed for every other
+#: terminal too (`design/netlist/gate_driver_core.spice`: no 3.3V-flavor
+#: device ever names `gnd_drv`, no 6V-flavor device ever names `gnd_logic`,
+#: and no PMOS device ever names either). So the correct rebind for *any*
+#: terminal (body or otherwise) that lands on the merged raw identity is that
+#: same device's own `_model_and_body`-derived ground -- not a single fixed
+#: name -- which is exactly what `leg_of` below does.
 MERGED_GROUND_RAW = "|".join(sorted(("GND_DRV", "GND_LOGIC")))
-
-
-def _canon_net(name: str) -> str:
-    """Fold ``MERGED_GROUND_RAW`` (and any leg-net name derived from it, e.g.
-    ``"GND_DRV|GND_LOGIC__t42"``) back to ``GROUND_REF`` so the emitted DUT
-    keeps a net literally named ``GND_LOGIC`` for the testbench to drive.
-    """
-    return name.replace(MERGED_GROUND_RAW, GROUND_REF)
 
 TRANSFORMS = [
     (
@@ -276,8 +286,33 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
     # physical position gives it its own leg resistance), so `--combine`
     # refuses a parasitics-bearing extraction rather than silently dropping
     # per-finger leg fidelity -- see `main()`.
-    def leg_of(dev: dict, terminal: str) -> str:
-        return _canon_net(legs.get((dev["name"], terminal), dev["nets"][terminal]))
+    def _is_merged_ground(raw: str) -> bool:
+        return raw == MERGED_GROUND_RAW or raw.startswith(MERGED_GROUND_RAW + "__")
+
+    def leg_of(dev: dict, terminal: str, own_ground: str) -> str:
+        """This terminal's net, rebound to ``own_ground`` if (and only if) it
+        landed on the deck's merged ground identity (see
+        ``MERGED_GROUND_RAW``'s own docstring for why a *device-specific*
+        rebind, not a fixed one, is required here). Every other terminal's
+        real, measured net (or per-terminal parasitic leg name) passes
+        through unchanged. Only an NMOS terminal is expected to ever land on
+        the merged ground identity (confirmed against the schematic: no PMOS
+        device names either ground net) -- a PMOS terminal landing there
+        would mean this design grew a real PMOS-to-ground connection this
+        script's (class, L) body table was never taught about, so that case
+        raises rather than silently rebinding to `own_ground`'s PMOS
+        supply value.
+        """
+        raw = legs.get((dev["name"], terminal), dev["nets"][terminal])
+        if not _is_merged_ground(raw):
+            return raw
+        if dev["class"] != "nfet":
+            raise SystemExit(
+                f"device {dev['name']!r} ({dev['class']}) terminal {terminal!r} landed on "
+                f"the deck's merged ground identity ({raw!r}) -- only NMOS terminals are "
+                "expected to; MODEL_AND_BODY_BY_CLASS_L / this rebind needs a new case"
+            )
+        return own_ground
 
     if not combine:
         for dev in sorted(extract["devices"], key=lambda d: (d["class"], d["name"])):
@@ -286,7 +321,8 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             counts[model] = counts.get(model, 0) + 1
             inst = name.lstrip("$")
             lines.append(
-                f"X{inst} {leg_of(dev, 'd')} {leg_of(dev, 'g')} {leg_of(dev, 's')} {body} {model} "
+                f"X{inst} {leg_of(dev, 'd', body)} {leg_of(dev, 'g', body)} "
+                f"{leg_of(dev, 's', body)} {body} {model} "
                 f"L={_fmt(params['l_um'])}U W={_fmt(params['w_um'])}U nf=1 "
                 f"ad={_fmt(params['ad_um2'])}P as={_fmt(params['as_um2'])}P "
                 f"pd={_fmt(params['pd_um'])}U ps={_fmt(params['ps_um'])}U m=1"
@@ -297,7 +333,7 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             cls, params = dev["class"], dev["params"]
             model, body = _model_and_body(cls, params["l_um"])
             key = (
-                model, leg_of(dev, "d"), leg_of(dev, "g"), leg_of(dev, "s"), body,
+                model, leg_of(dev, "d", body), leg_of(dev, "g", body), leg_of(dev, "s", body), body,
                 round(params["l_um"], 6), round(params["w_um"], 6),
                 round(params["ad_um2"], 6), round(params["as_um2"], 6),
                 round(params["pd_um"], 6), round(params["ps_um"], 6),
@@ -317,27 +353,31 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
     par_count = {"r": 0, "c": 0}
     if parasitics is not None:
         lines += ["", "* T5: per-net parasitic star (klt extract --parasitics), coupling excluded"]
-        # A body terminal's own leg (`terminal["terminal"] == "B"`) does get a
-        # real measured resistance in this net's `terminals` list now that
-        # issue #132 draws real tap geometry -- but `emit()` never calls
-        # `leg_of()` for the body terminal (T4 rebinds it directly to
-        # GROUND_REF/VDD_LOGIC/VDD_DRV with no series R), so instantiating
-        # that leg here would only add a dangling, never-referenced resistor.
-        # Modeling real body-tap leg resistance would need `leg_of`'s device-
-        # card body slot to route through this same star -- a fidelity
-        # improvement out of this issue's scope, not a correctness gap (an
-        # omitted series R is a conservative -- zero-resistance -- tie, not a
-        # fabricated connection).
+        # The deck's merged ground identity (MERGED_GROUND_RAW) gets no star
+        # here at all -- every terminal that would have routed through it is
+        # rebound by `leg_of` straight to its own device's real GND_LOGIC/
+        # GND_DRV instead (see that constant's own docstring for why a shared
+        # hub is wrong here), so this net's hub would be entirely unreferenced
+        # if emitted; skipping it avoids a dangling, disconnected R/C island.
+        # This also covers a body terminal's own leg (`terminal["terminal"]
+        # == "B"`, which does get a real measured resistance in this net's
+        # `terminals` list now that issue #132 draws real tap geometry) --
+        # `emit()` never calls `leg_of()` for the body slot either (T4 rebinds
+        # it directly with no series R), so modeling real body-tap leg
+        # resistance stays a fidelity improvement out of this issue's scope,
+        # not a correctness gap (an omitted series R is a conservative --
+        # zero-resistance -- tie, not a fabricated connection).
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
-            hub = _canon_net(net["hub_net"])
+            if net["net"] == MERGED_GROUND_RAW:
+                continue
+            hub = net["hub_net"]
             for terminal in net["terminals"]:
                 if terminal["terminal"].upper() == "B":
                     continue
-                leg = _canon_net(terminal["leg_net"])
+                leg = terminal["leg_net"]
                 lines.append(f"R{leg} {leg} {hub} {_fmt(terminal['resistance_ohm'])}")
                 par_count["r"] += 1
-            cap_name = _canon_net(net["net"])
-            lines.append(f"C{cap_name} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}")
+            lines.append(f"C{net['net']} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}")
             par_count["c"] += 1
 
     return lines, {"devices": counts, "parasitics": par_count}
