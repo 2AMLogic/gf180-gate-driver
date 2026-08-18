@@ -5,7 +5,7 @@
 * extraction deck: gf180mcu (sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3)  (klt extract --parasitics)
 * klt/klayout    : 0.2.0 / 0.30.10
 * devices        : 959 {'nfet': 299, 'pfet': 660} -> {'nfet_03v3': 3, 'nfet_06v0': 296, 'pfet_03v3': 1, 'pfet_06v0': 659}
-*   parasitics    : 2580 R / 16 C (per-net ground star only; net-to-net coupling NOT modeled, see T5)
+*   parasitics    : 2877 R / 17 C (per-net ground star only; net-to-net coupling NOT modeled, see T5)
 * regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260817-232634-dc66e49.pex-extract.json -o layout/lvs/gate_driver_core.extracted-rc.spice
 *
 * ------------------------------------------------------------------
@@ -61,17 +61,20 @@
 *     (`parasitics.nets[].coupled`) is NOT emitted -- a documented scope
 *     reduction, not a silent drop; every ground-referenced term is measured,
 *     every coupling term is omitted, stated once here rather than per-record.
-*     One further reduction since issue #132: the extraction deck now reports
-*     BOTH ground rails as one merged net (klayout-tools #1128), whose star is
-*     skipped here because every terminal on it is rebound per-device to a real
-*     GND_LOGIC/GND_DRV (T4/BA1) and its hub would be left dangling. So the two
-*     ground rails are modeled as ideal zero-ohm nodes -- 297 fewer R legs and
-*     the GND_DRV<->GND_LOGIC coupling cap, versus the pre-#132 RC DUT. That is
-*     OPTIMISTIC, not conservative, for ground bounce and n1_min_v undershoot:
-*     it removes the rail IR drop those checks measure. It changes no recorded
-*     verdict today (~10x margin on the worst RC n1_min_v corner); it is carried
-*     as a stated fidelity gap in layout/README.md's 'Known gaps' with a
-*     follow-up issue.
+*     Since issue #132 the extraction deck reports BOTH ground rails as one
+*     merged net (klayout-tools #1128), which has no single hub of its own here:
+*     every terminal on it belongs to exactly one real ground domain by (class,
+*     L) (T4/BA1), so each of its legs is emitted with the leg's OWN device's
+*     real GND_LOGIC/GND_DRV as that leg's hub -- the same per-device rebind the
+*     leg net itself gets, never one shared hub (which would reroute one
+*     domain's return current through the testbench's inter-rail tie; see
+*     MERGED_GROUND_RAW). That reproduces exactly the pre-#132 topology, where
+*     each rail's own star hub WAS that rail's node: 297 ground-rail R legs
+*     (issue #184). The merged net's own measured ground capacitance is emitted
+*     once between the two real rails it spans (GND_DRV<->GND_LOGIC), the same
+*     place the pre-#132 GND_DRV star's cap landed -- the deck reports one
+*     lumped value for the merged metal and resolves no per-domain split, so it
+*     is carried whole rather than apportioned by assertion.
 * T6. (only with --combine, and only on a non-parasitic extraction) Device
 *     folding: parallel-identical fingers of one schematic device (exactly
 *     matching (model, d, g, s, body, L, W, AD, AS, PD, PS) after T2/T4) are
@@ -102,7 +105,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): 18f7cbc5cc9fb4e0d2a9530e07af1eb1
+* sha256 (this file, sans this line): 7840d5fd4f7d87f484f90dd9bb9f59cd
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
@@ -110,305 +113,305 @@
 * FLAT form: device/parasitic cards at deck level, no `.SUBCKT` wrapper --
 * matches this repo's existing DUT-fragment convention (T1).
 
-X1 x1_inb__t1 IN__t1 GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
-X10 x2_n3__t1 x2_n2__t2 GND_DRV GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
-X100 GND_DRV x2_n5__t131 OUT__t174 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X101 OUT__t61 x2_n5__t121 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X102 GND_DRV x2_n5__t120 OUT__t169 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X103 OUT__t49 x2_n5__t93 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X104 GND_DRV x2_n5__t92 OUT__t153 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X105 OUT__t60 x2_n5__t119 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X106 GND_DRV x2_n5__t94 OUT__t154 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X107 OUT__t62 x2_n5__t122 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X108 GND_DRV x2_n5__t132 OUT__t175 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X109 OUT__t67 x2_n5__t133 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X11 x2_n4__t185 x2_n3__t5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X110 GND_DRV x2_n5__t134 OUT__t176 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X111 OUT__t68 x2_n5__t135 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X112 GND_DRV x2_n5__t136 OUT__t177 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X113 OUT__t69 x2_n5__t137 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X114 GND_DRV x2_n5__t138 OUT__t178 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X115 OUT__t70 x2_n5__t139 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X116 GND_DRV x2_n5__t149 OUT__t183 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X117 OUT__t72 x2_n5__t141 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X118 GND_DRV x2_n5__t142 OUT__t179 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X119 OUT__t73 x2_n5__t143 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X12 GND_DRV x2_n3__t6 x2_n4__t184 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X120 GND_DRV x2_n5__t144 OUT__t180 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X121 OUT__t74 x2_n5__t145 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X122 GND_DRV x2_n5__t146 OUT__t181 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X123 OUT__t75 x2_n5__t147 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X124 GND_DRV x2_n5__t148 OUT__t182 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X125 OUT__t71 x2_n5__t140 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X126 GND_DRV x2_n5__t114 OUT__t166 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X127 OUT__t58 x2_n5__t115 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X128 GND_DRV x2_n5__t116 OUT__t167 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X129 OUT__t59 x2_n5__t117 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X13 x2_n4__t183 x2_n3__t18 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X130 GND_DRV x2_n5__t118 OUT__t168 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X131 OUT__t36 x2_n5__t70 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X132 GND_DRV x2_n5__t164 OUT__t192 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X133 OUT__t44 x2_n5__t85 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X134 GND_DRV x2_n5__t1 OUT__t0 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
-X135 OUT__t108 x2_n5__t216 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X136 GND_DRV x2_n5__t215 OUT__t217 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X137 OUT__t107 x2_n5__t213 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X138 GND_DRV x2_n5__t212 OUT__t215 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X139 OUT__t106 x2_n5__t211 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X14 GND_DRV x2_n3__t14 x2_n4__t189 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X140 GND_DRV x2_n5__t210 OUT__t214 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X141 OUT__t105 x2_n5__t209 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X142 GND_DRV x2_n5__t214 OUT__t216 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X143 OUT__t103 x2_n5__t207 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X144 GND_DRV x2_n5__t206 OUT__t213 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X145 OUT__t102 x2_n5__t205 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X146 GND_DRV x2_n5__t204 OUT__t212 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X147 OUT__t79 x2_n5__t158 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X148 GND_DRV x2_n5__t165 OUT__t193 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X149 OUT__t81 x2_n5__t163 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X15 x2_n4__t179 x2_n3__t13 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X150 GND_DRV x2_n5__t162 OUT__t191 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X151 OUT__t95 x2_n5__t190 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X152 GND_DRV x2_n5__t194 OUT__t207 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X153 OUT__t109 x2_n5__t219 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X154 GND_DRV x2_n5__t218 OUT__t219 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X155 OUT__t104 x2_n5__t208 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X156 GND_DRV x2_n5__t189 OUT__t204 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X157 OUT__t94 x2_n5__t188 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X158 GND_DRV x2_n5__t187 OUT__t203 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X159 OUT__t93 x2_n5__t186 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X16 GND_DRV x2_n3__t12 x2_n4__t188 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X160 GND_DRV x2_n5__t109 OUT__t163 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X161 OUT__t96 x2_n5__t192 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X162 GND_DRV x2_n5__t191 OUT__t205 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X163 OUT__t55 x2_n5__t108 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X164 GND_DRV x2_n5__t107 OUT__t162 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X165 OUT__t54 x2_n5__t106 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X166 GND_DRV x2_n5__t105 OUT__t161 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X167 OUT__t57 x2_n5__t113 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X168 GND_DRV x2_n5__t103 OUT__t159 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X169 OUT__t53 x2_n5__t102 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X17 x2_n4__t178 x2_n3__t11 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X170 GND_DRV x2_n5__t161 OUT__t190 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X171 OUT__t52 x2_n5__t100 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X172 GND_DRV x2_n5__t99 OUT__t157 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X173 OUT__t51 x2_n5__t98 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X174 GND_DRV x2_n5__t97 OUT__t156 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X175 OUT__t50 x2_n5__t96 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X176 GND_DRV x2_n5__t86 OUT__t151 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X177 OUT__t100 x2_n5__t202 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X178 GND_DRV x2_n5__t201 OUT__t211 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X179 OUT__t99 x2_n5__t200 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X18 GND_DRV x2_n3__t10 x2_n4__t187 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X180 GND_DRV x2_n5__t199 OUT__t210 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X181 OUT__t98 x2_n5__t198 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X182 GND_DRV x2_n5__t197 OUT__t209 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X183 OUT__t97 x2_n5__t196 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X184 GND_DRV x2_n5__t195 OUT__t208 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X185 OUT__t101 x2_n5__t203 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X186 GND_DRV x2_n5__t193 OUT__t206 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X187 OUT__t47 x2_n5__t90 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X188 GND_DRV x2_n5__t80 OUT__t149 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X189 OUT__t46 x2_n5__t88 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X19 x2_n4__t177 x2_n3__t9 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X190 GND_DRV x2_n5__t67 OUT__t142 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X191 OUT__t33 x2_n5__t64 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X192 GND_DRV x2_n5__t66 OUT__t141 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X193 OUT__t34 x2_n5__t65 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X194 GND_DRV x2_n5__t167 OUT__t194 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X195 OUT__t39 x2_n5__t76 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X196 GND_DRV x2_n5__t51 OUT__t136 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X197 OUT__t24 x2_n5__t50 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X198 GND_DRV x2_n5__t49 OUT__t135 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X199 OUT__t23 x2_n5__t48 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X2 x1_na__t0 IN__t2 GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X20 GND_DRV x2_n3__t8 x2_n4__t186 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X200 GND_DRV x2_n5__t101 OUT__t158 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X201 OUT__t22 x2_n5__t47 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X202 GND_DRV x2_n5__t46 OUT__t134 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X203 OUT__t21 x2_n5__t45 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X204 GND_DRV x2_n5__t44 OUT__t133 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X205 OUT__t25 x2_n5__t52 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X206 GND_DRV x2_n5__t42 OUT__t131 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X207 OUT__t20 x2_n5__t41 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X208 GND_DRV x2_n5__t40 OUT__t130 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X209 OUT__t19 x2_n5__t39 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X21 x2_n4__t182 x2_n3__t17 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X210 GND_DRV x2_n5__t38 OUT__t129 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X211 OUT__t18 x2_n5__t37 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X212 GND_DRV x2_n5__t36 OUT__t128 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X213 OUT__t31 x2_n5__t61 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X214 GND_DRV x2_n5__t68 OUT__t143 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X215 OUT__t82 x2_n5__t166 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X216 GND_DRV x2_n5__t157 OUT__t188 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X217 OUT__t83 x2_n5__t168 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X218 GND_DRV x2_n5__t156 OUT__t187 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X219 OUT__t78 x2_n5__t155 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X22 GND_DRV x2_n3__t16 x2_n4__t190 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X220 GND_DRV x2_n5__t154 OUT__t186 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X221 OUT__t77 x2_n5__t153 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X222 GND_DRV x2_n5__t152 OUT__t185 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X223 OUT__t76 x2_n5__t151 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X224 GND_DRV x2_n5__t150 OUT__t184 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X225 OUT__t87 x2_n5__t175 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X226 GND_DRV x2_n5__t184 OUT__t202 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X227 OUT__t91 x2_n5__t183 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X228 GND_DRV x2_n5__t182 OUT__t201 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X229 OUT__t90 x2_n5__t181 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X23 x2_n4__t180 x2_n3__t15 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X230 GND_DRV x2_n5__t180 OUT__t200 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X231 OUT__t89 x2_n5__t179 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X232 GND_DRV x2_n5__t178 OUT__t199 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X233 OUT__t88 x2_n5__t177 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X234 GND_DRV x2_n5__t176 OUT__t198 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X235 OUT__t92 x2_n5__t185 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X236 GND_DRV x2_n5__t174 OUT__t197 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X237 OUT__t86 x2_n5__t173 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X238 GND_DRV x2_n5__t172 OUT__t196 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X239 OUT__t85 x2_n5__t171 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X24 GND_DRV x2_n3__t7 x2_n4__t181 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
-X240 GND_DRV x2_n5__t170 OUT__t195 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X241 OUT__t84 x2_n5__t169 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X242 GND_DRV x2_n5__t95 OUT__t155 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X243 OUT__t45 x2_n5__t87 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X244 GND_DRV x2_n5__t217 OUT__t218 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X245 OUT__t110 x2_n5__t220 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X246 GND_DRV x2_n5__t34 OUT__t126 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X247 OUT__t14 x2_n5__t26 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X248 GND_DRV x2_n5__t32 OUT__t124 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X249 OUT__t17 x2_n5__t31 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X25 x2_n5__t747 x2_n4__t54 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
-X250 GND_DRV x2_n5__t30 OUT__t123 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X251 OUT__t16 x2_n5__t29 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X252 GND_DRV x2_n5__t28 OUT__t122 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X253 OUT__t15 x2_n5__t27 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X254 GND_DRV x2_n5__t35 OUT__t127 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X255 OUT__t13 x2_n5__t25 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X256 GND_DRV x2_n5__t24 OUT__t121 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X257 OUT__t12 x2_n5__t23 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X258 GND_DRV x2_n5__t22 OUT__t120 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X259 OUT__t11 x2_n5__t21 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X26 GND_DRV x2_n4__t51 x2_n5__t772 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X260 GND_DRV x2_n5__t20 OUT__t119 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X261 OUT__t10 x2_n5__t19 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X262 GND_DRV x2_n5__t18 OUT__t118 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X263 OUT__t27 x2_n5__t54 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X264 GND_DRV x2_n5__t77 OUT__t147 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X265 OUT__t35 x2_n5__t69 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X266 GND_DRV x2_n5__t75 OUT__t146 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X267 OUT__t38 x2_n5__t74 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X268 GND_DRV x2_n5__t73 OUT__t145 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X269 OUT__t37 x2_n5__t72 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X27 x2_n5__t746 x2_n4__t50 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X270 GND_DRV x2_n5__t71 OUT__t144 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X271 OUT__t32 x2_n5__t63 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X272 GND_DRV x2_n5__t62 OUT__t140 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X273 OUT__t2 x2_n5__t3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X274 GND_DRV x2_n5__t17 OUT__t117 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X275 OUT__t1 x2_n5__t2 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X276 GND_DRV x2_n5__t60 OUT__t139 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X277 OUT__t30 x2_n5__t59 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X278 GND_DRV x2_n5__t58 OUT__t138 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X279 OUT__t29 x2_n5__t57 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X28 GND_DRV x2_n4__t49 x2_n5__t771 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X280 GND_DRV x2_n5__t56 OUT__t137 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X281 OUT__t28 x2_n5__t55 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X282 GND_DRV x2_n5__t43 OUT__t132 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X283 OUT__t26 x2_n5__t53 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X284 GND_DRV x2_n5__t33 OUT__t125 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X285 OUT__t9 x2_n5__t16 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X286 GND_DRV x2_n5__t15 OUT__t116 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X287 OUT__t8 x2_n5__t14 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X288 GND_DRV x2_n5__t13 OUT__t115 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X289 OUT__t7 x2_n5__t12 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X29 x2_n5__t745 x2_n4__t48 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X290 GND_DRV x2_n5__t11 OUT__t114 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X291 OUT__t6 x2_n5__t10 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X292 GND_DRV x2_n5__t9 OUT__t113 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X293 OUT__t5 x2_n5__t8 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X294 GND_DRV x2_n5__t7 OUT__t112 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X295 OUT__t4 x2_n5__t6 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X296 GND_DRV x2_n5__t5 OUT__t111 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X297 OUT__t3 x2_n5__t4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X298 GND_DRV x2_n5__t159 OUT__t189 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X299 OUT__t80 x2_n5__t160 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X3 x1_nb__t1 x1_inb__t2 GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X30 GND_DRV x2_n4__t47 x2_n5__t770 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X31 x2_n5__t744 x2_n4__t46 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X32 GND_DRV x2_n4__t45 x2_n5__t769 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X33 x2_n5__t743 x2_n4__t44 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X34 GND_DRV x2_n4__t52 x2_n5__t773 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X35 x2_n5__t741 x2_n4__t40 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X36 GND_DRV x2_n4__t25 x2_n5__t759 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X37 x2_n5__t738 x2_n4__t34 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X38 GND_DRV x2_n4__t31 x2_n5__t763 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X39 x2_n5__t735 x2_n4__t30 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X1 x1_inb__t1 IN__t1 GND_DRV_GND_LOGIC__t299 GND_LOGIC nfet_03v3 L=0.28U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X10 x2_n3__t1 x2_n2__t2 GND_DRV_GND_LOGIC__t302 GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
+X100 GND_DRV_GND_LOGIC__t407 x2_n5__t131 OUT__t174 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X101 OUT__t61 x2_n5__t121 GND_DRV_GND_LOGIC__t547 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X102 GND_DRV_GND_LOGIC__t402 x2_n5__t120 OUT__t169 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X103 OUT__t49 x2_n5__t93 GND_DRV_GND_LOGIC__t535 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X104 GND_DRV_GND_LOGIC__t386 x2_n5__t92 OUT__t153 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X105 OUT__t60 x2_n5__t119 GND_DRV_GND_LOGIC__t546 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X106 GND_DRV_GND_LOGIC__t387 x2_n5__t94 OUT__t154 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X107 OUT__t62 x2_n5__t122 GND_DRV_GND_LOGIC__t548 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X108 GND_DRV_GND_LOGIC__t408 x2_n5__t132 OUT__t175 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X109 OUT__t67 x2_n5__t133 GND_DRV_GND_LOGIC__t553 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X11 x2_n4__t185 x2_n3__t5 GND_DRV_GND_LOGIC__t306 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X110 GND_DRV_GND_LOGIC__t409 x2_n5__t134 OUT__t176 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X111 OUT__t68 x2_n5__t135 GND_DRV_GND_LOGIC__t554 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X112 GND_DRV_GND_LOGIC__t410 x2_n5__t136 OUT__t177 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X113 OUT__t69 x2_n5__t137 GND_DRV_GND_LOGIC__t555 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X114 GND_DRV_GND_LOGIC__t411 x2_n5__t138 OUT__t178 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X115 OUT__t70 x2_n5__t139 GND_DRV_GND_LOGIC__t556 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X116 GND_DRV_GND_LOGIC__t416 x2_n5__t149 OUT__t183 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X117 OUT__t72 x2_n5__t141 GND_DRV_GND_LOGIC__t558 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X118 GND_DRV_GND_LOGIC__t412 x2_n5__t142 OUT__t179 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X119 OUT__t73 x2_n5__t143 GND_DRV_GND_LOGIC__t559 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X12 GND_DRV_GND_LOGIC__t508 x2_n3__t6 x2_n4__t184 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X120 GND_DRV_GND_LOGIC__t413 x2_n5__t144 OUT__t180 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X121 OUT__t74 x2_n5__t145 GND_DRV_GND_LOGIC__t560 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X122 GND_DRV_GND_LOGIC__t414 x2_n5__t146 OUT__t181 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X123 OUT__t75 x2_n5__t147 GND_DRV_GND_LOGIC__t561 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X124 GND_DRV_GND_LOGIC__t415 x2_n5__t148 OUT__t182 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X125 OUT__t71 x2_n5__t140 GND_DRV_GND_LOGIC__t557 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X126 GND_DRV_GND_LOGIC__t399 x2_n5__t114 OUT__t166 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X127 OUT__t58 x2_n5__t115 GND_DRV_GND_LOGIC__t544 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X128 GND_DRV_GND_LOGIC__t400 x2_n5__t116 OUT__t167 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X129 OUT__t59 x2_n5__t117 GND_DRV_GND_LOGIC__t545 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X13 x2_n4__t183 x2_n3__t18 GND_DRV_GND_LOGIC__t507 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X130 GND_DRV_GND_LOGIC__t401 x2_n5__t118 OUT__t168 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X131 OUT__t36 x2_n5__t70 GND_DRV_GND_LOGIC__t498 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X132 GND_DRV_GND_LOGIC__t426 x2_n5__t164 OUT__t192 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X133 OUT__t44 x2_n5__t85 GND_DRV_GND_LOGIC__t530 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X134 GND_DRV_GND_LOGIC__t308 x2_n5__t1 OUT__t0 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X135 OUT__t108 x2_n5__t216 GND_DRV_GND_LOGIC__t594 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X136 GND_DRV_GND_LOGIC__t451 x2_n5__t215 OUT__t217 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X137 OUT__t107 x2_n5__t213 GND_DRV_GND_LOGIC__t593 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X138 GND_DRV_GND_LOGIC__t449 x2_n5__t212 OUT__t215 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X139 OUT__t106 x2_n5__t211 GND_DRV_GND_LOGIC__t592 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X14 GND_DRV_GND_LOGIC__t358 x2_n3__t14 x2_n4__t189 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X140 GND_DRV_GND_LOGIC__t448 x2_n5__t210 OUT__t214 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X141 OUT__t105 x2_n5__t209 GND_DRV_GND_LOGIC__t591 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X142 GND_DRV_GND_LOGIC__t450 x2_n5__t214 OUT__t216 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X143 OUT__t103 x2_n5__t207 GND_DRV_GND_LOGIC__t589 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X144 GND_DRV_GND_LOGIC__t447 x2_n5__t206 OUT__t213 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X145 OUT__t102 x2_n5__t205 GND_DRV_GND_LOGIC__t588 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X146 GND_DRV_GND_LOGIC__t446 x2_n5__t204 OUT__t212 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X147 OUT__t79 x2_n5__t158 GND_DRV_GND_LOGIC__t565 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X148 GND_DRV_GND_LOGIC__t427 x2_n5__t165 OUT__t193 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X149 OUT__t81 x2_n5__t163 GND_DRV_GND_LOGIC__t567 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X15 x2_n4__t179 x2_n3__t13 GND_DRV_GND_LOGIC__t501 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X150 GND_DRV_GND_LOGIC__t425 x2_n5__t162 OUT__t191 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X151 OUT__t95 x2_n5__t190 GND_DRV_GND_LOGIC__t581 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X152 GND_DRV_GND_LOGIC__t441 x2_n5__t194 OUT__t207 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X153 OUT__t109 x2_n5__t219 GND_DRV_GND_LOGIC__t595 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X154 GND_DRV_GND_LOGIC__t453 x2_n5__t218 OUT__t219 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X155 OUT__t104 x2_n5__t208 GND_DRV_GND_LOGIC__t590 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X156 GND_DRV_GND_LOGIC__t438 x2_n5__t189 OUT__t204 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X157 OUT__t94 x2_n5__t188 GND_DRV_GND_LOGIC__t580 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X158 GND_DRV_GND_LOGIC__t437 x2_n5__t187 OUT__t203 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X159 OUT__t93 x2_n5__t186 GND_DRV_GND_LOGIC__t579 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X16 GND_DRV_GND_LOGIC__t357 x2_n3__t12 x2_n4__t188 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X160 GND_DRV_GND_LOGIC__t396 x2_n5__t109 OUT__t163 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X161 OUT__t96 x2_n5__t192 GND_DRV_GND_LOGIC__t582 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X162 GND_DRV_GND_LOGIC__t439 x2_n5__t191 OUT__t205 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X163 OUT__t55 x2_n5__t108 GND_DRV_GND_LOGIC__t541 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X164 GND_DRV_GND_LOGIC__t395 x2_n5__t107 OUT__t162 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X165 OUT__t54 x2_n5__t106 GND_DRV_GND_LOGIC__t540 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X166 GND_DRV_GND_LOGIC__t394 x2_n5__t105 OUT__t161 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X167 OUT__t57 x2_n5__t113 GND_DRV_GND_LOGIC__t543 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X168 GND_DRV_GND_LOGIC__t392 x2_n5__t103 OUT__t159 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X169 OUT__t53 x2_n5__t102 GND_DRV_GND_LOGIC__t539 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X17 x2_n4__t178 x2_n3__t11 GND_DRV_GND_LOGIC__t500 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X170 GND_DRV_GND_LOGIC__t424 x2_n5__t161 OUT__t190 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X171 OUT__t52 x2_n5__t100 GND_DRV_GND_LOGIC__t538 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X172 GND_DRV_GND_LOGIC__t390 x2_n5__t99 OUT__t157 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X173 OUT__t51 x2_n5__t98 GND_DRV_GND_LOGIC__t537 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X174 GND_DRV_GND_LOGIC__t389 x2_n5__t97 OUT__t156 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X175 OUT__t50 x2_n5__t96 GND_DRV_GND_LOGIC__t536 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X176 GND_DRV_GND_LOGIC__t384 x2_n5__t86 OUT__t151 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X177 OUT__t100 x2_n5__t202 GND_DRV_GND_LOGIC__t586 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X178 GND_DRV_GND_LOGIC__t445 x2_n5__t201 OUT__t211 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X179 OUT__t99 x2_n5__t200 GND_DRV_GND_LOGIC__t585 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X18 GND_DRV_GND_LOGIC__t356 x2_n3__t10 x2_n4__t187 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X180 GND_DRV_GND_LOGIC__t444 x2_n5__t199 OUT__t210 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X181 OUT__t98 x2_n5__t198 GND_DRV_GND_LOGIC__t584 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X182 GND_DRV_GND_LOGIC__t443 x2_n5__t197 OUT__t209 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X183 OUT__t97 x2_n5__t196 GND_DRV_GND_LOGIC__t583 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X184 GND_DRV_GND_LOGIC__t442 x2_n5__t195 OUT__t208 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X185 OUT__t101 x2_n5__t203 GND_DRV_GND_LOGIC__t587 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X186 GND_DRV_GND_LOGIC__t440 x2_n5__t193 OUT__t206 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X187 OUT__t47 x2_n5__t90 GND_DRV_GND_LOGIC__t533 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X188 GND_DRV_GND_LOGIC__t382 x2_n5__t80 OUT__t149 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X189 OUT__t46 x2_n5__t88 GND_DRV_GND_LOGIC__t532 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X19 x2_n4__t177 x2_n3__t9 GND_DRV_GND_LOGIC__t499 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X190 GND_DRV_GND_LOGIC__t344 x2_n5__t67 OUT__t142 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X191 OUT__t33 x2_n5__t64 GND_DRV_GND_LOGIC__t487 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X192 GND_DRV_GND_LOGIC__t343 x2_n5__t66 OUT__t141 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X193 OUT__t34 x2_n5__t65 GND_DRV_GND_LOGIC__t488 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X194 GND_DRV_GND_LOGIC__t428 x2_n5__t167 OUT__t194 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X195 OUT__t39 x2_n5__t76 GND_DRV_GND_LOGIC__t516 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X196 GND_DRV_GND_LOGIC__t338 x2_n5__t51 OUT__t136 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X197 OUT__t24 x2_n5__t50 GND_DRV_GND_LOGIC__t477 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X198 GND_DRV_GND_LOGIC__t337 x2_n5__t49 OUT__t135 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X199 OUT__t23 x2_n5__t48 GND_DRV_GND_LOGIC__t476 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X2 x1_na__t0 IN__t2 GND_DRV_GND_LOGIC__t300 GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X20 GND_DRV_GND_LOGIC__t355 x2_n3__t8 x2_n4__t186 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X200 GND_DRV_GND_LOGIC__t391 x2_n5__t101 OUT__t158 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X201 OUT__t22 x2_n5__t47 GND_DRV_GND_LOGIC__t475 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X202 GND_DRV_GND_LOGIC__t336 x2_n5__t46 OUT__t134 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X203 OUT__t21 x2_n5__t45 GND_DRV_GND_LOGIC__t474 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X204 GND_DRV_GND_LOGIC__t335 x2_n5__t44 OUT__t133 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X205 OUT__t25 x2_n5__t52 GND_DRV_GND_LOGIC__t478 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X206 GND_DRV_GND_LOGIC__t333 x2_n5__t42 OUT__t131 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X207 OUT__t20 x2_n5__t41 GND_DRV_GND_LOGIC__t473 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X208 GND_DRV_GND_LOGIC__t332 x2_n5__t40 OUT__t130 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X209 OUT__t19 x2_n5__t39 GND_DRV_GND_LOGIC__t472 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X21 x2_n4__t182 x2_n3__t17 GND_DRV_GND_LOGIC__t503 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X210 GND_DRV_GND_LOGIC__t331 x2_n5__t38 OUT__t129 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X211 OUT__t18 x2_n5__t37 GND_DRV_GND_LOGIC__t471 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X212 GND_DRV_GND_LOGIC__t330 x2_n5__t36 OUT__t128 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X213 OUT__t31 x2_n5__t61 GND_DRV_GND_LOGIC__t484 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X214 GND_DRV_GND_LOGIC__t345 x2_n5__t68 OUT__t143 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X215 OUT__t82 x2_n5__t166 GND_DRV_GND_LOGIC__t568 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X216 GND_DRV_GND_LOGIC__t421 x2_n5__t157 OUT__t188 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X217 OUT__t83 x2_n5__t168 GND_DRV_GND_LOGIC__t569 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X218 GND_DRV_GND_LOGIC__t420 x2_n5__t156 OUT__t187 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X219 OUT__t78 x2_n5__t155 GND_DRV_GND_LOGIC__t564 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X22 GND_DRV_GND_LOGIC__t360 x2_n3__t16 x2_n4__t190 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X220 GND_DRV_GND_LOGIC__t419 x2_n5__t154 OUT__t186 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X221 OUT__t77 x2_n5__t153 GND_DRV_GND_LOGIC__t563 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X222 GND_DRV_GND_LOGIC__t418 x2_n5__t152 OUT__t185 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X223 OUT__t76 x2_n5__t151 GND_DRV_GND_LOGIC__t562 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X224 GND_DRV_GND_LOGIC__t417 x2_n5__t150 OUT__t184 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X225 OUT__t87 x2_n5__t175 GND_DRV_GND_LOGIC__t573 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X226 GND_DRV_GND_LOGIC__t436 x2_n5__t184 OUT__t202 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X227 OUT__t91 x2_n5__t183 GND_DRV_GND_LOGIC__t577 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X228 GND_DRV_GND_LOGIC__t435 x2_n5__t182 OUT__t201 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X229 OUT__t90 x2_n5__t181 GND_DRV_GND_LOGIC__t576 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X23 x2_n4__t180 x2_n3__t15 GND_DRV_GND_LOGIC__t502 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X230 GND_DRV_GND_LOGIC__t434 x2_n5__t180 OUT__t200 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X231 OUT__t89 x2_n5__t179 GND_DRV_GND_LOGIC__t575 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X232 GND_DRV_GND_LOGIC__t433 x2_n5__t178 OUT__t199 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X233 OUT__t88 x2_n5__t177 GND_DRV_GND_LOGIC__t574 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X234 GND_DRV_GND_LOGIC__t432 x2_n5__t176 OUT__t198 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X235 OUT__t92 x2_n5__t185 GND_DRV_GND_LOGIC__t578 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X236 GND_DRV_GND_LOGIC__t431 x2_n5__t174 OUT__t197 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X237 OUT__t86 x2_n5__t173 GND_DRV_GND_LOGIC__t572 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X238 GND_DRV_GND_LOGIC__t430 x2_n5__t172 OUT__t196 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X239 OUT__t85 x2_n5__t171 GND_DRV_GND_LOGIC__t571 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X24 GND_DRV_GND_LOGIC__t307 x2_n3__t7 x2_n4__t181 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X240 GND_DRV_GND_LOGIC__t429 x2_n5__t170 OUT__t195 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X241 OUT__t84 x2_n5__t169 GND_DRV_GND_LOGIC__t570 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X242 GND_DRV_GND_LOGIC__t388 x2_n5__t95 OUT__t155 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X243 OUT__t45 x2_n5__t87 GND_DRV_GND_LOGIC__t531 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X244 GND_DRV_GND_LOGIC__t452 x2_n5__t217 OUT__t218 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X245 OUT__t110 x2_n5__t220 GND_DRV_GND_LOGIC__t309 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X246 GND_DRV_GND_LOGIC__t328 x2_n5__t34 OUT__t126 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X247 OUT__t14 x2_n5__t26 GND_DRV_GND_LOGIC__t467 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X248 GND_DRV_GND_LOGIC__t326 x2_n5__t32 OUT__t124 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X249 OUT__t17 x2_n5__t31 GND_DRV_GND_LOGIC__t470 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X25 x2_n5__t747 x2_n4__t54 GND_DRV_GND_LOGIC__t310 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X250 GND_DRV_GND_LOGIC__t325 x2_n5__t30 OUT__t123 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X251 OUT__t16 x2_n5__t29 GND_DRV_GND_LOGIC__t469 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X252 GND_DRV_GND_LOGIC__t324 x2_n5__t28 OUT__t122 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X253 OUT__t15 x2_n5__t27 GND_DRV_GND_LOGIC__t468 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X254 GND_DRV_GND_LOGIC__t329 x2_n5__t35 OUT__t127 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X255 OUT__t13 x2_n5__t25 GND_DRV_GND_LOGIC__t466 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X256 GND_DRV_GND_LOGIC__t323 x2_n5__t24 OUT__t121 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X257 OUT__t12 x2_n5__t23 GND_DRV_GND_LOGIC__t465 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X258 GND_DRV_GND_LOGIC__t322 x2_n5__t22 OUT__t120 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X259 OUT__t11 x2_n5__t21 GND_DRV_GND_LOGIC__t464 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X26 GND_DRV_GND_LOGIC__t379 x2_n4__t51 x2_n5__t772 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X260 GND_DRV_GND_LOGIC__t321 x2_n5__t20 OUT__t119 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X261 OUT__t10 x2_n5__t19 GND_DRV_GND_LOGIC__t463 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X262 GND_DRV_GND_LOGIC__t320 x2_n5__t18 OUT__t118 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X263 OUT__t27 x2_n5__t54 GND_DRV_GND_LOGIC__t480 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X264 GND_DRV_GND_LOGIC__t370 x2_n5__t77 OUT__t147 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X265 OUT__t35 x2_n5__t69 GND_DRV_GND_LOGIC__t493 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X266 GND_DRV_GND_LOGIC__t369 x2_n5__t75 OUT__t146 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X267 OUT__t38 x2_n5__t74 GND_DRV_GND_LOGIC__t515 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X268 GND_DRV_GND_LOGIC__t368 x2_n5__t73 OUT__t145 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X269 OUT__t37 x2_n5__t72 GND_DRV_GND_LOGIC__t514 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X27 x2_n5__t746 x2_n4__t50 GND_DRV_GND_LOGIC__t525 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X270 GND_DRV_GND_LOGIC__t367 x2_n5__t71 OUT__t144 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X271 OUT__t32 x2_n5__t63 GND_DRV_GND_LOGIC__t486 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X272 GND_DRV_GND_LOGIC__t342 x2_n5__t62 OUT__t140 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X273 OUT__t2 x2_n5__t3 GND_DRV_GND_LOGIC__t455 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X274 GND_DRV_GND_LOGIC__t319 x2_n5__t17 OUT__t117 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X275 OUT__t1 x2_n5__t2 GND_DRV_GND_LOGIC__t454 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X276 GND_DRV_GND_LOGIC__t341 x2_n5__t60 OUT__t139 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X277 OUT__t30 x2_n5__t59 GND_DRV_GND_LOGIC__t483 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X278 GND_DRV_GND_LOGIC__t340 x2_n5__t58 OUT__t138 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X279 OUT__t29 x2_n5__t57 GND_DRV_GND_LOGIC__t482 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X28 GND_DRV_GND_LOGIC__t378 x2_n4__t49 x2_n5__t771 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X280 GND_DRV_GND_LOGIC__t339 x2_n5__t56 OUT__t137 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X281 OUT__t28 x2_n5__t55 GND_DRV_GND_LOGIC__t481 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X282 GND_DRV_GND_LOGIC__t334 x2_n5__t43 OUT__t132 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X283 OUT__t26 x2_n5__t53 GND_DRV_GND_LOGIC__t479 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X284 GND_DRV_GND_LOGIC__t327 x2_n5__t33 OUT__t125 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X285 OUT__t9 x2_n5__t16 GND_DRV_GND_LOGIC__t462 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X286 GND_DRV_GND_LOGIC__t318 x2_n5__t15 OUT__t116 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X287 OUT__t8 x2_n5__t14 GND_DRV_GND_LOGIC__t461 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X288 GND_DRV_GND_LOGIC__t317 x2_n5__t13 OUT__t115 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X289 OUT__t7 x2_n5__t12 GND_DRV_GND_LOGIC__t460 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X29 x2_n5__t745 x2_n4__t48 GND_DRV_GND_LOGIC__t524 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X290 GND_DRV_GND_LOGIC__t316 x2_n5__t11 OUT__t114 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X291 OUT__t6 x2_n5__t10 GND_DRV_GND_LOGIC__t459 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X292 GND_DRV_GND_LOGIC__t315 x2_n5__t9 OUT__t113 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X293 OUT__t5 x2_n5__t8 GND_DRV_GND_LOGIC__t458 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X294 GND_DRV_GND_LOGIC__t314 x2_n5__t7 OUT__t112 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X295 OUT__t4 x2_n5__t6 GND_DRV_GND_LOGIC__t457 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X296 GND_DRV_GND_LOGIC__t313 x2_n5__t5 OUT__t111 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X297 OUT__t3 x2_n5__t4 GND_DRV_GND_LOGIC__t456 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X298 GND_DRV_GND_LOGIC__t422 x2_n5__t159 OUT__t189 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X299 OUT__t80 x2_n5__t160 GND_DRV_GND_LOGIC__t566 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X3 x1_nb__t1 x1_inb__t2 GND_DRV_GND_LOGIC__t311 GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X30 GND_DRV_GND_LOGIC__t377 x2_n4__t47 x2_n5__t770 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X31 x2_n5__t744 x2_n4__t46 GND_DRV_GND_LOGIC__t523 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X32 GND_DRV_GND_LOGIC__t376 x2_n4__t45 x2_n5__t769 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X33 x2_n5__t743 x2_n4__t44 GND_DRV_GND_LOGIC__t522 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X34 GND_DRV_GND_LOGIC__t380 x2_n4__t52 x2_n5__t773 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X35 x2_n5__t741 x2_n4__t40 GND_DRV_GND_LOGIC__t520 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X36 GND_DRV_GND_LOGIC__t362 x2_n4__t25 x2_n5__t759 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X37 x2_n5__t738 x2_n4__t34 GND_DRV_GND_LOGIC__t517 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X38 GND_DRV_GND_LOGIC__t366 x2_n4__t31 x2_n5__t763 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X39 x2_n5__t735 x2_n4__t30 GND_DRV_GND_LOGIC__t511 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
 X4 x1_nca__t2 VDD_LOGIC__t3 x1_na__t1 GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X40 GND_DRV x2_n4__t26 x2_n5__t760 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X41 x2_n5__t742 x2_n4__t41 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X42 GND_DRV x2_n4__t38 x2_n5__t766 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X43 x2_n5__t737 x2_n4__t33 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X44 GND_DRV x2_n4__t29 x2_n5__t762 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X45 x2_n5__t740 x2_n4__t39 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X46 GND_DRV x2_n4__t28 x2_n5__t761 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X47 x2_n5__t734 x2_n4__t27 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X48 GND_DRV x2_n4__t42 x2_n5__t767 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X49 x2_n5__t733 x2_n4__t24 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X40 GND_DRV_GND_LOGIC__t363 x2_n4__t26 x2_n5__t760 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X41 x2_n5__t742 x2_n4__t41 GND_DRV_GND_LOGIC__t521 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X42 GND_DRV_GND_LOGIC__t373 x2_n4__t38 x2_n5__t766 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X43 x2_n5__t737 x2_n4__t33 GND_DRV_GND_LOGIC__t513 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X44 GND_DRV_GND_LOGIC__t365 x2_n4__t29 x2_n5__t762 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X45 x2_n5__t740 x2_n4__t39 GND_DRV_GND_LOGIC__t519 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X46 GND_DRV_GND_LOGIC__t364 x2_n4__t28 x2_n5__t761 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X47 x2_n5__t734 x2_n4__t27 GND_DRV_GND_LOGIC__t510 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X48 GND_DRV_GND_LOGIC__t374 x2_n4__t42 x2_n5__t767 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X49 x2_n5__t733 x2_n4__t24 GND_DRV_GND_LOGIC__t509 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
 X5 x1_ncb__t0 VDD_LOGIC__t2 x1_nb__t0 GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
-X50 GND_DRV x2_n4__t43 x2_n5__t768 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X51 x2_n5__t721 x2_n4__t1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X52 GND_DRV x2_n4__t2 x2_n5__t748 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X53 x2_n5__t730 x2_n4__t20 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X54 GND_DRV x2_n4__t9 x2_n5__t751 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X55 x2_n5__t725 x2_n4__t8 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X56 GND_DRV x2_n4__t37 x2_n5__t765 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X57 x2_n5__t739 x2_n4__t36 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X58 GND_DRV x2_n4__t35 x2_n5__t764 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X59 x2_n5__t736 x2_n4__t32 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X6 x1_nbuf1__t3 x1_ncb__t3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
-X60 GND_DRV x2_n4__t17 x2_n5__t755 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X61 x2_n5__t729 x2_n4__t16 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X62 GND_DRV x2_n4__t15 x2_n5__t754 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X63 x2_n5__t728 x2_n4__t14 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X64 GND_DRV x2_n4__t13 x2_n5__t753 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X65 x2_n5__t727 x2_n4__t12 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X66 GND_DRV x2_n4__t11 x2_n5__t752 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X67 x2_n5__t726 x2_n4__t10 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X68 GND_DRV x2_n4__t18 x2_n5__t756 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X69 x2_n5__t724 x2_n4__t7 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X7 IN_DRV__t3 x1_nbuf1__t1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
-X70 GND_DRV x2_n4__t6 x2_n5__t750 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X71 x2_n5__t723 x2_n4__t5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X72 GND_DRV x2_n4__t4 x2_n5__t749 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X73 x2_n5__t722 x2_n4__t3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X74 GND_DRV x2_n4__t19 x2_n5__t757 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X75 x2_n5__t732 x2_n4__t23 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X76 GND_DRV x2_n4__t22 x2_n5__t758 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X77 x2_n5__t731 x2_n4__t21 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X78 GND_DRV x2_n4__t53 x2_n5__t774 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X79 x2_n5__t0 x2_n4__t0 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
-X8 x2_n1__t3 IN_DRV__t1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
-X80 GND_DRV x2_n5__t89 OUT__t152 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X81 OUT__t42 x2_n5__t82 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X82 GND_DRV x2_n5__t84 OUT__t150 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X83 OUT__t43 x2_n5__t83 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X84 GND_DRV x2_n5__t79 OUT__t148 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X85 OUT__t40 x2_n5__t78 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X86 GND_DRV x2_n5__t104 OUT__t160 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X87 OUT__t56 x2_n5__t111 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X88 GND_DRV x2_n5__t110 OUT__t164 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X89 OUT__t41 x2_n5__t81 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X9 x2_n2__t0 x2_n1__t0 GND_DRV GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
-X90 GND_DRV x2_n5__t112 OUT__t165 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X91 OUT__t48 x2_n5__t91 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X92 GND_DRV x2_n5__t130 OUT__t173 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X93 OUT__t66 x2_n5__t129 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X94 GND_DRV x2_n5__t128 OUT__t172 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X95 OUT__t65 x2_n5__t127 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X96 GND_DRV x2_n5__t126 OUT__t171 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X97 OUT__t64 x2_n5__t125 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X98 GND_DRV x2_n5__t124 OUT__t170 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
-X99 OUT__t63 x2_n5__t123 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X50 GND_DRV_GND_LOGIC__t375 x2_n4__t43 x2_n5__t768 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X51 x2_n5__t721 x2_n4__t1 GND_DRV_GND_LOGIC__t485 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X52 GND_DRV_GND_LOGIC__t346 x2_n4__t2 x2_n5__t748 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X53 x2_n5__t730 x2_n4__t20 GND_DRV_GND_LOGIC__t504 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X54 GND_DRV_GND_LOGIC__t349 x2_n4__t9 x2_n5__t751 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X55 x2_n5__t725 x2_n4__t8 GND_DRV_GND_LOGIC__t492 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X56 GND_DRV_GND_LOGIC__t372 x2_n4__t37 x2_n5__t765 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X57 x2_n5__t739 x2_n4__t36 GND_DRV_GND_LOGIC__t518 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X58 GND_DRV_GND_LOGIC__t371 x2_n4__t35 x2_n5__t764 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X59 x2_n5__t736 x2_n4__t32 GND_DRV_GND_LOGIC__t512 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X6 x1_nbuf1__t3 x1_ncb__t3 GND_DRV_GND_LOGIC__t305 GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X60 GND_DRV_GND_LOGIC__t353 x2_n4__t17 x2_n5__t755 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X61 x2_n5__t729 x2_n4__t16 GND_DRV_GND_LOGIC__t497 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X62 GND_DRV_GND_LOGIC__t352 x2_n4__t15 x2_n5__t754 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X63 x2_n5__t728 x2_n4__t14 GND_DRV_GND_LOGIC__t496 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X64 GND_DRV_GND_LOGIC__t351 x2_n4__t13 x2_n5__t753 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X65 x2_n5__t727 x2_n4__t12 GND_DRV_GND_LOGIC__t495 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X66 GND_DRV_GND_LOGIC__t350 x2_n4__t11 x2_n5__t752 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X67 x2_n5__t726 x2_n4__t10 GND_DRV_GND_LOGIC__t494 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X68 GND_DRV_GND_LOGIC__t354 x2_n4__t18 x2_n5__t756 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X69 x2_n5__t724 x2_n4__t7 GND_DRV_GND_LOGIC__t491 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X7 IN_DRV__t3 x1_nbuf1__t1 GND_DRV_GND_LOGIC__t303 GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X70 GND_DRV_GND_LOGIC__t348 x2_n4__t6 x2_n5__t750 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X71 x2_n5__t723 x2_n4__t5 GND_DRV_GND_LOGIC__t490 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X72 GND_DRV_GND_LOGIC__t347 x2_n4__t4 x2_n5__t749 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X73 x2_n5__t722 x2_n4__t3 GND_DRV_GND_LOGIC__t489 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X74 GND_DRV_GND_LOGIC__t359 x2_n4__t19 x2_n5__t757 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X75 x2_n5__t732 x2_n4__t23 GND_DRV_GND_LOGIC__t506 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X76 GND_DRV_GND_LOGIC__t361 x2_n4__t22 x2_n5__t758 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X77 x2_n5__t731 x2_n4__t21 GND_DRV_GND_LOGIC__t505 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X78 GND_DRV_GND_LOGIC__t423 x2_n4__t53 x2_n5__t774 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X79 x2_n5__t0 x2_n4__t0 GND_DRV_GND_LOGIC__t312 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X8 x2_n1__t3 IN_DRV__t1 GND_DRV_GND_LOGIC__t304 GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
+X80 GND_DRV_GND_LOGIC__t385 x2_n5__t89 OUT__t152 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X81 OUT__t42 x2_n5__t82 GND_DRV_GND_LOGIC__t528 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X82 GND_DRV_GND_LOGIC__t383 x2_n5__t84 OUT__t150 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X83 OUT__t43 x2_n5__t83 GND_DRV_GND_LOGIC__t529 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X84 GND_DRV_GND_LOGIC__t381 x2_n5__t79 OUT__t148 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X85 OUT__t40 x2_n5__t78 GND_DRV_GND_LOGIC__t526 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X86 GND_DRV_GND_LOGIC__t393 x2_n5__t104 OUT__t160 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X87 OUT__t56 x2_n5__t111 GND_DRV_GND_LOGIC__t542 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X88 GND_DRV_GND_LOGIC__t397 x2_n5__t110 OUT__t164 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X89 OUT__t41 x2_n5__t81 GND_DRV_GND_LOGIC__t527 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X9 x2_n2__t0 x2_n1__t0 GND_DRV_GND_LOGIC__t301 GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
+X90 GND_DRV_GND_LOGIC__t398 x2_n5__t112 OUT__t165 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X91 OUT__t48 x2_n5__t91 GND_DRV_GND_LOGIC__t534 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X92 GND_DRV_GND_LOGIC__t406 x2_n5__t130 OUT__t173 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X93 OUT__t66 x2_n5__t129 GND_DRV_GND_LOGIC__t552 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X94 GND_DRV_GND_LOGIC__t405 x2_n5__t128 OUT__t172 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X95 OUT__t65 x2_n5__t127 GND_DRV_GND_LOGIC__t551 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X96 GND_DRV_GND_LOGIC__t404 x2_n5__t126 OUT__t171 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X97 OUT__t64 x2_n5__t125 GND_DRV_GND_LOGIC__t550 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X98 GND_DRV_GND_LOGIC__t403 x2_n5__t124 OUT__t170 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
+X99 OUT__t63 x2_n5__t123 GND_DRV_GND_LOGIC__t549 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=1
 X300 x1_inb__t0 IN__t0 VDD_LOGIC__t0 VDD_LOGIC pfet_03v3 L=0.28U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
 X301 x1_nca__t0 x1_ncb__t1 VDD_DRV__t0 VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
 X302 x1_ncb__t4 x1_nca__t1 VDD_DRV__t671 VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
@@ -1071,6 +1074,304 @@ X958 VDD_DRV__t988 x2_n5__t709 OUT__t714 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad
 X959 OUT__t470 x2_n5__t720 VDD_DRV__t668 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
 
 * T5: per-net parasitic star (klt extract --parasitics), coupling excluded
+RGND_DRV_GND_LOGIC__t299 GND_DRV_GND_LOGIC__t299 GND_LOGIC 10.0058
+RGND_DRV_GND_LOGIC__t300 GND_DRV_GND_LOGIC__t300 GND_LOGIC 9.3317
+RGND_DRV_GND_LOGIC__t301 GND_DRV_GND_LOGIC__t301 GND_DRV 4.7676
+RGND_DRV_GND_LOGIC__t302 GND_DRV_GND_LOGIC__t302 GND_DRV 2.9222
+RGND_DRV_GND_LOGIC__t303 GND_DRV_GND_LOGIC__t303 GND_DRV 5.843
+RGND_DRV_GND_LOGIC__t304 GND_DRV_GND_LOGIC__t304 GND_DRV 5.4034
+RGND_DRV_GND_LOGIC__t305 GND_DRV_GND_LOGIC__t305 GND_DRV 6.5435
+RGND_DRV_GND_LOGIC__t306 GND_DRV_GND_LOGIC__t306 GND_DRV 2.39
+RGND_DRV_GND_LOGIC__t307 GND_DRV_GND_LOGIC__t307 GND_DRV 2.099
+RGND_DRV_GND_LOGIC__t308 GND_DRV_GND_LOGIC__t308 GND_DRV 3.3619
+RGND_DRV_GND_LOGIC__t309 GND_DRV_GND_LOGIC__t309 GND_DRV 2.2006
+RGND_DRV_GND_LOGIC__t310 GND_DRV_GND_LOGIC__t310 GND_DRV 2.185
+RGND_DRV_GND_LOGIC__t311 GND_DRV_GND_LOGIC__t311 GND_LOGIC 8.8086
+RGND_DRV_GND_LOGIC__t312 GND_DRV_GND_LOGIC__t312 GND_DRV 0.8632
+RGND_DRV_GND_LOGIC__t313 GND_DRV_GND_LOGIC__t313 GND_DRV 0.9699
+RGND_DRV_GND_LOGIC__t314 GND_DRV_GND_LOGIC__t314 GND_DRV 1.0158
+RGND_DRV_GND_LOGIC__t315 GND_DRV_GND_LOGIC__t315 GND_DRV 1.0621
+RGND_DRV_GND_LOGIC__t316 GND_DRV_GND_LOGIC__t316 GND_DRV 1.1087
+RGND_DRV_GND_LOGIC__t317 GND_DRV_GND_LOGIC__t317 GND_DRV 1.1557
+RGND_DRV_GND_LOGIC__t318 GND_DRV_GND_LOGIC__t318 GND_DRV 1.2029
+RGND_DRV_GND_LOGIC__t319 GND_DRV_GND_LOGIC__t319 GND_DRV 1.4904
+RGND_DRV_GND_LOGIC__t320 GND_DRV_GND_LOGIC__t320 GND_DRV 1.7825
+RGND_DRV_GND_LOGIC__t321 GND_DRV_GND_LOGIC__t321 GND_DRV 1.8314
+RGND_DRV_GND_LOGIC__t322 GND_DRV_GND_LOGIC__t322 GND_DRV 1.8805
+RGND_DRV_GND_LOGIC__t323 GND_DRV_GND_LOGIC__t323 GND_DRV 1.9296
+RGND_DRV_GND_LOGIC__t324 GND_DRV_GND_LOGIC__t324 GND_DRV 2.028
+RGND_DRV_GND_LOGIC__t325 GND_DRV_GND_LOGIC__t325 GND_DRV 2.0772
+RGND_DRV_GND_LOGIC__t326 GND_DRV_GND_LOGIC__t326 GND_DRV 2.1265
+RGND_DRV_GND_LOGIC__t327 GND_DRV_GND_LOGIC__t327 GND_DRV 1.2504
+RGND_DRV_GND_LOGIC__t328 GND_DRV_GND_LOGIC__t328 GND_DRV 2.1759
+RGND_DRV_GND_LOGIC__t329 GND_DRV_GND_LOGIC__t329 GND_DRV 1.9788
+RGND_DRV_GND_LOGIC__t330 GND_DRV_GND_LOGIC__t330 GND_DRV 0.4633
+RGND_DRV_GND_LOGIC__t331 GND_DRV_GND_LOGIC__t331 GND_DRV 0.4901
+RGND_DRV_GND_LOGIC__t332 GND_DRV_GND_LOGIC__t332 GND_DRV 0.5204
+RGND_DRV_GND_LOGIC__t333 GND_DRV_GND_LOGIC__t333 GND_DRV 0.5536
+RGND_DRV_GND_LOGIC__t334 GND_DRV_GND_LOGIC__t334 GND_DRV 1.298
+RGND_DRV_GND_LOGIC__t335 GND_DRV_GND_LOGIC__t335 GND_DRV 0.5892
+RGND_DRV_GND_LOGIC__t336 GND_DRV_GND_LOGIC__t336 GND_DRV 0.6268
+RGND_DRV_GND_LOGIC__t337 GND_DRV_GND_LOGIC__t337 GND_DRV 0.7068
+RGND_DRV_GND_LOGIC__t338 GND_DRV_GND_LOGIC__t338 GND_DRV 0.7486
+RGND_DRV_GND_LOGIC__t339 GND_DRV_GND_LOGIC__t339 GND_DRV 1.3459
+RGND_DRV_GND_LOGIC__t340 GND_DRV_GND_LOGIC__t340 GND_DRV 1.3939
+RGND_DRV_GND_LOGIC__t341 GND_DRV_GND_LOGIC__t341 GND_DRV 1.4421
+RGND_DRV_GND_LOGIC__t342 GND_DRV_GND_LOGIC__t342 GND_DRV 1.5388
+RGND_DRV_GND_LOGIC__t343 GND_DRV_GND_LOGIC__t343 GND_DRV 0.8351
+RGND_DRV_GND_LOGIC__t344 GND_DRV_GND_LOGIC__t344 GND_DRV 0.8794
+RGND_DRV_GND_LOGIC__t345 GND_DRV_GND_LOGIC__t345 GND_DRV 0.4406
+RGND_DRV_GND_LOGIC__t346 GND_DRV_GND_LOGIC__t346 GND_DRV 1.5165
+RGND_DRV_GND_LOGIC__t347 GND_DRV_GND_LOGIC__t347 GND_DRV 1.0295
+RGND_DRV_GND_LOGIC__t348 GND_DRV_GND_LOGIC__t348 GND_DRV 1.0776
+RGND_DRV_GND_LOGIC__t349 GND_DRV_GND_LOGIC__t349 GND_DRV 1.4673
+RGND_DRV_GND_LOGIC__t350 GND_DRV_GND_LOGIC__t350 GND_DRV 1.1742
+RGND_DRV_GND_LOGIC__t351 GND_DRV_GND_LOGIC__t351 GND_DRV 1.2228
+RGND_DRV_GND_LOGIC__t352 GND_DRV_GND_LOGIC__t352 GND_DRV 1.2715
+RGND_DRV_GND_LOGIC__t353 GND_DRV_GND_LOGIC__t353 GND_DRV 1.3203
+RGND_DRV_GND_LOGIC__t354 GND_DRV_GND_LOGIC__t354 GND_DRV 1.1258
+RGND_DRV_GND_LOGIC__t355 GND_DRV_GND_LOGIC__t355 GND_DRV 2.1875
+RGND_DRV_GND_LOGIC__t356 GND_DRV_GND_LOGIC__t356 GND_DRV 2.2321
+RGND_DRV_GND_LOGIC__t357 GND_DRV_GND_LOGIC__t357 GND_DRV 2.2769
+RGND_DRV_GND_LOGIC__t358 GND_DRV_GND_LOGIC__t358 GND_DRV 2.322
+RGND_DRV_GND_LOGIC__t359 GND_DRV_GND_LOGIC__t359 GND_DRV 0.9817
+RGND_DRV_GND_LOGIC__t360 GND_DRV_GND_LOGIC__t360 GND_DRV 2.1431
+RGND_DRV_GND_LOGIC__t361 GND_DRV_GND_LOGIC__t361 GND_DRV 0.9341
+RGND_DRV_GND_LOGIC__t362 GND_DRV_GND_LOGIC__t362 GND_DRV 1.9119
+RGND_DRV_GND_LOGIC__t363 GND_DRV_GND_LOGIC__t363 GND_DRV 1.8127
+RGND_DRV_GND_LOGIC__t364 GND_DRV_GND_LOGIC__t364 GND_DRV 1.6644
+RGND_DRV_GND_LOGIC__t365 GND_DRV_GND_LOGIC__t365 GND_DRV 1.7138
+RGND_DRV_GND_LOGIC__t366 GND_DRV_GND_LOGIC__t366 GND_DRV 1.8623
+RGND_DRV_GND_LOGIC__t367 GND_DRV_GND_LOGIC__t367 GND_DRV 1.5874
+RGND_DRV_GND_LOGIC__t368 GND_DRV_GND_LOGIC__t368 GND_DRV 1.636
+RGND_DRV_GND_LOGIC__t369 GND_DRV_GND_LOGIC__t369 GND_DRV 1.6847
+RGND_DRV_GND_LOGIC__t370 GND_DRV_GND_LOGIC__t370 GND_DRV 1.7336
+RGND_DRV_GND_LOGIC__t371 GND_DRV_GND_LOGIC__t371 GND_DRV 1.3692
+RGND_DRV_GND_LOGIC__t372 GND_DRV_GND_LOGIC__t372 GND_DRV 1.4182
+RGND_DRV_GND_LOGIC__t373 GND_DRV_GND_LOGIC__t373 GND_DRV 1.7632
+RGND_DRV_GND_LOGIC__t374 GND_DRV_GND_LOGIC__t374 GND_DRV 1.615
+RGND_DRV_GND_LOGIC__t375 GND_DRV_GND_LOGIC__t375 GND_DRV 1.5657
+RGND_DRV_GND_LOGIC__t376 GND_DRV_GND_LOGIC__t376 GND_DRV 2.0111
+RGND_DRV_GND_LOGIC__t377 GND_DRV_GND_LOGIC__t377 GND_DRV 2.0608
+RGND_DRV_GND_LOGIC__t378 GND_DRV_GND_LOGIC__t378 GND_DRV 2.1105
+RGND_DRV_GND_LOGIC__t379 GND_DRV_GND_LOGIC__t379 GND_DRV 2.1602
+RGND_DRV_GND_LOGIC__t380 GND_DRV_GND_LOGIC__t380 GND_DRV 1.9615
+RGND_DRV_GND_LOGIC__t381 GND_DRV_GND_LOGIC__t381 GND_DRV 2.1203
+RGND_DRV_GND_LOGIC__t382 GND_DRV_GND_LOGIC__t382 GND_DRV 1.9726
+RGND_DRV_GND_LOGIC__t383 GND_DRV_GND_LOGIC__t383 GND_DRV 2.071
+RGND_DRV_GND_LOGIC__t384 GND_DRV_GND_LOGIC__t384 GND_DRV 1.6786
+RGND_DRV_GND_LOGIC__t385 GND_DRV_GND_LOGIC__t385 GND_DRV 2.0218
+RGND_DRV_GND_LOGIC__t386 GND_DRV_GND_LOGIC__t386 GND_DRV 2.6153
+RGND_DRV_GND_LOGIC__t387 GND_DRV_GND_LOGIC__t387 GND_DRV 2.665
+RGND_DRV_GND_LOGIC__t388 GND_DRV_GND_LOGIC__t388 GND_DRV 0.6611
+RGND_DRV_GND_LOGIC__t389 GND_DRV_GND_LOGIC__t389 GND_DRV 1.6299
+RGND_DRV_GND_LOGIC__t390 GND_DRV_GND_LOGIC__t390 GND_DRV 1.5813
+RGND_DRV_GND_LOGIC__t391 GND_DRV_GND_LOGIC__t391 GND_DRV 0.6661
+RGND_DRV_GND_LOGIC__t392 GND_DRV_GND_LOGIC__t392 GND_DRV 1.4843
+RGND_DRV_GND_LOGIC__t393 GND_DRV_GND_LOGIC__t393 GND_DRV 2.1697
+RGND_DRV_GND_LOGIC__t394 GND_DRV_GND_LOGIC__t394 GND_DRV 1.436
+RGND_DRV_GND_LOGIC__t395 GND_DRV_GND_LOGIC__t395 GND_DRV 1.3879
+RGND_DRV_GND_LOGIC__t396 GND_DRV_GND_LOGIC__t396 GND_DRV 1.292
+RGND_DRV_GND_LOGIC__t397 GND_DRV_GND_LOGIC__t397 GND_DRV 2.2191
+RGND_DRV_GND_LOGIC__t398 GND_DRV_GND_LOGIC__t398 GND_DRV 2.2685
+RGND_DRV_GND_LOGIC__t399 GND_DRV_GND_LOGIC__t399 GND_DRV 3.1625
+RGND_DRV_GND_LOGIC__t400 GND_DRV_GND_LOGIC__t400 GND_DRV 3.2124
+RGND_DRV_GND_LOGIC__t401 GND_DRV_GND_LOGIC__t401 GND_DRV 3.2622
+RGND_DRV_GND_LOGIC__t402 GND_DRV_GND_LOGIC__t402 GND_DRV 2.5657
+RGND_DRV_GND_LOGIC__t403 GND_DRV_GND_LOGIC__t403 GND_DRV 2.4665
+RGND_DRV_GND_LOGIC__t404 GND_DRV_GND_LOGIC__t404 GND_DRV 2.417
+RGND_DRV_GND_LOGIC__t405 GND_DRV_GND_LOGIC__t405 GND_DRV 2.3674
+RGND_DRV_GND_LOGIC__t406 GND_DRV_GND_LOGIC__t406 GND_DRV 2.318
+RGND_DRV_GND_LOGIC__t407 GND_DRV_GND_LOGIC__t407 GND_DRV 2.5161
+RGND_DRV_GND_LOGIC__t408 GND_DRV_GND_LOGIC__t408 GND_DRV 2.7147
+RGND_DRV_GND_LOGIC__t409 GND_DRV_GND_LOGIC__t409 GND_DRV 2.7643
+RGND_DRV_GND_LOGIC__t410 GND_DRV_GND_LOGIC__t410 GND_DRV 2.8141
+RGND_DRV_GND_LOGIC__t411 GND_DRV_GND_LOGIC__t411 GND_DRV 2.8638
+RGND_DRV_GND_LOGIC__t412 GND_DRV_GND_LOGIC__t412 GND_DRV 2.9633
+RGND_DRV_GND_LOGIC__t413 GND_DRV_GND_LOGIC__t413 GND_DRV 3.0131
+RGND_DRV_GND_LOGIC__t414 GND_DRV_GND_LOGIC__t414 GND_DRV 3.0629
+RGND_DRV_GND_LOGIC__t415 GND_DRV_GND_LOGIC__t415 GND_DRV 3.1127
+RGND_DRV_GND_LOGIC__t416 GND_DRV_GND_LOGIC__t416 GND_DRV 2.9135
+RGND_DRV_GND_LOGIC__t417 GND_DRV_GND_LOGIC__t417 GND_DRV 0.4091
+RGND_DRV_GND_LOGIC__t418 GND_DRV_GND_LOGIC__t418 GND_DRV 0.4032
+RGND_DRV_GND_LOGIC__t419 GND_DRV_GND_LOGIC__t419 GND_DRV 0.4036
+RGND_DRV_GND_LOGIC__t420 GND_DRV_GND_LOGIC__t420 GND_DRV 0.4102
+RGND_DRV_GND_LOGIC__t421 GND_DRV_GND_LOGIC__t421 GND_DRV 0.4227
+RGND_DRV_GND_LOGIC__t422 GND_DRV_GND_LOGIC__t422 GND_DRV 0.9244
+RGND_DRV_GND_LOGIC__t423 GND_DRV_GND_LOGIC__t423 GND_DRV 0.8868
+RGND_DRV_GND_LOGIC__t424 GND_DRV_GND_LOGIC__t424 GND_DRV 1.5327
+RGND_DRV_GND_LOGIC__t425 GND_DRV_GND_LOGIC__t425 GND_DRV 1.0563
+RGND_DRV_GND_LOGIC__t426 GND_DRV_GND_LOGIC__t426 GND_DRV 3.3121
+RGND_DRV_GND_LOGIC__t427 GND_DRV_GND_LOGIC__t427 GND_DRV 1.01
+RGND_DRV_GND_LOGIC__t428 GND_DRV_GND_LOGIC__t428 GND_DRV 0.7915
+RGND_DRV_GND_LOGIC__t429 GND_DRV_GND_LOGIC__t429 GND_DRV 0.622
+RGND_DRV_GND_LOGIC__t430 GND_DRV_GND_LOGIC__t430 GND_DRV 0.5846
+RGND_DRV_GND_LOGIC__t431 GND_DRV_GND_LOGIC__t431 GND_DRV 0.5493
+RGND_DRV_GND_LOGIC__t432 GND_DRV_GND_LOGIC__t432 GND_DRV 0.5164
+RGND_DRV_GND_LOGIC__t433 GND_DRV_GND_LOGIC__t433 GND_DRV 0.4866
+RGND_DRV_GND_LOGIC__t434 GND_DRV_GND_LOGIC__t434 GND_DRV 0.4602
+RGND_DRV_GND_LOGIC__t435 GND_DRV_GND_LOGIC__t435 GND_DRV 0.4381
+RGND_DRV_GND_LOGIC__t436 GND_DRV_GND_LOGIC__t436 GND_DRV 0.4208
+RGND_DRV_GND_LOGIC__t437 GND_DRV_GND_LOGIC__t437 GND_DRV 1.2444
+RGND_DRV_GND_LOGIC__t438 GND_DRV_GND_LOGIC__t438 GND_DRV 1.197
+RGND_DRV_GND_LOGIC__t439 GND_DRV_GND_LOGIC__t439 GND_DRV 1.3399
+RGND_DRV_GND_LOGIC__t440 GND_DRV_GND_LOGIC__t440 GND_DRV 1.9234
+RGND_DRV_GND_LOGIC__t441 GND_DRV_GND_LOGIC__t441 GND_DRV 1.1029
+RGND_DRV_GND_LOGIC__t442 GND_DRV_GND_LOGIC__t442 GND_DRV 1.8743
+RGND_DRV_GND_LOGIC__t443 GND_DRV_GND_LOGIC__t443 GND_DRV 1.8253
+RGND_DRV_GND_LOGIC__t444 GND_DRV_GND_LOGIC__t444 GND_DRV 1.7763
+RGND_DRV_GND_LOGIC__t445 GND_DRV_GND_LOGIC__t445 GND_DRV 1.7274
+RGND_DRV_GND_LOGIC__t446 GND_DRV_GND_LOGIC__t446 GND_DRV 0.9641
+RGND_DRV_GND_LOGIC__t447 GND_DRV_GND_LOGIC__t447 GND_DRV 0.9187
+RGND_DRV_GND_LOGIC__t448 GND_DRV_GND_LOGIC__t448 GND_DRV 0.8296
+RGND_DRV_GND_LOGIC__t449 GND_DRV_GND_LOGIC__t449 GND_DRV 0.786
+RGND_DRV_GND_LOGIC__t450 GND_DRV_GND_LOGIC__t450 GND_DRV 0.8738
+RGND_DRV_GND_LOGIC__t451 GND_DRV_GND_LOGIC__t451 GND_DRV 0.7433
+RGND_DRV_GND_LOGIC__t452 GND_DRV_GND_LOGIC__t452 GND_DRV 0.7016
+RGND_DRV_GND_LOGIC__t453 GND_DRV_GND_LOGIC__t453 GND_DRV 1.1498
+RGND_DRV_GND_LOGIC__t454 GND_DRV_GND_LOGIC__t454 GND_DRV 1.4662
+RGND_DRV_GND_LOGIC__t455 GND_DRV_GND_LOGIC__t455 GND_DRV 1.5146
+RGND_DRV_GND_LOGIC__t456 GND_DRV_GND_LOGIC__t456 GND_DRV 0.9471
+RGND_DRV_GND_LOGIC__t457 GND_DRV_GND_LOGIC__t457 GND_DRV 0.9928
+RGND_DRV_GND_LOGIC__t458 GND_DRV_GND_LOGIC__t458 GND_DRV 1.0389
+RGND_DRV_GND_LOGIC__t459 GND_DRV_GND_LOGIC__t459 GND_DRV 1.0854
+RGND_DRV_GND_LOGIC__t460 GND_DRV_GND_LOGIC__t460 GND_DRV 1.1322
+RGND_DRV_GND_LOGIC__t461 GND_DRV_GND_LOGIC__t461 GND_DRV 1.1793
+RGND_DRV_GND_LOGIC__t462 GND_DRV_GND_LOGIC__t462 GND_DRV 1.2266
+RGND_DRV_GND_LOGIC__t463 GND_DRV_GND_LOGIC__t463 GND_DRV 1.807
+RGND_DRV_GND_LOGIC__t464 GND_DRV_GND_LOGIC__t464 GND_DRV 1.856
+RGND_DRV_GND_LOGIC__t465 GND_DRV_GND_LOGIC__t465 GND_DRV 1.905
+RGND_DRV_GND_LOGIC__t466 GND_DRV_GND_LOGIC__t466 GND_DRV 1.9542
+RGND_DRV_GND_LOGIC__t467 GND_DRV_GND_LOGIC__t467 GND_DRV 2.1512
+RGND_DRV_GND_LOGIC__t468 GND_DRV_GND_LOGIC__t468 GND_DRV 2.0034
+RGND_DRV_GND_LOGIC__t469 GND_DRV_GND_LOGIC__t469 GND_DRV 2.0526
+RGND_DRV_GND_LOGIC__t470 GND_DRV_GND_LOGIC__t470 GND_DRV 2.1019
+RGND_DRV_GND_LOGIC__t471 GND_DRV_GND_LOGIC__t471 GND_DRV 0.4763
+RGND_DRV_GND_LOGIC__t472 GND_DRV_GND_LOGIC__t472 GND_DRV 0.5049
+RGND_DRV_GND_LOGIC__t473 GND_DRV_GND_LOGIC__t473 GND_DRV 0.5367
+RGND_DRV_GND_LOGIC__t474 GND_DRV_GND_LOGIC__t474 GND_DRV 0.6078
+RGND_DRV_GND_LOGIC__t475 GND_DRV_GND_LOGIC__t475 GND_DRV 0.6463
+RGND_DRV_GND_LOGIC__t476 GND_DRV_GND_LOGIC__t476 GND_DRV 0.6863
+RGND_DRV_GND_LOGIC__t477 GND_DRV_GND_LOGIC__t477 GND_DRV 0.7276
+RGND_DRV_GND_LOGIC__t478 GND_DRV_GND_LOGIC__t478 GND_DRV 0.5711
+RGND_DRV_GND_LOGIC__t479 GND_DRV_GND_LOGIC__t479 GND_DRV 1.2742
+RGND_DRV_GND_LOGIC__t480 GND_DRV_GND_LOGIC__t480 GND_DRV 1.758
+RGND_DRV_GND_LOGIC__t481 GND_DRV_GND_LOGIC__t481 GND_DRV 1.3219
+RGND_DRV_GND_LOGIC__t482 GND_DRV_GND_LOGIC__t482 GND_DRV 1.3699
+RGND_DRV_GND_LOGIC__t483 GND_DRV_GND_LOGIC__t483 GND_DRV 1.418
+RGND_DRV_GND_LOGIC__t484 GND_DRV_GND_LOGIC__t484 GND_DRV 0.4514
+RGND_DRV_GND_LOGIC__t485 GND_DRV_GND_LOGIC__t485 GND_DRV 1.5411
+RGND_DRV_GND_LOGIC__t486 GND_DRV_GND_LOGIC__t486 GND_DRV 1.5631
+RGND_DRV_GND_LOGIC__t487 GND_DRV_GND_LOGIC__t487 GND_DRV 0.8572
+RGND_DRV_GND_LOGIC__t488 GND_DRV_GND_LOGIC__t488 GND_DRV 0.8132
+RGND_DRV_GND_LOGIC__t489 GND_DRV_GND_LOGIC__t489 GND_DRV 1.0056
+RGND_DRV_GND_LOGIC__t490 GND_DRV_GND_LOGIC__t490 GND_DRV 1.0535
+RGND_DRV_GND_LOGIC__t491 GND_DRV_GND_LOGIC__t491 GND_DRV 1.1017
+RGND_DRV_GND_LOGIC__t492 GND_DRV_GND_LOGIC__t492 GND_DRV 1.4428
+RGND_DRV_GND_LOGIC__t493 GND_DRV_GND_LOGIC__t493 GND_DRV 1.7091
+RGND_DRV_GND_LOGIC__t494 GND_DRV_GND_LOGIC__t494 GND_DRV 1.15
+RGND_DRV_GND_LOGIC__t495 GND_DRV_GND_LOGIC__t495 GND_DRV 1.1985
+RGND_DRV_GND_LOGIC__t496 GND_DRV_GND_LOGIC__t496 GND_DRV 1.2471
+RGND_DRV_GND_LOGIC__t497 GND_DRV_GND_LOGIC__t497 GND_DRV 1.2959
+RGND_DRV_GND_LOGIC__t498 GND_DRV_GND_LOGIC__t498 GND_DRV 3.2871
+RGND_DRV_GND_LOGIC__t499 GND_DRV_GND_LOGIC__t499 GND_DRV 2.2097
+RGND_DRV_GND_LOGIC__t500 GND_DRV_GND_LOGIC__t500 GND_DRV 2.2545
+RGND_DRV_GND_LOGIC__t501 GND_DRV_GND_LOGIC__t501 GND_DRV 2.2994
+RGND_DRV_GND_LOGIC__t502 GND_DRV_GND_LOGIC__t502 GND_DRV 2.121
+RGND_DRV_GND_LOGIC__t503 GND_DRV_GND_LOGIC__t503 GND_DRV 2.1653
+RGND_DRV_GND_LOGIC__t504 GND_DRV_GND_LOGIC__t504 GND_DRV 1.4919
+RGND_DRV_GND_LOGIC__t505 GND_DRV_GND_LOGIC__t505 GND_DRV 0.9104
+RGND_DRV_GND_LOGIC__t506 GND_DRV_GND_LOGIC__t506 GND_DRV 0.9578
+RGND_DRV_GND_LOGIC__t507 GND_DRV_GND_LOGIC__t507 GND_DRV 2.3446
+RGND_DRV_GND_LOGIC__t508 GND_DRV_GND_LOGIC__t508 GND_DRV 2.3673
+RGND_DRV_GND_LOGIC__t509 GND_DRV_GND_LOGIC__t509 GND_DRV 1.5904
+RGND_DRV_GND_LOGIC__t510 GND_DRV_GND_LOGIC__t510 GND_DRV 1.6397
+RGND_DRV_GND_LOGIC__t511 GND_DRV_GND_LOGIC__t511 GND_DRV 1.8375
+RGND_DRV_GND_LOGIC__t512 GND_DRV_GND_LOGIC__t512 GND_DRV 1.3448
+RGND_DRV_GND_LOGIC__t513 GND_DRV_GND_LOGIC__t513 GND_DRV 1.7385
+RGND_DRV_GND_LOGIC__t514 GND_DRV_GND_LOGIC__t514 GND_DRV 1.6117
+RGND_DRV_GND_LOGIC__t515 GND_DRV_GND_LOGIC__t515 GND_DRV 1.6604
+RGND_DRV_GND_LOGIC__t516 GND_DRV_GND_LOGIC__t516 GND_DRV 0.7699
+RGND_DRV_GND_LOGIC__t517 GND_DRV_GND_LOGIC__t517 GND_DRV 1.8871
+RGND_DRV_GND_LOGIC__t518 GND_DRV_GND_LOGIC__t518 GND_DRV 1.3937
+RGND_DRV_GND_LOGIC__t519 GND_DRV_GND_LOGIC__t519 GND_DRV 1.6891
+RGND_DRV_GND_LOGIC__t520 GND_DRV_GND_LOGIC__t520 GND_DRV 1.9366
+RGND_DRV_GND_LOGIC__t521 GND_DRV_GND_LOGIC__t521 GND_DRV 1.788
+RGND_DRV_GND_LOGIC__t522 GND_DRV_GND_LOGIC__t522 GND_DRV 1.9863
+RGND_DRV_GND_LOGIC__t523 GND_DRV_GND_LOGIC__t523 GND_DRV 2.0359
+RGND_DRV_GND_LOGIC__t524 GND_DRV_GND_LOGIC__t524 GND_DRV 2.0856
+RGND_DRV_GND_LOGIC__t525 GND_DRV_GND_LOGIC__t525 GND_DRV 2.1353
+RGND_DRV_GND_LOGIC__t526 GND_DRV_GND_LOGIC__t526 GND_DRV 2.145
+RGND_DRV_GND_LOGIC__t527 GND_DRV_GND_LOGIC__t527 GND_DRV 2.2438
+RGND_DRV_GND_LOGIC__t528 GND_DRV_GND_LOGIC__t528 GND_DRV 2.0464
+RGND_DRV_GND_LOGIC__t529 GND_DRV_GND_LOGIC__t529 GND_DRV 2.0957
+RGND_DRV_GND_LOGIC__t530 GND_DRV_GND_LOGIC__t530 GND_DRV 3.337
+RGND_DRV_GND_LOGIC__t531 GND_DRV_GND_LOGIC__t531 GND_DRV 0.6812
+RGND_DRV_GND_LOGIC__t532 GND_DRV_GND_LOGIC__t532 GND_DRV 1.9972
+RGND_DRV_GND_LOGIC__t533 GND_DRV_GND_LOGIC__t533 GND_DRV 1.948
+RGND_DRV_GND_LOGIC__t534 GND_DRV_GND_LOGIC__t534 GND_DRV 2.2932
+RGND_DRV_GND_LOGIC__t535 GND_DRV_GND_LOGIC__t535 GND_DRV 2.5905
+RGND_DRV_GND_LOGIC__t536 GND_DRV_GND_LOGIC__t536 GND_DRV 1.6542
+RGND_DRV_GND_LOGIC__t537 GND_DRV_GND_LOGIC__t537 GND_DRV 1.6056
+RGND_DRV_GND_LOGIC__t538 GND_DRV_GND_LOGIC__t538 GND_DRV 1.557
+RGND_DRV_GND_LOGIC__t539 GND_DRV_GND_LOGIC__t539 GND_DRV 1.5085
+RGND_DRV_GND_LOGIC__t540 GND_DRV_GND_LOGIC__t540 GND_DRV 1.4119
+RGND_DRV_GND_LOGIC__t541 GND_DRV_GND_LOGIC__t541 GND_DRV 1.3638
+RGND_DRV_GND_LOGIC__t542 GND_DRV_GND_LOGIC__t542 GND_DRV 2.1944
+RGND_DRV_GND_LOGIC__t543 GND_DRV_GND_LOGIC__t543 GND_DRV 1.4601
+RGND_DRV_GND_LOGIC__t544 GND_DRV_GND_LOGIC__t544 GND_DRV 3.1874
+RGND_DRV_GND_LOGIC__t545 GND_DRV_GND_LOGIC__t545 GND_DRV 3.2373
+RGND_DRV_GND_LOGIC__t546 GND_DRV_GND_LOGIC__t546 GND_DRV 2.6402
+RGND_DRV_GND_LOGIC__t547 GND_DRV_GND_LOGIC__t547 GND_DRV 2.5409
+RGND_DRV_GND_LOGIC__t548 GND_DRV_GND_LOGIC__t548 GND_DRV 2.6898
+RGND_DRV_GND_LOGIC__t549 GND_DRV_GND_LOGIC__t549 GND_DRV 2.4913
+RGND_DRV_GND_LOGIC__t550 GND_DRV_GND_LOGIC__t550 GND_DRV 2.4417
+RGND_DRV_GND_LOGIC__t551 GND_DRV_GND_LOGIC__t551 GND_DRV 2.3922
+RGND_DRV_GND_LOGIC__t552 GND_DRV_GND_LOGIC__t552 GND_DRV 2.3427
+RGND_DRV_GND_LOGIC__t553 GND_DRV_GND_LOGIC__t553 GND_DRV 2.7395
+RGND_DRV_GND_LOGIC__t554 GND_DRV_GND_LOGIC__t554 GND_DRV 2.7892
+RGND_DRV_GND_LOGIC__t555 GND_DRV_GND_LOGIC__t555 GND_DRV 2.8389
+RGND_DRV_GND_LOGIC__t556 GND_DRV_GND_LOGIC__t556 GND_DRV 2.8887
+RGND_DRV_GND_LOGIC__t557 GND_DRV_GND_LOGIC__t557 GND_DRV 3.1376
+RGND_DRV_GND_LOGIC__t558 GND_DRV_GND_LOGIC__t558 GND_DRV 2.9384
+RGND_DRV_GND_LOGIC__t559 GND_DRV_GND_LOGIC__t559 GND_DRV 2.9882
+RGND_DRV_GND_LOGIC__t560 GND_DRV_GND_LOGIC__t560 GND_DRV 3.038
+RGND_DRV_GND_LOGIC__t561 GND_DRV_GND_LOGIC__t561 GND_DRV 3.0878
+RGND_DRV_GND_LOGIC__t562 GND_DRV_GND_LOGIC__t562 GND_DRV 0.4054
+RGND_DRV_GND_LOGIC__t563 GND_DRV_GND_LOGIC__t563 GND_DRV 0.4027
+RGND_DRV_GND_LOGIC__t564 GND_DRV_GND_LOGIC__t564 GND_DRV 0.4062
+RGND_DRV_GND_LOGIC__t565 GND_DRV_GND_LOGIC__t565 GND_DRV 0.987
+RGND_DRV_GND_LOGIC__t566 GND_DRV_GND_LOGIC__t566 GND_DRV 0.9019
+RGND_DRV_GND_LOGIC__t567 GND_DRV_GND_LOGIC__t567 GND_DRV 1.0331
+RGND_DRV_GND_LOGIC__t568 GND_DRV_GND_LOGIC__t568 GND_DRV 0.431
+RGND_DRV_GND_LOGIC__t569 GND_DRV_GND_LOGIC__t569 GND_DRV 0.4158
+RGND_DRV_GND_LOGIC__t570 GND_DRV_GND_LOGIC__t570 GND_DRV 0.6414
+RGND_DRV_GND_LOGIC__t571 GND_DRV_GND_LOGIC__t571 GND_DRV 0.6031
+RGND_DRV_GND_LOGIC__t572 GND_DRV_GND_LOGIC__t572 GND_DRV 0.5667
+RGND_DRV_GND_LOGIC__t573 GND_DRV_GND_LOGIC__t573 GND_DRV 0.4142
+RGND_DRV_GND_LOGIC__t574 GND_DRV_GND_LOGIC__t574 GND_DRV 0.5011
+RGND_DRV_GND_LOGIC__t575 GND_DRV_GND_LOGIC__t575 GND_DRV 0.4729
+RGND_DRV_GND_LOGIC__t576 GND_DRV_GND_LOGIC__t576 GND_DRV 0.4486
+RGND_DRV_GND_LOGIC__t577 GND_DRV_GND_LOGIC__t577 GND_DRV 0.4288
+RGND_DRV_GND_LOGIC__t578 GND_DRV_GND_LOGIC__t578 GND_DRV 0.5325
+RGND_DRV_GND_LOGIC__t579 GND_DRV_GND_LOGIC__t579 GND_DRV 1.2682
+RGND_DRV_GND_LOGIC__t580 GND_DRV_GND_LOGIC__t580 GND_DRV 1.2207
+RGND_DRV_GND_LOGIC__t581 GND_DRV_GND_LOGIC__t581 GND_DRV 1.0795
+RGND_DRV_GND_LOGIC__t582 GND_DRV_GND_LOGIC__t582 GND_DRV 1.3159
+RGND_DRV_GND_LOGIC__t583 GND_DRV_GND_LOGIC__t583 GND_DRV 1.8498
+RGND_DRV_GND_LOGIC__t584 GND_DRV_GND_LOGIC__t584 GND_DRV 1.8008
+RGND_DRV_GND_LOGIC__t585 GND_DRV_GND_LOGIC__t585 GND_DRV 1.7519
+RGND_DRV_GND_LOGIC__t586 GND_DRV_GND_LOGIC__t586 GND_DRV 1.703
+RGND_DRV_GND_LOGIC__t587 GND_DRV_GND_LOGIC__t587 GND_DRV 1.8989
+RGND_DRV_GND_LOGIC__t588 GND_DRV_GND_LOGIC__t588 GND_DRV 0.9414
+RGND_DRV_GND_LOGIC__t589 GND_DRV_GND_LOGIC__t589 GND_DRV 0.8962
+RGND_DRV_GND_LOGIC__t590 GND_DRV_GND_LOGIC__t590 GND_DRV 1.1733
+RGND_DRV_GND_LOGIC__t591 GND_DRV_GND_LOGIC__t591 GND_DRV 0.8516
+RGND_DRV_GND_LOGIC__t592 GND_DRV_GND_LOGIC__t592 GND_DRV 0.8077
+RGND_DRV_GND_LOGIC__t593 GND_DRV_GND_LOGIC__t593 GND_DRV 0.7646
+RGND_DRV_GND_LOGIC__t594 GND_DRV_GND_LOGIC__t594 GND_DRV 0.7223
+RGND_DRV_GND_LOGIC__t595 GND_DRV_GND_LOGIC__t595 GND_DRV 1.1263
+CGND_DRV_GND_LOGIC GND_DRV GND_LOGIC 5.38173e-13
 RIN__t0 IN__t0 IN 20.7888
 RIN__t1 IN__t1 IN 117.831
 RIN__t2 IN__t2 IN 138.62

@@ -435,7 +435,7 @@ built from the same layout:
 | File | Built from | Contents | Used for |
 |---|---|---|---|
 | [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2580 R / 16 C per-net ground stars (the merged `GND_DRV\|GND_LOGIC` net's own star is intentionally not emitted, which leaves **both ground rails ideal** — an optimistic, not conservative, simplification for undershoot: [Known gaps](#known-gaps), issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)); **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 17 C per-net ground stars, **including both ground rails** — the merged `GND_DRV\|GND_LOGIC` net's star is emitted with each leg's hub rebound to that leg's *own* device's rail (297 ground-rail legs, issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)), and its one measured capacitance placed between the two real rails; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
 
 Both DUTs still back-annotate every body terminal (BA1/BA2) rather than
 reading it off the extractor's own merged `GND_DRV|GND_LOGIC` net directly —

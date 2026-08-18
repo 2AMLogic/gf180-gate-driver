@@ -60,17 +60,20 @@
 *     (`parasitics.nets[].coupled`) is NOT emitted -- a documented scope
 *     reduction, not a silent drop; every ground-referenced term is measured,
 *     every coupling term is omitted, stated once here rather than per-record.
-*     One further reduction since issue #132: the extraction deck now reports
-*     BOTH ground rails as one merged net (klayout-tools #1128), whose star is
-*     skipped here because every terminal on it is rebound per-device to a real
-*     GND_LOGIC/GND_DRV (T4/BA1) and its hub would be left dangling. So the two
-*     ground rails are modeled as ideal zero-ohm nodes -- 297 fewer R legs and
-*     the GND_DRV<->GND_LOGIC coupling cap, versus the pre-#132 RC DUT. That is
-*     OPTIMISTIC, not conservative, for ground bounce and n1_min_v undershoot:
-*     it removes the rail IR drop those checks measure. It changes no recorded
-*     verdict today (~10x margin on the worst RC n1_min_v corner); it is carried
-*     as a stated fidelity gap in layout/README.md's 'Known gaps' with a
-*     follow-up issue.
+*     Since issue #132 the extraction deck reports BOTH ground rails as one
+*     merged net (klayout-tools #1128), which has no single hub of its own here:
+*     every terminal on it belongs to exactly one real ground domain by (class,
+*     L) (T4/BA1), so each of its legs is emitted with the leg's OWN device's
+*     real GND_LOGIC/GND_DRV as that leg's hub -- the same per-device rebind the
+*     leg net itself gets, never one shared hub (which would reroute one
+*     domain's return current through the testbench's inter-rail tie; see
+*     MERGED_GROUND_RAW). That reproduces exactly the pre-#132 topology, where
+*     each rail's own star hub WAS that rail's node: 297 ground-rail R legs
+*     (issue #184). The merged net's own measured ground capacitance is emitted
+*     once between the two real rails it spans (GND_DRV<->GND_LOGIC), the same
+*     place the pre-#132 GND_DRV star's cap landed -- the deck reports one
+*     lumped value for the merged metal and resolves no per-domain split, so it
+*     is carried whole rather than apportioned by assertion.
 * T6. (only with --combine, and only on a non-parasitic extraction) Device
 *     folding: parallel-identical fingers of one schematic device (exactly
 *     matching (model, d, g, s, body, L, W, AD, AS, PD, PS) after T2/T4) are
@@ -101,7 +104,7 @@
 *       own per-net table is still keyed by the schematic's pre-merge
 *       net names, so this rename is still the correct lookup key)
 *
-* sha256 (this file, sans this line): d75cbb2254df9baced59a89c6be73730
+* sha256 (this file, sans this line): c7002fe91ea17f7a762fa9c0c9440739
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
