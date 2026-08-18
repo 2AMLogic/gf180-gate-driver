@@ -75,24 +75,27 @@ fail() { FAIL=$((FAIL + 1)); TOTAL=$((TOTAL + 1)); printf "${RED}FAIL${NC} %s\n"
 DDL="DROP TA""BLE"
 
 # =============================================================================
-# PART 1 -- _fastpath_pipe_split() / fastpath_grep_pipe_admits() unit tests
+# PART 1 -- fastpath_structural_ok() / _fastpath_pipe_split() /
+#           fastpath_grep_pipe_admits() unit tests
 # =============================================================================
-echo "=== fastpath pipe-split unit tests (#109) ==="
+echo "=== fastpath pipe-split unit tests (#109, #127) ==="
 
 FASTPATH_LIB="$(mktemp)"
 trap 'rm -f "$FASTPATH_LIB"' EXIT
 
-# Extract from the sink-allowlist assignments through the closing brace of
-# fastpath_grep_pipe_admits().
+# Extract from fastpath_structural_ok() (the #127 target) through the closing
+# brace of fastpath_grep_pipe_admits() -- this range also picks up
+# fastpath_builtin_admits() and the sink-allowlist assignments in between,
+# which is harmless (unused by these tests, but self-contained).
 awk '
-    /^_FASTPATH_PIPE_SINKS_ANYARG=/ { emit = 1 }
+    /^fastpath_structural_ok\(\) \{/ { emit = 1 }
     emit { print }
     /^fastpath_grep_pipe_admits\(\) \{/ { infunc = 1 }
     infunc && /^\}$/ { exit }
 ' "$SRC_HOOK" > "$FASTPATH_LIB"
 
-if ! grep -q '^_fastpath_pipe_split() {' "$FASTPATH_LIB"; then
-    fail "could not extract _fastpath_pipe_split()/fastpath_grep_pipe_admits() from $SRC_HOOK"
+if ! grep -q '^_fastpath_pipe_split() {' "$FASTPATH_LIB" || ! grep -q '^fastpath_structural_ok() {' "$FASTPATH_LIB"; then
+    fail "could not extract fastpath_structural_ok()/_fastpath_pipe_split()/fastpath_grep_pipe_admits() from $SRC_HOOK"
 else
     # shellcheck disable=SC1090
     source "$FASTPATH_LIB"
@@ -200,6 +203,81 @@ else
     # evaluate to 0 there either.
     split_ok "(28) backslash-escaped command word at offset 0 still splits" \
         '\grep "a\|b" f.txt | head' '\grep "a\|b" f.txt ' ' head'
+
+    # --- _fastpath_has_unquoted_pipe(): quote-aware "is there a LIVE pipe on
+    # this line" predicate (#127), factored out of the same quote-tracking scan
+    # as _fastpath_pipe_split() above and used by fastpath_structural_ok() so a
+    # `|` byte inside a quoted argument no longer disqualifies a BARE (unpiped)
+    # command from the built-in fastpath allowlist.
+    has_pipe() {
+        local desc="$1" cmd="$2"
+        if _fastpath_has_unquoted_pipe "$cmd"; then pass "$desc"
+        else fail "$desc (expected TRUE/has-live-pipe, got FALSE)"; fi
+    }
+    no_pipe() {
+        local desc="$1" cmd="$2"
+        if _fastpath_has_unquoted_pipe "$cmd"; then fail "$desc (expected FALSE/no-live-pipe, got TRUE)"
+        else pass "$desc"; fi
+    }
+
+    no_pipe "(29) bare double-quoted ERE alternation has no live pipe" \
+        "grep -n \"${DDL}\\|foo\" f.sql"
+    no_pipe "(30) bare single-quoted ERE alternation has no live pipe" \
+        "grep -n '${DDL}\\|foo' f.sql"
+    no_pipe "(31) no pipe byte anywhere has no live pipe" \
+        "grep -n \"${DDL}\" f.sql"
+    has_pipe "(32) a real unquoted pipe is detected" \
+        'grep foo f.txt | head -3'
+    has_pipe "(33) a quoted pipe PLUS a real pipe is still detected" \
+        "grep -n \"${DDL}\\|foo\" f.sql | head -3"
+    has_pipe "(34) FAIL-SAFE: an unterminated quote is treated as having a live pipe (decline)" \
+        "grep -n \"${DDL}\\|foo f.sql"
+    has_pipe "(35) FAIL-SAFE: an unterminated single quote is treated as having a live pipe (decline)" \
+        "grep -n '${DDL}\\|foo f.sql"
+
+    # --- fastpath_structural_ok(): the #127 target itself ---------------------
+    # Direct unit tests of the shared structural pre-check, now that its `|`
+    # test is quote-aware while every other metacharacter (`; & < > `` `` $(`)
+    # stays a raw byte scan (explicitly out of scope per the issue).
+    structural_ok() {
+        local desc="$1" cmd="$2"
+        if fastpath_structural_ok "$cmd"; then pass "$desc"
+        else fail "$desc (expected structural_ok to ADMIT, got decline)"; fi
+    }
+    structural_declines() {
+        local desc="$1" cmd="$2"
+        if fastpath_structural_ok "$cmd"; then fail "$desc (expected structural_ok to DECLINE, got admit)"
+        else pass "$desc"; fi
+    }
+
+    structural_ok "(36) #127 fix: bare double-quoted ERE alternation now admits" \
+        "grep -n \"${DDL}\\|foo\" f.sql"
+    structural_ok "(37) #127 fix: bare single-quoted ERE alternation now admits" \
+        "grep -n '${DDL}\\|foo' f.sql"
+    structural_ok "(38) single-term grep (no | at all) still admits (baseline, unchanged)" \
+        "grep -n \"${DDL}\" f.sql"
+    structural_declines "(39) x | y: a genuinely live pipe still declines" \
+        'grep foo f.txt | head'
+    structural_declines "(40) quoted | PLUS a live pipe still declines" \
+        "grep -n \"${DDL}\\|foo\" f.sql | head"
+    structural_declines "(41) FAIL-SAFE: unterminated quote still declines" \
+        "grep -n \"${DDL}\\|foo f.sql"
+    structural_declines "(42) a; b: chaining still declines (raw scan, unchanged)" \
+        'echo hi; rm -rf /'
+    structural_declines "(43) a && b: chaining still declines (raw scan, unchanged)" \
+        'echo hi && rm -rf /'
+    structural_declines "(44) a > b: redirection still declines (raw scan, unchanged)" \
+        'echo hi > /etc/passwd'
+    structural_declines "(45) a < b: redirection still declines (raw scan, unchanged)" \
+        'echo hi < /etc/passwd'
+    structural_declines "(46) backtick command substitution still declines (raw scan, unchanged)" \
+        'echo `rm -rf /`'
+    structural_declines "(47) \$(...) command substitution still declines (raw scan, unchanged)" \
+        'echo "$(rm -rf /)"'
+    structural_declines "(48) \$(...) substitution INSIDE an otherwise-quoted arg still declines" \
+        'echo "prefix $(rm -rf /) suffix"'
+    structural_declines "(49) newline still declines (unchanged)" \
+        "$(printf 'echo hi\nrm -rf /')"
 fi
 
 # =============================================================================
@@ -353,6 +431,22 @@ assert_allow() {
     fi
 }
 
+assert_not_fastpath_allowed() {
+    # Weaker than assert_decision: only pins "the fastpath declined" (not a
+    # silent ALLOW), without coupling to which downstream deny/ask rule fires.
+    # Used for #127 regression cases where the point is that
+    # fastpath_structural_ok()'s non-`|` metacharacters still decline exactly
+    # as before -- the specific full-path outcome for those shapes is a
+    # different gate's concern, not this file's.
+    local desc="$1" result="$2"
+    local code="${result%%|*}" out="${result#*|}"
+    if [[ "$code" == "0" && -z "$out" ]]; then
+        fail "$desc (expected fastpath to DECLINE, got silent ALLOW)"
+    else
+        pass "$desc"
+    fi
+}
+
 assert_decision() {   # assert_decision <desc> <result> <deny|ask> [reason substring]
     local desc="$1" result="$2" want="$3" reason_substr="${4:-}"
     local code="${result%%|*}" out="${result#*|}"
@@ -398,19 +492,17 @@ assert_allow "(d) alternation terms containing spaces -> allow" "$result"
 result=$(run_hook "grep -n -e \"${DDL}\" -e foo ${TARGET} | head -3")
 assert_allow "(e) repeated -e search terms -> allow" "$result"
 
-# --- (f) SCOPE NOTE, deliberately not asserted here. The BARE (unpiped)
-# alternation search `grep -n "<ddl>\|foo" <file>` is ALSO denied today, but by
-# a DIFFERENT gate: fastpath_structural_ok()'s own raw `*'|'*` byte test, which
-# disqualifies the command from the built-in grep allowlist before
-# fastpath_grep_pipe_admits() is ever consulted. That gate is shared by every
-# fastpath admission (ls/grep/rg/jq/echo/find/git/gh/aws) and cannot be made
-# quote-aware by the same argument used here -- `$(...)` and backticks DO expand
-# inside double quotes, so ignoring double-quoted spans there would open a real
-# bypass (`echo "$(rm -rf /)"`), and it needs a per-metacharacter analysis rather
-# than this issue's one-line pipe-count fix. Explicitly out of scope for #109
-# (see its acceptance criteria: "No change to fastpath_structural_ok()"), and
-# tracked separately; no assertion is pinned so that the follow-up fix does not
-# have to fight a test asserting the buggy behavior.
+# --- (f) #127 fix: the BARE (unpiped) alternation search
+# `grep -n "<ddl>\|foo" <file>` used to be denied by a DIFFERENT gate:
+# fastpath_structural_ok()'s own raw `*'|'*` byte test, which disqualified the
+# command from the built-in grep allowlist before fastpath_grep_pipe_admits()
+# was ever consulted. #127 made ONLY that `|` check quote-aware (via
+# _fastpath_has_unquoted_pipe(), factored out of _fastpath_pipe_split() above)
+# -- the other metacharacters (`; & < > \` $(`) in that same gate stay raw byte
+# scans on purpose (see fastpath_structural_ok()'s own comment). This is now a
+# real ALLOW, pinning the #127 fix.
+result=$(run_hook "grep -n \"${DDL}\\|foo\" ${TARGET}")
+assert_allow "(f) #127 fix: BARE ERE-alternation grep (no pipe at all) -> allow" "$result"
 
 # --- (g) SECURITY: a genuinely SECOND shell-level pipe must still decline the
 # fastpath and fall through to the full path, which denies on the DDL phrase
@@ -457,6 +549,58 @@ assert_allow "(m) #198: 3-statement ';'-joined block over the DDL phrase -> allo
 # shapes, not a general loosening of multi-statement scanning.
 result=$(run_hook "echo \"about to migrate\"; psql -c \"${DDL} users\"")
 assert_decision "(n) #198 SECURITY: echo + live psql DDL statement -> still deny" "$result" deny "$DDL"
+
+# --- (o) FAIL-SAFE (#127): a BARE (unpiped) grep with an unterminated quote
+# is ambiguous pipe-count-wise -- _fastpath_has_unquoted_pipe() must treat that
+# the same fail-safe way _fastpath_pipe_split() already does (decline), so this
+# still falls through to the full path, which denies on the DDL phrase inside
+# the still-open quote
+result=$(run_hook "grep -n \"${DDL}\\|foo ${TARGET}")
+assert_decision "(o) FAIL-SAFE: unterminated quote declines the fastpath -> deny" \
+    "$result" deny "$DDL"
+
+# --- (p)-(t) REGRESSION (#127): fastpath_structural_ok()'s OTHER
+# metacharacters (`; & < > `` ` `` $(`) are explicitly OUT OF SCOPE for this
+# issue and stay raw byte scans, unchanged -- only `|` became quote-aware.
+# Exercised through the echo builtin allowlist entry, whose own documented
+# invariant ("structural_ok already ruled out |/>/backtick/$( on this line")
+# must still hold for anything that can actually execute.
+result=$(run_hook "echo \"\$(${DDL} users)\"")
+assert_not_fastpath_allowed "(p) REGRESSION: echo \"\$(...)\" command substitution still declines the fastpath" \
+    "$result"
+
+result=$(run_hook 'echo `'"${DDL} users"'`')
+assert_not_fastpath_allowed "(q) REGRESSION: backtick command substitution still declines the fastpath" \
+    "$result"
+
+result=$(run_hook "echo hi; ${DDL} users")
+assert_not_fastpath_allowed "(r) REGRESSION: a; b chaining still declines the fastpath" \
+    "$result"
+
+result=$(run_hook "echo hi && ${DDL} users")
+assert_not_fastpath_allowed "(s) REGRESSION: a && b chaining still declines the fastpath" \
+    "$result"
+
+# NOTE: an end-to-end "(t) a > b redirection" case was deliberately dropped
+# here. `echo hi > <repo file>` declines the fastpath exactly like every other
+# `>` case (pinned directly at the fastpath_structural_ok() unit level as
+# case (44) in PART 1 above), but the FULL path has no generic rule against
+# redirecting into an arbitrary repo-relative file -- only specific sinks
+# (.ssh/.aws credentials, etc.) are flagged -- so it is itself a silent ALLOW
+# downstream of the (correct) fastpath decline. Asserting "not silently
+# allowed" end-to-end on that shape would pin unrelated full-path behavior
+# this issue does not touch, not the fastpath decline itself.
+
+# --- (u) REGRESSION (#127): a genuinely live (unquoted) pipe on a BARE grep
+# line must still decline fastpath_builtin_admits() outright (structural_ok
+# still rejects it), even though it is the one case that then gets a SECOND
+# chance via fastpath_grep_pipe_admits() -- already exercised end-to-end by
+# cases (a)-(e) above (which all ALLOW) and (g) (which correctly DENIES a
+# second real pipe). This case pins the single-live-pipe shape once more,
+# directly, for the #127 diff.
+result=$(run_hook "grep -n \"a\\|b\" ${TARGET} | head -3")
+assert_allow "(u) REGRESSION: single real pipe (grep|head) still admits via fastpath_grep_pipe_admits()" \
+    "$result"
 
 # =============================================================================
 echo
