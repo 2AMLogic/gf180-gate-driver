@@ -1,0 +1,118 @@
+* tb_low_side_power_switch.spice -- low-side on-die power-NMOS facet
+* device characterization at cell-referenced bias (issue #179, decision
+* record 0008's deferred purpose-built sweep).
+*
+* This is the facet-(b) counterpart to sim/device-mv-fet's testbench. That
+* one measures the same thick-oxide devices at the PDK elec-spec tables' own
+* 75/90/100 %-of-Vidsat convention (4.5/5.4/6.0 V); this one measures them at
+* the bias points a single Li-ion cell actually presents to an on-die low-side
+* switch -- 5.0 V (fresh cell), 4.2 V (nominal), 3.6 V (end of discharge).
+*
+* Deliberately identical to sim/device-mv-fet where the two overlap, so the
+* two records' on-resistance numbers are directly comparable rather than
+* merely similar:
+*   - same devices and same PDK test geometry (nfet_06v0 W/L = 10/0.7 um,
+*     pfet_06v0 W/L = 10/0.55 um),
+*   - same Vds sweep span (0 .. 6.6 V, the 06v0 family's vmax, via a shared
+*     normalized control node `vfracds` swept 0..1 in 0.01 steps), so the
+*     near-origin chord this deck's analysis script reads (row index 1,
+*     Vds = 1 % of 6.6 V = 66 mV) is the same chord point,
+*   - same Vsb = 0 four-terminal condition (NMOS source=bulk=0; PMOS
+*     source=bulk at a fixed 6.6 V local rail, gate/drain referenced down
+*     from there).
+*
+* Sections
+* --------
+*   OC_n06_g<vgs>  Section A -- Id(Vds) output characteristic of nfet_06v0
+*                  at Vgs = 3.6 / 4.2 / 5.0 V. This is the facet's primary
+*                  measurement: Ron.W of the low-side switch itself.
+*   OC_p06_g<vgs>  Section B -- the same for pfet_06v0 at |Vgs| = 3.6/4.2/
+*                  5.0 V. Not the switch: this sizes the *synchronous-PMOS*
+*                  flyback option (spec/low-side-power-switch.md), which is
+*                  a high-side recirculation device driven from the same
+*                  cell rail, so it sees the same cell-referenced |Vgs|.
+*   Dfb            Section C -- forward characteristic of the PDK's 6 V
+*                  P+/N-well junction diode (`diode_pd2nw_06v0`) at a fixed
+*                  reference area, for the diode flyback options. This is
+*                  physically the same junction as a high-side pfet_06v0's
+*                  drain-to-nwell body diode, which is why one sweep covers
+*                  both the "body diode" and "dedicated junction diode"
+*                  options of that trade -- they differ in drawn area, not
+*                  in device physics.
+*
+* Reference diode geometry: a 100 um x 100 um square P+ region, i.e.
+* area = 1e-8 m^2 and perimeter pj = 4e-4 m. Chosen so the 1 A/channel
+* target current lands inside the swept 0..1.2 V forward window at every
+* corner (it does: measured Vf(1 A) spans ~0.87..1.04 V across the grid).
+* The diode's SPICE model carries no self-heating and no electromigration or
+* current-density reliability limit, so this measurement bounds the
+* *electrical* drop only -- see the record's own caveat.
+
+.param
++ w_n06=10u l_n06=0.7u
++ w_p06=10u l_p06=0.55u
+
+* 06v0-family DC ceiling, reused verbatim from sim/device-mv-fet as the Vds
+* sweep span so the near-origin chord lands on the same Vds. Not a bias the
+* facet applies to anything: the low-side switch's drain sits near ground
+* when on, and the sweep is read at its first non-zero row.
+.param vmax=6.6
+
+* Cell-referenced gate drive: fresh / nominal / end-of-discharge single
+* Li-ion cell (spec/low-side-power-switch.md, decision record 0008 sec
+* "Context").
+.param
++ vgs_hi=5.0
++ vgs_mid=4.2
++ vgs_lo=3.6
+
+* Reference flyback-diode geometry (see header).
+.param a_fb=1e-8 pj_fb=4e-4
+
+* ---- Section A: nfet_06v0 Id(Vds) at cell-referenced Vgs ----------------
+* The DC value of `vfracds` is deliberately 0.01, not 0: that is exactly the
+* near-origin chord row (Vds = 66 mV) the analysis script reads out of the
+* swept table, so this deck's plain `.op` operating point already sits on the
+* chord. That is what lets testbench/tb.json run the same fragment through
+* the generic `sim/run_corners.py` CLI as a representative single-op-point
+* check without a second bias network -- `dc vfracds ...` overrides it during
+* the authoritative sweep.
+Vfracds vfracds 0 dc 0.01
+
+Vgoc_n06_glo goc_n06_glo 0 dc {vgs_lo}
+Bdoc_n06_glo doc_n06_glo 0 V = 'vmax * v(vfracds)'
+Xoc_n06_glo doc_n06_glo goc_n06_glo 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgoc_n06_gmid goc_n06_gmid 0 dc {vgs_mid}
+Bdoc_n06_gmid doc_n06_gmid 0 V = 'vmax * v(vfracds)'
+Xoc_n06_gmid doc_n06_gmid goc_n06_gmid 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+Vgoc_n06_ghi goc_n06_ghi 0 dc {vgs_hi}
+Bdoc_n06_ghi doc_n06_ghi 0 V = 'vmax * v(vfracds)'
+Xoc_n06_ghi doc_n06_ghi goc_n06_ghi 0 0 nfet_06v0 w={w_n06} l={l_n06}
+
+* ---- Section B: pfet_06v0 Id(Vsd) at cell-referenced |Vgs| --------------
+Vsoc_p06_glo soc_p06_glo 0 dc {vmax}
+Vgoc_p06_glo goc_p06_glo 0 dc 'vmax - vgs_lo'
+Bdoc_p06_glo doc_p06_glo 0 V = 'vmax * (1 - v(vfracds))'
+Xoc_p06_glo doc_p06_glo goc_p06_glo soc_p06_glo soc_p06_glo pfet_06v0 w={w_p06} l={l_p06}
+
+Vsoc_p06_gmid soc_p06_gmid 0 dc {vmax}
+Vgoc_p06_gmid goc_p06_gmid 0 dc 'vmax - vgs_mid'
+Bdoc_p06_gmid doc_p06_gmid 0 V = 'vmax * (1 - v(vfracds))'
+Xoc_p06_gmid doc_p06_gmid goc_p06_gmid soc_p06_gmid soc_p06_gmid pfet_06v0 w={w_p06} l={l_p06}
+
+Vsoc_p06_ghi soc_p06_ghi 0 dc {vmax}
+Vgoc_p06_ghi goc_p06_ghi 0 dc 'vmax - vgs_hi'
+Bdoc_p06_ghi doc_p06_ghi 0 V = 'vmax * (1 - v(vfracds))'
+Xoc_p06_ghi doc_p06_ghi goc_p06_ghi soc_p06_ghi soc_p06_ghi pfet_06v0 w={w_p06} l={l_p06}
+
+* ---- Section C: flyback junction-diode forward characteristic -----------
+* Swept on its own normalized control node so it does not share Section A/B's
+* sweep: `vfracdi` 0..1 maps to a 0..1.2 V forward bias.
+* Its DC value (0.81 -> 0.972 V forward) is the measured tt/27 C Vf(1 A)
+* point, so the plain `.op` operating point sits at the 1 A freewheel
+* current the facet cares about -- same reasoning as `vfracds` above.
+Vfracdi vfracdi 0 dc 0.81
+Bdfb afb 0 V = '1.2 * v(vfracdi)'
+Dfb afb 0 diode_pd2nw_06v0 area={a_fb} pj={pj_fb}
