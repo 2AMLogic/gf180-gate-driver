@@ -330,14 +330,57 @@ python3 layout/drc/deck_negative_control.py
 python3 layout/lvs/lvs_negative_control.py
 ```
 
+### Reproducibility: pin the `klt` install (#190)
+
+Every DRC/LVS report's `provenance.deck.content_hash` names the exact
+`klayout-tools` deck build a verdict was produced against — it is not
+decorative. **A `klt` install resolved against an unpinned `main` (e.g. a
+bare `uv tool install git+https://github.com/2AMLogic/klayout-tools` with no
+`@<rev>`/`?rev=` qualifier) can silently pick up a different deck build
+between two runs, weeks or hours apart, with an unchanged `klt --version`**
+(this repo observed exactly that: the same committed
+`gate_driver_core.gds`, re-extracted against two different unpinned installs,
+produced two different `provenance.deck.content_hash` values and flipped
+`device.body_unverified` from zero back to 959). Filed upstream, generically,
+per CLAUDE.md's friction protocol:
+[klayout-tools#1149](https://github.com/2AMLogic/klayout-tools/issues/1149)
+("gf180mcu deck: substrate/well-tap recognition behavior changed between deck
+builds, silently invalidating previously-passing LVS evidence") — already
+fixed there by
+[klayout-tools#1154](https://github.com/2AMLogic/klayout-tools/pull/1154),
+which adds `--check`/`--rerun` to `klt extract` so a caller can ask "does
+this committed report still reproduce against the deck installed *right
+now*" without re-deriving the hash by hand (`klt drc`/`klt lvs` already had
+this, issue #1106).
+
+Pin the install to a specific revision rather than letting it float:
+
+```bash
+uv tool install --from "git+https://github.com/2AMLogic/klayout-tools@<rev>" klayout-tools
+```
+
+The reports linked below (`20260818-082605-cf3a1c7` DRC,
+`20260818-082329-cf3a1c7` LVS) were produced against
+`klt 0.2.0` / `klayout 0.30.10` / deck content hash
+`sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3` — the
+same triple as the `dc66e49` reports they supersede, confirming this design's
+own body-tie geometry (issue #132) is unaffected and the earlier mismatch
+some agents observed was purely an install-drift artifact, not a regression
+in this repo. Before trusting a *new* DRC/LVS run against a differently-timed
+`klt` install, diff `provenance.deck.content_hash` against the value above; a
+mismatch means the deck build itself has moved, not that this layout changed.
+
 ### DRC (`klt drc`)
 
-Latest report: [`layout/drc/reports/gate_driver_core/20260817-232501-dc66e49.drc.json`](drc/reports/gate_driver_core/20260817-232501-dc66e49.drc.json)
+Latest report: [`layout/drc/reports/gate_driver_core/20260818-082605-cf3a1c7.drc.json`](drc/reports/gate_driver_core/20260818-082605-cf3a1c7.drc.json)
 — `status: clean`, `violation_count: 0`, deck `gf180mcu`, run against the
 stream whose content hash is the committed `gate_driver_core.provenance.json`'s
 (issue #132: every device's own body-tie tap plus a closed, contacted PCOMP
 guard ring, still DRC-clean). Re-running `klt drc` on the committed GDS
-reproduces that report byte for byte.
+reproduces that report byte for byte (confirmed fresh under issue #190, same
+`provenance.deck.content_hash` as the prior
+[`20260817-232501-dc66e49`](drc/reports/gate_driver_core/20260817-232501-dc66e49.drc.json)
+report it supersedes).
 
 #### What the DRC verdict covers
 
@@ -368,8 +411,12 @@ A deck that returns `clean` for everything would fail that control.
 
 ### LVS (`klt extract` + `klt lvs`)
 
-Latest report: [`layout/lvs/reports/gate_driver_core/20260817-232502-dc66e49.lvs.json`](lvs/reports/gate_driver_core/20260817-232502-dc66e49.lvs.json)
-— engine **`klayout`** (klayout 0.30.10), `status: match`:
+Latest report: [`layout/lvs/reports/gate_driver_core/20260818-082329-cf3a1c7.lvs.json`](lvs/reports/gate_driver_core/20260818-082329-cf3a1c7.lvs.json)
+— engine **`klayout`** (klayout 0.30.10), `status: match` (confirmed fresh
+under issue #190, same `provenance.deck.content_hash` as the prior
+[`20260817-232502-dc66e49`](lvs/reports/gate_driver_core/20260817-232502-dc66e49.lvs.json)
+report it supersedes — see "[Reproducibility: pin the `klt`
+install](#reproducibility-pin-the-klt-install-190)" above):
 
 | | layout | reference | matched |
 |---|---|---|---|

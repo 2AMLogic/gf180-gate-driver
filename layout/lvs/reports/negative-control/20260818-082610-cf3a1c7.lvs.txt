@@ -1,0 +1,18 @@
+layout: ../../../gate_driver_core.gds
+reference: ../../../build/gate_driver_core.ref.one-device-short.spice
+top: gate_driver_core
+engine: klayout
+status: mismatch
+mismatches: 4
+  nets: layout=17  reference=17  matched=14
+  devices: layout=959  reference=958  matched=958
+  pins: layout=17  reference=17  matched=17
+
+category_counts:
+  device.unmatched: 1
+  topology: 3
+
+[error] device.unmatched  (layout)  device has no counterpart on the other side
+[error] topology  (both)  nets were paired despite a name/identity conflict
+[error] topology  (both)  nets were paired despite a name/identity conflict
+[warning] topology  (layout)  device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch

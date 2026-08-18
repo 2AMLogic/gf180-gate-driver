@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "engine": "klayout",
+  "layout": "../../../gate_driver_core.gds",
+  "reference": "../../../build/gate_driver_core.ref.one-device-short.spice",
+  "top": "gate_driver_core",
+  "parameter_tolerance": null,
+  "status": "mismatch",
+  "mismatch_count": 4,
+  "category_counts": {
+    "device.unmatched": 1,
+    "topology": 3
+  },
+  "counts": {
+    "nets": {
+      "layout": 17,
+      "reference": 17,
+      "matched": 14
+    },
+    "devices": {
+      "layout": 959,
+      "reference": 958,
+      "matched": 958
+    },
+    "pins": {
+      "layout": 17,
+      "reference": 17,
+      "matched": 17
+    }
+  },
+  "device_classes": [
+    "nfet",
+    "pfet",
+    "bjt",
+    "cap_mim_2f0_m4m5_noshield",
+    "resistor",
+    "diode_nd2ps_06v0",
+    "diode_pd2nw_06v0"
+  ],
+  "environment": {
+    "engine": "klayout",
+    "engine_version": "0.30.10",
+    "layout_sha256": "70ca45b75109e913f93ca759da9bac866f9bfd05025f05e4a4614f97fe49066b",
+    "reference_sha256": "344bec8a24825eb2abc1df44e53ad388b694bcfd0a07a2fa1a72a83077e02b64",
+    "extracted_netlist": null
+  },
+  "provenance": {
+    "klt_version": "0.2.0",
+    "klayout_version": "0.30.10",
+    "pdk": null,
+    "deck": {
+      "name": "gf180mcu",
+      "content_hash": "sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3"
+    },
+    "input": null
+  },
+  "mismatches": [
+    {
+      "category": "device.unmatched",
+      "severity": "error",
+      "description": "device has no counterpart on the other side",
+      "side": "layout",
+      "net": null,
+      "device": {
+        "layout": "$299",
+        "reference": null,
+        "class": "nfet"
+      },
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "GND_DRV|GND_LOGIC",
+        "reference": "GND_DRV|GND_LOGIC"
+      },
+      "device": null,
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "error",
+      "description": "nets were paired despite a name/identity conflict",
+      "side": "both",
+      "net": {
+        "layout": "x2_n5",
+        "reference": "X2_N5"
+      },
+      "device": null,
+      "property": null,
+      "details": null
+    },
+    {
+      "category": "topology",
+      "severity": "warning",
+      "description": "device class has no counterpart on the other side, but no devices of this class were extracted either -- not a real topology mismatch",
+      "side": "layout",
+      "net": null,
+      "device": null,
+      "property": null,
+      "details": null
+    }
+  ],
+  "net_correspondence": [
+    {
+      "layout": "IN",
+      "reference": "IN",
+      "pin": true
+    },
+    {
+      "layout": "IN_DRV",
+      "reference": "IN_DRV",
+      "pin": true
+    },
+    {
+      "layout": "VDD_DRV",
+      "reference": "VDD_DRV",
+      "pin": true
+    },
+    {
+      "layout": "VDD_LOGIC",
+      "reference": "VDD_LOGIC",
+      "pin": true
+    },
+    {
+      "layout": "x1_inb",
+      "reference": "X1_INB",
+      "pin": true
+    },
+    {
+      "layout": "x1_na",
+      "reference": "X1_NA",
+      "pin": true
+    },
+    {
+      "layout": "x1_nb",
+      "reference": "X1_NB",
+      "pin": true
+    },
+    {
+      "layout": "x1_nbuf1",
+      "reference": "X1_NBUF1",
+      "pin": true
+    },
+    {
+      "layout": "x1_nca",
+      "reference": "X1_NCA",
+      "pin": true
+    },
+    {
+      "layout": "x1_ncb",
+      "reference": "X1_NCB",
+      "pin": true
+    },
+    {
+      "layout": "x2_n1",
+      "reference": "X2_N1",
+      "pin": true
+    },
+    {
+      "layout": "x2_n2",
+      "reference": "X2_N2",
+      "pin": true
+    },
+    {
+      "layout": "x2_n3",
+      "reference": "X2_N3",
+      "pin": true
+    },
+    {
+      "layout": "x2_n4",
+      "reference": "X2_N4",
+      "pin": true
+    }
+  ]
+}
