@@ -665,8 +665,8 @@ live in [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive
 as ordinary append-only `sim/` evidence, re-run against the post-#166
 (XCCOMP-drawn) extraction, fixed for T8's anonymous-net rename (issue #201;
 parasitic-free:
-[`20260818-110622-9d8e74d`](../sim/gate-driver-core-drive-postlayout/records/20260818-110622-9d8e74d.md);
-RC: [`20260818-110637-9d8e74d`](../sim/gate-driver-core-drive-postlayout/records/20260818-110637-9d8e74d.md)
+[`20260818-111748-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-111748-af13899.md);
+RC: [`20260818-112446-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md)
 — both the full 60-point PVT grid, superseding the pre-#166 pair).
 
 **Read these numbers against one remaining, already-tracked, pre-existing
@@ -688,7 +688,7 @@ parasitic-free. The two `ipeak_sink_a` stretch misses are untouched by
 XCCOMP (they are a pre-existing drive-strength shortfall, not a
 gate-ceiling/undershoot one) and remain the *only* misses under RC.
 
-| | Parasitic-free (`9d8e74d`, no-RC) | RC (`9d8e74d`) |
+| | Parasitic-free (`af13899`, no-RC) | RC (`af13899`) |
 |---|---|---|
 | Overall | `FAIL` — 13/60 points (one point fails both rows below) | `FAIL` — 2/60 points |
 | `ipeak_sink_a` short of the **1 A stretch** target, `ss_125c`/`sf_125c` 6 V | 0.883 A / 0.931 A | 0.880 A / 0.925 A |
@@ -717,7 +717,7 @@ solve report `singular matrix` warnings and fall back through gmin/source
 stepping before finding the transient operating point directly; every one of
 the 60 RC-DUT corners still completes and produces a physically sensible
 trajectory (see the raw per-corner logs under
-`sim/gate-driver-core-drive-postlayout/corners/20260818-110637-9d8e74d/`) —
+`sim/gate-driver-core-drive-postlayout/corners/20260818-112446-af13899/`) —
 noted here since it is visible in the evidence, not because it is a new
 finding: it is exactly what "floating by construction" (the `mim_stack`
 check's own premise) predicts for a first-order DC solve.
