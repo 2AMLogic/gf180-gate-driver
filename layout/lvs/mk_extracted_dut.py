@@ -113,6 +113,20 @@ GROUND_REF = "GND_LOGIC"
 #: name -- which is exactly what `leg_of` below does.
 MERGED_GROUND_RAW = "|".join(sorted(("GND_DRV", "GND_LOGIC")))
 
+#: The two real rails behind `MERGED_GROUND_RAW`, in the merged label's own
+#: order -- derived from the merged identity itself rather than hardcoded, so
+#: it cannot drift from it. Used by T5 to place the merged net's own measured
+#: ground capacitance between the two rails it actually spans.
+MERGED_GROUND_RAILS = tuple(MERGED_GROUND_RAW.split("|"))
+
+#: SPICE-legal node form of the merged identity. `|` is not a legal character
+#: in an ngspice node name, and once T5 emits the merged net's per-terminal
+#: parasitic legs (`GND_DRV|GND_LOGIC__t42`) those names reach the netlist as
+#: real nodes, so the separator is rewritten. Purely a rename: `__t<n>` leg
+#: suffixes, and therefore the extractor's own per-terminal identity, are
+#: preserved verbatim.
+MERGED_GROUND_NODE = MERGED_GROUND_RAW.replace("|", "_")
+
 TRANSFORMS = [
     (
         "T1",
@@ -181,18 +195,22 @@ TRANSFORMS = [
         "Net-to-net coupling capacitance (`parasitics.nets[].coupled`) is "
         "NOT emitted -- a documented scope reduction, not a silent drop; "
         "every ground-referenced term is measured, every coupling term is "
-        "omitted, stated once here rather than per-record. One further "
-        "reduction since issue #132: the extraction deck now reports BOTH "
-        "ground rails as one merged net (klayout-tools #1128), whose star is "
-        "skipped here because every terminal on it is rebound per-device to a "
-        "real GND_LOGIC/GND_DRV (T4/BA1) and its hub would be left dangling. "
-        "So the two ground rails are modeled as ideal zero-ohm nodes -- 297 "
-        "fewer R legs and the GND_DRV<->GND_LOGIC coupling cap, versus the "
-        "pre-#132 RC DUT. That is OPTIMISTIC, not conservative, for ground "
-        "bounce and n1_min_v undershoot: it removes the rail IR drop those "
-        "checks measure. It changes no recorded verdict today (~10x margin on "
-        "the worst RC n1_min_v corner); it is carried as a stated fidelity "
-        "gap in layout/README.md's 'Known gaps' with a follow-up issue.",
+        "omitted, stated once here rather than per-record. Since issue #132 "
+        "the extraction deck reports BOTH ground rails as one merged net "
+        "(klayout-tools #1128), which has no single hub of its own here: "
+        "every terminal on it belongs to exactly one real ground domain by "
+        "(class, L) (T4/BA1), so each of its legs is emitted with the leg's "
+        "OWN device's real GND_LOGIC/GND_DRV as that leg's hub -- the same "
+        "per-device rebind the leg net itself gets, never one shared hub "
+        "(which would reroute one domain's return current through the "
+        "testbench's inter-rail tie; see MERGED_GROUND_RAW). That reproduces "
+        "exactly the pre-#132 topology, where each rail's own star hub WAS "
+        "that rail's node: 297 ground-rail R legs (issue #184). The merged "
+        "net's own measured ground capacitance is emitted once between the "
+        "two real rails it spans (GND_DRV<->GND_LOGIC), the same place the "
+        "pre-#132 GND_DRV star's cap landed -- the deck reports one lumped "
+        "value for the merged metal and resolves no per-domain split, so it "
+        "is carried whole rather than apportioned by assertion.",
     ),
     (
         "T6",
@@ -300,30 +318,46 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
     def _is_merged_ground(raw: str) -> bool:
         return raw == MERGED_GROUND_RAW or raw.startswith(MERGED_GROUND_RAW + "__")
 
-    def leg_of(dev: dict, terminal: str, own_ground: str) -> str:
-        """This terminal's net, rebound to ``own_ground`` if (and only if) it
-        landed on the deck's merged ground identity (see
-        ``MERGED_GROUND_RAW``'s own docstring for why a *device-specific*
-        rebind, not a fixed one, is required here). Every other terminal's
-        real, measured net (or per-terminal parasitic leg name) passes
-        through unchanged. Only an NMOS terminal is expected to ever land on
-        the merged ground identity (confirmed against the schematic: no PMOS
-        device names either ground net) -- a PMOS terminal landing there
-        would mean this design grew a real PMOS-to-ground connection this
-        script's (class, L) body table was never taught about, so that case
-        raises rather than silently rebinding to `own_ground`'s PMOS
-        supply value.
+    def _assert_nmos_ground(dev: dict, terminal: str, raw: str) -> None:
+        """Only an NMOS terminal is expected to ever land on the deck's merged
+        ground identity (confirmed against the schematic: no PMOS device names
+        either ground net). A PMOS terminal landing there would mean this
+        design grew a real PMOS-to-ground connection this script's (class, L)
+        body table was never taught about, so that case raises rather than
+        silently rebinding to that flavor's *supply* rail.
         """
-        raw = legs.get((dev["name"], terminal), dev["nets"][terminal])
-        if not _is_merged_ground(raw):
-            return raw
         if dev["class"] != "nfet":
             raise SystemExit(
                 f"device {dev['name']!r} ({dev['class']}) terminal {terminal!r} landed on "
                 f"the deck's merged ground identity ({raw!r}) -- only NMOS terminals are "
                 "expected to; MODEL_AND_BODY_BY_CLASS_L / this rebind needs a new case"
             )
-        return own_ground
+
+    def leg_of(dev: dict, terminal: str, own_ground: str) -> str:
+        """This terminal's net (or its per-terminal parasitic leg), with the
+        deck's merged ground identity resolved *per device* -- see
+        ``MERGED_GROUND_RAW``'s own docstring for why a device-specific
+        resolution, not a fixed one, is required here. Every other terminal's
+        real, measured net passes through unchanged.
+
+        Two merged-ground cases, and the difference matters:
+
+        * The terminal has a **measured parasitic leg** on the merged net
+          (``GND_DRV|GND_LOGIC__t<n>``, a ``--parasitics`` run): keep that leg
+          as this terminal's node, only renamed to a SPICE-legal form. T5
+          emits its series R down to this same device's own real rail, so the
+          rail IR drop the extractor measured stays in the model (issue #184).
+        * The terminal has **no measured leg** (a non-``--parasitics``
+          extraction): there is nothing to route through, so bind straight to
+          this device's own real rail.
+        """
+        raw = legs.get((dev["name"], terminal), dev["nets"][terminal])
+        if not _is_merged_ground(raw):
+            return raw
+        _assert_nmos_ground(dev, terminal, raw)
+        if raw == MERGED_GROUND_RAW:
+            return own_ground
+        return MERGED_GROUND_NODE + raw[len(MERGED_GROUND_RAW) :]
 
     if not combine:
         for dev in sorted(extract["devices"], key=lambda d: (d["class"], d["name"])):
@@ -364,43 +398,68 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
     par_count = {"r": 0, "c": 0}
     if parasitics is not None:
         lines += ["", "* T5: per-net parasitic star (klt extract --parasitics), coupling excluded"]
-        # The deck's merged ground identity (MERGED_GROUND_RAW) gets no star
-        # here at all -- every terminal that would have routed through it is
-        # rebound by `leg_of` straight to its own device's real GND_LOGIC/
-        # GND_DRV instead (see that constant's own docstring for why a shared
-        # hub is wrong here), so this net's hub would be entirely unreferenced
-        # if emitted; skipping it avoids a dangling, disconnected R/C island.
-        # This also covers a body terminal's own leg (`terminal["terminal"]
-        # == "B"`, which does get a real measured resistance in this net's
-        # `terminals` list now that issue #132 draws real tap geometry) --
-        # `emit()` never calls `leg_of()` for the body slot either (T4 rebinds
-        # it directly with no series R).
+        # The deck's merged ground identity (MERGED_GROUND_RAW) is the one net
+        # whose star is NOT a single hub: since issue #132 the extractor
+        # reports both drawn ground rails under one label (klayout-tools
+        # #1128), and this design's two ground domains are two nodes bridged by
+        # a milliohm-scale tie, not one node (decision record 0001 Decision 1;
+        # the postlayout testbench simulates exactly that). So its star is
+        # emitted with each leg's HUB rebound per-device, the same way
+        # `leg_of()` rebinds the leg net itself: leg -> R -> that leg's own
+        # device's real GND_LOGIC/GND_DRV, keyed by the same disjoint
+        # (class, L) binning as T4/BA1.
         #
-        # Be precise about which way this errs, because it is NOT conservative:
-        # since issue #132 merged both grounds into this one raw identity, the
-        # skip drops the whole ground-rail parasitic star (297 R legs and the
-        # GND_DRV<->GND_LOGIC coupling cap, measured against the pre-#132 RC
-        # DUT), leaving both rails as ideal zero-ohm nodes. For a ground-bounce
-        # or `n1_min_v` undershoot measurement that is *optimistic*: it removes
-        # exactly the rail IR drop and inter-rail coupling those checks exist
-        # to catch, so the RC record understates undershoot rather than
-        # overstating it. It does not change any recorded verdict today (RC
-        # worst-case `n1_min_v` is -0.0068 V against a -0.05 V limit, ~10x
-        # margin, and the RC record's failure set is unchanged), which is why
-        # it is recorded as a stated fidelity gap -- layout/README.md's "Known
-        # gaps" and the follow-up issue linked there -- rather than silently
-        # carried or hand-waved as a safe direction to be wrong in.
+        # A single shared hub here -- whatever it is named -- is known wrong,
+        # not merely imprecise: it would put every 6 V device's return current
+        # on the same node as the 3.3 V devices', i.e. route the output
+        # stage's sink current through the testbench's inter-rail tie resistor
+        # instead of straight to the load's own return (see
+        # MERGED_GROUND_RAW's docstring, and the full-PVT regression cited
+        # there). The per-device form has no such node: it reproduces exactly
+        # the pre-#132 topology, where each ground net's own `hub_net` WAS
+        # that rail's node, at the same 297 legs (issue #184).
+        #
+        # Body terminals stay excluded on every net, merged or not
+        # (`terminal["terminal"] == "B"` -- they do carry a real measured
+        # resistance now that issue #132 draws real tap geometry): `emit()`
+        # never calls `leg_of()` for the body slot, T4 binds it directly to a
+        # real rail with no series R, so a body leg node would be referenced
+        # by its R card alone.
+        devices_by_name = {dev["name"]: dev for dev in extract["devices"]}
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
-            if net["net"] == MERGED_GROUND_RAW:
-                continue
+            merged = net["net"] == MERGED_GROUND_RAW
             hub = net["hub_net"]
             for terminal in net["terminals"]:
                 if terminal["terminal"].upper() == "B":
                     continue
                 leg = terminal["leg_net"]
-                lines.append(f"R{leg} {leg} {hub} {_fmt(terminal['resistance_ohm'])}")
+                leg_hub = hub
+                if merged:
+                    dev = devices_by_name[terminal["device"]]
+                    _assert_nmos_ground(dev, terminal["terminal"].lower(), leg)
+                    leg_hub = _model_and_body(dev["class"], dev["params"]["l_um"])[1]
+                    leg = MERGED_GROUND_NODE + leg[len(MERGED_GROUND_RAW) :]
+                lines.append(f"R{leg} {leg} {leg_hub} {_fmt(terminal['resistance_ohm'])}")
                 par_count["r"] += 1
-            lines.append(f"C{net['net']} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}")
+            if merged:
+                # One measured lumped ground capacitance for metal that spans
+                # both rails, and no per-domain split reported to apportion it
+                # by. Emitted whole between the two real rails the merged
+                # identity names -- which is where the pre-#132 GND_DRV star's
+                # own cap landed too (its reference, GROUND_REF/BA3, is the
+                # other rail), so nothing measured is dropped and nothing is
+                # invented. The pre-#132 GND_LOGIC star's cap had no such
+                # place: referenced to GROUND_REF it was a cap from GND_LOGIC
+                # to itself, a degenerate no-op card, which is why this is 17
+                # C where pre-#132 was 18.
+                lines.append(
+                    f"C{MERGED_GROUND_NODE} {MERGED_GROUND_RAILS[0]} {MERGED_GROUND_RAILS[1]} "
+                    f"{_fmt(net['capacitance_ff'] * 1e-15)}"
+                )
+            else:
+                lines.append(
+                    f"C{net['net']} {hub} {GROUND_REF} {_fmt(net['capacitance_ff'] * 1e-15)}"
+                )
             par_count["c"] += 1
 
     return lines, {"devices": counts, "parasitics": par_count}

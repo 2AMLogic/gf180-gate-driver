@@ -435,7 +435,7 @@ built from the same layout:
 | File | Built from | Contents | Used for |
 |---|---|---|---|
 | [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) | the LVS extraction, `--combine` | 42 cards, parallel-identical fingers folded back to `m=<n>`; drawn W/L and measured AS/AD/PS/PD; **no interconnect parasitics** | the full PVT grid |
-| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2580 R / 16 C per-net ground stars (the merged `GND_DRV\|GND_LOGIC` net's own star is intentionally not emitted, which leaves **both ground rails ideal** — an optimistic, not conservative, simplification for undershoot: [Known gaps](#known-gaps), issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)); **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
+| [`lvs/gate_driver_core.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) | `klt extract --parasitics` | 959 discrete fingers + 2877 R / 17 C per-net ground stars, **including both ground rails** — the merged `GND_DRV\|GND_LOGIC` net's star is emitted with each leg's hub rebound to that leg's *own* device's rail (297 ground-rail legs, issue [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)), and its one measured capacitance placed between the two real rails; **still no net-to-net coupling** | its own full PVT grid, run via `--dut` |
 
 Both DUTs still back-annotate every body terminal (BA1/BA2) rather than
 reading it off the extractor's own merged `GND_DRV|GND_LOGIC` net directly —
@@ -565,25 +565,35 @@ record 0007 the way the schematic side already does is #166's (and #164's).
   unmeasured any more (it now matches real extraction on both flavors), but
   because the testbench needs a net literally named `GND_LOGIC`/`GND_DRV` to
   drive, and the deck's own raw merged label is not one.
-- **The RC DUT models both ground rails as ideal zero-ohm nodes — which is
-  optimistic, not conservative (issue
-  [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184)).** Because
-  the extraction deck now reports the two grounds as one merged net (previous
-  gap), `mk_extracted_dut.py`'s T5 skips that merged net's parasitic star —
-  every terminal on it is rebound per-device to a real `GND_LOGIC`/`GND_DRV`
-  (T4/BA1), so the merged hub would be left dangling. The cost, measured
-  against the pre-#132 RC DUT: **297 R legs on the two ground rails and the
-  `GND_DRV`↔`GND_LOGIC` coupling cap are gone** (2877 → 2580 R, 18 → 16 C).
-  Be precise about the direction of that error: for ground bounce and
-  `n1_min_v` undershoot an ideal ground is **optimistic** — it removes exactly
-  the rail IR drop those checks measure — so the RC record understates
-  undershoot rather than overstating it. It changes no recorded verdict today
-  (worst-case RC `n1_min_v` is −0.0068 V against a −0.05 V limit, ~10x margin,
-  and the RC record's failure set is unchanged at 2), which is why it is
-  carried here as a stated gap with a follow-up rather than blocking. Fixing
-  it means emitting the merged star with each leg's *hub* rebound per-device
-  too; a shared/fixed-name hub is known wrong (see `MERGED_GROUND_RAW`'s
-  docstring).
+- **The RC DUT's ground rails are no longer ideal — the residual is how the
+  merged net's one lumped capacitance is placed (issue
+  [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184), closed).**
+  Because the deck reports the two grounds as one merged net (previous gap),
+  `mk_extracted_dut.py`'s T5 used to skip that net's parasitic star outright,
+  leaving both rails as ideal zero-ohm nodes — 297 R legs and the
+  `GND_DRV`↔`GND_LOGIC` cap short of the pre-#132 RC DUT, and **optimistic,
+  not conservative**, for exactly the ground-bounce/undershoot checks the RC
+  record makes. T5 now emits that star with each leg's **hub rebound
+  per-device** — leg → R → that leg's *own* device's real `GND_LOGIC`/
+  `GND_DRV`, by the same disjoint (class, L) binning as T4/BA1 — which
+  reproduces the pre-#132 topology exactly (each rail's own `hub_net` *was*
+  that rail's node): 294 legs on `GND_DRV`, 3 on `GND_LOGIC`, 2877 R total,
+  and no node anywhere standing in for the merged identity. A shared or
+  fixed-name hub is known wrong and is pinned against in CI
+  (`lvs/test_mk_extracted_dut.py`) — see `MERGED_GROUND_RAW`'s docstring.
+  What is left is an approximation, not a hole: the deck reports **one**
+  measured ground capacitance for metal spanning both rails and resolves no
+  per-domain split, so it is emitted whole between the two real rails (where
+  the pre-#132 `GND_DRV` star's own cap landed) rather than apportioned by
+  assertion — 17 C, versus pre-#132's 18, whose extra card was a degenerate
+  `GND_LOGIC`-to-itself cap. Measured effect on the RC record, full 60-point
+  grid: undershoot deepens on most corners, as restoring rail IR drop should
+  (`indrv_min_v` and `n3_min_v` on 60/60 corners, `n5_min_v` on 59/60), the
+  worst `n1_min_v` moves −0.00681 V → −0.00680 V (a second-order improvement
+  at that one corner; 39/60 corners deepen), and the verdict is unchanged —
+  same two failing corners, both on `ipeak_sink_a`'s stretch target. The
+  deepest undershoot anywhere on the grid is `n5_min_v` at −0.0205 V against
+  the −0.05 V limit (2.4x margin, was −0.0204 V).
 - **klt's gf180mcu deck does not model `Dualgate` scoping.** Every thick-oxide
   device in this layout extracts against the **3.3 V** model
   (`nfet_03v3`/`pfet_03v3`) and is DRC-checked against 3.3 V thresholds, even

@@ -137,6 +137,19 @@ jobs:
         # not minted by CI (same convention as sim/, CLAUDE.md).
         run: python3 layout/lvs/test_make_reference.py
 
+      - name: Post-layout DUT merged-ground parasitic unit tests
+        # layout/lvs/test_mk_extracted_dut.py pins the one transform whose
+        # wrong form still produces a plausible, simulatable netlist: the
+        # merged GND_DRV|GND_LOGIC net's parasitic star must be emitted with
+        # each leg's hub rebound to that leg's OWN device's rail (issue #184).
+        # Skipping the star leaves both rails ideal (optimistic for
+        # undershoot); a shared hub routes the output stage's return current
+        # through the testbench's inter-rail tie (known wrong, see
+        # MERGED_GROUND_RAW). Neither shows up as an error at run time, so it
+        # is pinned here. Builds the DUT in-process from the same committed
+        # extraction JSON the --check step below uses -- no klt/PDK/ngspice.
+        run: python3 layout/lvs/test_mk_extracted_dut.py
+
       - name: Extracted post-layout DUT netlists are in sync with their reports
         # mk_extracted_dut.py --check re-derives each committed DUT netlist
         # from the committed `klt extract` JSON report it names and fails if

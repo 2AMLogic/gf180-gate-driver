@@ -1,3 +1,64 @@
+* Frozen netlist snapshot for record 20260818-021600-1fc131b
+* source     : sim/gate-driver-core-drive-postlayout/testbench/gate_driver_core_tb.spice
+* sha256     : 823936f7ab5b6552d2640d0960539d81e3a74ce09135e318c4e941b517918ee6
+* This is a verbatim copy taken at record time. Do not edit.
+* gate-driver-core-drive-postlayout -- byte-identical stimulus/load copy of
+* sim/gate-driver-core-drive/testbench/gate_driver_core_tb.spice (issue #105:
+* post-layout re-run of that end-to-end campaign against the LVS-extracted
+* netlist -- see this directory's tb.json). Copied rather than shared because
+* sim/README.md's convention is one owned testbench/ per experiment
+* directory; the only thing that differs between the two experiments is
+* tb.json's "dut" and internal-node probe names (x2.n1..n5 -> x2_n1..n5,
+* since the extracted DUT is flat -- no x2 sub-circuit boundary survives
+* extraction, see layout/lvs/mk_extracted_dut.py's T1). This stimulus file
+* itself never references an internal x2 node, so it needs no change at all
+* -- verbatim copy.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the
+* gf180mcu models, the corner .lib sections, .temp, this experiment's DUT
+* fragment (layout/lvs/gate_driver_core.extracted.spice, .include'd ahead of
+* this file -- see tb.json's "dut" key), the .control block and .end.
+*
+* This testbench uses this repo's default two rails (vlogic 3.3V logic
+* supply, vdrv 5V/6V drive rail -- tb.json omits "rails" to get
+* corners.DEFAULT_RAILS), matching the block's two actual supply domains
+* (design/gate_driver_core.sch's VDD_LOGIC/GND_LOGIC and VDD_DRV/GND_DRV
+* pins) -- both of which are real top-level pins on the extracted netlist
+* too (layout/lvs/mk_extracted_dut.py never renames a named net).
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1: "tied together with
+* minimal impedance close to the device (star point)") -- modeled here as
+* a milliohm-scale tie, matching the schematic-side testbench's convention.
+*
+* IN is driven at the block's actual 3.3V logic input pin, an idealized
+* rail-to-rail pulse referenced to GND_LOGIC, swinging the full vlogic_val
+* rail (0 -> vlogic_val). Starts low so the whole chain settles to a
+* well-defined DC operating point before the first transient edge.
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 1n 1n 300n 700n)
+
+* 1 nF reference load (spec Sec.3), measured through a 0V ammeter so the
+* load current (source = positive, sink = negative) is directly probeable
+* as i(vimeas) without relying on a simulator-specific capacitor-current
+* accessor -- matches the schematic-side testbench's convention, referenced
+* here to GND_DRV (the drive-rail domain's own return) rather than the
+* global node 0, since GND_DRV is only tied to 0 through
+* rgndtie/vgnd_logic in this fragment, not identical to it.
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* ---------------------------------------------------------------
+* DUT netlist included by this testbench (extracted)
+* source     : layout/lvs/gate_driver_core.extracted-rc.spice
+* sha256     : 47491ba1c7757c7b5b5c6946c41c9b5ae2e689d320b8d4eede61b225b1777961
+* ---------------------------------------------------------------
+
 * Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
 *
 * extract report : layout/lvs/reports/gate_driver_core/20260817-232634-dc66e49.pex-extract.json
