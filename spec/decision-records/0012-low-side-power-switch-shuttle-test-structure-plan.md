@@ -76,8 +76,10 @@ pricing/deadlines are explicitly a moving target):
   coordinates, larger core at 2.66 mm² but only 18 total pads). This plan
   targets the **standard 4-side quarter slot** because its 56-pad budget
   comfortably covers the pad list below with margin (§ "Pad budget"), while
-  the 2-side variant's 18-pad budget would not (§ "Pad budget" shows 17 pads
-  used here already).
+  the 2-side variant's 18-pad budget would not — § "Pad budget" counts **18
+  pads used here**, i.e. that variant's entire budget with zero margin, and
+  that is before asking whether its 18 pads even break down into the 4
+  analog + 8 power types this plan's pad list depends on.
 - **Dates disagree between two wafer.space pages fetched the same day**,
   which is itself the "next submission window is a moving target" the issue
   warned about: the live countdown on `wafer.space`'s front page (fetched
@@ -219,7 +221,12 @@ therefore measures both, rather than needing two.
   elevated ambient — see § "Traceability", item 3).
 - **One shared `pfet_06v0` structure measures options (a) and (c)**, with
   `FLY_FORCE` / `FLY_SENSE` (Kelvin) and `FLY_GATE` (floating/off = option
-  a; driven on = option c).
+  a; driven on = option c). These are **three additional general-IO pads**
+  — they do not share §2's pads, because the flyback structure must be
+  measurable independently of (and concurrently with) the switch channel it
+  is being compared against, and all four analog pads are already committed
+  to §2's sense-critical nodes. They are counted as general IO in
+  § "Pad budget".
 
 **Sizing, at a chosen comparison current of `I_test` = 100 mA (0.1 A)** —
 chosen to exactly match the *lowest already-recorded* point in
@@ -303,9 +310,21 @@ papered over with an invented number.
 
 ### Pad budget
 
-17 of 56 pads used (4 of 4 analog, 8 of 44 general IO, 5 of 8 power) — see
-the tables in §2 and §3. **Pad count is not the binding constraint on
-channel count or structure count** — area is (§1) — but the four dedicated
+**18 of 56 pads used** (4 of 4 analog, 9 of 44 general IO, 5 of 8 power) —
+counted from the tables in §2 and §3:
+
+| Category | Pads | Of budget | Which |
+|---|---|---|---|
+| Power (`DVDD`/`DVSS`) | 5 | 5 of 8 | `VDD_DRV` ×2 (`DVDD`), `GND_DRV` ×2 + `GND_SENSE` ×1 (`DVSS`) |
+| Analog | 4 | **4 of 4** | `DRAIN_SENSE`, `OCP_VTRIM`, `THERM_VTRIM`, `THERM_VBE` |
+| General IO | 9 | 9 of 44 | §2: `GATE`, `DRAIN_FORCE`, `SOURCE_SENSE`, `OCP_OUT`, `THERM_OUT`, `THERM_IBIAS`; §3: `FLY_FORCE`, `FLY_SENSE`, `FLY_GATE` |
+| **Total** | **18** | **18 of 56** | |
+
+(The 44-pad general-IO budget is the slot table's 48 IO pads minus its 4
+dedicated analog pads: 38 bidir + 6 in.)
+
+**Pad count is not the binding constraint on channel count or structure
+count** — area is (§1) — but the four dedicated
 analog pads are the one category this plan fully consumes, which is worth
 carrying forward: a future second channel would need to either share the
 existing analog pads' sensitive nodes through an on-die mux, or accept that
