@@ -63,13 +63,21 @@ gf180mcu medium-voltage devices, per
   This facet is **in scope in this repo, not a sibling one** — the device
   characterization it needs (`Ron`, `Vt`, `Ioff`, thermal behavior of the
   same `nfet_06v0`/`pfet_06v0` devices) is already being produced here for
-  facet (a)'s output stage. Decision record 0008 records the scope decision
-  and a `Ron·W` baseline derived from existing `sim/device-mv-fet` evidence;
-  the rest of this facet's spec content (EM/current-density guidance,
-  per-channel OCP/thermal-shutdown structures, flyback options: issue #179;
-  a shared-shuttle test-structure plan: issue #180; multi-channel
-  bond/ground/substrate-noise guidance: issue #181) is deferred to those
-  follow-on issues.
+  facet (a)'s output stage. This facet now has its own ratified spec
+  (`spec/low-side-power-switch.md`, decision records 0010 and 0011):
+  cell-referenced `Ron·W` measured across the full PVT grid, switch sizing,
+  the EM/current-density budget at 1 A per channel, per-channel OCP and
+  thermal-sense reference structures, and flyback handling. Decision record
+  0008's `Ron·W` baseline was a stopgap measured at the wrong gate drive and
+  has been replaced as the design baseline by that document's §2.1.
+  Everything from the pad outwards — multi-channel bond wires, ground return
+  and substrate noise — is decision record 0009. One piece is still deferred
+  to a follow-on issue: a shared-shuttle test-structure plan (issue #180).
+
+  The headline result so far: **a 1 A on-die low-side channel in this
+  process is area-dominated** — ~45.7 mm of `nfet_06v0` gate width to hold
+  0.10 Ω at end of discharge and 125 °C, with the supply bus itself eating
+  26–30 mΩ of that same budget.
 
 ## Repo layout
 

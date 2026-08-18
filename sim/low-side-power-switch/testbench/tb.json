@@ -1,0 +1,30 @@
+{
+  "name": "low-side-power-switch",
+  "description": "Low-side on-die power-NMOS facet (issue #179, decision record 0008): Ron.W of nfet_06v0 (and, for the synchronous-PMOS flyback option, pfet_06v0) at the cell-referenced gate drive a single Li-ion cell actually presents -- Vgs = 3.6 / 4.2 / 5.0 V -- plus the forward characteristic of the 6 V P+/N-well junction diode (diode_pd2nw_06v0) that the flyback options are built from. This manifest lets sim/run_corners.py run the same fragment as a generic representative check (the three nfet_06v0 near-origin chord resistances, for --list/--check-env discovery); the authoritative evidence record -- full Ron.W tables over the PVT grid plus the diode Vf(I) extraction -- is produced by run_low_side_power_switch.py, which drives sim/harness's library (pdk.py, corners.py, report.py) directly because DC-sweep-plus-interpolation does not fit a single tb.json op-point grid (same reason, and same precedent, as sim/device-mv-fet).",
+  "claim": "spec/low-side-power-switch.md#21-ronw-vs-vgs-and-temperature -- the ratified cell-referenced Ron.W table, and the flyback-option evidence in that document's Sec 5. See run_low_side_power_switch.py's records/ output for the full grid; this manifest's own generic-CLI run reports the three nfet_06v0 chord resistances only.",
+  "netlist": "tb_low_side_power_switch.spice",
+  "rails": {},
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "analyses": ["op"],
+  "subset_reason": "No supply rail: every DUT is a bare transistor or diode biased from ideal sources, so the +/-10% supply axis has nothing to sweep -- see the 'nosupply' corner-id production in sim/README.md (rails declared empty). The cell voltage this facet is referenced to is not a swept harness rail either: it enters the deck as three explicit gate-bias points (3.6/4.2/5.0 V), which is the cell's own discharge range recorded as an axis of the result rather than as a +/-10% tolerance band. run_low_side_power_switch.py's own records/ output uses the 'nosupply' convention directly (corner-ids like ss_-40c_nosupply, via corners.device_corner_id).",
+  "measure": {
+    "ron_n06_vgs3p6_ohm": "0.066/(-i(Bdoc_n06_glo))",
+    "ron_n06_vgs4p2_ohm": "0.066/(-i(Bdoc_n06_gmid))",
+    "ron_n06_vgs5p0_ohm": "0.066/(-i(Bdoc_n06_ghi))"
+  },
+  "checks": {
+    "ron_n06_vgs3p6_ohm": {
+      "min": 150,
+      "max": 700,
+      "min_spread_pct": 1.0,
+      "description": "sanity range for the nfet_06v0 10/0.7 near-origin chord resistance at Vgs = 3.6 V (the facet's worst-case end-of-discharge gate drive); the spread floor proves the MOS .lib sections and .temp actually change the bias point"
+    },
+    "ron_n06_vgs5p0_ohm": {
+      "min": 120,
+      "max": 550,
+      "min_spread_pct": 1.0,
+      "description": "same, at Vgs = 5.0 V (fresh cell). Must be lower than the 3.6 V figure at every point; the authoritative monotonicity check is in run_low_side_power_switch.py's record, this is the coarse CLI sanity band"
+    }
+  }
+}
