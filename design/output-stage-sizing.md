@@ -353,14 +353,32 @@ temperatures × 4 tied-supply points, including the 6 V stretch rail), see
 [`sim/output-stage-drive/records/20260812-064304-03699ea.md`](../sim/output-stage-drive/records/20260812-064304-03699ea.md)
 for the complete per-corner table.
 
-**Drive strength (§3, acceptance criteria)** — met at every PVT point:
+**Drive strength (§3, acceptance criteria)** — the nominal ±10 % target is
+met at every PVT point; the stretch-rail sink-current target is not met at
+two corners (see the note below the table):
 
 | Measurement | Worst case | Value | Target |
 |---|---|---|---|
-| Peak source current | `ss_125c_vdrv4p50v` | 0.5877 A | ≥ 0.5 A |
-| Peak sink current | `ss_125c_vdrv4p50v` | 0.5737 A | ≥ 0.5 A |
+| Peak source current (nominal ±10 %) | `ss_125c_vdrv4p50v` | 0.5877 A | ≥ 0.5 A |
+| Peak sink current (nominal ±10 %) | `ss_125c_vdrv4p50v` | 0.5737 A | ≥ 0.5 A |
+| Peak source current (6 V stretch) | `ss_125c_vdrv6p00v` | 1.01079 A | ≥ 1 A |
+| Peak sink current (6 V stretch) | `ss_125c_vdrv6p00v` | **0.875334 A — FAIL** | ≥ 1 A |
 | 10–90 % rise time | `ss_125c_vdrv4p50v` | 8.36 ns | < 50 ns |
 | 10–90 % fall time | `ss_125c_vdrv4p50v` | 7.53 ns | < 50 ns |
+
+**Stretch sink-current shortfall**: 2 of the 15 6 V-stretch-rail points
+(`ss_125c_vdrv6p00v` at 0.875334 A / −12.5 %, `sf_125c_vdrv6p00v` at
+0.935921 A / −6.4 %) fall short of the ≥ 1 A stretch sink-current target —
+all other stretch points, and every nominal ±10 % point, clear their
+targets. This is a corner-scoped-check finding surfaced by issue #125's
+harness fix (the pre-fix harness judged the 6 V rail against the nominal
+0.5 A bound, which both corners clear), not a regression — see
+`sim/output-stage-drive/records/20260817-110340-54fdbf8.md` for the full
+grid and [decision record
+0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)
+for why this is accepted as a documented, bounded exception (≥ 0.85 A at
+these two corners) rather than resolved by resizing the final-stage NMOS or
+relaxing the target.
 
 **Propagation delay (§5 budget)** — met against this cell's own allocation
 at every point, including the 6 V stretch corners:

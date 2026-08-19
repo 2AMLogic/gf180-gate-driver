@@ -153,6 +153,20 @@ results — per `CLAUDE.md`, "no claim without a testbench"; PVT-corner
 verification against these numbers is the job of the sim-harness follow-on
 issue (§6), not this spec.
 
+**Known exception (decision record
+[0016](decision-records/0016-output-stage-stretch-sink-current-shortfall.md))**:
+the output stage's (`design/output_stage.sch`) peak *sink* current at the
+6 V stretch rail falls short of the ≥ 1 A stretch target at the two
+hottest, slowest-NMOS-skew corners — `ss_125c_vdrv6p00v` (0.875334 A,
+−12.5 %) and `sf_125c_vdrv6p00v` (0.935921 A, −6.4 %) — confirmed across
+isolated, end-to-end, and extracted post-layout evidence. All other 13 of
+15 stretch-rail points, and every point of the nominal ±10 % matrix, clear
+their respective targets; peak *source* current clears 1 A everywhere on
+the stretch rail. **Bounded at ≥ 0.85 A** at these two corners. This is not
+a relaxation of the ≥ 1 A target or of the sim harness's per-corner check —
+both stay in force, and the affected corners continue to report FAIL by
+design, per decision record 0016.
+
 ## 4. Level-shifter topology (3.3 V logic → 5 V/6 V drive rail)
 
 This is the central design problem for this block (per `CLAUDE.md`) and is
