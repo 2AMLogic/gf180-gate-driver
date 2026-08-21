@@ -23,42 +23,37 @@ separately-driven per-cell campaigns summed or eyeballed together. See
 and "Methodology" for how its grid differs from the two older per-cell
 records it is cross-checked against.
 
-**Freshness note (issue #22 item 5/8 re-read, 2026-08-21):** the TL;DR and
-Results tables below still cite
-`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`, which
-predates the `XCCOMP` MiM compensation-stack rework (decision record 0014,
-issue #192). The current record for the same DUT hash as
-`design/netlist/gate_driver_core.spice` on `main` is
-[`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md);
-its §3-row figures move by a few percent at most (e.g. worst-case nominal
-peak sink 0.576363 A vs. this report's 0.5796 A; worst-case nominal `tpdlh`
-6.947 ns vs. 6.82 ns) and **no verdict below changes** — every spec §3 PASS
-stays PASS by a wide margin, and the known stretch-sink-current FAIL is the
-same two corners either way (decision record 0016). This report's numeric
-tables are not re-derived against the newer record in this pass (that is a
-larger refresh than issue #22's own item 7/9 scope); flagged here per
-`design-evidence-tiers.md`'s "staleness is failure" so a reader does not
-treat the exact figures below as current without checking.
+**Refresh note (issue #22 item 5/8 re-read, 2026-08-21):** the TL;DR and
+Results tables below were re-derived against
+[`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md),
+the current record for `design/netlist/gate_driver_core.spice` on `main`,
+superseding this report's prior citation of
+`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md` (which
+predated the `XCCOMP` MiM compensation-stack rework, decision record 0014,
+issue #192). Every spec §3 figure below was re-read from that record's own
+tables; no verdict changes — every spec §3 PASS stays PASS by a wide margin,
+and the known stretch-sink-current FAIL is the same two corners either way
+(decision record 0016).
 
 ## TL;DR
 
 - **Propagation delay** (spec §3: < 50 ns nominal / < 25 ns stretch): now a
   single measured end-to-end number (level shifter + output stage, one
   chain) instead of two unsummed partial segments — worst-case nominal
-  `tpdlh` 6.82 ns, `tpdhl` 6.35 ns; worst-case stretch `tpdlh` 5.33 ns,
-  `tpdhl` 5.39 ns; all four **PASS** with wide margin
-  (`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`).
+  `tpdlh` 6.95 ns, `tpdhl` 6.38 ns; worst-case stretch `tpdlh` 5.42 ns,
+  `tpdhl` 5.42 ns; all four **PASS** with wide margin
+  (`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`).
 - **Drive strength** (spec §3: ≥ 0.5 A peak source/sink, stretch 1 A): met
   at every nominal-tolerance point — worst-case nominal peak source
-  0.5963 A, worst-case nominal peak sink 0.5796 A, same record. At the 6 V
-  stretch rail, peak source clears the 1 A stretch target (worst 1.0195 A)
-  but peak sink does **not** (worst 0.8827 A, 117 mA short) — a pre-existing
+  0.5873 A, worst-case nominal peak sink 0.5764 A, same record. At the 6 V
+  stretch rail, peak source clears the 1 A stretch target (worst 1.0132 A)
+  but peak sink does **not** (worst 0.8818 A, 118 mA short) — a pre-existing
   shortfall already visible in `sim/output-stage-drive/` in isolation, now
   confirmed under real end-to-end drive and stated explicitly against the
   stretch target (see "Results" below).
 - **Rise/fall into the 1 nF reference load** (spec §3: < 50 ns, 10–90 %):
   met at all measured corners with wide margin — worst-case nominal rise
-  8.36 ns, worst-case nominal fall 7.53 ns, essentially unchanged from the
+  8.37 ns, worst-case nominal fall 7.53 ns, essentially unchanged from the
   isolated output-stage-only numbers (see "Results" — the level shifter's
   own edge is sub-nanosecond and does not materially slow the output
   stage's own rise/fall into the load).
@@ -113,20 +108,31 @@ temperature) across grids of different shape, not identical grids.
   level shifter rather than assumed.
 - **Grid**: 60 points — `tt`/`ff`/`ss`/`fs`/`sf` × −40/27/125 °C × tied
   (`vlogic`, `vdrv`) supply point (nominal ±10 % plus the 6 V stretch rail).
-- **Record**: [`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`](../sim/gate-driver-core-drive/records/20260817-013400-ae66957.md),
-  overall **FAIL** — but every one of the five harness-check misses behind
-  that FAIL is on the *inherited −50 mV undershoot sanity band* on
-  inter-cell/taper nodes (`IN_DRV`, `x2.n1`), not on any spec §3 drive,
-  timing, or rise/fall target this report cites. Spec §3's own six rows
-  (peak source/sink current, `tpdlh`/`tpdhl`, rise/fall) are all evaluated
-  explicitly against their own target column in that record's §1 table —
-  see "Results" below. That record also documents new spec §2.3 thick-oxide
-  gate-ceiling findings on `IN_DRV`/`x2.n1`…`n5` at the 6 V stretch rail;
-  those are outside this report's §3 scope (see the note at the end of
-  "Results") and are recorded in that record itself, not resolved here —
-  both have since been formally scoped in `spec/gate-driver.md` §5 by
-  [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)
-  (issue #136).
+- **Record**: [`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md),
+  overall **FAIL** — two classes of miss, neither on any spec §3
+  drive/timing/rise-fall row this report evaluates as a per-row PASS/FAIL
+  (see "Results" below, which states each spec §3 row's own verdict
+  explicitly): the same 6 V stretch-rail peak-sink-current shortfall this
+  report already tracks against spec §3's own ≥ 1 A stretch target (now also
+  surfaced as a direct per-corner harness check, at the same two corners as
+  every prior record of this experiment), and 16 of 60 points on the
+  *inherited −50 mV undershoot sanity band* on the output stage's `x2.n1`
+  taper node (a larger point-count but a smaller worst-case magnitude than
+  the pre-`XCCOMP` uncompensated control — see the record's own comparison
+  table). This is the first full-grid re-run of this experiment since
+  `design/netlist/gate_driver_core.spice`'s `XCCOMP` feedforward
+  compensation capacitor was re-modeled as four series
+  `cap_mim_2f0_m4m5_noshield` devices ([decision record
+  0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md),
+  issue #192); it also re-measures the inter-cell node `IN_DRV`'s spec §2.3
+  thick-oxide gate-ceiling exceedance at the 6 V stretch rail, narrowing the
+  ceiling excess from the uncompensated circuit's −148.3 mV margin to
+  **−2.66 mV**. That exceedance is outside this report's §3 scope (see the
+  note at the end of "Results") and is formally scoped in
+  `spec/gate-driver.md` §5 Exception 3 by [decision record
+  0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)
+  (issue #136), with its measured figure since re-stated by decision record
+  0014 to match this citation's current record.
 
 ### `sim/output-stage-drive/` — the output stage only (retained for cross-check)
 
@@ -209,24 +215,25 @@ temperature) across grids of different shape, not identical grids.
 
 ### Drive strength: peak source/sink current (spec §3: ≥ 0.5 A, stretch 1 A)
 
-Source: [`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`](../sim/gate-driver-core-drive/records/20260817-013400-ae66957.md)
-(`ipeak_source_a` / `ipeak_sink_a` columns), full 60-point grid, spec §3
-table in that record's §1.
+Source: [`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md)
+(`ipeak_source_a` / `ipeak_sink_a` columns), full 60-point grid, worst
+nominal (45-point, ≤ 5.5 V rail) and worst stretch (15-point, 6.0 V rail)
+values read directly from that record's own corner-by-corner result table.
 
 | Measurement | Nominal target | Worst-case nominal | Nominal binding corner | Stretch target | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|---|---|
-| Peak source current | ≥ 0.5 A | 0.5963 A — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | 1.0195 A — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
-| Peak sink current | ≥ 0.5 A | 0.5796 A — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | **0.8827 A — FAIL** (117 mA short) | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Peak source current | ≥ 0.5 A | 0.5873 A — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | 1.0132 A — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Peak sink current | ≥ 0.5 A | 0.5764 A — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | **0.8818 A — FAIL** (118 mA short) | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
-Grid means: peak source 1.1620 A, peak sink 1.0206 A.
+Grid means: peak source 1.1532 A, peak sink 1.0178 A.
 
 **Cross-check against `sim/output-stage-drive/`'s isolated numbers**: that
 record's worst-case nominal values were peak source 0.5877 A and peak sink
-0.5737 A (`ss_125c_vdrv4p50v`). The end-to-end numbers above are about
-1–1.5 % higher at the matching `vdrv`/process/temperature point — a small,
-real divergence, not noise: the level shifter's own output impedance and
-the composed chain's parasitics change the output stage's effective drive
-slightly relative to the idealized-edge testbench. It does not change any
+0.5737 A (`ss_125c_vdrv4p50v`). The end-to-end numbers above are now within
+about half a percent of that isolated-cell result at the matching
+`vdrv`/process/temperature point (source ≈ 0.07 % lower, sink ≈ 0.46 %
+higher) — a smaller divergence than the ≈ 1–1.5 % higher this report
+previously cited against the pre-`XCCOMP` record. It does not change any
 verdict (both nominal rows still clear ≥ 0.5 A with wide margin). The
 **stretch-rail shortfall on peak sink current is not new** — the isolated
 `sim/output-stage-drive/` record already showed the same shortfall in
@@ -234,56 +241,61 @@ isolation (`ss_125c_vdrv6p00v` sink = 0.875334 A, `sf_125c_vdrv6p00v` sink
 = 0.935921 A) — the end-to-end record confirms the level shifter is not the
 cause (it contributes negligible additional loading ahead of the output
 stage's own final push-pull stage) and states the shortfall explicitly
-against spec §3's stretch-specific ≥ 1 A target. Resolving it is a design
-change, not a verification task; cross-references issue #125 (harness
-tooling gap: checks apply the nominal bound uniformly instead of the
-stricter stretch bound at 6 V).
+against spec §3's stretch-specific ≥ 1 A target; this record's own
+per-corner verdict column now checks the stretch bound directly (issue
+#125's harness gap has since closed), rather than only stating it in this
+report's own narrative as before. Resolving the shortfall itself is a
+design change, not a verification task (decision record 0016).
 
 ### Rise/fall into the 1 nF reference load (spec §3: < 50 ns, 10–90 %)
 
 Source: same end-to-end record, `trise_s` / `tfall_s` columns, full
-60-point grid; spec §3 table in that record's §1 (rise/fall have no
-separate stretch target in §3, so only one column applies at each rail).
+60-point grid, worst nominal/stretch values read the same way as the drive
+strength table above (rise/fall have no separate stretch target in §3, so
+only one column applies at each rail).
 
 | Measurement | Worst-case nominal | Nominal binding corner | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|
-| 10–90 % rise time | 8.36 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.53 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| 10–90 % rise time | 8.37 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.53 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
 | 10–90 % fall time | 7.53 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.53 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
 Grid means: rise 5.11 ns, fall 4.99 ns.
 
 **Cross-check against `sim/output-stage-drive/`'s isolated numbers**: that
 record's worst-case values were rise 8.36 ns and fall 7.53 ns
-(`ss_125c_vdrv4p50v`) — the same to the precision both records report.
-Unlike drive strength, rise/fall into the 1 nF load does **not** diverge
-once the idealized 1 ns input edge is replaced by the real level-shifter
-output edge: the level shifter's own propagation delay is sub-nanosecond
-(see the refreshed `sim/level-shifter-oxide-safety/` record) and adds
-negligible additional edge time ahead of the output stage's own,
-load-dominated rise/fall into 1 nF. This row was already measured against
-the real 1 nF load in the isolated record; it is now also measured against
-a real level-shifter-driven input edge, and the number does not move.
+(`ss_125c_vdrv4p50v`) — rise now differs by a negligible ~5 ps (8.37 ns
+here vs. 8.36 ns there) and fall is unchanged to the precision both records
+report. Unlike drive strength, rise/fall into the 1 nF load does **not**
+materially diverge once the idealized 1 ns input edge is replaced by the
+real level-shifter output edge: the level shifter's own propagation delay
+is sub-nanosecond (see the refreshed `sim/level-shifter-oxide-safety/`
+record) and adds negligible additional edge time ahead of the output
+stage's own, load-dominated rise/fall into 1 nF. This row was already
+measured against the real 1 nF load in the isolated record; it is now also
+measured against a real level-shifter-driven input edge, and the number
+does not materially move.
 
 ### Propagation delay (spec §3: < 50 ns nominal, < 25 ns stretch)
 
 This row is now a single measured end-to-end number — the level shifter and
 output stage composed into one chain, `IN` → `OUT` — not two unsummed
 partial segments. Source: same end-to-end record, `tpdlh_s` / `tpdhl_s`
-columns, full 60-point grid; spec §3 table in that record's §1.
+columns, full 60-point grid, worst nominal/stretch values read the same way
+as the drive strength table above.
 
 | Measurement | Nominal target | Worst-case nominal | Nominal binding corner | Stretch target | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|---|---|
-| Low→high propagation delay (`tpdlh`) | < 50 ns | 6.82 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 5.33 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
-| High→low propagation delay (`tpdhl`) | < 50 ns | 6.35 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 5.39 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Low→high propagation delay (`tpdlh`) | < 50 ns | 6.95 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 5.42 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| High→low propagation delay (`tpdhl`) | < 50 ns | 6.38 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 5.42 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
-Grid means: `tpdlh` 4.19 ns, `tpdhl` 4.17 ns.
+Grid means: `tpdlh` 4.26 ns, `tpdhl` 4.19 ns.
 
 This supersedes the two-segment estimate this report previously carried
 (output-stage-only `tpdlh`/`tpdhl` of 5.78/5.88 ns from
 `sim/output-stage-drive/`, plus level-shifter-only `t_plh`/`t_phl` of
 1.13/0.61 ns from the pre-refresh `sim/level-shifter-oxide-safety/` record,
 summed to an order-of-magnitude sanity bound of ≈ 7.0 ns). The end-to-end
-measured values (6.82/6.35 ns nominal, 5.33/5.39 ns stretch) are **lower**
+measured values (6.95/6.38 ns nominal, 5.42/5.42 ns stretch) are **lower**
 than that naive worst-case-plus-worst-case sum, because the sum combined
 each segment's own independent worst-case corner rather than one corner's
 actual composed delay — the naive sum was never claimed as a measured
@@ -293,16 +305,18 @@ criteria. `design/output-stage-sizing.md` §5's design allocation (≤ 20 ns /
 is not disturbed by this — the end-to-end worst case clears the full
 50 ns/25 ns budget with more than 6× margin at every rail.
 
-**Note on scope**: the end-to-end record also documents new spec §2.3
+**Note on scope**: the end-to-end record also re-measures spec §2.3
 thick-oxide gate-ceiling findings on the inter-cell node `IN_DRV` and the
 output stage's internal taper nodes (`x2.n1`…`n5`) at the 6 V stretch rail
 — these are not spec §3 drive-strength/timing/rise-fall rows and are out of
-this report's scope; they are recorded in full, including the exceedance on
-`IN_DRV` that decision record 0005 did not cover, in
-[`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`](../sim/gate-driver-core-drive/records/20260817-013400-ae66957.md)
-§2. This report does not restate them; both are now formally scoped as
+this report's scope; they are recorded in full in
+[`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md).
+This report does not restate them; they are formally scoped as
 `spec/gate-driver.md` §5 exceptions by
-[decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md).
+[decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)
+(issue #136), with Exception 3's measured figure since re-stated by
+[decision record 0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md)
+(issue #192) to match this citation's current record.
 
 ## Post-layout coverage: what extraction models, what it does not, and what it does not re-verify (issue #22 item 7)
 
@@ -420,7 +434,7 @@ relative to the previous per-cell-only version of this report:
   real 1 nF load but with an idealized input edge (the level shifter was
   entirely absent from that circuit); they are now also measured with the
   real level-shifter-driven edge feeding the output stage. Rise/fall did
-  not move measurably; drive strength moved by a small (~1–1.5 %),
+  not move measurably; drive strength moved by a small (under ~0.5 %),
   non-verdict-changing amount — see the cross-checks in "Results" above.
 - The **thin-oxide (§2.3) safety claim** for the level shifter, which this
   report does not itself carry a row for, is re-established against the
@@ -436,26 +450,28 @@ pass" and "no claim without a testbench" — these are design or
 spec-decision follow-ups, not documentation gaps):
 
 - The 6 V stretch-rail peak-sink-current shortfall against spec §3's ≥ 1 A
-  stretch target (cross-references issue #125).
+  stretch target (decision record 0016).
 - ~~The new, unratified spec §2.3 thick-oxide ceiling exceedance on
   `IN_DRV`~~ — **resolved by
   [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)**
   (issue #136), which ratifies it as `spec/gate-driver.md` §5's Exception 3
   and corrects Exception 2's cited worst case to the
-  larger-than-previously-recorded taper-node figure on `x2.n1`. Both are
-  documented in the end-to-end record's §2 and not restated in full here
-  because they fall outside this report's spec §3 scope (see the scope note
-  at the end of "Results"). Decision record 0006 also leaves one item open:
-  a characterized-but-not-adopted mitigation for `IN_DRV`, and a
+  larger-than-previously-recorded taper-node figure on `x2.n1`, with the
+  exception's measured figure since narrowed and re-stated by [decision
+  record 0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md)
+  (issue #192) following the `XCCOMP` compensation-stack rework. Both are
+  documented in the end-to-end record and not restated in full here because
+  they fall outside this report's spec §3 scope (see the scope note at the
+  end of "Results"). Decision record 0006 also leaves one item open: a
   deck-fidelity question about whether the harness's default transient
   tolerances resolve narrow coupling transients.
-- Five harness-check misses on the inherited, non-spec −50 mV undershoot
-  sanity band, documented in the end-to-end record's §3 and not restated
-  here for the same reason.
+- 16 of 60 points on the inherited, non-spec −50 mV undershoot sanity band
+  on the output stage's `x2.n1` taper node, documented in the end-to-end
+  record and not restated here for the same reason.
 
 ## Links
 
-- Gate-driver-core-drive (end-to-end) record: [`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`](../sim/gate-driver-core-drive/records/20260817-013400-ae66957.md)
+- Gate-driver-core-drive (end-to-end) record: [`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md)
 - Gate-driver-core-drive testbench: [`sim/gate-driver-core-drive/testbench/gate_driver_core_tb.spice`](../sim/gate-driver-core-drive/testbench/gate_driver_core_tb.spice)
 - Combined top-level netlist: [`design/netlist/gate_driver_core.spice`](netlist/gate_driver_core.spice) (from issue #98)
 - Output-stage-drive record (current): [`sim/output-stage-drive/records/20260817-110340-54fdbf8.md`](../sim/output-stage-drive/records/20260817-110340-54fdbf8.md)
@@ -466,5 +482,5 @@ spec-decision follow-ups, not documentation gaps):
 - Level-shifter-oxide-safety record (superseded): [`sim/level-shifter-oxide-safety/records/20260808-052057-5fbdb2d.md`](../sim/level-shifter-oxide-safety/records/20260808-052057-5fbdb2d.md)
 - Level-shifter-oxide-safety testbench: [`sim/level-shifter-oxide-safety/testbench/level_shifter_tb.spice`](../sim/level-shifter-oxide-safety/testbench/level_shifter_tb.spice)
 - Spec: [`spec/gate-driver.md`](../spec/gate-driver.md) §3 (targets), §5 (protection scope / documented exceptions)
-- Decision records: [0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md), [0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md)
+- Decision records: [0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md), [0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md), [0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md), [0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md), [0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)
 - Re-read table: issue #62 (item 8); epic tracking: issue #22; end-to-end campaign: issue #100 (closed, PR #135); this rollup: issue #107
