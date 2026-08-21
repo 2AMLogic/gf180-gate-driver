@@ -374,6 +374,46 @@ Generated decks land in `sim/.work/<experiment-slug>/<record-id>/` and are
 git-ignored, so a failing corner can be reproduced by hand with
 `ngspice -b sim/.work/<slug>/<record-id>/<corner-id>.spice`.
 
+## Monte Carlo / local mismatch
+
+`harness/montecarlo.py` adds a **local device mismatch** mode to deck
+composition. The ratified convention it implements — what the PDK does and
+does not model, why `sw_stat_global` stays off, and the mandatory
+deterministic negative control — is in
+[`sim/README.md`](../README.md#decision-record-monte-carlo--local-mismatch-convention)
+and `spec/decision-records/0017-pdk-local-mismatch-model-coverage.md`. This
+section is just the API.
+
+```python
+from harness.montecarlo import MismatchSample, mc_point, sample_seed
+from harness.runner import run_samples
+
+seed = sample_seed(base_seed=20260204, point_index=7, sample=42)
+mc = MismatchSample(sample=42, seed=seed)          # sample=0 is the control
+results = run_samples(tb, pdk, [(mc_point(point, mc), mc)], workdir, jobs=8)
+```
+
+- `compose_deck(tb, pdk, point, mc=...)` appends `.param sw_stat_global=0`,
+  `.param sw_stat_mismatch={0,1}` and a literal `.options seed=<n>` **after**
+  the corner `.lib` sections — the PDK's `design.ngspice` sets both switches to
+  `0` ahead of them, and ngspice takes the last `.param` definition of a name,
+  so an override emitted earlier would be silently undone and every "Monte
+  Carlo" run would quietly be a nominal run. There is a regression test for
+  exactly that ordering.
+- `mc=None` (every non-Monte-Carlo run) leaves the deck byte-identical to what
+  the harness produced before this mode existed.
+- `mc_point(point, mc)` re-labels the point's *process* field with an
+  `mc<NNNN>` token (`ss_mc0042_125c_vlogic3p30v-vdrv6p00v`) so each sample gets
+  a unique, grammar-legal corner-id, while carrying the corner's actual `.lib`
+  sections through untouched.
+- `run_samples(...)` is the Monte Carlo counterpart of `run_grid`: it returns
+  every run's raw ngspice text on the result and keeps logs in the scratch
+  workdir, so a campaign can commit only the runs its record actually cites
+  instead of one log file per draw.
+
+`sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` is the first campaign
+built on this, and the reference for the shape of one.
+
 ## smoke-mv-inverter
 
 `sim/smoke-mv-inverter/` is the harness acceptance test, not a circuit

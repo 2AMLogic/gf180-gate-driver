@@ -184,6 +184,65 @@ repo's git history. Implemented in
 `effective_reltol`, `compose_deck`) and
 [`sim/harness/report.py`](harness/report.py) (`environment`, `render_record`).
 
+## Decision record: Monte Carlo / local-mismatch convention
+
+Every recorded result in this repo before issue #204 was a **global process
+corner** claim (`tt`/`ff`/`ss`/`fs`/`sf`) — die-to-die and wafer-to-wafer
+skew, applied uniformly to every device in the deck. That says nothing about
+**within-die local mismatch** between two nominally-identical devices on the
+same die at the same corner, which is the statistic that matters for a
+matched pair or a small, precision-cancelled margin. The **Statistical
+convention** field above has always reserved a place for that evidence
+class; this section ratifies how the harness produces it.
+
+**What the installed PDK ships** (read off `gf180mcuD`, open_pdks
+`c6d73a35f524070e85faff4a6a9eef49553ebc2b`, not assumed):
+
+| Device class | Local (intra-die) mismatch model | Notes |
+|---|---|---|
+| `nfet_03v3` / `pfet_03v3` / `nfet_05v0` / `pfet_05v0` / `nfet_06v0` / `pfet_06v0` | **Yes** — `sm141064.ngspice`'s `.lib fets_mm` wrappers carry `delvto='mis_vth*sw_stat_mismatch'` and `mulu0='1-mis_k*sw_stat_mismatch'`, drawn per *instance* from `agauss(0, σ, 1)` with σ ∝ 1/√(W_eff·L_eff) | `fets_mm` is already pulled in by all five MOS corner sections, and this repo's netlists instantiate those subcircuit names directly, so no netlist edit is needed |
+| MiM capacitors (`cap_mim_*`) | **No** — the `mc_c_cox_{1p0,1p5,2p0}fF` hooks exist but are hardcoded to `0` in every `mimcap_*` section, and are `.LIB`-scope (one value for all instances) rather than per-instance | Global ±10 % density skew *is* modelled, via `mimcap_ss`/`mimcap_ff` |
+| Resistors | **No** — `.lib res_statistical` draws `agauss` sheet-rho deviations but gates them on `sw_stat_global`, not `sw_stat_mismatch` | Die-level skew only, already covered by `res_ff`/`res_ss` |
+| `nfet_05v0` / `nfet_06v0` β mismatch | **No** — `par_k = 0.0000` for these two families only, so `mulu0` ≡ 1 | Threshold mismatch only for the thick-oxide nFETs; recorded as a medium-voltage model-fidelity finding per `CLAUDE.md` |
+
+**Convention** (implemented in [`sim/harness/montecarlo.py`](harness/montecarlo.py),
+`runner.compose_deck(..., mc=...)`, `runner.run_samples`):
+
+- **One ngspice invocation is one sample.** ngspice evaluates `agauss` at
+  netlist-parse time and draws independently per subcircuit instance, so the
+  existing "one PVT point is one ngspice run" model carries over unchanged.
+- **`sw_stat_global` stays 0.** The deterministic `.LIB` process corner is
+  this harness's global-skew axis; letting the PDK *also* draw a random
+  global skew would double-count it and make "mismatch at the `ss` corner"
+  mean something else. Monte Carlo is therefore always run **on top of** the
+  corner matrix, never instead of it.
+- **Seeds are derived, not ad hoc.** `seed = base_seed + point_index ×
+  10000 + sample`, pinned into the deck as `.options seed=<n>`; the base seed
+  and sample count on the record regenerate the whole distribution.
+- **A deterministic negative control is mandatory.** Sample index 0 is
+  reserved for a `sw_stat_mismatch = 0` run, which must reproduce the plain
+  (`mc=None`) harness deck for the same PVT point **bit-for-bit**, on every
+  measurement, at two different seeds. Without it a "Monte Carlo" record
+  cannot distinguish mismatch from a deck difference or solver noise.
+- **Corner-ids stay inside the ratified grammar.** The sample token rides in
+  the *process* field — `ss_mc0042_125c_vlogic3p30v-vdrv6p00v` — rather than
+  adding a fourth field the evidence linter would reject.
+- **Raw evidence is filtered, not dropped.** A campaign is thousands of runs;
+  committing one `.log` per draw is unreadable and committing none is
+  unauditable. The convention is a real `.log` for each cited run (the
+  baseline, the zero-sigma control, and the worst-case draw at each PVT
+  point) plus a flat `samples-<corner-id>.csv` sidecar under
+  `corners/<record-id>/` carrying every draw's seed and parsed measurements.
+  `corners/<record-id>/` deliberately does not forbid non-`.log` sidecars.
+- **The Statistical convention field must state** N, the sigma level of the
+  *underlying model* (the PDK's per-device draws are 1 σ, not a 3 σ corner
+  pull), the base seed, and whether a reported worst case is an observed
+  maximum or a fitted quantile.
+
+First record under this convention:
+`sim/gate-driver-indrv-mismatch/records/` (issue #204,
+`spec/decision-records/0017-pdk-local-mismatch-model-coverage.md`).
+
 ## Append-only rule
 
 `records/*.md` files are never edited or deleted after creation. A re-run or
@@ -257,8 +316,9 @@ actually followed by every facet, not just described in the abstract.
 | `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
 | `device-mv-fet` | `PDK_ROOT=... PDK=gf180mcuD sim/device-mv-fet/run_device_mv_fet.py` (dedicated script — see its own module docstring; `python3 sim/run_corners.py device-mv-fet` runs only a small representative subset for `--list`/`--check-env` discovery) | `spec/gate-driver.md` §2.5 |
 | `low-side-power-switch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch/run_low_side_power_switch.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py low-side-power-switch` runs only a representative subset) | `spec/low-side-power-switch.md` §2.1 |
+| `gate-driver-indrv-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/gate-driver-core-drive/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 3, §2.3 |
 
-All seven entries resolve the PDK the same way (`sim/harness/README.md`'s
+All eight entries resolve the PDK the same way (`sim/harness/README.md`'s
 `GF180_PDK_PATH` → `PDK_ROOT`/`PDK` → `sim/pdk.local.json` → `sim/pdk.json` →
 built-in search-root order); `sim/pdk.json` commits this repo's default
 variant (`gf180mcuD`), and `sim/env.sh` exports the resolved path/variant to
