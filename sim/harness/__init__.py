@@ -7,6 +7,9 @@ and adapted for this repo's two-rail design: a 3.3 V logic rail and a 5 V/6 V
 drive rail swept together. See sim/README.md.
 """
 
-HARNESS_VERSION = "0.1.0"
+# 0.2.0 -- adds the Monte Carlo / local-mismatch deck mode (harness/montecarlo.py,
+# runner.compose_deck(mc=...), runner.run_samples); issue #204. Additive: a
+# deck composed with mc=None is byte-identical to what 0.1.0 produced.
+HARNESS_VERSION = "0.2.0"
 
 __all__ = ["HARNESS_VERSION"]

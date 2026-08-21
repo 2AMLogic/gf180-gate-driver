@@ -59,6 +59,14 @@ sys.path.insert(0, str(SIM_DIR))
 
 from harness import report  # noqa: E402
 from harness.corners import CORNERS, PvtPoint, Rail  # noqa: E402
+from harness.evidence_lint import parse_corner_id  # noqa: E402
+from harness.montecarlo import (  # noqa: E402
+    CONTROL_SAMPLE,
+    MAX_SAMPLE,
+    MismatchSample,
+    mc_point,
+    sample_seed,
+)
 from harness.pdk import Pdk  # noqa: E402
 from harness.runner import (  # noqa: E402
     DEFAULT_TRAN_RELTOL,
@@ -249,6 +257,110 @@ class RecordEnvironmentReltolTests(unittest.TestCase):
         self.assertIn(
             f"Transient tolerance: reltol={DEFAULT_TRAN_RELTOL} (manifest override)", text
         )
+
+
+class ComposeDeckMonteCarloTests(unittest.TestCase):
+    """Deck composition for a Monte Carlo / local-mismatch draw (issue #204).
+
+    The statistical block must land *after* the corner ``.lib`` sections:
+    the PDK's own ``design.ngspice`` (included ahead of them) sets both
+    ``sw_stat_global`` and ``sw_stat_mismatch`` to 0, and ngspice takes the
+    last ``.param`` definition of a name -- so an override emitted with the
+    other PVT parameters at the top of the deck would be silently undone by
+    the PDK and every "Monte Carlo" run would quietly be a nominal run.
+    """
+
+    def _lines(self, mc):
+        return compose_deck(_TB, _PDK, _POINT, mc=mc).splitlines()
+
+    def test_no_mc_deck_is_unchanged(self):
+        # Every non-Monte-Carlo run must be byte-identical to what the
+        # harness produced before Monte Carlo support existed.
+        deck = compose_deck(_TB, _PDK, _POINT)
+        self.assertNotIn("sw_stat_mismatch", deck)
+        self.assertNotIn("seed=", deck)
+
+    def test_mismatch_switch_and_seed_are_emitted(self):
+        lines = self._lines(MismatchSample(sample=7, seed=1234))
+        self.assertIn(".param sw_stat_mismatch=1", lines)
+        self.assertIn(".param sw_stat_global=0", lines)
+        self.assertIn(".options seed=1234", lines)
+
+    def test_control_sample_switches_mismatch_off(self):
+        lines = self._lines(MismatchSample(sample=CONTROL_SAMPLE, seed=99))
+        self.assertIn(".param sw_stat_mismatch=0", lines)
+        self.assertIn(".options seed=99", lines)
+
+    def test_statistical_block_follows_the_corner_lib_sections(self):
+        lines = self._lines(MismatchSample(sample=1, seed=5))
+        last_lib = max(i for i, line in enumerate(lines) if line.startswith(".lib "))
+        switch = lines.index(".param sw_stat_mismatch=1")
+        self.assertGreater(switch, last_lib)
+
+    def test_global_skew_stays_off_even_for_a_mismatch_draw(self):
+        # Double-counting guard: the deterministic .LIB process corner is the
+        # harness's global-skew axis, so a Monte Carlo draw must never also
+        # let the PDK draw a random global skew.
+        for sample in (CONTROL_SAMPLE, 1, 250):
+            with self.subTest(sample=sample):
+                lines = self._lines(MismatchSample(sample=sample, seed=1))
+                self.assertIn(".param sw_stat_global=0", lines)
+                self.assertNotIn(".param sw_stat_global=1", lines)
+
+
+class MonteCarloSampleTests(unittest.TestCase):
+    """Sample identity, seeding and corner-id formation."""
+
+    def test_control_sample_is_not_enabled(self):
+        self.assertFalse(MismatchSample(sample=CONTROL_SAMPLE, seed=1).enabled)
+        self.assertTrue(MismatchSample(sample=1, seed=1).enabled)
+
+    def test_token_is_four_digits(self):
+        self.assertEqual(MismatchSample(sample=0, seed=1).token, "mc0000")
+        self.assertEqual(MismatchSample(sample=42, seed=1).token, "mc0042")
+
+    def test_out_of_range_sample_is_refused(self):
+        with self.assertRaises(ValueError):
+            MismatchSample(sample=MAX_SAMPLE + 1, seed=1)
+
+    def test_seed_derivation_is_collision_free_across_points(self):
+        seeds = {
+            sample_seed(1000, point, sample)
+            for point in range(20)
+            for sample in (0, 1, MAX_SAMPLE)
+        }
+        self.assertEqual(len(seeds), 60)
+
+    def test_seed_derivation_is_deterministic(self):
+        self.assertEqual(sample_seed(7, 3, 5), sample_seed(7, 3, 5))
+        self.assertNotEqual(sample_seed(7, 3, 5), sample_seed(7, 3, 6))
+
+    def test_seed_stride_smaller_than_max_sample_is_refused(self):
+        with self.assertRaises(ValueError):
+            sample_seed(0, 1, 1, stride=10)
+
+    def test_mc_corner_id_parses_under_the_ratified_grammar(self):
+        # The mc token rides in the *process* field precisely so the id stays
+        # inside sim/README.md's corner-id grammar, which the evidence linter
+        # enforces on every committed raw log filename.
+        point = PvtPoint(
+            corner=CORNERS["ss"], temp_c=125.0, supplies={"vlogic": 3.30, "vdrv": 6.00}
+        )
+        labelled = mc_point(point, MismatchSample(sample=42, seed=1))
+        self.assertEqual(
+            labelled.corner_id, "ss_mc0042_125c_vlogic3p30v-vdrv6p00v"
+        )
+        self.assertIsNone(parse_corner_id(labelled.corner_id))
+
+    def test_mc_point_preserves_the_simulated_corner_sections(self):
+        # Only the *label* changes; the .lib sections -- the actual process
+        # skew simulated -- must survive untouched, or a "mismatch at ss"
+        # record would silently be a mismatch-at-something-else record.
+        point = PvtPoint(corner=CORNERS["ss"], temp_c=27.0, supplies={"vdrv": 5.0})
+        labelled = mc_point(point, MismatchSample(sample=1, seed=1))
+        self.assertEqual(labelled.corner.sections, CORNERS["ss"].sections)
+        self.assertEqual(labelled.temp_c, point.temp_c)
+        self.assertEqual(labelled.supplies, point.supplies)
 
 
 if __name__ == "__main__":
