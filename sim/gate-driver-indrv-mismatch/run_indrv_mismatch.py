@@ -425,11 +425,21 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "claim made here. The 6 V stretch point at `ss`/125 °C is the "
         "binding corner the issue (#204) names."
     )
+    drawn = sum(len(o.samples) for o in outcomes)
+    converged = sum(len(o.ok) for o in outcomes)
+    dropped = drawn - converged
+    dropped_note = (
+        f" **{dropped} of {drawn} draws did not converge and are excluded from "
+        f"every statistic below** — enumerated in \"Non-converged draws\", "
+        f"leaving {converged} in the distribution."
+        if dropped
+        else f" All {drawn} draws converged; none is excluded."
+    )
     add(
         f"- **Statistical convention**: Monte Carlo **local device mismatch** "
         f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {len(outcomes) * n_samples} mismatch "
-        f"samples total. Distribution source: the gf180mcu PDK's own "
+        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
+        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's own "
         f"`.lib fets_mm` per-instance mismatch model "
         f"(`delvto = mis_vth·sw_stat_mismatch`, "
         f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` drawn "
@@ -521,16 +531,17 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     )
     add("")
     add(
-        "  | PVT point | control (V) | MC mean (V) | MC σ (mV) | MC min (V) "
+        "  | PVT point | draws used | control (V) | MC mean (V) | MC σ (mV) | MC min (V) "
         "| MC max (V) | worst margin (mV) | Δ vs control (mV) | vs ≤ 10 mV bound |"
     )
-    add("  |---|---|---|---|---|---|---|---|---|")
+    add("  |---|---|---|---|---|---|---|---|---|---|")
     worst_overall = None
     for outcome in outcomes:
         values = outcome.values(CLAIM_MEASUREMENT)
         control = outcome.control_value(CLAIM_MEASUREMENT)
+        used = f"{len(values)}/{len(outcome.samples)}"
         if not values:
-            add(f"  | `{outcome.corner_id}` | {_fmt(control)} | no data | | | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -541,9 +552,55 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         if worst_overall is None or hi > worst_overall[1]:
             worst_overall = (outcome, hi, margin)
         add(
-            f"  | `{outcome.corner_id}` | {_fmt(control)} | {_fmt(mean)} | "
+            f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | {_fmt(mean)} | "
             f"{sigma * 1e3:.4f} | {_fmt(lo)} | {_fmt(hi)} | {_mv(margin)} | "
             f"{_mv(delta)} | {'PASS' if within else '**FAIL**'} |"
+        )
+    add("")
+
+    # --- non-converged draws (disclosed, never silently dropped) ---
+    add("  ### Non-converged draws")
+    add("")
+    bad = [
+        (outcome, mc, result)
+        for outcome in outcomes
+        for mc, result in outcome.samples
+        if result.status != "ok"
+    ]
+    if not bad:
+        add(
+            f"  None — all {drawn} mismatch draws completed and every one is in "
+            f"the statistics above."
+        )
+    else:
+        add(
+            f"  **{len(bad)} of {drawn} draws** did not complete and are "
+            f"excluded from every statistic in this record. They are listed "
+            f"here rather than dropped silently: a Monte Carlo record whose "
+            f"sample count does not match its draw count is unauditable, and "
+            f"a non-converged draw is not evidence of a low value — it is "
+            f"absence of evidence at that draw. Each is reproducible from the "
+            f"seed below."
+        )
+        add("")
+        add("  | PVT point | sample | seed | ngspice message |")
+        add("  |---|---|---|---|")
+        for outcome, mc, result in bad:
+            message = " ".join(result.message.split())[:180]
+            add(
+                f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | "
+                f"`{message}` |"
+            )
+        add("")
+        add(
+            "  This is the same solver failure mode `sim/README.md`'s transient-"
+            "tolerance decision record already documents for this class of deck "
+            "(ngspice \"Timestep too small\" on a source branch current); at the "
+            "harness's ratified `reltol=1e-4` it is rare rather than absent. "
+            "Because the abort truncates the transient, the affected draw's "
+            "partial `indrv_max_v` is a lower bound on what that draw would "
+            "have peaked at, which is exactly why it is excluded rather than "
+            "counted."
         )
     add("")
 
@@ -592,7 +649,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         verdict = "PASS" if (within and control_ok) else "FAIL"
         add(
             f"  - **Overall: {verdict}** — across "
-            f"{len(outcomes) * n_samples} local-mismatch draws spanning the full "
+            f"{converged} converged local-mismatch draws (of {drawn} run) "
+            f"spanning the full "
             f"process × temperature grid at the 6 V stretch rail, the worst "
             f"observed `IN_DRV` peak is **{_fmt(hi)} V "
             f"(margin {_mv(margin)} mV)** at `{outcome.corner_id}`, inside "
@@ -602,9 +660,11 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"The three-leg deterministic negative control holds at "
             f"{'every' if control_ok else '**not every**'} PVT point "
             f"(baseline = seed-A control = seed-B control, bit-for-bit, on "
-            f"every measurement), and the committed corner-matrix record is "
-            f"reproduced to within {worst_ref_delta * 1e6:.2f} µV across an "
-            f"ngspice major-version change. "
+            f"every measurement). Against the **committed** corner-matrix "
+            f"record the same control differs by up to "
+            f"{worst_ref_delta * 1e6:.0f} µV, which is an ngspice-46 → "
+            f"ngspice-47 effect and is treated as a finding in its own right "
+            f"below, not folded into this claim. "
             "No ratified bound is amended by this record."
         )
     add("")
@@ -624,8 +684,12 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     add("")
     add(
         f"  - **Spread**: σ(`indrv_max_v`) = {_point_sigma_summary(outcomes)} "
-        f"per PVT point, i.e. the same order as — but smaller than — the "
-        f"−2.66 mV the ratified exception already concedes."
+        f"per PVT point (largest {stats['sigma_max'] * 1e6:.0f} µV, at the hot "
+        f"slow corners; smallest at `tt`/`fs`, where the node barely moves at "
+        f"all). Even the largest is well under the −2.66 mV excursion the "
+        f"ratified exception already concedes, and ~"
+        f"{stats['sigma_max'] / EXCEPTION3_BOUND_V * 100:.0f} % of its ≤ 10 mV "
+        f"bound."
     )
     if stats["worst_delta"] > 0.0:
         excursion = (
@@ -651,13 +715,21 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"{abs((stats['worst_margin'] + EXCEPTION3_BOUND_V) / max(stats['sigma_max'], 1e-12)):.1f}σ "
         f"of headroom beyond the worst observed draw."
     )
+    if stats["worst_delta"] > 0.0:
+        taper_ratio = (
+            f"{stats['worst_taper_delta'] / stats['worst_delta']:.1f}× the "
+            f"largest `IN_DRV` excursion"
+        )
+    else:
+        taper_ratio = "while no draw moved `IN_DRV` above its control at all"
     add(
         f"  - **The model is demonstrably active**: the same draws move the "
         f"output stage's device-driven taper nodes by up to "
         f"{_mv(stats['worst_taper_delta'])} mV "
-        f"(`{stats['worst_taper_node']}`), an order of magnitude more than "
-        f"`IN_DRV`. That contrast is the cross-check that these decks are not "
-        f"simply insensitive to mismatch."
+        f"(`{stats['worst_taper_node']}`) — {taper_ratio}. "
+        f"That contrast is the cross-check that these decks "
+        f"are not simply insensitive to mismatch: the same perturbation that "
+        f"barely moves a rail-clamped node visibly moves the device-driven ones."
     )
     add("")
     add(
@@ -673,25 +745,44 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "below, is not varied by this PDK at all."
     )
     add("")
-    add("  ### On the ngspice version residue in the control table")
+    add("  ### Finding: the ngspice version change moves this node more than mismatch does")
     add("")
+    sigma_ratio = worst_ref_delta / max(stats["sigma_max"], 1e-12)
     add(
         f"  The committed corner-matrix record `{REFERENCE_RECORD}` was taken "
         f"under **ngspice-46**; this campaign ran under "
-        f"**{ngspice.split(':')[0].strip()}**. The zero-sigma control "
-        f"reproduces that record to within **{worst_ref_delta * 1e6:.2f} µV** "
-        f"— about {worst_ref_delta / max(stats['sigma_max'], 1e-12) * 100:.1f} % "
-        f"of one mismatch σ, and ~{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.3f} % "
-        f"of Exception 3's bound — but **not** bit-for-bit. That residue is a "
-        "simulator-version effect, not a circuit or deck difference: the "
-        "three same-machine control legs (plain deck, and two "
-        "`sw_stat_mismatch = 0` decks at different seeds) do agree "
-        "bit-for-bit with each other, which is what isolates the version "
-        "change as the only variable. Recorded here because "
-        "`sim/README.md` treats records as append-only evidence a later "
-        "reader must be able to re-derive: at ngspice-47 the same deck gives "
-        "a very slightly different number, and that is now on the record "
-        "rather than a surprise for whoever re-runs it next."
+        f"**{ngspice.split(':')[0].strip()}**. The zero-sigma control — the "
+        f"*same deck*, mismatch off — differs from that record by up to "
+        f"**{worst_ref_delta * 1e6:.0f} µV** at the worst point. That is "
+        f"**{sigma_ratio:.1f}×** the largest per-point mismatch σ this campaign "
+        f"measured ({stats['sigma_max'] * 1e6:.0f} µV) and "
+        f"{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.1f} % of Exception 3's "
+        f"entire ≤ 10 mV bound. **The simulator version change is a larger "
+        f"perturbation of this measurement than local device mismatch is** — "
+        f"which is the single most useful thing this campaign found, and it is "
+        f"not a circuit result."
+    )
+    add("")
+    add(
+        "  It is isolated to the simulator, not to the deck or the circuit: the "
+        "three same-machine control legs (the plain `mc=None` deck and two "
+        "`sw_stat_mismatch = 0` decks at different seeds) agree **bit-for-bit** "
+        "with each other at every PVT point, so the only variable between this "
+        "record's control column and the reference record's number is the "
+        "ngspice binary. Per `CLAUDE.md` (\"when something behaves oddly, "
+        "suspect the tool or the deck before the circuit\") this is recorded as "
+        "a tool-fidelity finding, not absorbed into the circuit claim."
+    )
+    add("")
+    add(
+        f"  **It does not threaten Exception 3's bound.** The residue is "
+        f"largest at points with wide margin, and at the binding corner "
+        f"`ss_125c_vlogic3p30v-vdrv6p00v` the control reproduces the reference "
+        f"record to well under a microvolt (see the control table above). "
+        f"But it does mean the −2.66 mV figure decision records 0014/0006 "
+        f"quote carries a simulator-version uncertainty of order ±1 mV that no "
+        f"prior record stated — comfortably inside the ≤ 10 mV bound, and a "
+        f"further reason not to narrow that bound toward the measured value."
     )
     add("")
 
