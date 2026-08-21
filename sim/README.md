@@ -238,3 +238,39 @@ netlist)`, and a `Supersedes: <prior-record-id>` field carrying a
 schematic-vs-extracted delta summary in its Result section — the same
 supersession convention `sim/smoke-mv-inverter/` itself would use for a
 correction re-run.
+
+## Facets in this repo: cold-start invocation and PDK pin (issue #22 item 9)
+
+Every experiment directory under `sim/` uses one of two entry points, and
+every record it produces pins the exact PDK build it ran against — this is
+the per-facet index the [T1 checklist](https://github.com/2AMLogic/gf180-gate-driver/issues/22)
+"item 9" acceptance criterion asks for, confirming the convention already
+documented above and in [`sim/harness/README.md`](harness/README.md) is
+actually followed by every facet, not just described in the abstract.
+
+| Facet (`sim/<slug>/`) | Cold-start invocation | Spec claim |
+|---|---|---|
+| `smoke-mv-inverter` | `python3 sim/run_corners.py smoke-mv-inverter` | none — harness self-test |
+| `gate-driver-core-drive` | `python3 sim/run_corners.py gate-driver-core-drive` | `spec/gate-driver.md` §3, §2.3 |
+| `gate-driver-core-drive-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §3, §2.3 |
+| `output-stage-drive` | `python3 sim/run_corners.py output-stage-drive` | `spec/gate-driver.md` §3 |
+| `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
+| `device-mv-fet` | `PDK_ROOT=... PDK=gf180mcuD sim/device-mv-fet/run_device_mv_fet.py` (dedicated script — see its own module docstring; `python3 sim/run_corners.py device-mv-fet` runs only a small representative subset for `--list`/`--check-env` discovery) | `spec/gate-driver.md` §2.5 |
+| `low-side-power-switch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch/run_low_side_power_switch.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py low-side-power-switch` runs only a representative subset) | `spec/low-side-power-switch.md` §2.1 |
+
+All seven entries resolve the PDK the same way (`sim/harness/README.md`'s
+`GF180_PDK_PATH` → `PDK_ROOT`/`PDK` → `sim/pdk.local.json` → `sim/pdk.json` →
+built-in search-root order); `sim/pdk.json` commits this repo's default
+variant (`gf180mcuD`), and `sim/env.sh` exports the resolved path/variant to
+an interactive shell. That is the *prospective* pin (which variant a fresh
+clone should install); the *retrospective* pin — which exact `open_pdks`
+build actually produced a given number — is per-record, not per-facet:
+every `records/<record-id>.md` file's **Environment** section states the
+PDK path, variant and `open_pdks` git hash, the `ngspice` version, the
+harness version, and the git commit the record was produced from (see the
+worked example above, or any record under any facet listed here) — that is
+what makes a given record reproducible, since the PDK a facet resolves at
+run time can differ record to record as `open_pdks` itself advances. CI
+never installs a PDK or mints a record (`.github/workflows/ci.yml`'s own
+top-of-file comment; `sim/` results are minted by a human or agent, not a
+CI robot, per `CLAUDE.md`'s append-only-evidence convention).

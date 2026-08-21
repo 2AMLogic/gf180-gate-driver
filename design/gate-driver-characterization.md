@@ -23,6 +23,23 @@ separately-driven per-cell campaigns summed or eyeballed together. See
 and "Methodology" for how its grid differs from the two older per-cell
 records it is cross-checked against.
 
+**Freshness note (issue #22 item 5/8 re-read, 2026-08-21):** the TL;DR and
+Results tables below still cite
+`sim/gate-driver-core-drive/records/20260817-013400-ae66957.md`, which
+predates the `XCCOMP` MiM compensation-stack rework (decision record 0014,
+issue #192). The current record for the same DUT hash as
+`design/netlist/gate_driver_core.spice` on `main` is
+[`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md);
+its §3-row figures move by a few percent at most (e.g. worst-case nominal
+peak sink 0.576363 A vs. this report's 0.5796 A; worst-case nominal `tpdlh`
+6.947 ns vs. 6.82 ns) and **no verdict below changes** — every spec §3 PASS
+stays PASS by a wide margin, and the known stretch-sink-current FAIL is the
+same two corners either way (decision record 0016). This report's numeric
+tables are not re-derived against the newer record in this pass (that is a
+larger refresh than issue #22's own item 7/9 scope); flagged here per
+`design-evidence-tiers.md`'s "staleness is failure" so a reader does not
+treat the exact figures below as current without checking.
+
 ## TL;DR
 
 - **Propagation delay** (spec §3: < 50 ns nominal / < 25 ns stretch): now a
@@ -286,6 +303,104 @@ this report's scope; they are recorded in full, including the exceedance on
 §2. This report does not restate them; both are now formally scoped as
 `spec/gate-driver.md` §5 exceptions by
 [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md).
+
+## Post-layout coverage: what extraction models, what it does not, and what it does not re-verify (issue #22 item 7)
+
+`sim/gate-driver-core-drive-postlayout/` re-runs this report's three spec §3
+rows against `layout/gate_driver_core.gds`'s LVS-clean extraction instead of
+the schematic. Two DUTs exist, built by
+[`layout/lvs/mk_extracted_dut.py`](../layout/lvs/mk_extracted_dut.py) from
+the same `klt extract` output — see that script's own module docstring
+(transforms T1–T8) and [`layout/README.md`'s "Post-layout
+simulation"](../layout/README.md#post-layout-simulation) section for the
+full derivation; this section states, for this report's own scope, what
+that extraction does and does not model, and whether its coverage matches
+the full spec suite.
+
+**What it models** (current-latest, freshness-checked record:
+[`sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md),
+DUT `layout/lvs/gate_driver_core.extracted-rc.spice`, sha256 matches the
+committed file as of `e2895da`):
+
+- The same active-device SPICE models and the same `tt`/`ff`/`ss`/`fs`/`sf`
+  × −40/27/125 °C × two-rail-supply PVT grid as the schematic-level
+  `sim/gate-driver-core-drive/` campaign — the DUT swaps, nothing about the
+  corner sweep does.
+- 959 individually-extracted transistor fingers plus the four `XCCOMP*` MiM
+  series capacitors (drawn geometry, not schematic `nf`/`m` multipliers —
+  T2/T3/T7), and real, drawn body-tie geometry for both device flavors
+  (T4, issue #132).
+- Per-net **interconnect parasitics** from `klt extract --parasitics`: a
+  single lumped resistance per net, distributed as a star across that net's
+  device terminals (2885 R legs in the emitted netlist), plus one
+  net-to-ground capacitor per net (20 C) — quasi-static (one
+  frequency-independent R and C per net; no skin effect, no
+  transmission-line behavior), per the extraction report's own `model`
+  field
+  (`layout/lvs/reports/gate_driver_core/20260818-103925-ec34094.pex-extract.json`
+  `parasitics.model`).
+
+**What it does not model**:
+
+- **Net-to-net coupling capacitance.** `klt extract --parasitics` *did*
+  compute it for this layout (140 coupling-capacitor pairs, 21.83 fF total,
+  vs. 5044 fF total net-to-ground capacitance, in the extraction JSON's
+  `parasitics` block) — but `mk_extracted_dut.py`'s T5 transform
+  deliberately does not emit `parasitics.nets[].coupled` into the simulated
+  netlist. This is stated as a scope reduction in both
+  `layout/lvs/gate_driver_core.extracted-rc.spice`'s own generated header
+  and `layout/README.md`, not a silent drop, but it means the ~22 fF of
+  computed coupling on this layout is not part of any postlayout number in
+  this report.
+- **Distributed (segment-by-segment) RC.** Every net's parasitic is a
+  single-hub star (issue #592 model), not a chain of per-segment
+  resistors/capacitors — this design declared no `--critical-net`, so the
+  finer-grained `--distributed-rc` mode (issue #977) never engaged
+  (`distributed_rc: false`, `critical_nets: []` in the extraction JSON).
+- **Lateral (same-layer, sidewall) coupling** between any net pair, and
+  **parasitic inductance** (`l_count: 0`, `total_inductance_nh: 0.0`) —
+  neither is modeled at all for this design, critical-net or not.
+- **Corner-dependent parasitics.** The 2885 R / 20 C values come from one
+  `klt extract` pass at nominal drawn geometry and are held fixed across
+  every one of the 60 PVT points; only the active-device (MOS/BJT/diode/MIM)
+  `.lib` corner sections vary process/temperature. Metal sheet resistance
+  and dielectric capacitance are not re-derived per process corner.
+- **Self-heating** and any other thermal-electrical coupling beyond the
+  `.temp`-driven ambient-temperature device models already used at the
+  schematic level.
+
+**Whether postlayout coverage matches the full spec suite: no.** The
+postlayout campaign covers exactly this report's three spec §3 rows (peak
+source/sink current, `tpdlh`/`tpdhl`, rise/fall) end-to-end, on the combined
+top-level DUT — and confirms the same verdict pattern as the schematic
+campaign, including [decision record
+0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)'s
+6 V stretch-rail peak-sink shortfall at the same two corners (`ss_125c`
+0.880 A, `sf_125c` 0.925 A in the RC record above, inside the 0.880–0.883 A
+/ 0.923–0.932 A band decision record 0016 cites across all six postlayout
+records) and the improvement in the inherited −50 mV undershoot band that
+`layout/README.md` attributes to the extracted net capacitance damping the
+ringing (0/60 points fail under RC vs. 12/60 parasitic-free). What it does
+**not** re-verify post-layout:
+
+- **`spec/gate-driver.md` §5 Exception 1** — the level shifter's own
+  internal thin-oxide overshoot on `inb` (decision records 0003/0015). No
+  `sim/gate-driver-core-drive-postlayout/` record measures `inb`, `na`, or
+  `nb` (its per-corner table's measured columns are `trise`/`tfall`/`tpdlh`/
+  `tpdhl`/`ipeak_source`/`ipeak_sink`/`vout`/`vin`/`indrv`/`n1`…`n5` only —
+  the level shifter's own internal nodes are not on that list). That claim's
+  only evidence remains schematic-level,
+  `sim/level-shifter-oxide-safety/records/20260818-071216-5260603.md`, and
+  there is no `level-shifter-oxide-safety`-equivalent postlayout facet
+  directory today.
+- **The `spec/low-side-power-switch.md` facet** — no layout exists for that
+  facet yet (`layout/` contains only `gate_driver_core.gds`), so its
+  `Ron·W`, EM-budget and protection claims have no postlayout counterpart to
+  even ask this question of.
+
+This section documents evidence status; it does not itself change any
+verdict or spec text, per `CLAUDE.md`'s "no claim without a testbench" and
+"spec changes go through `spec/` with a decision record."
 
 ## Coverage: what is now end-to-end, and what is not
 
