@@ -286,7 +286,11 @@ def write_sample_csv(corners_dir: Path, record: str, outcome: PointOutcome, name
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"samples-{outcome.corner_id}.csv"
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle)
+        # lineterminator: csv.writer defaults to CRLF, and newline="" passes it
+        # through verbatim -- so the sidecar on disk would differ from the LF
+        # blob git stores, and every `git add` of a fresh run would warn. These
+        # are committed evidence; on-disk and committed bytes must be the same.
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["sample", "seed", "sw_stat_mismatch", "status", *names])
         writer.writerow(
             ["baseline", "", "unset (plain harness deck)", outcome.baseline.status]
