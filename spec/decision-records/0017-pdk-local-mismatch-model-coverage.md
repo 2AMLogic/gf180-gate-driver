@@ -173,7 +173,7 @@ This repo's evidence trail currently spans **both** simulator versions — 23
 record mentions of `ngspice-46` and 10 of `ngspice-47` as of this record — so
 cross-record numeric comparisons at this precision are not automatically valid.
 Quantifying the residue across the other facets is out of scope here and is
-tracked separately.
+tracked in issue #210.
 
 ## Alternatives considered
 
@@ -220,7 +220,9 @@ tracked separately.
   that is not an Exception-2-scoped campaign and must not be cited as one.
   Exception 1 (`inb`, decision records 0003/0015) is measured by a different
   facet (`sim/level-shifter-oxide-safety/`) and has had no mismatch run at all.
-  Both are open follow-ups.
+  Both are tracked in issue #211 — and note that Exception 2's taper nodes are
+  the *more* interesting mismatch target of the two, being device-driven rather
+  than rail-clamped like `IN_DRV`.
 - **Cross-record numeric comparison now needs a simulator-version check.** Per
   the second finding above, a ~1 mV `ngspice-46` → `ngspice-47` residue exists on
   this class of narrow coupling peak. Every record already states its ngspice
