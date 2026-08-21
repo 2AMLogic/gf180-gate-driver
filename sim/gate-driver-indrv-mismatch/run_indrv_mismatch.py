@@ -429,7 +429,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped = drawn - converged
     dropped_note = (
-        f" **{dropped} of {drawn} draws did not converge and are excluded from "
+        f" **{dropped} of {drawn} draws did not converge and "
+        f"{'is' if dropped == 1 else 'are'} excluded from "
         f"every statistic below** — enumerated in \"Non-converged draws\", "
         f"leaving {converged} in the distribution."
         if dropped
@@ -574,8 +575,10 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         )
     else:
         add(
-            f"  **{len(bad)} of {drawn} draws** did not complete and are "
-            f"excluded from every statistic in this record. They are listed "
+            f"  **{len(bad)} of {drawn} draws** did not complete and "
+            f"{'is' if len(bad) == 1 else 'are'} "
+            f"excluded from every statistic in this record. "
+            f"{'It is' if len(bad) == 1 else 'They are'} listed "
             f"here rather than dropped silently: a Monte Carlo record whose "
             f"sample count does not match its draw count is unauditable, and "
             f"a non-converged draw is not evidence of a low value — it is "
