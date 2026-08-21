@@ -380,11 +380,22 @@ fastpath_enabled() {
 
 # Shared structural pre-check: reject any chaining/piping/redirection/
 # substitution/newline. Pure bash builtins, zero forks.
+#
+# Every metacharacter here EXCEPT `|` is a raw byte scan, deliberately: `;`,
+# `&`, `<`, `>`, backtick, and `$(` all genuinely change bash's parse or expand
+# their contents even inside double quotes, so relaxing them for quoted
+# occurrences would be a real fastpath bypass (e.g. `echo "$(rm -rf /)"`), not
+# a false-positive fix. See _fastpath_has_unquoted_pipe()'s own comment (#127)
+# for why `|` is the one exception: a `|` byte inside a properly quoted
+# argument (ERE alternation, e.g. `grep -n "DROP TABLE\|foo" f`) is never live
+# to bash, so ignoring quoted ones can only ever narrow a false positive —
+# while an ambiguous/unterminated quote still fails safe (declines).
 fastpath_structural_ok() {
     case "$1" in
-        *';'*|*'&'*|*'|'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
+        *';'*|*'&'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
     esac
     [[ "$1" == *$'\n'* ]] && return 1
+    _fastpath_has_unquoted_pipe "$1" && return 1
     return 0
 }
 
@@ -482,7 +493,11 @@ fastpath_builtin_admits() {
 #   * exactly ONE pipe, and NO other shell metacharacter (; & < > ` $( newline)
 #     anywhere — so wrapper (`bash -c`), substitution (`$(...)`), and compound
 #     (`&&`/`;`) forms are untouched and keep denying via the full path exactly
-#     as before (satisfying #5263's "obfuscation still caught" requirement);
+#     as before (satisfying #5263's "obfuscation still caught" requirement).
+#     "ONE pipe" means one SHELL-LEVEL pipe as bash would parse it (#109): a `|`
+#     inside the search pattern — ERE alternation, `grep "a\|b" f | head` — is
+#     argument text, not structure, and does not count. See
+#     _fastpath_pipe_split() below;
 #   * the UPSTREAM command word is a non-executing search: grep|egrep|fgrep|rg
 #     (grep/rg are already fully admitted for any args by the built-in allowlist;
 #     egrep/fgrep are the same tool). A real DDL-executing command piped the same
@@ -503,81 +518,147 @@ fastpath_builtin_admits() {
 _FASTPATH_PIPE_SINKS_ANYARG=" head tail wc "     # already fully allowlisted → any args
 _FASTPATH_PIPE_SINKS_STDIN=" cat less more "     # stdin-only → no positional operand
 
-# Quote/escape-aware pipe count (#5673). Pure bash string ops, zero forks —
-# same budget as fastpath_grep_pipe_admits() itself.
+# Quote-aware shell-level-pipe scanner, shared by _fastpath_pipe_split() and
+# _fastpath_has_unquoted_pipe() below (#109, #127). Pure bash, no forks.
 #
-# A `|` that lives inside a single-/double-quoted argument (grep's own BRE
-# alternation pattern, e.g. `"DROP TABLE\|SQL_DDL_PATTERN"`) or immediately
-# after an unquoted backslash escape is DATA to the shell, not a pipe
-# operator. The naive whole-string character count fastpath_grep_pipe_admits()
-# used to do (`${cmd%%|*}` / `case "$right" in *'|'*)`) could not tell that
-# apart from a real second pipe: it split at the quoted `|` first, then saw
-# the genuine trailing `| head` as a "second" pipe and declined — falling
-# through to the full pattern-matching path, which then denied on a bare
-# substring match (e.g. "DROP TABLE") inside what was actually a read-only
-# grep search argument. This mirrors the quote-tracking state machine
-# qsplit() (:~1295) already uses for the awk-side segment splitters (#3755),
-# ported to bash since this fast path must stay fork-free; by this point in
-# fastpath_grep_pipe_admits(), the caller has already rejected any `$(` /
-# backtick anywhere in $cmd, so — unlike qsplit() — a quoted span here can
-# never smuggle a command substitution and needs no such carve-out.
+# The original spelling of the pipe-count step was `left="${cmd%%|*}"` /
+# `right="${cmd#*|}"` plus `case "$right" in *'|'*) return 1`, a RAW byte scan
+# that splits at the FIRST `|` byte anywhere in the string with no notion of
+# quoting. That is wrong the moment a quoted argument contains a `|` — which is
+# exactly what ERE alternation looks like, and the single most useful way to
+# write a multi-term search: `grep -n "DROP TABLE\|foo" schema.sql | head -3`.
+# There the leftmost `|` byte sits INSIDE grep's quoted argument, so the split
+# landed mid-argument. #109 fixed this for the piped form
+# (fastpath_grep_pipe_admits()); #127 fixed the same class of bug for the BARE
+# (unpiped) form, where fastpath_structural_ok()'s own raw `*'|'*` byte scan
+# disqualified the command from the built-in allowlist before
+# fastpath_grep_pipe_admits() was ever consulted.
 #
-# Sets _FASTPATH_REAL_PIPE_COUNT to the number of real (shell-significant)
-# pipes found, and _FASTPATH_REAL_PIPE_POS to the byte offset of the first
-# one (meaningful only when the count is exactly 1). An unterminated quote
-# (malformed/unparseable input) forces the count to -1 — never trust a
-# partial scan — so the caller declines the fast path exactly like any other
-# ambiguous shape (a false negative, not a hole).
-_fastpath_count_real_pipes() {
+# So pipe detection has to agree with what bash itself would parse. This walks
+# the string once tracking quote state the way bash does:
+#   * outside quotes: `\` escapes the next byte; `'` and `"` open a span;
+#     a bare `|` is a REAL pipe.
+#   * inside `'…'`: nothing is special but the closing `'` (no backslash escapes).
+#   * inside `"…"`: `\` escapes the next byte (so `\"` does not close the span,
+#     matching the #112 rule), `"` closes.
+# The BSQ apostrophe idiom (`'a'\''b'`, #56) falls out of these rules for free:
+# close, escaped bare quote, reopen — the scan ends balanced, as bash does.
+#
+# Sets _FASTPATH_PIPE_COUNT to the number of REAL (unquoted) pipes found,
+# _FASTPATH_PIPE_POS to the offset of the first one (-1 if none), and
+# _FASTPATH_PIPE_UNTERMINATED=1 if the string ends inside an open quote span
+# (where our parse and bash's could disagree). Always returns 0 — callers
+# interpret the outputs; this function itself never "declines".
+_fastpath_scan_pipes() {
+    # NOTE: separate statements on purpose — under `set -u` bash declares every
+    # name in a single `local` list before running any of its initializers, so
+    # `local s="$1" n=${#s}` errors with "s: unbound variable". This file does
+    # not set -u, but its test harness sources these functions into one that does.
     local s="$1"
-    local -i i=0 n=${#s} count=0 pos=-1
-    local mode=0 c   # 0=unquoted 1=single-quoted 2=double-quoted
-    while (( i < n )); do
+    local n=${#s}
+    local i c q=''
+    _FASTPATH_PIPE_COUNT=0
+    _FASTPATH_PIPE_POS=-1
+    _FASTPATH_PIPE_UNTERMINATED=0
+    # Every branch below ends on an assignment or an `if`, never on a bare
+    # `(( … ))`. That matters because the natural spelling of the escape branch,
+    # `(( i++ ))`, evaluates to the PRE-increment value: at offset 0 (`\grep …`)
+    # it yields 0, i.e. a FAILED simple command. This file does not `set -e`, but
+    # the function is also sourced standalone by its test harness, and under
+    # errexit that one branch would silently abort the caller mid-scan (a bare
+    # failed `[[ … ]]` in an `&&` list is exempt from errexit; a bare `(( … ))`
+    # is not). `i=$(( i + 1 ))` is a plain assignment and always succeeds.
+    for (( i = 0; i < n; i++ )); do
         c="${s:i:1}"
-        case "$mode" in
-            0)
-                case "$c" in
-                    "'") mode=1 ;;
-                    '"') mode=2 ;;
-                    '\') (( i++ )) ;;   # unquoted backslash escapes the next char
-                    '|') (( count++ )); (( pos == -1 )) && pos=$i ;;
-                esac
+        case "$q" in
+            "'")
+                # Single-quoted: only the closing quote is special (no escapes).
+                if [[ "$c" == "'" ]]; then q=''; fi
                 ;;
-            1)
-                [[ "$c" == "'" ]] && mode=0   # no backslash escaping inside '...'
+            '"')
+                # Double-quoted: `\` escapes the next byte, so `\"` does not close.
+                if [[ "$c" == '\' ]]; then
+                    i=$(( i + 1 ))
+                elif [[ "$c" == '"' ]]; then
+                    q=''
+                fi
                 ;;
-            2)
+            *)
                 case "$c" in
-                    '"') mode=0 ;;
-                    '\') (( i++ )) ;;   # \" \\ etc. inside "..."; a `|` is inert either way
+                    '\') i=$(( i + 1 )) ;;
+                    "'") q="'" ;;
+                    '"') q='"' ;;
+                    '|')
+                        (( _FASTPATH_PIPE_COUNT++ ))
+                        (( _FASTPATH_PIPE_POS < 0 )) && _FASTPATH_PIPE_POS=$i
+                        ;;
                 esac
                 ;;
         esac
-        (( i++ ))
     done
-    if (( mode != 0 )); then
-        count=-1   # unterminated quote: never trust the partial count
-    fi
-    _FASTPATH_REAL_PIPE_COUNT=$count
-    _FASTPATH_REAL_PIPE_POS=$pos
+    [[ -z "$q" ]] || _FASTPATH_PIPE_UNTERMINATED=1
+    return 0
+}
+
+# "Split at THE single shell-level pipe" (#109), built on _fastpath_scan_pipes()
+# above. On success sets _FASTPATH_PIPE_L / _FASTPATH_PIPE_R to the text either
+# side of that one pipe and returns 0. FAIL-SAFE in the declining direction for
+# every other outcome — zero real pipes, two or more real pipes (`grep a | grep
+# b | head`, and `||` which is two `|` bytes), or an unterminated quote all
+# return 1, so the caller falls through to the full path exactly as before.
+# This function only ever narrows a FALSE positive: nothing it admits was
+# reachable through the old raw split, because a command with exactly one
+# unquoted pipe and no quoted `|` splits identically under both.
+_fastpath_pipe_split() {
+    local s="$1"
+    _FASTPATH_PIPE_L=''
+    _FASTPATH_PIPE_R=''
+    _fastpath_scan_pipes "$s"
+    (( _FASTPATH_PIPE_UNTERMINATED == 0 )) || return 1   # unterminated quote — decline
+    (( _FASTPATH_PIPE_COUNT == 1 )) || return 1          # zero or 2+ real pipes — decline
+    local pos=$_FASTPATH_PIPE_POS
+    _FASTPATH_PIPE_L="${s:0:pos}"
+    _FASTPATH_PIPE_R="${s:pos+1}"
+    return 0
+}
+
+# Quote-aware "is there a LIVE (unquoted) pipe on this line" predicate (#127),
+# built on _fastpath_scan_pipes() above. Used by fastpath_structural_ok() so a
+# `|` byte that lives entirely inside a quoted argument (ERE alternation, e.g.
+# `grep -n "DROP TABLE\|foo" f` with no shell pipe at all) does not disqualify
+# a command from the fastpath, while an actual shell-level pipe still does.
+#
+# Returns 0 (true — decline the fastpath) if there is at least one unquoted
+# pipe, OR the string ends inside an unterminated quote span (ambiguous — the
+# fail-safe direction is to treat that as "has a pipe" and decline, same as
+# _fastpath_pipe_split()'s fail-safe). Returns 1 (false — no live pipe, safe to
+# continue) only when the scan completed with balanced quotes and zero
+# unquoted pipes.
+_fastpath_has_unquoted_pipe() {
+    _fastpath_scan_pipes "$1"
+    (( _FASTPATH_PIPE_UNTERMINATED == 0 )) || return 0   # unterminated quote — treat as "has pipe"
+    (( _FASTPATH_PIPE_COUNT > 0 ))
 }
 
 fastpath_grep_pipe_admits() {
     local cmd="$1"
     # No shell metacharacter other than a single pipe. Reject substitution,
     # redirection, chaining, backticks, and newlines outright.
+    #
+    # Deliberately still a RAW scan, unlike the pipe split below: a quoted `;`
+    # or `>` only ever costs a decline (fall through to the full path, the
+    # pre-existing behavior), never an admission, so leaving it byte-literal
+    # keeps this carve-out's blast radius exactly where #5263 documented it.
     case "$cmd" in
         *';'*|*'&'*|*'<'*|*'>'*|*'`'*|*'$('*) return 1 ;;
     esac
     [[ "$cmd" == *$'\n'* ]] && return 1
     [[ "$cmd" == *'|'* ]] || return 1
-    _fastpath_count_real_pipes "$cmd"
-    # Exactly one REAL pipe: a second one (`grep a | grep b | head`) declines
-    # here and falls through to the full path (conservative — a false
-    # negative, not a hole). A `|` inside a quoted argument no longer counts.
-    (( _FASTPATH_REAL_PIPE_COUNT == 1 )) || return 1
-    local left="${cmd:0:_FASTPATH_REAL_PIPE_POS}"
-    local right="${cmd:_FASTPATH_REAL_PIPE_POS+1}"
+    # Exactly one pipe, counted the way bash parses it — a `|` inside the search
+    # pattern is text, not structure. See _fastpath_pipe_split() above.
+    _fastpath_pipe_split "$cmd" || return 1
+    local left="$_FASTPATH_PIPE_L"
+    local right="$_FASTPATH_PIPE_R"
     local -a lt rt
     read -ra lt <<< "$left"
     read -ra rt <<< "$right"
@@ -606,6 +687,153 @@ fastpath_grep_pipe_admits() {
         return 0
     fi
     return 1
+}
+
+# Multi-statement structural fastpath (#198). Pure bash builtins, zero forks.
+#
+# GAP THIS CLOSES: a multi-line/multi-statement block where EVERY individual
+# statement already independently matches one of the two admitted shapes above
+# (a bare fastpath_builtin_admits() command, or the #5263/#109
+# `<search> | <read-only-sink>` pipe) was still falling through to the full
+# path, because fastpath_structural_ok() rejects the WHOLE command outright the
+# moment it sees a `;`, `&&`, or newline anywhere in it — with no notion that
+# those separators might just be joining several already-safe statements. On
+# the full path, SQL_DDL_PATTERN does a blanket substring scan of the entire
+# command text and matches a DDL phrase sitting inside `grep`'s own quoted
+# search argument on one otherwise-unrelated statement, denying a block that
+# is 100% read-only (see the header comment above _fastpath_pipe_split() and
+# issue #198's Reproduction section).
+#
+# FIX DIRECTION (see #198's "Curator Enhancement" for the rejected
+# alternative): this widens what the STRUCTURAL fastpath ADMITS — it does NOT
+# touch COMMAND_ASK_SCAN, strip_literal_text(), mask_ask_positional_args(), or
+# SQL_DDL_PATTERN in any way. A previous attempt fixed this general shape by
+# extending mask_ask_positional_args() to also redact grep/egrep/fgrep/rg
+# pattern arguments on the full path — that was reverted (see that function's
+# header comment at ~3295-3309) because it blinds SQL_DDL_PATTERN's full-path
+# scan to a `grep '<phrase>' file` invocation's own argument text for EVERY
+# command shape that reaches the full path, including ones that are NOT
+# provably composed entirely of already-admitted narrow statements. This fix
+# cannot reintroduce that regression by construction: it only changes WHICH
+# commands are recognized as fastpath-eligible before REPO_ROOT/COMMAND_ASK_SCAN
+# are even computed; every command that fails this per-statement decomposition
+# — including any single statement that is not itself a bare-admitted command
+# or a `<search>|<sink>` pipe — still falls through to the untouched full path,
+# where SQL_DDL_PATTERN sees the complete, unredacted command text exactly as
+# before. (See test-guard-sql-ddl-jq-prose.sh cases (c)-(e) and
+# test-guard-readonly-fastpath-pipe.sh case (k), both of which pin that the
+# safety floor for non-decomposable / live-DDL commands is unaffected.)
+#
+# ADMISSION RULE: split the command into statements on unquoted `;`, newline,
+# or `&&` (see _fastpath_split_statements() below) and require EVERY resulting
+# statement — trimmed of surrounding whitespace — to independently satisfy
+# fastpath_builtin_admits() or fastpath_grep_pipe_admits(). Both of those are
+# already narrow, well-tested admission predicates; this function adds no new
+# per-statement leniency, it only lets a SEQUENCE of them stand in for the
+# single-statement case fastpath_structural_ok() alone recognizes.
+#
+# FAIL-SAFE BY CONSTRUCTION: any statement that itself contains an unadmitted
+# shape (a live command, a second/stray pipe, a redirection, a substitution, an
+# unlisted sink, …) is declined by fastpath_builtin_admits()/
+# fastpath_grep_pipe_admits() exactly as it already is today, which fails the
+# whole decomposition and falls through unchanged. An unterminated quote or a
+# lone `&` (backgrounding — NOT a simple sequencer, changes execution
+# semantics) anywhere in the command also declines via
+# _fastpath_split_statements() below.
+fastpath_multistatement_admits() {
+    local cmd="$1"
+    _fastpath_split_statements "$cmd" || return 1
+    # Require at least two statements: a single statement is already covered
+    # (and rejected, if it reaches here) by the two checks above — no need to
+    # re-derive that outcome through this slower path.
+    (( ${#_FASTPATH_STATEMENTS[@]} >= 2 )) || return 1
+    local st trimmed
+    for st in "${_FASTPATH_STATEMENTS[@]}"; do
+        trimmed="${st#"${st%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        if fastpath_builtin_admits "$trimmed"; then
+            continue
+        elif fastpath_grep_pipe_admits "$trimmed"; then
+            continue
+        else
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Quote-aware statement splitter backing fastpath_multistatement_admits()
+# above. Pure bash, no forks. Splits `$1` into individual statements on
+# unquoted `;`, newline, or `&&` (two consecutive unquoted `&` bytes) using the
+# same single-pass quote-tracking scan as _fastpath_pipe_split() (`\` escapes
+# the next byte outside quotes and inside a double-quoted span; a single-quoted
+# span has no escapes; the BSQ apostrophe idiom falls out for free).
+#
+# On success, sets the global array _FASTPATH_STATEMENTS to the statements (NOT
+# trimmed — the caller trims) and returns 0. Declines (returns 1, fail-safe —
+# the caller then falls through to the full path exactly as before this fix)
+# on:
+#   * an unterminated quote (the parse could disagree with bash's own),
+#   * a lone unquoted `&` — background-job syntax, not a simple sequencer, and
+#     changes execution semantics (the statement before it no longer blocks
+#     the shell), so it is deliberately NOT treated as `;`'s equivalent here,
+#   * any empty/whitespace-only statement (a leading/trailing/doubled
+#     separator, e.g. `;;`, a trailing `;`, or `&&&&`) — ambiguous enough that
+#     declining and falling through to the full path is the safer call.
+# A stray `|`, `<`, `>`, backtick, or `$(` is NOT special to this splitter at
+# all — it stays embedded in whichever statement contains it, and that
+# statement's own admission check (fastpath_builtin_admits() /
+# fastpath_grep_pipe_admits(), both of which independently re-validate
+# structure via fastpath_structural_ok() or their own raw/quote-aware pipe
+# scan) is what declines it if it is not one of the two admitted shapes.
+_fastpath_split_statements() {
+    local s="$1" n i c q='' start=0
+    _FASTPATH_STATEMENTS=()
+    n=${#s}
+    for (( i = 0; i < n; i++ )); do
+        c="${s:i:1}"
+        case "$q" in
+            "'")
+                [[ "$c" == "'" ]] && q=''
+                ;;
+            '"')
+                if [[ "$c" == '\' ]]; then
+                    i=$(( i + 1 ))
+                elif [[ "$c" == '"' ]]; then
+                    q=''
+                fi
+                ;;
+            *)
+                case "$c" in
+                    '\') i=$(( i + 1 )) ;;
+                    "'") q="'" ;;
+                    '"') q='"' ;;
+                    ';'|$'\n')
+                        _FASTPATH_STATEMENTS+=("${s:start:i-start}")
+                        start=$(( i + 1 ))
+                        ;;
+                    '&')
+                        if [[ "${s:i+1:1}" == '&' ]]; then
+                            _FASTPATH_STATEMENTS+=("${s:start:i-start}")
+                            i=$(( i + 1 ))
+                            start=$(( i + 1 ))
+                        else
+                            return 1   # lone `&` (background) — decline
+                        fi
+                        ;;
+                esac
+                ;;
+        esac
+    done
+    [[ -z "$q" ]] || return 1        # unterminated quote — decline
+    _FASTPATH_STATEMENTS+=("${s:start:n-start}")
+    local st trimmed
+    for st in "${_FASTPATH_STATEMENTS[@]}"; do
+        trimmed="${st#"${st%%[![:space:]]*}"}"
+        trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+        [[ -n "$trimmed" ]] || return 1   # empty statement — decline
+    done
+    return 0
 }
 
 # Optional extend-only escape hatch: guards.readOnlyFastPathExtra is an array of
@@ -680,6 +908,10 @@ if [[ "$_fastpath_env" != "0" && "$_fastpath_env" != "false" && "$_fastpath_env"
         # Read-only search piped to a read-only sink (#5263) — same silent allow.
         fastpath_enabled && exit 0
     elif fastpath_extra_admits "$COMMAND"; then
+        fastpath_enabled && exit 0
+    elif fastpath_multistatement_admits "$COMMAND"; then
+        # Every statement in a `;`/newline/`&&`-joined sequence independently
+        # matches one of the two checks above (#198) — same silent allow.
         fastpath_enabled && exit 0
     fi
 fi
@@ -1606,86 +1838,6 @@ function strip_cd_quoting(tok,   out, n, i, c, in_s, in_d, sq, dq) {
 '
 
 # =============================================================================
-# SAME-COMMAND VARIABLE RESOLUTION (#4881, shared #6152) — resolve_var() /
-# record_assign() / varmap.
-#
-# Originally embedded only inside extract_write_targets() (the write-
-# confinement scan): when the SAME command text contains a `NAME=value`
-# assignment (no embedded whitespace in `value`, optionally single/double-
-# quoted) earlier in the stream, a later `$NAME`/`${NAME}` token is
-# substituted with that value. See extract_write_targets()'s own header
-# comment (above its body, further down this file) for the full contract,
-# the recognized assignment shapes (bare / export / readonly / declare /
-# typeset / local / multi-assignment / env-prefix), the CONFLICTING-
-# ASSIGNMENTS-POISON-THE-VARIABLE rule, and the FAIL-CLOSED-ON-UNRESOLVABLE
-# guarantee (an unresolvable `$NAME` is returned UNCHANGED, never guessed and
-# never dropped).
-#
-# Extracted to a shared awk source string (#6152, same pattern as
-# _QSPLIT_AWK/_CDEXPAND_AWK/_CDQUOTE_AWK above) so parse_force_ops() can reuse
-# the IDENTICAL resolver for its `-C <path>` / `cd <dir>` cwd-capture points
-# instead of drifting a second copy: a `-C "$VAR"`/`cd "$VAR"` argument fed by
-# a preceding same-command `VAR=literal` assignment (e.g. the Guide role's own
-# `DOCS_WT="..."; git -C "$DOCS_WT" reset --hard HEAD` shape) previously left
-# `cpath`/`cdarg` as the literal unexpanded `$VAR` token, so the #5775
-# managed-worktree detached-HEAD reset-recovery allowlist could never resolve
-# an absolute cwd to check and always fell through to asking. Callers that
-# include this snippet must populate `varmap` themselves by calling
-# record_assign() on each `NAME=value` word in a segment BEFORE consulting
-# resolve_var() on that same command'"'"'s later tokens — extract_write_targets()
-# and parse_force_ops() both do this per-segment, in their own main loops.
-# =============================================================================
-_VARRESOLVE_AWK='
-function resolve_var(tok,   vname, rest, vv) {
-    if (substr(tok, 1, 1) != "$") return tok
-    if (match(tok, /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
-        vname = substr(tok, RSTART + 2, RLENGTH - 3)
-        rest = substr(tok, RSTART + RLENGTH)
-    } else if (match(tok, /^\$[A-Za-z_][A-Za-z0-9_]*/)) {
-        vname = substr(tok, RSTART + 1, RLENGTH - 1)
-        rest = substr(tok, RSTART + RLENGTH)
-    } else {
-        # `$(...)`, `${VAR:-x}`, `$1`, … — not a bare variable reference.
-        return tok
-    }
-    if (!(vname in varmap)) return tok
-    vv = varmap[vname]
-    # A value that itself still starts with an unresolved "$" (chained
-    # assignment this single-pass resolver does not follow) stays
-    # unresolved rather than being guessed.
-    if (vv == "" || substr(vv, 1, 1) == "$") return tok
-    return vv rest
-}
-function record_assign(word,   eqpos, vname, vval, vlen, c1, c2) {
-    eqpos = index(word, "=")
-    if (eqpos < 2) return
-    vname = substr(word, 1, eqpos - 1)
-    vval = substr(word, eqpos + 1)
-    vlen = length(vval)
-    if (vlen >= 2) {
-        c1 = substr(vval, 1, 1)
-        c2 = substr(vval, vlen, 1)
-        if ((c1 == DQ && c2 == DQ) || (c1 == SQ && c2 == SQ)) {
-            vval = substr(vval, 2, vlen - 2)
-        }
-    }
-    if ((vname in varmap) && varmap[vname] != vval) {
-        varmap[vname] = AMBIG
-        return
-    }
-    varmap[vname] = vval
-}
-BEGIN {
-    DQ = sprintf("%c", 34)
-    SQ = sprintf("%c", 39)
-    # Poison value for a name assigned two different values in one command
-    # (see record_assign). The leading "$" is load-bearing: it routes into
-    # the existing unresolved-chain refusal inside resolve_var().
-    AMBIG = "$__LOOM_AMBIGUOUS_ASSIGNMENT__"
-}
-'
-
-# =============================================================================
 # QUOTE- AND ARITHMETIC/TEST-CONTEXT-AWARE REDIRECTION MASKING (#4245, #5515)
 #
 # extract_write_targets() (below) recognizes `>`/`>>` redirection by splitting
@@ -2012,9 +2164,13 @@ function unmask_ws(s) {
 #      only (masking an interpreter-fed body there flips a DENY to an ALLOW on
 #      the #4523/#4601/#4685 data-loss shape -- never acceptable).
 #      UPDATED DECISION (#5351): the deferral no longer stands. The catastrophic
-#      tier proved the approach, so extract_write_targets() now ALSO calls
-#      mask_heredoc_bodies_selective() (see its END block below) -- both tiers
-#      share the same interpreter-aware masking. _selective() recognizes an
+#      tier proved the approach, so extract_write_targets() now ALSO applies
+#      interpreter-aware masking (see its END block below; as of
+#      gf180-gate-driver#68 it calls the narrower
+#      mask_heredoc_bodies_selective_shell_only() variant, which restricts the
+#      "leave it visible" carve-out to bodies fed to an actual SHELL --
+#      the only kind where shell redirection syntax in the body is live).
+#      _selective() recognizes an
 #      interpreter-fed opener and leaves that block's body VISIBLE to the scan
 #      (so a write into the main checkout inside a `bash <<'EOF' ... EOF` body
 #      now DENYs from a managed worktree), while still masking every
@@ -2051,18 +2207,10 @@ function unmask_ws(s) {
 # =============================================================================
 _MASKHEREDOC_AWK='
 # Return the heredoc delimiter opened by the `<<` at byte offset p in line,
-# or "" when that `<<` is not a recognized heredoc opener. As a side effect,
-# sets the global HEREDOC_DELIM_QUOTED to 1 when the opening delimiter was
-# single- or double-quoted and 0 when it was bare/unquoted -- callers that
-# need to distinguish an inert quoted heredoc body (no expansion) from a live
-# unquoted one (command substitution expanded by the OUTER shell while
-# building the body, see mask_heredoc_bodies_selective()) read this right
-# after calling heredoc_delim_at(); it is only meaningful when the return
-# value is non-empty.
+# or "" when that `<<` is not a recognized heredoc opener.
 function heredoc_delim_at(line, p,   start, qc, c, wordend, d, SQ, DQ) {
     SQ = sprintf("%c", 39)    # single quote
     DQ = sprintf("%c", 34)    # double quote
-    HEREDOC_DELIM_QUOTED = 0
     start = p + 2
     # `<<<` is a herestring, never a heredoc opener.
     if (substr(line, start, 1) == "<") return ""
@@ -2083,7 +2231,6 @@ function heredoc_delim_at(line, p,   start, qc, c, wordend, d, SQ, DQ) {
     # (`$((1 << 3))`) far more often than a real heredoc delimiter. A quoted
     # one (`<<"3"`) is unambiguous heredoc intent, so it stays recognized.
     if (qc == "" && d ~ /^[0-9]/) return ""
-    HEREDOC_DELIM_QUOTED = (qc != "")
     return d
 }
 function mask_heredoc_bodies(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
@@ -2195,7 +2342,15 @@ function _interp_basename(tok,   base, SQ, DQ) {
     sub(/^.*\//, "", base)
     return base
 }
-function is_interpreter_opener(line,   n, segs, i, seg, m, toks, j, base) {
+# Shared implementation behind is_interpreter_opener() (shellonly = 0) and
+# is_shell_interpreter_opener() (shellonly = 1). The two differ ONLY in
+# whether a NON-shell scripting interpreter (python/perl/ruby/node) counts:
+# see is_shell_interpreter_opener() below for why that distinction exists.
+# Every other rule -- segment splitting, assignment/wrapper stripping,
+# basename normalization, and the FAIL-CLOSED unresolvable-command-word tail
+# -- is identical for both, so they must stay one function rather than two
+# drifting copies.
+function _interp_opener(line, shellonly,   n, segs, i, seg, m, toks, j, base) {
     # Split into command segments on ; & | (covers && and || too) so a piped
     # or chained interpreter is caught in ANY position, e.g. `cat <<EOF | bash`
     # and `cat <<EOF | sudo bash`.
@@ -2229,35 +2384,68 @@ function is_interpreter_opener(line,   n, segs, i, seg, m, toks, j, base) {
         }
         if (j > m) continue
         base = _interp_basename(toks[j])
-        if (base ~ /^(bash|sh|zsh|dash|ksh|python[0-9.]*|perl|ruby|node|nodejs|eval|source|\.)$/)
+        # SHELL interpreters -- the body is shell source, so shell
+        # redirection/write syntax inside it is genuinely live code.
+        if (base ~ /^(bash|sh|zsh|dash|ksh|eval|source|\.)$/)
+            return 1
+        # NON-shell scripting interpreters -- the body is Python/Perl/Ruby/JS
+        # source, NOT shell source. Counted as interpreter-fed only when the
+        # caller asked for the broad test (shellonly = 0).
+        if (!shellonly && base ~ /^(python[0-9.]*|perl|ruby|node|nodejs)$/)
             return 1
         # (3) Fail CLOSED on a command word that resolves to no name at all --
         # a variable / command substitution, or an empty word. See the
         # FAIL-CLOSED TAIL note above: resolvable-but-unknown command words
-        # (`cat`, `tee`, a repo script) keep masking, per #5181.
+        # (`cat`, `tee`, a repo script) keep masking, per #5181. This tail
+        # applies to BOTH modes: an unresolvable command word could be a
+        # shell, so shellonly must not narrow it away.
         if (base == "" || base ~ /[$`]/)
             return 1
     }
     return 0
 }
+# True when a heredoc OPENER line feeds ANY recognized interpreter (shell or
+# not). Unchanged behaviour -- the wrapper preserves the exact contract every
+# pre-existing caller relies on.
+function is_interpreter_opener(line) {
+    return _interp_opener(line, 0)
+}
+# True when a heredoc OPENER line feeds a SHELL interpreter specifically
+# (`bash <<EOF`, `cat <<EOF | sh`, `eval <<EOF`, ...), or a command word this
+# guard cannot resolve to a name at all (fail-closed tail, #5226).
+#
+# A NON-shell interpreter (`python3 <<EOF`, `perl <<EOF`, `ruby <<EOF`,
+# `node <<EOF`) returns 0 here: its heredoc body is Python/Perl/Ruby/JS
+# source, and NOTHING in that body is ever parsed as shell redirection
+# syntax -- not by the outer shell (a heredoc body is never scanned for
+# operators, only for expansions) and not by the inner interpreter (which
+# does not speak shell at all). Scanning such a body for `>`/`>>`/`tee`/
+# `cp`/`mv` write idioms is a category error that manufactures phantom write
+# targets out of ordinary source text: `if len(methods) >= 10:` tokenizes to
+# a `>=` "redirection" whose target is a file literally named `=`, and
+# `if x > 3:` to a redirection into a file named `3`
+# (gf180-gate-driver#68). Used ONLY by
+# mask_heredoc_bodies_selective_shell_only() below.
+function is_shell_interpreter_opener(line) {
+    return _interp_opener(line, 1)
+}
 # Same closed-block detection as mask_heredoc_bodies(), but SKIPS masking
 # (leaves the body visible) for any block whose opener is interpreter-fed
-# per is_interpreter_opener() -- see KNOWN LIMITATIONS #1 above -- OR whose
-# delimiter was bare/unquoted (`<<EOF`, `<<-EOF`), per HEREDOC_DELIM_QUOTED
-# from heredoc_delim_at(). An unquoted heredoc body is NOT inert text: the
-# OUTER shell still expands `$(...)`/backticks/`${...}` inside it while
-# building the body, even when the sink is an inert command like `cat` --
-# masking it would blank a genuinely live command out of the scan
-# (regression found and fixed in review of #5779/#5781; a single-quoted
-# `<<'"'"'EOF'"'"'` body has no such expansion and stays maskable). Used by
-# BOTH tiers: the gh-api-rawfield-body-literal-at catastrophic check (#5198)
-# and, as of #5351, the extract_write_targets() ask-tier write-confinement
-# scan (the END-block call below) -- so a write into the main checkout
-# inside an interpreter-fed heredoc body is no longer masked out of the
-# confinement check. Plain mask_heredoc_bodies() above is retained as the
-# reference primitive (identical minus the interpreter carve-out) but now
-# has no runtime caller.
-function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed, body, delim, delim_quoted, closeat, p, off, MASKC) {
+# per is_interpreter_opener() -- see KNOWN LIMITATIONS #1 above. Used by the
+# gh-api-rawfield-body-literal-at catastrophic check (#5198).
+#
+# #5351 also routed the extract_write_targets() ask-tier write-confinement
+# scan through this function, so a write into the main checkout inside an
+# interpreter-fed heredoc body is no longer masked out of the confinement
+# check. That caller now uses the strictly narrower
+# mask_heredoc_bodies_selective_shell_only() below instead
+# (gf180-gate-driver#68): it keeps the #5351 property for SHELL-fed bodies,
+# which is the case that reasoning was actually about, while masking a
+# quoted-delimiter python/perl/ruby/node body that no shell layer ever
+# parses. Plain mask_heredoc_bodies() above is retained as the reference
+# primitive (identical minus the interpreter carve-out) but now has no
+# runtime caller.
+function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
@@ -2270,7 +2458,6 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
             p = off + p - 1
             off = p + 2
             delim = heredoc_delim_at(line, p)
-            delim_quoted = HEREDOC_DELIM_QUOTED
             if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
@@ -2279,7 +2466,7 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
                 if (trimmed == delim) { closeat = j; break }
             }
             if (closeat == 0) continue
-            if (delim_quoted && !is_interpreter_opener(line)) {
+            if (!is_interpreter_opener(line)) {
                 for (j = i + 1; j < closeat; j++) {
                     body = lines[j]
                     gsub(/./, MASKC, body)
@@ -2294,85 +2481,81 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
     for (i = 2; i <= nl; i++) out = out "\n" lines[i]
     return out
 }
-# True when every line of the heredoc body span [from, to) is PROVABLY free of
-# the two constructs that make an UNQUOTED-delimiter heredoc body live code to
-# the outer shell:
+# Like heredoc_delim_at(), but returns "" (not a recognized opener) unless the
+# delimiter is QUOTED (single or double) or backslash-prefixed (`<<\EOF`) --
+# the three real-bash shapes that disable ALL expansion of the heredoc body
+# (per-POSIX: "If any part of word is quoted... the here-document lines are
+# not expanded"). A BARE/unquoted delimiter (`<<EOF`) is NOT recognized here:
+# bash performs full parameter/command-substitution expansion on that body,
+# so a `$(...)`/backtick inside it is genuinely live code to the OUTER shell
+# even when the sink is an inert `cat`/`tee`/redirect (#58) -- distinct from,
+# and narrower than heredoc_delim_at(), whose job is finding ANY heredoc
+# opener regardless of expansion semantics.
 #
-#   * a `$(` command substitution -- the shell runs whatever is inside it while
-#     building the body, so text there is executable, not data. (`$((...))`
-#     arithmetic also starts with `$(` and is likewise rejected: conservative,
-#     and arithmetic never appears in prose bodies anyway.)
-#   * an UNESCAPED backtick -- the older command-substitution spelling. A
-#     backslash-escaped backtick (`\`` -- overwhelmingly the common case, since
-#     a markdown fenced code block inside a double-quoted `"$(cat <<EOF ...)"`
-#     capture must escape every backtick to survive the outer quoting) is
-#     literal text and does NOT disqualify the body.
-#
-# NOT rejected: a bare `$VAR` / `${VAR}` parameter expansion. The shell expands
-# it to TEXT and never re-scans that text for command substitution, so a
-# variable reference in the body cannot execute anything -- and the guard scans
-# the raw command string, never the expanded result. Rejecting `$` outright
-# would leave the real-world false positive in issue #6056 unfixed: both logged
-# occurrences carried a `<!-- loom:verdict-sha sha=$VERDICT_SHA ... -->` trailer
-# and escaped markdown fences.
-#
-# Backslash handling walks the line so an escaped backslash (`\\`) does not
-# swallow the character after it -- `\\` followed by a backtick is a LIVE
-# backtick and correctly disqualifies the body.
-function _heredoc_body_expansion_free(lines, from, to,   j, line, k, n, c, BTC) {
-    BTC = sprintf("%c", 96)   # backtick
-    for (j = from; j < to; j++) {
-        line = lines[j]
-        if (index(line, "$(")) return 0
-        if (index(line, BTC) == 0) continue
-        n = length(line)
-        for (k = 1; k <= n; k++) {
-            c = substr(line, k, 1)
-            if (c == "\\") { k++; continue }
-            if (c == BTC) return 0
+# The delimiter word is consumed as a sequence of CONCATENATED segments --
+# bare alnum/underscore runs, single-/double-quoted runs, and backslash-escaped
+# single characters -- exactly like real bash tokenizes a heredoc delimiter
+# word, rather than stopping at the first closing quote. This matters because
+# a three-segment, quote-per-letter heredoc delimiter (E, O, and F each in
+# their own pair of single quotes, with no separating whitespace) is valid
+# bash forming the single word EOF (quoting anywhere in the word disables ALL
+# expansion of the body, per POSIX), but a scan that only reads ONE quoted
+# segment mis-resolves it to just the letter E. That short, WRONG delimiter
+# then lets an attacker plant an early one-letter closer line inside the real
+# (still-open) heredoc body to desync the closer search from the real bash
+# parse, smuggling a second, nested heredoc-like token whose own real closer
+# sits AFTER the genuine terminator -- masking a live, executed command as if
+# it were inert heredoc-body text (confirmed bypass, #60).
+function heredoc_delim_literal_at(line, p,   start, c, d, SQ, DQ, literal, len, i, closeq, nc) {
+    SQ = sprintf("%c", 39)    # single quote
+    DQ = sprintf("%c", 34)    # double quote
+    start = p + 2
+    if (substr(line, start, 1) == "<") return ""
+    if (substr(line, start, 1) == "-") start++
+    while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
+    literal = 0
+    d = ""
+    len = length(line)
+    i = start
+    while (i <= len) {
+        c = substr(line, i, 1)
+        if (c == SQ || c == DQ) {
+            closeq = index(substr(line, i + 1), c)
+            if (closeq == 0) return ""    # unterminated quote -- not a recognized word
+            literal = 1
+            d = d substr(line, i + 1, closeq - 1)
+            i = i + 1 + closeq
+            continue
         }
+        if (c == "\\") {
+            nc = substr(line, i + 1, 1)
+            if (nc == "") break
+            literal = 1
+            d = d nc
+            i = i + 2
+            continue
+        }
+        if (c ~ /^[A-Za-z0-9_]$/) { d = d c; i++; continue }
+        break
     }
-    return 1
+    if (d == "") return ""
+    if (!literal) return ""
+    return d
 }
-# Mask the body of an UNQUOTED-delimiter cat-heredoc (`cat <<EOF` / `cat <<-EOF`)
-# whose stdout is captured by a command substitution that is itself the VALUE of
-# a known non-executing text-data flag -- the `gh pr comment N --body "$(cat
-# <<EOF ... EOF)"` idiom (issue #6056).
-#
-# mask_heredoc_bodies_selective() above deliberately leaves EVERY unquoted
-# heredoc body visible, because the outer shell expands `$(...)`/backticks
-# inside it while building the body (#5781). That is the right default, but it
-# is stricter than necessary: when the body provably contains no such expansion
-# (see _heredoc_body_expansion_free() above), the text is exactly as inert as a
-# single-quoted heredoc body and should not be scanned by the ASK_PATTERNS /
-# parse_force_ops() passes any more than a quoted one is. Both real occurrences
-# in #6056 were Judge "changes requested - merge conflict" comments whose prose
-# quotes `git push --force-with-lease` inside a fenced code block as advice to a
-# human -- flagged force-op:protected as though the force-push were live, with
-# no human present in headless mode to answer the ask.
-#
-# The confinement proof mirrors guard-loom-workflow.sh mask_cat_heredoc_bodies()
-# (#5109/#5122/#5672), and all four conditions are required:
-#   1. the word immediately before `<<` is a bare `cat` (never an interpreter),
-#   2. the text before that `cat` ends with a text-data flag whose value is an
-#      opening `$(`/backtick capture (`capre`) -- so cat stdout is provably
-#      confined to inert message text and can never reach a shell,
-#   3. the opener line ENDS after the delimiter -- anything trailing it (`| bash`,
-#      `> file`) routes cat stdout elsewhere and is left visible,
-#   4. the body is expansion-free per _heredoc_body_expansion_free().
-# Anything that fails any condition masks NOTHING and is scanned exactly as
-# before, so this can only narrow an ask, never miss one. QUOTED-delimiter
-# heredocs are skipped here entirely -- mask_heredoc_bodies_selective() already
-# handles those (with its interpreter carve-out), and re-handling them here
-# would bypass that carve-out.
-function mask_unquoted_cat_heredoc_bodies(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, start, wordend, qc, rest, pre, before_cat, capre, MASKC, SQ, DQ, BT) {
+# Same closed-block / interpreter-carve-out shape as mask_heredoc_bodies_selective()
+# above, but ONLY masks bodies opened by a LITERAL (quoted or backslash-prefixed)
+# delimiter -- via heredoc_delim_literal_at() instead of heredoc_delim_at() (#58).
+# An unquoted/expanding delimiter is left completely untouched (both the body
+# AND everything after it keep flowing through this pass unmasked, exactly like
+# a rejected candidate in mask_heredoc_bodies_selective()), so a real `$(...)`/
+# backtick command substitution inside an unquoted-delimiter heredoc body still
+# reaches the catastrophic scan that calls this function. Used to build
+# COMMAND_NO_LITERAL_TEXT (the shared buffer both the ALWAYS_BLOCK_PATTERNS loop
+# and extract_rm_targets() read, #5216) -- deliberately NOT reused for
+# COMMAND_HEREDOC_MASKED/COMMAND_GH_API_RAWFIELD_SCAN above, which keeps calling
+# mask_heredoc_bodies_selective() unchanged (out of scope for #58).
+function mask_heredoc_bodies_literal_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
-    SQ = sprintf("%c", 39)
-    DQ = sprintf("%c", 34)
-    BT = sprintf("%c", 96)
-    # Same allowlist of non-executing text-data flags / `gh api -f <field>=`
-    # fields used by guard-loom-workflow.sh mask_cat_heredoc_bodies().
-    capre = "(^|[ \t])((-m|--message|--body|--notes|--title|--comment|--search)[ \t]*=?|-f[ \t]+(body|message|comment|title|notes|search)=)[ \t]*(" DQ "|" SQ ")?[ \t]*([$][(]|" BT ")[ \t]*$"
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
     for (i = 1; i <= nl; i++) {
@@ -2383,31 +2566,8 @@ function mask_unquoted_cat_heredoc_bodies(s,   out, lines, nl, i, j, line, trimm
             if (p == 0) break
             p = off + p - 1
             off = p + 2
-            # (1) the consuming command word must be a bare `cat`.
-            pre = substr(line, 1, p - 1)
-            if (pre !~ /(^|[^A-Za-z0-9_])cat[ \t]*$/) continue
-            # (2) that `cat` must be captured into a text-data flag value.
-            before_cat = pre
-            sub(/cat[ \t]*$/, "", before_cat)
-            if (before_cat !~ capre) continue
-            start = p + 2
-            if (substr(line, start, 1) == "<") continue    # `<<<` herestring
-            if (substr(line, start, 1) == "-") start++
-            while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
-            qc = substr(line, start, 1)
-            # QUOTED delimiters belong to mask_heredoc_bodies_selective().
-            if (qc == SQ || qc == DQ) continue
-            wordend = start
-            while (substr(line, wordend, 1) ~ /^[A-Za-z0-9_]$/) wordend++
-            if (wordend <= start) continue
-            delim = substr(line, start, wordend - start)
-            # A bare delimiter starting with a digit is an arithmetic shift
-            # operand (`$((1 << 3))`), not a heredoc -- same rule as
-            # heredoc_delim_at() applies to bare delimiters.
-            if (delim ~ /^[0-9]/) continue
-            # (3) the opener line must end right after the delimiter.
-            rest = substr(line, wordend)
-            if (rest ~ /[^ \t]/) continue
+            delim = heredoc_delim_literal_at(line, p)
+            if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
                 trimmed = lines[j]
@@ -2415,12 +2575,12 @@ function mask_unquoted_cat_heredoc_bodies(s,   out, lines, nl, i, j, line, trimm
                 if (trimmed == delim) { closeat = j; break }
             }
             if (closeat == 0) continue
-            # (4) the body must be provably free of live expansion.
-            if (!_heredoc_body_expansion_free(lines, i + 1, closeat)) continue
-            for (j = i + 1; j < closeat; j++) {
-                body = lines[j]
-                gsub(/./, MASKC, body)
-                lines[j] = body
+            if (!is_interpreter_opener(line)) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
             }
             i = closeat            # resume scanning after the delimiter line
             break
@@ -2430,85 +2590,158 @@ function mask_unquoted_cat_heredoc_bodies(s,   out, lines, nl, i, j, line, trimm
     for (i = 2; i <= nl; i++) out = out "\n" lines[i]
     return out
 }
-'
-
-# =============================================================================
-# QUOTE-AWARE COMMENT STRIPPING (#6252) -- mask_comment()
-#
-# COMMAND_NO_COMMENT (built further below) used to strip a `#...end-of-line`
-# span whenever the `#` was preceded by whitespace or started a line, WITHOUT
-# tracking quote state -- so a `#` inside a single- or double-quoted argument
-# (a sed script, a `--body`/`-m`/`--title` prose string, a markdown heading,
-# a PR/issue reference like `#958`) was ALSO treated as a comment start,
-# truncating everything textually AFTER it. That matters well beyond a
-# cosmetic mis-strip: COMMAND_ASK_SCAN (built from COMMAND_NO_COMMENT) is not
-# only the ASK/DDL tier's input, it is ALSO the exact input
-# extract_write_targets() scans to compute the worktree-write-confinement
-# DENY (WRITE_TARGETS, below) -- so the truncation could silently drop a real
-# write target from the scan, producing a silent ALLOW where #4178/#4921
-# require a DENY. Root-caused in ADR-0016
-# (docs/adr/0016-write-target-confinement-approach.md, "Sed / argument-
-# position false positive"); live repro: `sed -i '' 's/x/y #958/'
-# $SP/file.md`.
-#
-# mask_comment() walks the string tracking quote state exactly like
-# mask_gt()/strip_target_quoting()/mark_expandable_dollars() elsewhere in
-# this file (single-quoted, double-quoted, unquoted) and strips a `#...`
-# span ONLY when the `#` is UNQUOTED and either starts the buffer, starts a
-# new line, or is immediately preceded by a space or tab -- mirroring the
-# original sed's `(^|[[:space:]])#.*$` shape exactly, just quote-aware. A
-# `#` found while inside a quoted span is never treated as a comment start,
-# regardless of what precedes it. Runs over the WHOLE (possibly multi-line)
-# buffer in a single pass -- quote state threads across embedded newlines,
-# so a quoted argument that itself spans multiple lines is tracked
-# correctly too, unlike sed'"'"'s original per-physical-line pattern space.
-#
-# Deliberately does NOT model backslash-escaped quotes -- same accepted
-# simplification qsplit()/mask_gt()/strip_target_quoting() already make for
-# this file'"'"'s other quote-tracking scans (see mask_gt()'"'"'s header for the
-# detailed rationale). An unterminated quote just runs to the end of the
-# buffer in that quote state -- never crashes, never mis-indexes, and only
-# ever risks UNDER-stripping (leaving more text visible to the ASK/DDL tier
-# and the write-confinement scan), never over-stripping into a missed DENY.
-# =============================================================================
-_MASKCOMMENT_AWK='
-function mask_comment(s,   out, n, i, c, prev, mode, SQ, DQ) {
-    SQ = sprintf("%c", 39)    # single quote
-    DQ = sprintf("%c", 34)    # double quote
-    out = ""
-    n = length(s)
-    i = 1
-    mode = 0     # 0 = unquoted, 1 = single-quoted, 2 = double-quoted
-    prev = ""    # previous character, for the start-of-line/whitespace test
-    while (i <= n) {
-        c = substr(s, i, 1)
-        if (mode == 0) {
-            if (c == SQ) { mode = 1; out = out c; prev = c; i++; continue }
-            if (c == DQ) { mode = 2; out = out c; prev = c; i++; continue }
-            if (c == "#" && (prev == "" || prev == "\n" || prev == " " || prev == "\t")) {
-                while (i <= n && substr(s, i, 1) != "\n") i++
-                continue
+# True when the heredoc opener at byte offset p in line uses a QUOTED
+# delimiter (`<<'"'"'EOF'"'"'`, `<<"EOF"`, `<<-'"'"'EOF'"'"'`), false for a bare
+# delimiter (`<<EOF`). Mirrors the quote-detection strip_literal_text() own
+# mask_flag_cat_heredocs() already relies on (see its header comment, "the
+# heredoc delimiter is QUOTED ... guarantees the outer shell performs NO
+# expansion on the body") -- a BARE delimiter lets the outer shell perform
+# parameter/command substitution INSIDE the body before the heredoc'"'"'s
+# consumer ever sees it, so a `$(...)`/backtick sitting in such a body may be
+# genuinely LIVE code to the OUTER shell, not merely inert text to whatever
+# reads the heredoc. Assumes heredoc_delim_at() has already validated this as
+# a real opener (delim != "").
+function heredoc_delim_quoted_at(line, p,   start, c, SQ, DQ) {
+    SQ = sprintf("%c", 39)
+    DQ = sprintf("%c", 34)
+    start = p + 2
+    if (substr(line, start, 1) == "-") start++
+    while (substr(line, start, 1) == " " || substr(line, start, 1) == "\t") start++
+    c = substr(line, start, 1)
+    return (c == SQ || c == DQ) ? 1 : 0
+}
+# Same closed-block, interpreter-aware detection as mask_heredoc_bodies_selective()
+# above, PLUS one further narrowing (gf180-gate-driver#41): a block whose
+# delimiter is BARE (unquoted, e.g. `<<EOF`) is also left fully visible, not
+# just an interpreter-fed one. An unquoted delimiter means the OUTER shell
+# itself performs `$(...)`/backtick expansion inside the body -- so a body
+# line containing a real command substitution (e.g. `$(git clean -fd .)`) is
+# genuinely live to the outer shell even though nothing ever hands the body
+# to an inner interpreter. Only a heredoc whose delimiter is explicitly
+# quoted (`<<'"'"'EOF'"'"'`/`<<"EOF"`) is provably inert prose to the outer shell,
+# so ONLY those bodies are masked here. This is strictly NARROWER than
+# mask_heredoc_bodies_selective() (every additional case it declines to mask
+# was already left visible by that function too), so reusing it changes
+# nothing for the catastrophic-tier / write-confinement callers, which keep
+# calling the unquoted-delimiter-inclusive original unchanged; this variant
+# is used ONLY for the ASK-tier COMMAND_ASK_SCAN heredoc-masking step.
+function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+    MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
+    nl = split(s, lines, "\n")
+    if (nl == 0) return ""
+    for (i = 1; i <= nl; i++) {
+        line = lines[i]
+        off = 1
+        while (1) {
+            p = index(substr(line, off), "<<")
+            if (p == 0) break
+            p = off + p - 1
+            off = p + 2
+            delim = heredoc_delim_at(line, p)
+            if (delim == "") continue
+            closeat = 0
+            for (j = i + 1; j <= nl; j++) {
+                trimmed = lines[j]
+                sub(/^\t+/, "", trimmed)
+                if (trimmed == delim) { closeat = j; break }
             }
-            out = out c
-            prev = c
-            i++
-            continue
+            if (closeat == 0) continue
+            if (!is_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
+            }
+            i = closeat            # resume scanning after the delimiter line
+            break
         }
-        if (mode == 1) {
-            # Single-quoted: only the matching quote ends the span; a `#`
-            # here is always literal data, never a comment start.
-            if (c == SQ) mode = 0
-            out = out c
-            prev = c
-            i++
-            continue
-        }
-        # mode == 2 (double-quoted): only the matching quote ends the span.
-        if (c == DQ) mode = 0
-        out = out c
-        prev = c
-        i++
     }
+    out = lines[1]
+    for (i = 2; i <= nl; i++) out = out "\n" lines[i]
+    return out
+}
+# Same closed-block, interpreter-aware detection as mask_heredoc_bodies_selective()
+# above, PLUS one WIDENING (gf180-gate-driver#68): a body fed to a NON-shell
+# interpreter (python/perl/ruby/node) through an explicitly QUOTED delimiter is
+# masked too, instead of being left visible merely because "an interpreter" was
+# recognized on the opener line.
+#
+# Why the original selective rule over-matched here. #5351 kept every
+# interpreter-fed body visible so a REAL redirection inside `bash <<EOF ... >
+# <main-checkout>/f ... EOF` still reaches the write-confinement check. That
+# reasoning is specific to a SHELL inner interpreter. For `python3 <<EOF`, no
+# layer ever parses the body as shell:
+#   * the OUTER shell never scans a heredoc body for operators at all (with a
+#     QUOTED delimiter it does not even expand it -- provably inert prose, the
+#     same property heredoc_delim_quoted_at() is documented against above), and
+#   * the INNER interpreter does not speak shell.
+# So every `>`/`>>`/`tee`/`cp`/`mv`-shaped byte in such a body is ordinary
+# source text, and scanning it can only ever manufacture PHANTOM write targets:
+# the reported `if len(methods) >= 10:` yields a redirection into a file named
+# `=`, and a plain `if x > 3:` one into a file named `3` -- both denied as
+# worktree-isolation bypasses for a script that never writes anything.
+#
+# Strictly narrower than "mask every interpreter-fed body": a SHELL-fed body
+# (`bash <<EOF`, `cat <<EOF | sh`, `sudo bash <<EOF`), an unresolvable command
+# word (`$SHELL <<EOF` -- the #5226 fail-closed tail), and a non-shell
+# interpreter fed through a BARE delimiter (`python3 <<EOF`, where the outer
+# shell still performs `$(...)`/backtick expansion inside the body, so that
+# body is not provably inert to it) all stay VISIBLE exactly as before. The
+# ONLY behaviour change is masking a quoted-delimiter non-shell-interpreter
+# body -- which loses no real coverage, because a write performed from inside
+# Python/Perl/Ruby/JS goes through the file APIs of that language
+# (`open(...,"w")`, `shutil.copy(...)`), which this command-word-based shell
+# scanner never detected in the first place (KNOWN LIMITATIONS #1, "STILL
+# OPEN": the broader interpreter-mediated write class).
+#
+# Used ONLY by the extract_write_targets() write-confinement scan; the
+# catastrophic-tier caller keeps calling mask_heredoc_bodies_selective()
+# unchanged.
+function mask_heredoc_bodies_selective_shell_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC, maskit) {
+    MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
+    nl = split(s, lines, "\n")
+    if (nl == 0) return ""
+    for (i = 1; i <= nl; i++) {
+        line = lines[i]
+        off = 1
+        while (1) {
+            p = index(substr(line, off), "<<")
+            if (p == 0) break
+            p = off + p - 1
+            off = p + 2
+            delim = heredoc_delim_at(line, p)
+            if (delim == "") continue
+            closeat = 0
+            for (j = i + 1; j <= nl; j++) {
+                trimmed = lines[j]
+                sub(/^\t+/, "", trimmed)
+                if (trimmed == delim) { closeat = j; break }
+            }
+            if (closeat == 0) continue
+            maskit = 0
+            if (!is_interpreter_opener(line)) {
+                # Inert sink body (`cat <<EOF`, `--body "$(cat <<EOF ...)"`):
+                # masked exactly as before (#4914/#5000/#5181).
+                maskit = 1
+            } else if (!is_shell_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+                # Non-shell interpreter + quoted delimiter: no shell layer
+                # ever parses this body (gf180-gate-driver#68).
+                maskit = 1
+            }
+            if (maskit) {
+                for (j = i + 1; j < closeat; j++) {
+                    body = lines[j]
+                    gsub(/./, MASKC, body)
+                    lines[j] = body
+                }
+            }
+            i = closeat            # resume scanning after the delimiter line
+            break
+        }
+    }
+    out = lines[1]
+    for (i = 2; i <= nl; i++) out = out "\n" lines[i]
     return out
 }
 '
@@ -2560,28 +2793,8 @@ function mask_comment(s,   out, n, i, c, prev, mode, SQ, DQ) {
 # before: its target is the literal refspec text, not cwd/HEAD-derived, so cd
 # tracking must not change its behavior (a still-empty <cpath> there continues
 # to fall back to the caller's raw $CWD, unchanged).
-#
-# SAME-COMMAND VARIABLE RESOLUTION AT THE CWD-CAPTURE POINTS (#6152): both the
-# `-C <path>` and `cd <dir>` capture points below now also try resolve_var()
-# (the shared _VARRESOLVE_AWK helper, #4881) when the raw argument is a quoted
-# or bare `$NAME`/`${NAME}` reference — e.g. the Guide role's own
-# `DOCS_WT="..."; git -C "$DOCS_WT" reset --hard HEAD` shape. A preceding
-# same-command `NAME=value` assignment is recorded into `varmap` exactly like
-# extract_write_targets() does (mirrored below, per-segment, before the
-# `cd`/`git` dispatch). resolve_var() itself only matches a BARE `$NAME`
-# token, so each capture point first unquotes the raw argument via
-# strip_cd_quoting() (#5363/#5372, already used here for classification) —
-# this is the ONLY reason strip_cd_quoting() is applied before resolve_var();
-# it does not change strip_cd_quoting()'s existing classification-only role
-# elsewhere. WHEN RESOLUTION SUCCEEDS the resolved (absolute, unquoted) value
-# is used directly, so the #5775 managed-worktree detached-HEAD reset-
-# recovery allowlist can actually evaluate it. WHEN IT FAILS (no matching
-# assignment, a chained/ambiguous/command-substitution value, or the argument
-# was never a variable reference at all) each capture point falls back to
-# EXACTLY the pre-#6152 code path — same fail-toward-asking behavior,
-# unchanged.
 parse_force_ops() {
-    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_VARRESOLVE_AWK"'
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK"'
     BEGIN { SEP = sprintf("%c", 31); curcwd = startcwd }
                                        # SEP is non-whitespace so bash read
                                        # does not trim an empty cpath.
@@ -2593,28 +2806,6 @@ parse_force_ops() {
             sub(/^[ \t]+/, "", seg)
             sub(/^sudo[ \t]+/, "", seg)
             sub(/^[ \t]+/, "", seg)
-            # Record any `NAME=value` assignment(s) leading this segment into
-            # varmap for LATER segments'"'"' -C/cd resolve_var() lookups (#6152) —
-            # mirrors extract_write_targets()'"'"'s identical assignment scan
-            # (see its header comment for the full recognized-shape list and
-            # the conflicting-assignment poison rule). Consuming the
-            # assignment prefix never hides a real `cd`/`git` command in the
-            # same segment (the `A=1 cmd …` env-prefix shape) — whatever
-            # remains after the assignment words keeps flowing into the
-            # existing dispatch below.
-            if (seg ~ /^(export|readonly|declare|typeset|local)[ \t]/) {
-                sub(/^(export|readonly|declare|typeset|local)[ \t]+/, "", seg)
-                while (seg ~ /^-/) {
-                    if (!sub(/^-[^ \t]*[ \t]*/, "", seg)) break
-                }
-            }
-            while (match(seg, /^[A-Za-z_][A-Za-z0-9_]*=[^ \t]*([ \t]+|$)/)) {
-                assignword = substr(seg, 1, RLENGTH)
-                seg = substr(seg, RLENGTH + 1)
-                sub(/[ \t]+$/, "", assignword)
-                record_assign(assignword)
-            }
-            if (seg == "") continue
             m = split(seg, toks, /[ \t]+/)
             if (m == 0) continue
             # Thread a `cd <dir>` prefix through LATER segments of this same
@@ -2624,18 +2815,10 @@ parse_force_ops() {
             # uses strip_cd_quoting() (#5363/#5372) so a fully or partially
             # quoted absolute argument (e.g. '"'"'<dir>'"'"'/sub) is not
             # misclassified as relative; curcwd is still built from the RAW
-            # cdarg, exactly mirroring extract_write_targets (#5372) — UNLESS
-            # resolve_var() (#6152) resolves toks[2] to a proven value first,
-            # in which case that resolved value is cdarg instead.
+            # cdarg, exactly mirroring extract_write_targets (#5372).
             if (toks[1] == "cd") {
                 if (m >= 2 && toks[2] != "" && toks[2] != "-") {
-                    cdunq = strip_cd_quoting(toks[2])
-                    cdresolved = resolve_var(cdunq)
-                    if (cdresolved != cdunq) {
-                        cdarg = cdresolved   # #6152: proven $VAR resolution
-                    } else {
-                        cdarg = expand_cd_arg(toks[2], home)   # #5315
-                    }
+                    cdarg = expand_cd_arg(toks[2], home)   # #5315
                     cdclass = strip_cd_quoting(cdarg)   # #5372
                     if (cdclass ~ /^\//) {
                         curcwd = cdarg
@@ -2651,19 +2834,7 @@ parse_force_ops() {
             k = 2
             while (k <= m) {
                 t = toks[k]
-                if (t == "-C") {
-                    # #6152: try resolve_var() on the unquoted -C argument
-                    # first; fall back to the raw (possibly quoted) token
-                    # UNCHANGED, exactly as before, when it does not prove a
-                    # substitution (the downstream caller still strips
-                    # quoting from a literal quoted path itself, #5372).
-                    craw = toks[k+1]
-                    cunq = strip_cd_quoting(craw)
-                    cresolved = resolve_var(cunq)
-                    cpath = (cresolved != cunq) ? cresolved : craw
-                    k += 2
-                    continue
-                }
+                if (t == "-C") { cpath = toks[k+1]; k += 2; continue }
                 if (t == "-c") { k += 2; continue }
                 if (t ~ /^-/)  { k += 1; continue }
                 break
@@ -2768,7 +2939,7 @@ parse_force_ops() {
 # false-NEGATIVE direction out of this issue's scope) — only a `cd <dir>`
 # prefix is.
 resolve_stash_cwd() {
-    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKWS_AWK"'
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK"'
     BEGIN { curcwd = startcwd; found = 0 }
     {
         $0 = qsplit($0)   # quote-aware segmentation (#3755)
@@ -2779,22 +2950,8 @@ resolve_stash_cwd() {
             sub(/^sudo[ \t]+/, "", seg)
             sub(/^[ \t]+/, "", seg)
             if (seg == "") continue
-            # Quote-aware whitespace masking (#6552, same technique as
-            # extract_write_targets()'"'"'s #4934/mask_ws() fix): mask a
-            # space/tab INSIDE a quoted span with a non-whitespace
-            # placeholder before the plain `/[ \t]+/` split runs, so a
-            # quoted `cd` argument containing a literal space (e.g. `cd
-            # "/Users/me/Real Estate CRM/wt"`) yields exactly ONE token
-            # instead of truncating at the first embedded space and being
-            # misclassified as relative (which fed a bogus cwd join and a
-            # spurious cd-unresolved ask). unmask_ws() restores the real
-            # whitespace bytes afterward, so toks[] still carries the RAW,
-            # quote-intact text -- preserving the #5372 contract that
-            # curcwd is built from the raw cdarg, not an early-unquoted copy.
-            wseg = mask_ws(seg)
-            m = split(wseg, toks, /[ \t]+/)
+            m = split(seg, toks, /[ \t]+/)
             if (m == 0) continue
-            for (j = 1; j <= m; j++) toks[j] = unmask_ws(toks[j])
             # Thread a `cd <dir>` prefix through LATER segments of this same
             # compound command (mirrors parse_force_ops above). Classification
             # uses strip_cd_quoting() (#5363/#5372) so a fully or partially
@@ -2823,15 +2980,15 @@ resolve_stash_cwd() {
 }
 
 # Redact the quoted VALUES of known text-carrying flags (--body, -m/--message,
-# --title, --notes, --comment, --search) so a dangerous-looking phrase quoted
-# INSIDE such a value no longer trips the raw ALWAYS_BLOCK_PATTERNS substring
-# scan (catastrophic tier) or the ASK_PATTERNS scan (ask tier, #3756). Used
-# ONLY to build the literal-redacted working copies for those two loops
-# (mirrors the COMMAND_NO_COMMENT precedent); every other scan keeps reading
-# the raw command. This kills the #3679 false positive where `gh pr comment
-# --body "…git push --force origin main…"` / `git commit -m "…"` hard-denied
-# even though nothing executes, and (#3756) the analogous ask-tier false ask
-# where an ask-phrase like `gh issue close` quoted inside a
+# --title, --notes, --comment, --search, --jq) so a dangerous-looking phrase
+# quoted INSIDE such a value no longer trips the raw ALWAYS_BLOCK_PATTERNS
+# substring scan (catastrophic tier) or the ASK_PATTERNS scan (ask tier,
+# #3756). Used ONLY to build the literal-redacted working copies for those two
+# loops (mirrors the COMMAND_NO_COMMENT precedent); every other scan keeps
+# reading the raw command. This kills the #3679 false positive where `gh pr
+# comment --body "…git push --force origin main…"` / `git commit -m "…"`
+# hard-denied even though nothing executes, and (#3756) the analogous ask-tier
+# false ask where an ask-phrase like `gh issue close` quoted inside a
 # `--comment`/`--body` value prompted for confirmation despite no such
 # command actually being run.
 #
@@ -2849,21 +3006,96 @@ resolve_stash_cwd() {
 # read-only value arguments, per the #5214/#5157/#5158 precedent of NOT
 # generalizing this into a full qsplit()-segment-parsed rewrite.
 #
+# #170: `--jq` (e.g. `gh api ... --jq 'select(.title | test("DROP TABLE"))'`)
+# is likewise a read-only jq FILTER STRING, never an executed shell command —
+# structurally identical to `--search` above, so it fits the same
+# `<flag> "<quoted value>"` shape (NOT the NAME-aware `--arg`/`--argjson`
+# shape, which requires a bare identifier between the flag and the value).
+# This closes the sibling false positive where a search/audit command whose
+# `--jq` filter merely quotes a dangerous phrase as a substring/regex test
+# (never executing it) tripped the catastrophic sql-ddl deny.
+#
+# Issue #134: a THIRD alternative handles `gh api`'s `-f`/`-F`/`--raw-field`/
+# `--field NAME=<value>` shape — e.g. `gh api -X GET search/issues -f
+# q='repo:... "git push --force origin main" in:title,body'`. This is a
+# read-only GitHub search query value, never an invocation, but it doesn't
+# fit either existing shape above: unlike `--body "<value>"` the flag and
+# quoted value aren't adjacent tokens (gh api's `-f` takes ONE token of the
+# form `NAME=VALUE`, so `=` sits directly between an unquoted field name and
+# the opening quote, with no space), and unlike `--arg NAME "<value>"` the
+# name and the quote aren't whitespace-separated either — they're joined by
+# `=`. The third alternative matches that `NAME=<quoted value>` shape
+# directly after `-f`/`-F`/`--raw-field`/`--field`, so a search-query string
+# that merely QUOTES a dangerous phrase as data no longer hard-denies. A real
+# `gh api ... -f q=$(...)` command-substitution payload, or an unquoted live
+# invocation, is untouched by this addition and still denies — same
+# `$(`/backtick floor as the flags above.
+#
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
 #     is never redacted and its payload stays caught by the raw scan.
-#   - a DOUBLE-quoted span is redacted ONLY when it carries no command-substitution
-#     or backtick opener (`$(` — which also subsumes the arithmetic `$((` — or a
-#     backtick). So a smuggling attempt like `git commit -m "$(git push --force
-#     origin main)"` is left intact and still hard-denies. A SINGLE-quoted span is
-#     always redacted regardless of `$(`/backtick content — real single quotes give
-#     bash NO expansion of any kind, so such a span is provably inert either way
-#     (#5783; see the qchar == SQ branch at strip_literal_text()'s call site below).
+#   - a DOUBLE-quoted span is redacted ONLY when it carries an UNESCAPED
+#     command-substitution or backtick opener (`$(` — which also subsumes the
+#     arithmetic `$((` — or a backtick). So a smuggling attempt like `git commit
+#     -m "$(git push --force origin main)"` is left intact and still hard-denies.
+#     A SINGLE-quoted span is always redacted regardless of `$(`/backtick content
+#     — real single quotes give bash NO expansion of any kind, so such a span is
+#     provably inert either way (#5783; see the qchar == SQ branch at
+#     strip_literal_text()'s call site below).
 # Each redacted span is replaced by a SAME-LENGTH placeholder so byte offsets of
-# the surrounding command are unchanged. Best-effort like COMMAND_NO_COMMENT:
-# it does not model backslash-escaped quotes, but since the result feeds only
-# the narrowing (never widening) catastrophic scan, the worst case is a raw
-# substring surviving — never a catastrophic block being skipped incorrectly.
+# the surrounding command are unchanged.
+#
+# -----------------------------------------------------------------------------
+# BACKSLASH-ESCAPED QUOTES AND OPENERS INSIDE A DOUBLE-QUOTED VALUE (#112)
+#
+# This function used to be explicitly "best-effort … does not model
+# backslash-escaped quotes", on the reasoning that the result only feeds a
+# NARROWING scan so the worst case is an un-redacted substring surviving. That
+# is true of the catastrophic (deny) tier — but COMMAND_ASK_SCAN also feeds
+# SEGMENT PARSERS (extract_git_clean_fd_targets(), extract_rm_targets(),
+# parse_force_ops()), and for those a truncated redaction is not merely
+# "less masking": it hands qsplit() a string whose quote structure no longer
+# matches the real shell's, which MANUFACTURES a phantom command segment.
+#
+# Reproduced in #112 with the ordinary bash idiom for quoting example code as
+# prose inside a comment body:
+#
+#     gh pr comment 1 --body "example: \"\$(true; git clean -fd .)\""
+#
+# To bash that `--body` value is ONE inert argument: `\"` is a literal quote and
+# `\$(` is a literal `$(`, not a substitution — nothing in it executes. The old
+# span regex (`"[^"]*"`) stopped at the FIRST raw quote byte, i.e. inside the
+# `\"` escape, so it redacted only `example: \` and left
+# `\$(true; git clean -fd .)\""` standing as apparently-UNQUOTED text. qsplit()
+# then split at the (now unquoted-looking) `;` and handed
+# extract_git_clean_fd_targets() a phantom segment whose first three tokens are
+# literally `git clean -fd` — a false ask on text that runs nothing. (The same
+# body WITHOUT the `true; ` prefix happened to allow only because it contained
+# no separator to split on.)
+#
+# Two coordinated changes fix it, and BOTH are required — the span must be
+# delimited the way bash delimits it, and the `$(`-floor must then judge the
+# whole span the way bash judges it:
+#
+#   1. The double-quoted alternative of `re` below now consumes `\<char>` as a
+#      unit, so a backslash-escaped quote does not terminate the span. This is
+#      exactly bash's own rule inside double quotes, and it is deliberately NOT
+#      applied to the single-quoted alternative — inside single quotes bash
+#      treats a backslash as an ordinary literal character (the close-reopen
+#      apostrophe idiom is handled separately by BSQ, #56).
+#   2. dq_span_has_live_subst() replaces the raw `index(inner, "$(")` /
+#      `index(inner, "`")` floor: an opener preceded by an ODD number of
+#      consecutive backslashes is escaped and therefore inert, while an EVEN
+#      number (including zero) leaves it live. Parity is the correct test
+#      because `\\` is the only way to get a literal backslash inside a
+#      double-quoted string, so `"\$(x)"` is inert prose while `"\\$(x)"` is a
+#      literal backslash followed by a REAL substitution and stays un-redacted.
+#
+# Net direction: redaction now covers exactly the text bash itself treats as an
+# inert literal argument, no more. A span holding a genuinely live `$(`/backtick
+# is still never redacted, so the catastrophic floor is unchanged for every
+# shape that can actually execute.
+# -----------------------------------------------------------------------------
 #
 # -----------------------------------------------------------------------------
 # HEREDOC-WRAPPED FLAG VALUES (#5216)
@@ -2918,8 +3150,84 @@ resolve_stash_cwd() {
 # That is the safe direction (a false positive that already exists, never a new
 # bypass), and the shape above is the one the repo's own role prompts prescribe.
 # -----------------------------------------------------------------------------
+#
+# -----------------------------------------------------------------------------
+# QUOTE-CONTEXT-AWARE SPAN SELECTION (#120)
+#
+# Every rule above this point describes how far a redacted span EXTENDS once
+# one is opened. This section is about a prior gap in deciding WHETHER to open
+# one at all: the span matcher used to be a single context-free regex applied
+# to the whole slurped buffer — `<flag> <quote>...<quote>` — with no notion of
+# whether the `<quote>` right after the flag was itself already inside an
+# earlier-opened quoted region. Bash tracks that with a single piece of state
+# (the currently-open quote char, if any); the old regex tracked none of it.
+#
+# Concretely, this let a flag-shaped substring INSIDE an already-open
+# single-quoted argument be mistaken for a real flag/value pair:
+#
+#     foo 'a --body "b' ; rm -rf / ; echo "c"
+#
+# To bash, `'a --body "b'` is ONE single-quoted argument to `foo` (the `"`
+# inside it is an ordinary literal byte, not a quote) — `--body` here is just
+# four bytes of that argument's text, not a real flag. The old regex didn't
+# know that: it saw `--body` followed by a `"`, treated THAT `"` as opening a
+# double-quoted span, and matched through to the next unescaped `"` — the one
+# opening `"c"` at the very end of the buffer. The redacted span consumed
+# `b' ; rm -rf / ; echo `, masking a live `rm -rf /` out of every downstream
+# scan (a false ALLOW on a catastrophic command; the ask-tier analog with
+# `git clean -fd .` in place of `rm -rf /` produced a false ALLOW where an ASK
+# was expected).
+#
+# The fix is `segment_quotes()` below: a single left-to-right pass over the
+# buffer that tracks quote state exactly the way bash does (honoring the same
+# two escaping idioms as the rest of this function — BSQ continuation inside
+# single quotes, #56, and backslash-escaped bytes inside double quotes, #112)
+# and splits the buffer into an ordered sequence of "U" (unquoted) and "Q"
+# (quoted, including both delimiting quote bytes) segments. A quoted span is
+# then only EVER a candidate for redaction when it is segment k in that
+# sequence AND segment k-1 is an "U" segment whose own TAIL — not merely
+# "somewhere in the buffer" — matches one of the recognized flag shapes. Since
+# segment boundaries are themselves computed with full quote-state awareness,
+# a flag-shaped substring sitting inside an already-open quoted region can
+# never again be mistaken for a real flag: it is bytes in the MIDDLE of a "Q"
+# segment, not the tail of a "U" segment, so it can't satisfy the check no
+# matter what follows it. This also finally makes the "masking only ever
+# narrows" claim made elsewhere in this file about strip_literal_text()'s
+# output literally true: a redacted span can no longer extend past the real
+# bash argument boundary in either direction, because segment boundaries ARE
+# the real bash argument boundaries.
+# -----------------------------------------------------------------------------
 strip_literal_text() {
     printf '%s' "$1" | awk '
+    # Does this DOUBLE-quoted span carry a LIVE command substitution (#112)?
+    #
+    # Returns 1 for an unescaped `$(` or backtick (bash would expand it, so the
+    # span must stay visible to the scans), 0 when every such opener is
+    # backslash-escaped (bash emits it as literal text, so the span is inert
+    # prose and is safe to redact).
+    #
+    # Escapedness is decided by the PARITY of the run of consecutive
+    # backslashes immediately preceding the opener, which is exactly the bash
+    # rule inside double quotes: `\\` is the only spelling of a literal
+    # backslash there, so an odd run ends in a backslash that escapes the
+    # opener and an even run (including zero) leaves it live.
+    #   \$(x)     -> 1 backslash  -> odd  -> inert
+    #   \\$(x)    -> 2 backslashes -> even -> LIVE (literal \ + real subst)
+    #   \\\`x\`   -> 3 backslashes -> odd  -> inert
+    # Only ever called for a double-quoted span; a single-quoted span is inert
+    # unconditionally (#5783) and never reaches here.
+    function dq_span_has_live_subst(s,   i, n, j, c, nbs) {
+        n = length(s)
+        for (i = 1; i <= n; i++) {
+            c = substr(s, i, 1)
+            if (c != "$" && c != BT) continue
+            if (c == "$" && substr(s, i + 1, 1) != "(") continue
+            nbs = 0
+            for (j = i - 1; j >= 1 && substr(s, j, 1) == BS; j--) nbs++
+            if (nbs % 2 == 0) return 1
+        }
+        return 0
+    }
     # Mask the body of a `<flag> "$(cat <<QUOTED_DELIM … DELIM\n)"` heredoc.
     # See the header comment above for the four conditions and why each is
     # load-bearing. Body bytes are replaced 1:1 with "X" so the buffer keeps
@@ -2972,24 +3280,124 @@ strip_literal_text() {
         for (i = 2; i <= nl; i++) s = s "\n" lines[i]
         return s
     }
+    # Walk `s` left to right tracking real bash quote state, populating the
+    # global arrays segtype[1..nseg] ("U" unquoted / "Q" quoted-including-
+    # its-own-quote-bytes) and segtxt[1..nseg] (segqchar[k] set only for a
+    # "Q" segment). See the QUOTE-CONTEXT-AWARE SPAN SELECTION comment above
+    # strip_literal_text() for why this replaces the old context-free regex
+    # (#120).
+    #
+    # Honors the same two escaping idioms the rest of this function already
+    # models, so segmentation matches bash exactly for both:
+    #   - BSQ continuation (#56): a single-quote byte encountered while
+    #     inside an open single-quoted span does NOT close it if the
+    #     following three bytes are exactly backslash-quote-quote (BSQTAIL)
+    #     -- that four-byte sequence is the close/escape/reopen idiom bash
+    #     uses for a literal apostrophe, so scanning skips past all four
+    #     bytes and keeps looking for the real close.
+    #   - Backslash-escaping (#112): a `\` encountered while inside an open
+    #     double-quoted span consumes itself AND the next byte as one unit
+    #     (mirrors bash: `\"` inside double quotes is a literal quote, not a
+    #     close), so only a genuinely unescaped `"` closes the span.
+    # An unterminated quote (no matching close anywhere in the rest of `s`)
+    # falls back to treating everything from the opening quote to the end of
+    # the buffer as ONE final "U" segment -- never redacted, mirroring
+    # qsplit()'"'"'s identical fallback for the identical situation (never widen
+    # what gets masked).
+    function segment_quotes(s,    n, i, c, cur, start, j, cc, closed) {
+        n = length(s)
+        i = 1
+        cur = ""
+        nseg = 0
+        while (i <= n) {
+            c = substr(s, i, 1)
+            if (c == SQ) {
+                if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur; cur = "" }
+                start = i
+                j = i + 1
+                closed = 0
+                while (j <= n) {
+                    cc = substr(s, j, 1)
+                    if (cc == SQ) {
+                        if (substr(s, j + 1, 3) == BSQTAIL) { j += 4; continue }
+                        closed = 1
+                        break
+                    }
+                    j++
+                }
+                if (!closed) {
+                    nseg++; segtype[nseg] = "U"; segtxt[nseg] = substr(s, start)
+                    i = n + 1
+                    continue
+                }
+                nseg++; segtype[nseg] = "Q"; segqchar[nseg] = SQ
+                segtxt[nseg] = substr(s, start, j - start + 1)
+                i = j + 1
+                continue
+            }
+            if (c == DQ) {
+                if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur; cur = "" }
+                start = i
+                j = i + 1
+                closed = 0
+                while (j <= n) {
+                    cc = substr(s, j, 1)
+                    if (cc == BS) { j += 2; continue }
+                    if (cc == DQ) { closed = 1; break }
+                    j++
+                }
+                if (!closed) {
+                    nseg++; segtype[nseg] = "U"; segtxt[nseg] = substr(s, start)
+                    i = n + 1
+                    continue
+                }
+                nseg++; segtype[nseg] = "Q"; segqchar[nseg] = DQ
+                segtxt[nseg] = substr(s, start, j - start + 1)
+                i = j + 1
+                continue
+            }
+            cur = cur c
+            i++
+        }
+        if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur }
+    }
     BEGIN {
         SQ = sprintf("%c", 39)   # single quote
         DQ = sprintf("%c", 34)   # double quote
-        # boundary + text-carrying flag + optional (ws / = / ws) + quoted span.
-        # The leading boundary class includes a newline so a `--body` that begins
-        # a continuation line is still recognized; the quoted-span classes
-        # ([^"]* / [^'"'"']*) already match a newline, so a MULTI-LINE quoted
-        # value is captured as one span once the whole command is slurped below.
+        BT = sprintf("%c", 96)   # backtick
+        BS = sprintf("%c", 92)   # backslash (literal byte)
+        BSQTAIL = BS SQ SQ       # the 3 bytes after a BSQ-idiom-opening quote (#56)
+        # Text-carrying-flag shapes, checked against the TAIL of the "U"
+        # segment immediately preceding a candidate "Q" segment (#120) --
+        # never against the raw buffer as a whole, so a flag-shaped substring
+        # sitting inside an already-open quoted region can never match (it is
+        # never the tail of a "U" segment). Two variants of each: the "_BOL"
+        # form additionally allows the flag at the absolute START of the
+        # segment (`^`), which is only semantically meaningful for the FIRST
+        # segment of the whole buffer -- segtype[1] is the only segment that
+        # can ever truly start at buffer position 1, so callers use the BOL
+        # form only when checking segment 1 and the MID form (boundary
+        # whitespace/newline required) otherwise.
         #
         # Second alternative (#5797): `jq --arg NAME "<value>"` / `jq --argjson
-        # NAME "<value>"` — a bare identifier token (NAME) sits between the flag
-        # and the quoted value, which the first alternative'"'"'s shape does not
-        # anticipate, so it gets its own alternative rather than being folded
+        # NAME "<value>"` -- a bare identifier token (NAME) sits between the
+        # flag and the quoted value, which the first alternative'"'"'s shape does
+        # not anticipate, so it gets its own pattern rather than being folded
         # into the flag list above.
-        re = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|-m)[ \t]*=?[ \t]*(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*" SQ ")" \
-             "|(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+(" \
-             DQ "[^" DQ "]*" DQ "|" SQ "[^" SQ "]*" SQ ")"
+        FLAG_RE_BOL = "(^|[ \t\n])(--message|--body|--notes|--title|--comment|--search|--jq|-m)[ \t]*=?[ \t]*$"
+        FLAG_RE_MID = "[ \t\n](--message|--body|--notes|--title|--comment|--search|--jq|-m)[ \t]*=?[ \t]*$"
+        JQ_RE_BOL = "(^|[ \t\n])(--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
+        JQ_RE_MID = "[ \t\n](--arg|--argjson)[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*$"
+        #
+        # Third alternative (issue #134): `gh api -f NAME=<value>` / `-F
+        # NAME=<value>` / `--raw-field NAME=<value>` / `--field NAME=<value>`
+        # -- the gh api raw-field flag joins NAME and the quoted value with
+        # `=` and no space, unlike the --arg/--argjson shape above (whitespace
+        # before the quote) or the --body/-m shape (an optional `=` then
+        # optional whitespace). See the header comment above strip_literal_text
+        # for why this alternative is needed.
+        GH_API_RE_BOL = "(^|[ \t\n])(-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
+        GH_API_RE_MID = "[ \t\n](-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -3004,29 +3412,33 @@ strip_literal_text() {
     { buf = buf (NR > 1 ? "\n" : "") $0 }
     END {
         # PRE-PASS (#5216): blank the body of a `<flag> "$(cat <<QDELIMQ … )"`
-        # heredoc before the quoted-span redaction below runs. It has to happen
-        # here rather than inside the loop because `re`'"'"'s quoted-span classes
-        # ([^"]* / [^'"'"']*) stop at the first quote character, and a heredoc body
-        # is free to contain raw quotes (prose routinely does) — so the span
-        # match alone cannot see such a value whole. Masking first also means
-        # the `$(`-floor below needs no exception: by the time the loop reads
-        # this span, the only text left inside it is `$(cat <<QDELIMQ`, the
-        # delimiter, and `)`.
+        # heredoc before the segmentation/redaction below runs. It has to
+        # happen here rather than inside segment_quotes() because a heredoc
+        # body is free to contain raw quotes (prose routinely does) -- so
+        # segmenting first would see them as real quote boundaries. Masking
+        # first also means the `$(`-floor below needs no exception: by the
+        # time segmentation reads this span, the only text left inside it is
+        # `$(cat <<QDELIMQ`, the delimiter, and `)`.
         s = mask_flag_cat_heredocs(buf)
+        segment_quotes(s)
         out = ""
-        while (match(s, re)) {
-            pre     = substr(s, 1, RSTART - 1)
-            matched = substr(s, RSTART, RLENGTH)
-            s       = substr(s, RSTART + RLENGTH)
-            # Locate the opening quote inside the matched span.
-            qpos = 0
-            for (i = 1; i <= length(matched); i++) {
-                c = substr(matched, i, 1)
-                if (c == DQ || c == SQ) { qpos = i; break }
+        for (k = 1; k <= nseg; k++) {
+            if (segtype[k] != "Q") { out = out segtxt[k]; continue }
+            # A "Q" segment is only a redaction candidate when the segment
+            # immediately before it is "U" and that segment'"'"'s own TAIL --
+            # not merely some earlier occurrence anywhere in the buffer --
+            # matches a recognized flag shape (#120).
+            flagged = 0
+            if (k > 1 && segtype[k - 1] == "U") {
+                if (k - 1 == 1) {
+                    if (segtxt[k - 1] ~ FLAG_RE_BOL || segtxt[k - 1] ~ JQ_RE_BOL || segtxt[k - 1] ~ GH_API_RE_BOL) flagged = 1
+                } else {
+                    if (segtxt[k - 1] ~ FLAG_RE_MID || segtxt[k - 1] ~ JQ_RE_MID || segtxt[k - 1] ~ GH_API_RE_MID) flagged = 1
+                }
             }
-            head  = substr(matched, 1, qpos)                              # up to & incl. opening quote
-            qchar = substr(matched, qpos, 1)
-            inner = substr(matched, qpos + 1, length(matched) - qpos - 1) # between the quotes
+            if (!flagged) { out = out segtxt[k]; continue }
+            qchar = segqchar[k]
+            inner = substr(segtxt[k], 2, length(segtxt[k]) - 2)   # between the quotes
             # Redact ONLY provably inert text (no command substitution / backtick)
             # -- UNLESS the span is single-quoted (#5783). Inside real single
             # quotes bash performs NO expansion of any kind: dollar-paren and
@@ -3035,20 +3447,23 @@ strip_literal_text() {
             # a single-quoted --body/-m/etc value that merely quotes a
             # dangerous phrase as documentation (e.g. gh issue comment --body
             # quoting a backticked example command) is safe to redact even
-            # though it contains a backtick -- closing the boundary-anchor gap
-            # elsewhere in this file must not turn that inert prose into a new
-            # false ask/deny. A DOUBLE-quoted span keeps the original
-            # conservative floor: dollar-paren / backtick there IS live shell
-            # syntax, so it stays un-redacted and visible to the scans below.
+            # though it contains a backtick. A DOUBLE-quoted span keeps the
+            # original conservative floor: dollar-paren / backtick there IS
+            # live shell syntax, so it stays un-redacted and visible to the
+            # scans below.
             # gsub(/./) leaves embedded newlines untouched (awk `.` never matches a
             # newline), so a multi-line span stays SAME-LENGTH and byte offsets of
             # the surrounding command are preserved.
-            if (qchar == SQ || (index(inner, "$(") == 0 && index(inner, "`") == 0)) {
+            # #112: the double-quoted floor asks whether the span holds a LIVE
+            # (unescaped) opener rather than whether the two-byte sequence
+            # appears at all -- `"\$(x)"` / "\`x\`" are literal prose to bash.
+            # `"\\$(x)"` (even backslash run) is a real substitution and is
+            # still never redacted.
+            if (qchar == SQ || !dq_span_has_live_subst(inner)) {
                 gsub(/./, "X", inner)
             }
-            out = out pre head inner qchar
+            out = out qchar inner qchar
         }
-        out = out s
         printf "%s", out
     }'
 }
@@ -3161,6 +3576,88 @@ mask_ask_positional_args() {
     }'
 }
 
+# Mask quoted POSITIONAL arguments to `echo` (gf180-gate-driver#41). A
+# dedicated near-duplicate of mask_ask_positional_args() just above rather
+# than an extra entry in that function's cmdre allowlist -- ASK-tier-ONLY,
+# never shared with COMMAND_GH_API_RAWFIELD_SCAN (the catastrophic-tier
+# consumer of mask_ask_positional_args(), ~line 3264), so this cannot widen
+# any catastrophic check the way growing that shared allowlist would risk.
+#
+# `echo` never executes its own quoted argument -- unlike check-duplicate.sh
+# (a specific known script), that is true of EVERY invocation of the builtin,
+# so no command-name-specific reasoning is needed beyond "the command word is
+# literally echo". This closes the false-positive shape observed in
+# guard-decisions.log (2026-08-15T08:56:26Z / 09:18:05Z): a plain `echo
+# "=== search git clean -fd ask ==="` diagnostic/log label elsewhere in a
+# multi-line command, which never invokes `git clean` at all, previously
+# reached the git-clean-fd scoped-allowlist check (and every other
+# ASK_PATTERNS entry) unmasked -- neither strip_literal_text() (flag-value
+# quoting only) nor mask_ask_positional_args() (check-duplicate.sh only)
+# recognizes a bare `echo` invocation.
+#
+# INTERPRETER-FED CARVE-OUT: the one way echo's quoted argument CAN become
+# live code is if its STDOUT is piped to something that interprets it (`echo
+# "git clean -fd ." | bash`). Mirroring mask_heredoc_bodies_selective()'s
+# interpreter-fed exclusion, this function leaves an echo invocation's quoted
+# argument(s) FULLY UNMASKED whenever the very next non-whitespace byte after
+# the argument list is a pipe (`|`) -- so a real invocation smuggled that way
+# still asks exactly as before. Every other shape (echo terminated by a
+# newline, `;`, `&&`, `||`, or end-of-buffer) is masked. As with
+# strip_literal_text()/mask_ask_positional_args() above, a double-quoted span
+# carrying `$(`/backtick is left unmasked regardless (real command
+# substitution stays visible); a single-quoted span is always eligible
+# (real single quotes give bash zero expansion).
+mask_ask_echo_args() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        SQ = sprintf("%c", 39)
+        DQ = sprintf("%c", 34)
+        anchor = "(^|[ \t\n;&|`(])echo[ \t]+"
+        buf = ""
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        out = ""
+        while (match(s, anchor)) {
+            pre     = substr(s, 1, RSTART - 1)
+            matched = substr(s, RSTART, RLENGTH)
+            rest    = substr(s, RSTART + RLENGTH)
+            spanout = ""
+            origspan = ""
+            while (1) {
+                qc = substr(rest, 1, 1)
+                if (qc != DQ && qc != SQ) break
+                endpos = 0
+                for (i = 2; i <= length(rest); i++) {
+                    if (substr(rest, i, 1) == qc) { endpos = i; break }
+                }
+                if (endpos == 0) break
+                inner = substr(rest, 2, endpos - 2)
+                origspan = origspan qc inner qc
+                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
+                    gsub(/./, "X", inner)
+                }
+                spanout = spanout qc inner qc
+                rest = substr(rest, endpos + 1)
+                while (substr(rest, 1, 1) == " " || substr(rest, 1, 1) == "\t") {
+                    spanout = spanout substr(rest, 1, 1)
+                    origspan = origspan substr(rest, 1, 1)
+                    rest = substr(rest, 2)
+                }
+            }
+            if (substr(rest, 1, 1) == "|") {
+                out = out pre matched origspan
+            } else {
+                out = out pre matched spanout
+            }
+            s = rest
+        }
+        out = out s
+        printf "%s", out
+    }'
+}
+
 # Mask quoted POSITIONAL arguments (no preceding flag name) to a small
 # allowlist of known non-executing SEARCH commands (issue #5158). Extends the
 # #5235 mask_ask_positional_args() fix shape to the CATASTROPHIC-tier working
@@ -3192,18 +3689,6 @@ mask_ask_positional_args() {
 # so a future tuning of one masking pass can never silently change another's
 # behavior, per the "never couple the two guards'/tiers' masking" convention
 # documented in mask_ask_positional_args()'s header comment above.
-#
-# #6002: also includes jq. jq is unconditionally admitted with any arguments
-# by the #3687/#3772 read-only fast path (fastpath_builtin_admits() above) —
-# it never executes its filter-script argument as shell syntax, only reads
-# it as a filter program — so masking that same operand here (once the
-# command is chained/piped and no longer fast-path-eligible) carries the
-# identical safety rationale as fast-path admission, just applied on the
-# full-scan path. Without this, a filter script like `jq -c "select(.pattern
-# == <phrase>)" file.log`, chained onto another command, previously fell
-# through to the raw substring scan below and hard-denied on read-only
-# forensic log inspection even though the phrase was only ever quoted DATA
-# inside the filter, never a live invocation.
 mask_catastrophic_positional_args() {
     printf '%s' "$1" | awk '
     BEGIN {
@@ -3216,8 +3701,24 @@ mask_catastrophic_positional_args() {
         # why that is safe on this (catastrophic-tier) working copy.
         # ./.loom/scripts/check-duplicate.sh (#5838) is added for the same
         # reason mask_ask_positional_args() already carries it below.
-        # jq (#6002) is added for the same reason -- see the function header
-        # comment above for the full rationale.
+        # jq (issue #134) is added for the same reason: its filter argument is
+        # jq-language data evaluated against JSON input, never shell syntax, so
+        # a filter that merely QUOTES a dangerous phrase as a comparand (e.g.
+        # jq -c select(.pattern == "catastrophic:git push --force origin
+        # main") .loom/logs/guard-decisions.log, read-only log introspection
+        # for this guard own pattern name) can safely be masked without hiding
+        # a real invocation from the scan.
+        #
+        # EXCEPTION (issue #137): `jq -n`/`--null-input` is excluded from this
+        # allowlist entry below (see jq_null_input) — with -n, jq needs no
+        # input at all and can manufacture arbitrary literal output purely
+        # from the filter argument this masking pass would otherwise redact.
+        # Combined with `-r` (raw output), a masked filter becomes directly
+        # shell-executable via `$(...)` or a pipe to a shell, defeating the
+        # ALWAYS_BLOCK_PATTERNS scan entirely — not just for force-push, but
+        # for every catastrophic-tier phrase. grep/egrep/fgrep/rg/
+        # check-duplicate.sh carry no equivalent risk (they only ever emit
+        # substrings of real input) so only jq needs this carve-out.
         cmdre = "(grep|egrep|fgrep|rg|jq|\\./\\.loom/scripts/check-duplicate\\.sh)"
         flagre = "([ \t]+-[A-Za-z0-9_-]+)*"
         anchor = "(^|[ \t\n;&|`(])" cmdre flagre "[ \t]+"
@@ -3232,6 +3733,15 @@ mask_catastrophic_positional_args() {
             matched = substr(s, RSTART, RLENGTH)
             rest    = substr(s, RSTART + RLENGTH)
             out = out pre matched
+            # jq -n/--null-input carve-out (issue #137): determine whether
+            # this anchors command name is jq and, if so, whether -n or
+            # --null-input appears among its flags. See the cmdre
+            # BEGIN-block comment above for why only jq needs this check.
+            jq_null_input = 0
+            if (match(matched, cmdre) && substr(matched, RSTART, RLENGTH) == "jq" && \
+                matched ~ /(^|[ \t])(-n|--null-input)([ \t]|$)/) {
+                jq_null_input = 1
+            }
             # Mask every consecutive quoted positional argument immediately
             # following the anchor (whitespace-separated). Stops at the first
             # non-quote-starting token, so anything after the argument list
@@ -3246,7 +3756,7 @@ mask_catastrophic_positional_args() {
                 }
                 if (endpos == 0) break
                 inner = substr(rest, 2, endpos - 2)
-                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
+                if (index(inner, "$(") == 0 && index(inner, "`") == 0 && !jq_null_input) {
                     gsub(/./, "X", inner)
                 }
                 out = out qc inner qc
@@ -3260,429 +3770,6 @@ mask_catastrophic_positional_args() {
         }
         out = out s
         printf "%s", out
-    }'
-}
-
-# Mask a bare shell variable assignment (`NAME='...'` / `NAME="..."`, at
-# command position, optionally after a leading `export`) whose quoted value
-# is never subsequently read via `$NAME`/`${NAME}` ANYWHERE else in the same
-# command buffer (issue #6269, shape 2). Without this, a purely declarative
-# assignment like:
-#
-#   PATTERN='catastrophic:aws s3 rb'
-#
-# — a standalone line, not followed by anything that actually reads
-# $PATTERN — hard-denies exactly like a live invocation, even though the
-# assigned value is never executed or even referenced again. This is the
-# real-world shape seen repeatedly in `.loom/logs/guard-decisions.log` while
-# investigating (and filing an issue about) this very false-positive class:
-# a forensic/documentation assignment quoting a flagged phrase as inert data.
-#
-# SAFETY (mirrors mask_catastrophic_forloop_wordlist()'s fail-closed
-# contract just below, applied here via the simplest sufficient check for
-# this narrower shape): masking only ever happens when `$NAME` and `${NAME}`
-# do not appear ANYWHERE in the full original command buffer — checked
-# against the buffer BEFORE any masking, so a later pass's redaction can
-# never hide a live reference from this check. Since the assignment
-# `NAME=<quote>...<quote>` itself never contains the substring `$NAME` (it
-# defines the variable, it does not read it), this single whole-buffer check
-# already correctly excludes the assignment's own text — no separate
-# self-exclusion bookkeeping is needed. If `$NAME`/`${NAME}` appears
-# anywhere else — including a genuinely dangerous consumer like
-# `eval "$NAME"`, an unrelated later reassignment that itself reads the old
-# value (`NAME="$NAME-more"`), or even an already-trusted inert consumer
-# such as `--search "$NAME"` — masking is skipped and the assignment's raw
-# text stays fully exposed to the raw substring scan below, exactly as
-# before this fix. This is deliberately narrower than "only mask if every
-# use is a trusted consumer": it trades a few false-positive assignments
-# that DO have a later inert consumer (still denied, no regression — just
-# not newly fixed) for a much simpler, more obviously-correct safety
-# argument than re-deriving mask_catastrophic_forloop_wordlist()'s full
-# consumer-allowlist logic for a different syntactic shape. KNOWN ACCEPTED
-# GAP: indirect reads that never spell `$NAME`/`${NAME}` literally (bash
-# indirect expansion `${!ref}`, `env`/`printenv` dumps, a second variable
-# copied from the first and read under ITS OWN name) are not detected by
-# this textual check and so are simply never masked by this pass (fail
-# closed, same posture as every other approximation in this file).
-#
-# Only fires at command position (start of buffer or immediately after one
-# of `; & | \` ( <newline>`, mirroring mask_catastrophic_positional_args()'s
-# own anchor above) so an incidental `NAME=` substring inside an unrelated
-# quoted string or URL query component is not mistaken for an assignment.
-mask_catastrophic_var_assignment() {
-    printf '%s' "$1" | awk '
-    BEGIN {
-        SQ = sprintf("%c", 39)
-        DQ = sprintf("%c", 34)
-        anchor = "(^|[ \t\n;&|`(])(export[ \t]+)?[A-Za-z_][A-Za-z0-9_]*="
-        buf = ""
-    }
-    { buf = buf (NR > 1 ? "\n" : "") $0 }
-    END {
-        s = buf
-        out = ""
-        while (match(s, anchor)) {
-            pre     = substr(s, 1, RSTART - 1)
-            matched = substr(s, RSTART, RLENGTH)
-            rest    = substr(s, RSTART + RLENGTH)
-            name = matched
-            sub(/^[ \t\n;&|`(]/, "", name)
-            sub(/^export[ \t]+/, "", name)
-            sub(/=$/, "", name)
-            qc = substr(rest, 1, 1)
-            if (qc != DQ && qc != SQ) {
-                # Not a quoted-literal assignment (e.g. NAME=bareword, or
-                # NAME=$(...)) -- nothing this function is scoped to touch.
-                out = out pre matched
-                s = rest
-                continue
-            }
-            endpos = 0
-            for (i = 2; i <= length(rest); i++) {
-                if (substr(rest, i, 1) == qc) { endpos = i; break }
-            }
-            if (endpos == 0) {
-                # Unterminated quote -- fail closed, leave unmasked.
-                out = out pre matched
-                s = rest
-                continue
-            }
-            inner = substr(rest, 2, endpos - 2)
-            after = substr(rest, endpos + 1)
-            if (index(inner, "$(") != 0 || index(inner, "`") != 0) {
-                # Value itself carries a command substitution -- never mask.
-                out = out pre matched qc inner qc
-                s = after
-                continue
-            }
-            ref1 = "\\$" name "([^A-Za-z0-9_]|$)"
-            ref2 = "\\$\\{" name "\\}"
-            if (match(buf, ref1) || match(buf, ref2)) {
-                # $NAME/${NAME} is read somewhere in the command -- fail
-                # closed, leave this assignment'"'"'s value unmasked.
-                out = out pre matched qc inner qc
-                s = after
-                continue
-            }
-            gsub(/./, "X", inner)
-            out = out pre matched qc inner qc
-            s = after
-        }
-        out = out s
-        printf "%s", out
-    }'
-}
-
-# Mask quoted word-list literals inside a `for <var> in "<lit>" "<lit>" ...;
-# do ... done` loop, but ONLY when every reference to <var> inside the loop
-# body is a provably-inert consumer already trusted elsewhere in this file
-# (issue #6002).
-#
-# Neither strip_literal_text() nor mask_catastrophic_positional_args() above
-# touches this shape: the dangerous phrase is a literal token in the for-
-# loop's OWN word list, not a value directly following a recognized flag or
-# command name — `--search` (etc.) is instead followed by the loop
-# VARIABLE (`"$q"`), so the phrase sits structurally distant from any
-# command invocation on the same or a later line, e.g.:
-#
-#   for q in "sql-ddl" "catastrophic:aws s3 rb"; do
-#       gh issue list --search "$q" --limit 5
-#   done
-#
-# Blindly masking every for-loop word list would be UNSAFE: the literal
-# itself is never executed directly — only its interpolation into <var>
-# later matters — so `for cmd in "aws s3 rb s3://victim --force"; do eval
-# "$cmd"; done` would silently blind the catastrophic scan to a REAL
-# destructive invocation smuggled through the loop variable. This function
-# therefore fails CLOSED (leaves the word list fully unmasked, still
-# visible to the raw scan below) unless ALL of the following hold:
-#
-#   1. The loop is fully closed inside this buffer (a `; do`/newline-`do`
-#      header and a matching `done`) — mirrors the "must be CLOSED inside
-#      this buffer" convention in mask_flag_cat_heredocs() above.
-#   2. The body contains no nested for/while/until loop, `eval`, `source`/
-#      `. `, or `sh|bash|zsh|dash -c` wrapper — anything that could re-
-#      interpret the variable as code rather than read as data.
-#   3. The loop variable (`$var` or `${var}`) appears at least once in the
-#      body, and EVERY occurrence is immediately preceded by one of the
-#      exact same trusted consumer shapes the sibling masking passes above
-#      already trust: `--search`/`--arg NAME`/`--argjson NAME` (the
-#      strip_literal_text() flag set), directly after
-#      grep/egrep/fgrep/rg/jq/check-duplicate.sh (the
-#      mask_catastrophic_positional_args() command set), OR interpolated
-#      anywhere inside a still-open `echo`/`printf` quoted argument (#6069)
-#      — e.g. `echo "=== $q ==="`, the narrated-progress-heading shape
-#      CLAUDE.md's own Guard-Decision Telemetry Review section pairs with a
-#      `--search "$q"` lookup in the very same loop body, and the shape
-#      actually observed recurring in `.loom/logs/guard-decisions.log`.
-#      Unlike the grep/jq case (which requires `$var` to BE the whole
-#      positional argument), the echo/printf check only requires the
-#      variable to sit inside an argument whose quote is still open when
-#      `$var` is reached — `echo`/`printf` never execute their arguments as
-#      shell syntax, so any position inside an already-open quoted span
-#      carries the identical safety rationale. A single occurrence in ANY
-#      other context (bare command-position use, `eval "$var"`, an
-#      UNQUOTED `echo $var`, etc.) aborts masking for that loop entirely —
-#      fail closed, not partial. Known accepted gap: `printf '%s' "$var"`
-#      (var in a SECOND, separate argument after a complete format-string
-#      argument) is NOT covered — the still-open-quote check below only
-#      sees the argument immediately following the command name, so that
-#      shape stays fail-closed like any other unrecognized consumer;
-#      `printf "text $var text"` (var interpolated directly in the one
-#      format-string argument) IS covered.
-#
-# Only when every check passes are the word-list literals masked, using the
-# same inertness floor as every other pass in this file: a span containing
-# `$(` or a backtick is left unmasked so command-substitution smuggling
-# still reaches the raw scan.
-mask_catastrophic_forloop_wordlist() {
-    printf '%s' "$1" | awk '
-    BEGIN {
-        SQ = sprintf("%c", 39)
-        DQ = sprintf("%c", 34)
-        buf = ""
-    }
-    { buf = buf (NR > 1 ? "\n" : "") $0 }
-    function extract_varname(m,    tmp) {
-        tmp = m
-        sub(/^.*for[ \t]+/, "", tmp)
-        sub(/[ \t]+in[ \t]+$/, "", tmp)
-        return tmp
-    }
-    END {
-        s = buf
-        openre = "(^|[ \t\n;&|`(])for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t]+"
-        out = ""
-        while (match(s, openre)) {
-            pre     = substr(s, 1, RSTART - 1)
-            matched = substr(s, RSTART, RLENGTH)
-            varname = extract_varname(matched)
-            cursor  = substr(s, RSTART + RLENGTH)
-
-            # Walk consecutive quoted words (the for-loop word list),
-            # recording each word'"'"'s quote char, inner text, and trailing
-            # whitespace so the span can be reconstructed either masked or
-            # verbatim.
-            words_n = 0
-            delete word_q
-            delete word_inner
-            delete word_trail
-            while (1) {
-                qc = substr(cursor, 1, 1)
-                if (qc != DQ && qc != SQ) break
-                endpos = 0
-                for (i = 2; i <= length(cursor); i++) {
-                    if (substr(cursor, i, 1) == qc) { endpos = i; break }
-                }
-                if (endpos == 0) break
-                words_n++
-                word_q[words_n] = qc
-                word_inner[words_n] = substr(cursor, 2, endpos - 2)
-                cursor = substr(cursor, endpos + 1)
-                trail = ""
-                while (substr(cursor, 1, 1) == " " || substr(cursor, 1, 1) == "\t") {
-                    trail = trail substr(cursor, 1, 1)
-                    cursor = substr(cursor, 2)
-                }
-                word_trail[words_n] = trail
-            }
-
-            # Fallback reconstruction (word list left fully unmasked) used
-            # whenever any safety check below fails.
-            verbatim = ""
-            for (wi = 1; wi <= words_n; wi++) {
-                verbatim = verbatim word_q[wi] word_inner[wi] word_q[wi] word_trail[wi]
-            }
-
-            bail = 0
-            if (words_n == 0) bail = 1
-
-            if (!bail && match(cursor, /^;?[ \t\n]*do([ \t\n]|$)/) == 0) bail = 1
-
-            body = ""
-            after_done = ""
-            if (!bail) {
-                do_head  = substr(cursor, RSTART, RLENGTH)
-                after_do = substr(cursor, RSTART + RLENGTH)
-                if (match(after_do, /(^|[ \t\n;&|`(])done([ \t\n;&|`)]|$)/) == 0) {
-                    bail = 1
-                } else {
-                    body = substr(after_do, 1, RSTART - 1)
-                    done_matched = substr(after_do, RSTART, RLENGTH)
-                    after_done = substr(after_do, RSTART + RLENGTH)
-                }
-            }
-
-            # Refuse to reason about anything beyond a flat, single-
-            # statement body: a nested loop, eval, dot-source, or a shell -c
-            # wrapper aborts masking for this loop entirely (fail closed).
-            if (!bail && (body ~ /(^|[ \t\n;&|`(])(for|while|until|eval|source)([ \t]|$)/ \
-                          || body ~ /(^|[ \t\n;&|`(])\.[ \t]+\$/ \
-                          || body ~ /(^|[ \t])(sh|bash|zsh|dash)[ \t]+-c([ \t]|$)/)) {
-                bail = 1
-            }
-
-            # Every occurrence of the loop variable inside body must be a
-            # provably-inert reference (see function header comment above
-            # for the exact trusted-consumer list). Any other appearance
-            # aborts masking for this loop (fail closed).
-            if (!bail) {
-                varref = "\\$\\{?" varname "\\}?"
-                btmp = body
-                found_any = 0
-                safe = 1
-                while (match(btmp, varref)) {
-                    matchtext = substr(btmp, RSTART, RLENGTH)
-                    nextchar  = substr(btmp, RSTART + RLENGTH, 1)
-                    # A bare `$name` match must not be a prefix of a LONGER
-                    # identifier (e.g. `$q` inside `$qq`) — the brace form
-                    # (`${name}`) already has a hard boundary via the
-                    # closing brace, so only the braceless form needs this
-                    # check.
-                    if (matchtext !~ /\}$/ && nextchar ~ /[A-Za-z0-9_]/) {
-                        btmp = substr(btmp, RSTART + RLENGTH)
-                        continue
-                    }
-                    found_any = 1
-                    vpre = substr(btmp, 1, RSTART - 1)
-                    if (vpre !~ /(--search|--arg[ \t]+[A-Za-z_][A-Za-z0-9_]*|--argjson[ \t]+[A-Za-z_][A-Za-z0-9_]*)[ \t]*=?[ \t]*"?$/ \
-                        && vpre !~ /(grep|egrep|fgrep|rg|jq|\.\/\.loom\/scripts\/check-duplicate\.sh)([ \t]+-[A-Za-z0-9_-]+)*[ \t]+"?$/ \
-                        && vpre !~ /(^|[ \t\n;&|`(])(echo|printf)([ \t]+-[A-Za-z0-9_-]+)*[ \t]+["'"'"'][^"'"'"']*$/) {
-                        safe = 0
-                    }
-                    btmp = substr(btmp, RSTART + RLENGTH)
-                }
-                if (!found_any || !safe) bail = 1
-            }
-
-            if (bail) {
-                out = out pre matched verbatim
-                s = cursor
-                continue
-            }
-
-            # All checks passed — mask each word-list literal (same
-            # inertness floor as every other masking pass in this file: only
-            # a span with no `$(` / backtick is redacted).
-            masked = ""
-            for (wi = 1; wi <= words_n; wi++) {
-                inner = word_inner[wi]
-                if (index(inner, "$(") == 0 && index(inner, "`") == 0) {
-                    gsub(/./, "X", inner)
-                }
-                masked = masked word_q[wi] inner word_q[wi] word_trail[wi]
-            }
-            out = out pre matched masked do_head body done_matched
-            s = after_done
-        }
-        out = out s
-        printf "%s", out
-    }'
-}
-
-# Mask a WHOLE-LINE `#`-prefixed shell comment (issue #6394) from the
-# catastrophic-tier working copy, so a comment that merely QUOTES a
-# catastrophic-tier phrase for documentation/forensic purposes (e.g.
-# `# aws s3 rb mentioned here only, single line comment`, the exact shape
-# this repo's own Auditor "Guard-Decision Telemetry Review" standing policy,
-# #3898, produces while reporting on `.loom/logs/guard-decisions.log`) no
-# longer hard-denies. A physical line whose first non-whitespace character is
-# `#` is NEVER live shell syntax to any interpreter — bash, the outer shell,
-# or an inner `sh -c`/heredoc-fed interpreter all treat it as a no-op comment
-# — so dropping such a line can never hide a real invocation. Reproduced
-# twice, single-line and multi-line, in #6394's own filing.
-#
-# DELIBERATELY NOT a reuse of COMMAND_NO_COMMENT / mask_comment(): that
-# working copy is explicitly reserved for the ASK/DDL tier only (see the
-# "COMMENT-STRIPPED WORKING COPY" note further below in this file) — a
-# missed ASK there is an accepted risk, but the catastrophic tier is kept
-# strictly stricter so a missed BLOCK can never happen from a shared masking
-# pass. This function is a SEPARATE, narrower primitive built solely for
-# ALWAYS_BLOCK_PATTERNS, with its own, more conservative safety contract:
-#
-#   1. WHOLE-LINE ONLY: a line is masked only when the ENTIRE line (after
-#      stripping leading whitespace) is a comment — i.e. the `#` is the
-#      first non-whitespace character on that physical line. A TRAILING
-#      comment on a line that also carries real command text (e.g.
-#      `aws s3 rb bucket  # decommission`) is deliberately left untouched —
-#      unlike mask_comment(), which strips those too — because there is no
-#      way to redact the trailing span without touching the command text
-#      immediately before it on the same line; scoping to whole-line-only
-#      keeps the safety argument for this tier simple and obviously correct.
-#      KNOWN ACCEPTED GAP, same posture as every other approximation in this
-#      file: a whole-line comment that additionally quotes a catastrophic
-#      phrase as a TRAILING comment on a real command's own line is not
-#      unmasked by this pass and stays hard-denied (mirrors the accepted-gap
-#      convention documented on mask_catastrophic_var_assignment() above).
-#   2. QUOTE-AWARE: tracks single-/double-quote state across the WHOLE
-#      (possibly multi-line) buffer exactly like mask_comment() does, so a
-#      `#` that merely LOOKS like a line-start because it sits on its own
-#      physical line, but is actually still inside an unterminated quoted
-#      span from a PRIOR line, is never treated as a comment — it stays
-#      fully visible to the raw scan and still denies. Same accepted
-#      simplification as mask_comment()/mask_gt(): no backslash-escaped-quote
-#      modeling.
-#   3. HEREDOC-CONSERVATIVE: fails closed (does nothing) for the WHOLE buffer
-#      whenever a `<<` heredoc redirect appears anywhere in it, rather than
-#      attempting to reason about heredoc body boundaries or interpreter-fed
-#      vs. plain-data heredocs. This deliberately mirrors (by NOT touching
-#      anything) mask_heredoc_bodies_selective()'s interpreter-fed exclusion
-#      further below: a `#`-looking line inside an interpreter-fed heredoc
-#      body (`bash <<EOF ... EOF`) stays fully visible and still denies,
-#      exactly like a plain (non-interpreter) heredoc body line does today.
-mask_catastrophic_comment_lines() {
-    printf '%s' "$1" | awk '
-    BEGIN {
-        SQ = sprintf("%c", 39)
-        DQ = sprintf("%c", 34)
-        buf = ""
-    }
-    { buf = buf (NR > 1 ? "\n" : "") $0 }
-    END {
-        s = buf
-        if (index(s, "<<") != 0) {
-            # Fail closed: a heredoc redirect is present somewhere in this
-            # buffer -- leave the whole buffer untouched (see contract #3
-            # above) rather than try to reason about heredoc boundaries here.
-            printf "%s", s
-        } else {
-            out = ""
-            n = length(s)
-            i = 1
-            mode = 0      # 0 = unquoted, 1 = single-quoted, 2 = double-quoted
-            atline = 1    # true at buffer start and right after an unquoted \n
-            while (i <= n) {
-                c = substr(s, i, 1)
-                if (mode == 0) {
-                    if (c == SQ) { mode = 1; out = out c; atline = 0; i++; continue }
-                    if (c == DQ) { mode = 2; out = out c; atline = 0; i++; continue }
-                    if (c == "\n") { out = out c; atline = 1; i++; continue }
-                    if ((c == " " || c == "\t") && atline) { out = out c; i++; continue }
-                    if (c == "#" && atline) {
-                        # Whole-line comment: drop through to (but not
-                        # including) the terminating newline, mirroring the
-                        # deletion style mask_comment() uses above.
-                        while (i <= n && substr(s, i, 1) != "\n") i++
-                        continue
-                    }
-                    out = out c
-                    atline = 0
-                    i++
-                    continue
-                }
-                if (mode == 1) {
-                    if (c == SQ) mode = 0
-                    out = out c
-                    i++
-                    continue
-                }
-                # mode == 2 (double-quoted)
-                if (c == DQ) mode = 0
-                out = out c
-                i++
-            }
-            printf "%s", out
-        }
     }'
 }
 
@@ -3862,23 +3949,30 @@ ALWAYS_BLOCK_PATTERNS=(
 # payloads still reach the raw scan; spans carrying `$(` / backtick are left
 # intact so command-substitution smuggling still hard-denies.
 COMMAND_NO_LITERAL_TEXT="$COMMAND"
-# #6002: mask a fully-closed `for <var> in "<lit>" ...; do ... done` word
-# list's OWN quoted literals BEFORE every other pass below, so a phrase like
-# `for q in "sql-ddl" "catastrophic:aws s3 rb"; do gh issue list --search
-# "$q"; done` no longer hard-denies on a read-only search built from a
-# for-loop word list. This must run first (before the grep/rg/jq/
-# check-duplicate positional-arg pass and the flag-value strip below) so the
-# loop body still contains the literal `$var`/`${var}` text those two passes
-# would otherwise redact away — mask_catastrophic_forloop_wordlist()'s own
-# safety check depends on seeing the unredacted variable reference to prove
-# every use of it is a trusted consumer. See that function's header comment
-# for the full fail-closed safety contract (masking never happens unless the
-# loop is fully closed AND every use of the variable in the body is a
-# provably-inert consumer already trusted elsewhere in this file). Cheap
-# substring gate keeps the awk call off the hot path for the vast majority
-# of commands that never contain a for-loop.
-if [[ "$COMMAND" == *"for "* && "$COMMAND" == *" in "* ]]; then
-    COMMAND_NO_LITERAL_TEXT=$(mask_catastrophic_forloop_wordlist "$COMMAND_NO_LITERAL_TEXT")
+# HEREDOC-BODY MASKING (#58): a bare/top-level heredoc write (`cat > file
+# <<'EOF' ... EOF`, not nested inside any --body/-m/... flag value -- that
+# nested shape is already handled by strip_literal_text()'s own
+# mask_flag_cat_heredocs() below) whose body merely QUOTES a dangerous phrase
+# as inert sample/test text (e.g. a regression test fixture for
+# strip_literal_text() itself) previously reached the raw catastrophic scan
+# unmasked, indistinguishable from a real destructive command. Reuses the
+# same is-this-closed / is-this-interpreter-fed machinery as
+# mask_heredoc_bodies_selective() (COMMAND_HEREDOC_MASKED below) via the
+# sibling mask_heredoc_bodies_literal_only(), but ADDITIONALLY requires the
+# heredoc delimiter to be QUOTED or backslash-prefixed (`<<'EOF'`, `<<"EOF"`,
+# `<<\EOF`) -- the only shapes bash itself does NOT expand. An unquoted/
+# expanding delimiter (`<<EOF`, no quotes) is left completely unmasked: a
+# real `$(...)`/backtick command substitution inside such a body genuinely
+# executes when the outer shell writes it, so it must stay visible to the
+# scan below. Built ONCE here (not duplicated at the ALWAYS_BLOCK_PATTERNS
+# loop and extract_rm_targets() separately, #5216) since both consumers read
+# this same COMMAND_NO_LITERAL_TEXT buffer. Cheap substring gate keeps the
+# awk call off the hot path for the vast majority of commands with no
+# heredoc at all.
+if [[ "$COMMAND" == *"<<"* ]]; then
+    COMMAND_NO_LITERAL_TEXT=$(printf '%s' "$COMMAND_NO_LITERAL_TEXT" | awk "$_MASKHEREDOC_AWK"'
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END { printf "%s", mask_heredoc_bodies_literal_only(buf) }')
 fi
 # #5158: mask a leading grep/egrep/fgrep/rg invocation's own quoted pattern
 # argument BEFORE the flag-keyed strip below, so introspecting the guard's
@@ -3890,46 +3984,38 @@ fi
 # chained/piped check-duplicate.sh invocation (the bare single-command shape
 # is already covered by the #3687 read-only fast path, which doesn't apply
 # once the command is chained onto something else, e.g. inside a loop body).
-# #6002 adds `jq` to this gate: its filter-script positional operand (e.g.
-# `jq -c 'select(.pattern == "aws s3 rb")' file`, once chained onto another
-# command) is masked by the same allowlisted-command pass, mirroring jq's
-# unconditional #3687/#3772 fast-path admission for the bare single-command
-# shape.
+# Issue #134 adds "jq" to both the gate and mask_catastrophic_positional_args()'s
+# own command allowlist: a `jq '<filter>' file` invocation's filter argument is
+# jq-language data (never shell-executed), so masking it can't blind this scan
+# to a real invocation the way it could for a command that actually runs its
+# argument. This closes the false deny on `jq -c 'select(.pattern ==
+# "catastrophic:git push --force origin main")' .loom/logs/guard-decisions.log`
+# — read-only log introspection for the exact pattern name this guard emits,
+# recommended by the Guard-Decision Telemetry Review policy in auditor.md.
 if [[ "$COMMAND" == *"grep"* || "$COMMAND" == *"rg "* || \
       "$COMMAND" == *"check-duplicate"* || "$COMMAND" == *"jq"* ]]; then
     COMMAND_NO_LITERAL_TEXT=$(mask_catastrophic_positional_args "$COMMAND_NO_LITERAL_TEXT")
 fi
-# #6269: mask a bare `NAME='...'`/`NAME="..."` shell variable assignment
-# whose value is never read (via `$NAME`/`${NAME}`) anywhere else in the
-# command -- see mask_catastrophic_var_assignment()'s header comment for the
-# full fail-closed safety contract. Cheap substring gate (an `=` directly
-# followed by a quote character) keeps the awk call off the hot path for the
-# vast majority of commands that never assign a quoted literal to a
-# variable.
-if [[ "$COMMAND" == *"='"* || "$COMMAND" == *'="'* ]]; then
-    COMMAND_NO_LITERAL_TEXT=$(mask_catastrophic_var_assignment "$COMMAND_NO_LITERAL_TEXT")
-fi
 # #5797: "--arg" as a substring gate also covers "--argjson" (a superset
 # spelling of "--arg"), so no separate "--argjson" check is needed here.
+# Issue #134: "-f " (trailing space, so "--force"/"--force-with-lease" -- which
+# contain "-f" but never "-f " -- don't spuriously widen this gate) covers gh
+# api's `-f NAME=<value>` raw-field shape; "-F "/"--raw-field"/"--field" cover
+# its sibling flag spellings. See strip_literal_text()'s own header comment
+# for why this third regex alternative is needed (the flag/value pairing shape
+# for `-f`/`-F` differs from both `--body "<value>"` and `--arg NAME
+# "<value>"`). Deliberately NOT added to the COMMAND_GH_API_RAWFIELD_SCAN gate
+# below (~3800) or the COMMAND_ASK_SCAN gate (~3935) -- out of scope for this
+# fix, which targets only the catastrophic ALWAYS_BLOCK_PATTERNS force-push
+# false denial.
 if [[ "$COMMAND" == *"--body"* || "$COMMAND" == *"--message"* || \
       "$COMMAND" == *"--title"* || "$COMMAND" == *"--notes"* || \
       "$COMMAND" == *"--comment"* || "$COMMAND" == *"-m"* || \
-      "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* ]]; then
+      "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* || \
+      "$COMMAND" == *"--jq"* || \
+      "$COMMAND" == *"-f "* || "$COMMAND" == *"-F "* || \
+      "$COMMAND" == *"--raw-field"* || "$COMMAND" == *"--field"* ]]; then
     COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
-fi
-# #6394: mask any WHOLE-LINE `#`-prefixed shell comment last, so a comment
-# that merely quotes a catastrophic-tier phrase for documentation/forensic
-# purposes (e.g. `# aws s3 rb mentioned here only`) no longer hard-denies,
-# whether it is the entire command or one line among several. See
-# mask_catastrophic_comment_lines()'s own header comment (above, alongside
-# the other mask_catastrophic_* functions) for the full quote-/heredoc-aware
-# safety contract, and why this is deliberately NOT a reuse of
-# COMMAND_NO_COMMENT (see the "COMMENT-STRIPPED WORKING COPY" note further
-# below in this file for why that copy is reserved for the ASK/DDL tier
-# only). Cheap substring gate keeps the awk call off the hot path for the
-# vast majority of commands that never contain a `#`.
-if [[ "$COMMAND" == *"#"* ]]; then
-    COMMAND_NO_LITERAL_TEXT=$(mask_catastrophic_comment_lines "$COMMAND_NO_LITERAL_TEXT")
 fi
 
 for pattern in "${ALWAYS_BLOCK_PATTERNS[@]}"; do
@@ -4148,7 +4234,7 @@ if [[ "$COMMAND" == *"@"* ]]; then
     #     check-duplicate.sh) -- exactly the repro shape above.
     #   - strip_literal_text() (#3679/#5216/#5783) masks quoted values following a
     #     text-carrying FLAG (--body/--message/--title/--notes/--comment/--search/
-    #     -m/--arg/--argjson), single-quoted spans unconditionally (real single
+    #     --jq/-m/--arg/--argjson), single-quoted spans unconditionally (real single
     #     quotes give bash zero expansion) and double-quoted spans only when they
     #     carry no `$(`/backtick (so a live command-substitution smuggled through a
     #     double-quoted value stays visible and still denies).
@@ -4164,7 +4250,8 @@ if [[ "$COMMAND" == *"@"* ]]; then
     if [[ "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--body"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--message"* || \
           "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--title"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--notes"* || \
           "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--comment"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"-m"* || \
-          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--search"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--arg"* ]]; then
+          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--search"* || "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--arg"* || \
+          "$COMMAND_GH_API_RAWFIELD_SCAN" == *"--jq"* ]]; then
         COMMAND_GH_API_RAWFIELD_SCAN=$(strip_literal_text "$COMMAND_GH_API_RAWFIELD_SCAN")
     fi
     GH_API_RAWFIELD_BODY_AT_PATTERN="(^|[;&|[:space:]])gh[[:space:]]+api[^;&]*[[:space:]](-f|--raw-field)[[:space:]]*=?[[:space:]]*[\"']?body=[\"']?$GH_AT_PATHISH"
@@ -4174,37 +4261,21 @@ if [[ "$COMMAND" == *"@"* ]]; then
 fi
 
 # =============================================================================
-# COMMENT-STRIPPED WORKING COPY - used for the ASK-word and SQL DDL/DML
-# matches below, never for the catastrophic ALWAYS_BLOCK scan -- BUT also, as
-# of #6252, the input extract_write_targets() scans for the
-# worktree-write-confinement DENY (WRITE_TARGETS, below), via COMMAND_ASK_SCAN.
+# COMMENT-STRIPPED WORKING COPY - used ONLY for the ASK-word and SQL DDL/DML
+# matches below, never for the catastrophic ALWAYS_BLOCK scan.
 #
 # Strips a `#…EOL` shell comment when the `#` is at start-of-line or preceded
 # by whitespace (the common comment shape), so a pattern word that appears only
 # in a trailing comment ("# drop database first", "# git push --force") no
-# longer trips the ASK/DDL gates.
-#
-# QUOTE-AWARE as of #6252 (mask_comment(), defined above with the other
-# quote-state walkers): a `#` found while inside a single- or double-quoted
-# span is NEVER treated as a comment start, regardless of what precedes it.
-# Before #6252 this was a plain non-quote-aware sed
-# (`s/(^|[[:space:]])#.*$//`), which silently truncated the scan at a `#`
-# inside ANY whitespace-preceded quoted argument (a sed script, a
-# `--body`/`-m` prose string, a PR/issue reference like `#958`) -- harmless
-# for the ASK/DDL tier alone (a missed ask on quoted data), but an ACTIVE,
-# previously unreported unsound false-negative for the write-confinement DENY
-# that also reads this copy: the real write target after the truncation point
-# could silently vanish from the scan, producing a silent ALLOW where
-# #4178/#4921 require a DENY. Root-caused and fixed per ADR-0016
-# (docs/adr/0016-write-target-confinement-approach.md, "Sed / argument-
-# position false positive"); regression coverage in
-# tests/hooks/test-guard-destructive.sh. The awk only runs when a `#` is
-# actually present, keeping it off the hot path (#3553).
+# longer trips the ASK/DDL gates. This is best-effort: a `#` inside a quoted
+# string that happens to be whitespace-preceded is also stripped, but since the
+# stripped copy is used only for the *narrowing* ASK/DDL matches (never the
+# catastrophic scan) the worst case is a missed ask on quoted data, never a
+# missed catastrophic block. The sed only runs when a `#` is actually present,
+# keeping it off the hot path (#3553).
 # =============================================================================
 if [[ "$COMMAND" == *"#"* ]]; then
-    COMMAND_NO_COMMENT=$(printf '%s' "$COMMAND" | awk "$_MASKCOMMENT_AWK"'
-    { buf = buf (NR > 1 ? "\n" : "") $0 }
-    END { printf "%s", mask_comment(buf) }')
+    COMMAND_NO_COMMENT=$(printf '%s\n' "$COMMAND" | sed -E 's/(^|[[:space:]])#.*$//')
 else
     COMMAND_NO_COMMENT="$COMMAND"
 fi
@@ -4238,97 +4309,74 @@ fi
 # force-op:protected, or any other ASK_PATTERNS entry. Gated on the same
 # command-name substring the awk allowlist matches, keeping it off the hot
 # path for the vast majority of commands that never invoke it.
-COMMAND_ASK_SCAN="$COMMAND_NO_COMMENT"
-# HEREDOC-BODY MASKING (#5779): none of the narrowings above touch a
-# single-quoted heredoc BODY -- e.g. `cat > /tmp/x.md <<'EOF' ... git reset
-# --hard ... EOF` -- since that shape carries no --body/-m/etc. flag and is
-# not a check-duplicate.sh positional argument either. That heredoc body is
-# exactly as inert as a single-quoted string literal (no interpolation,
-# nothing executes), so it should not be scanned by the force-op/stash-scope
-# ASK_PATTERNS below any more than a quoted string is. Mirrors the
-# catastrophic tier's "HEREDOC-MASKED SCAN" (#5181/#5198) above: reuse
-# mask_heredoc_bodies_selective() to blank inert heredoc bodies while
-# leaving an INTERPRETER-fed heredoc (`bash <<EOF`, `sh -s <<EOF`, ...)
-# visible, since that body is genuinely live code (KNOWN LIMITATIONS #1).
-# Gated on literal '<<' presence, keeping it off the hot path for the vast
-# majority of commands with no heredoc at all. Narrows only: a real,
-# non-heredoc force-op/stash invocation is untouched and still asks, even
-# sitting in the same multi-line command as an unrelated heredoc.
+# HEREDOC-MASKED ASK SCAN (gf180-gate-driver#41): a heredoc BODY that merely
+# QUOTES an ask-tier pattern as inert prose -- e.g. a `gh issue create --title
+# ... --body "$(cat <<'EOF' ... EOF)"` call whose heredoc body authors a
+# static issue/PR body describing this exact guard pattern, or a plain `echo
+# "...git clean -fd..."` label elsewhere in a multi-line script -- previously
+# reached the git-clean-fd scoped-allowlist check (below) and every other
+# ASK_PATTERNS entry unmasked, because neither strip_literal_text() (which
+# only redacts the quoted span immediately following a text-carrying flag)
+# nor mask_ask_positional_args() (check-duplicate.sh only) touches a heredoc
+# body, or a quoted span that is not itself a flag's value, at all.
 #
-# UNQUOTED-DELIMITER SECOND PASS (#6056): mask_heredoc_bodies_selective()
-# deliberately leaves every UNQUOTED-delimiter body (`cat <<EOF`, no quotes
-# around EOF) visible, because the outer shell expands `$(...)`/backticks
-# inside it (#5781). Correct as a default, but it made the routine Judge
-# idiom `gh pr comment N --body "$(cat <<EOF ... EOF)"` false-ask
-# force-op:protected whenever the comment prose quotes `git push
-# --force-with-lease` as advice to a human -- an unanswerable stall in a
-# headless run. mask_unquoted_cat_heredoc_bodies() (defined above, mirroring
-# guard-loom-workflow.sh mask_cat_heredoc_bodies()) closes exactly that shape:
-# it masks an unquoted cat-heredoc ONLY when the capture is confined to a
-# text-data flag value AND the body is proven free of `$(`/unescaped-backtick
-# expansion, so a body that could actually execute something stays visible and
-# still asks. Runs SECOND so the quoted-delimiter pass (and its interpreter
-# carve-out) keeps full authority over the shapes it already handles.
-if [[ "$COMMAND_ASK_SCAN" == *"<<"* ]]; then
-    COMMAND_ASK_SCAN=$(printf '%s' "$COMMAND_ASK_SCAN" | awk "$_MASKHEREDOC_AWK"'
+# Uses mask_heredoc_bodies_selective_quoted_only() (defined alongside
+# mask_heredoc_bodies_selective() in _MASKHEREDOC_AWK above) -- NOT the plain
+# _selective() variant the catastrophic tier's COMMAND_HEREDOC_MASKED uses
+# (#5181/#5198, ~line 3228), and deliberately NOT plain mask_heredoc_bodies()
+# either. Two carve-outs keep this masking pass from ever widening an ask:
+#   - INTERPRETER-FED openers (`bash <<EOF`, `sh -s <<EOF`, `cat <<EOF |
+#     bash`) are left fully visible, same as _selective() -- a real
+#     `git clean -fd` reachable through one still asks exactly as before.
+#   - UNQUOTED-delimiter openers (`<<EOF`, vs. `<<'EOF'`/`<<"EOF"`) are ALSO
+#     left fully visible, which plain _selective() does NOT do. An unquoted
+#     delimiter lets the OUTER shell itself perform `$(...)`/backtick
+#     expansion inside the body, so a body line like `$(git clean -fd .)` is
+#     genuinely live to the outer shell even with no interpreter consuming
+#     the heredoc at all -- masking it there would turn a real invocation
+#     into a false ALLOW. Only a heredoc whose delimiter is explicitly quoted
+#     is provably inert prose to the outer shell, matching the repo's own
+#     `--body "$(cat <<'EOF' ... EOF)"` idiom (CLAUDE.md/builder role), which
+#     always uses a quoted delimiter.
+# This can only NARROW an ask, never widen one: a real, non-heredoc
+# `git clean -fd` (or other ASK_PATTERNS match) elsewhere in the same command
+# is untouched.
+#
+# Built from COMMAND_NO_COMMENT (not raw $COMMAND) to preserve the
+# `#`-comment stripping the ask tier already relies on, and gated on '<<'
+# presence to keep the hot path clean for the vast majority of commands with
+# no heredoc at all.
+if [[ "$COMMAND_NO_COMMENT" == *"<<"* ]]; then
+    COMMAND_ASK_SCAN=$(printf '%s' "$COMMAND_NO_COMMENT" | awk "$_MASKHEREDOC_AWK"'
     { buf = buf (NR > 1 ? "\n" : "") $0 }
-    END { printf "%s", mask_unquoted_cat_heredoc_bodies(mask_heredoc_bodies_selective(buf)) }')
+    END { printf "%s", mask_heredoc_bodies_selective_quoted_only(buf) }')
+else
+    COMMAND_ASK_SCAN="$COMMAND_NO_COMMENT"
 fi
-
-# COMMAND_CLOUD_ASK_SCAN (#6002): a SEPARATE, further-redacted copy branched
-# off HERE -- right after heredoc-body masking, BEFORE the check-duplicate.sh/
-# strip_literal_text passes just below -- used ONLY by CLOUD_ASK_PATTERNS
-# further down. It is deliberately NOT fed back into COMMAND_ASK_SCAN itself,
-# so SQL_DDL_PATTERN (and every other COMMAND_ASK_SCAN consumer) keeps seeing
-# grep/rg/jq/for-loop text completely unredacted, exactly as before.
-# mask_ask_positional_args() stays narrow for the same reason (see its header
-# comment: grep/rg are deliberately excluded because COMMAND_ASK_SCAN also
-# feeds SQL_DDL_PATTERN, which intentionally still scans a `grep '<pattern>'
-# file` invocation's own quoted argument for a DDL phrase). CLOUD_ASK_PATTERNS
-# is a DIFFERENT, narrower-purpose scan -- and it is also a TOGGLEABLE tier
-# (guards.cloudCli), not the catastrophic tier's ungated denial floor -- so it
-# is safe to give it its own, more-aggressively-masked copy without touching
-# that SQL-DDL invariant: reuses the exact same
-# mask_catastrophic_forloop_wordlist() / mask_catastrophic_positional_args()
-# passes the catastrophic-tier COMMAND_NO_LITERAL_TEXT copy uses above, so a
-# phrase like `aws s3 rb` that is merely quoted DATA in a for-loop word list
-# or a jq filter script (chained, not fast-path-eligible) no longer
-# false-asks on CLOUD_ASK_PATTERNS either, once the catastrophic scan has
-# already stopped false-denying it.
-#
-# MUST branch off before strip_literal_text() runs below: that pass masks
-# ANY quoted value following --search/--arg/etc, including a loop variable
-# reference like `--search "$q"` (it has no notion of bash semantics, so it
-# cannot tell "$q" apart from a real literal) -- masking that away first
-# would erase the very `$q` text mask_catastrophic_forloop_wordlist()'s own
-# safety check depends on seeing, causing it to fail closed for no reason.
-COMMAND_CLOUD_ASK_SCAN="$COMMAND_ASK_SCAN"
-if [[ "$COMMAND" == *"for "* && "$COMMAND" == *" in "* ]]; then
-    COMMAND_CLOUD_ASK_SCAN=$(mask_catastrophic_forloop_wordlist "$COMMAND_CLOUD_ASK_SCAN")
-fi
-if [[ "$COMMAND" == *"grep"* || "$COMMAND" == *"rg "* || \
-      "$COMMAND" == *"check-duplicate"* || "$COMMAND" == *"jq"* ]]; then
-    COMMAND_CLOUD_ASK_SCAN=$(mask_catastrophic_positional_args "$COMMAND_CLOUD_ASK_SCAN")
-fi
-# #6269: same NAME='...'/NAME="..." dead-assignment masking as the
-# catastrophic-tier COMMAND_NO_LITERAL_TEXT copy above, applied here so a
-# CLOUD_ASK_PATTERNS phrase quoted the same way no longer false-asks either.
-if [[ "$COMMAND" == *"='"* || "$COMMAND" == *'="'* ]]; then
-    COMMAND_CLOUD_ASK_SCAN=$(mask_catastrophic_var_assignment "$COMMAND_CLOUD_ASK_SCAN")
-fi
-
 if [[ "$COMMAND_NO_COMMENT" == *"check-duplicate.sh"* ]]; then
     COMMAND_ASK_SCAN=$(mask_ask_positional_args "$COMMAND_ASK_SCAN")
-    COMMAND_CLOUD_ASK_SCAN=$(mask_ask_positional_args "$COMMAND_CLOUD_ASK_SCAN")
+fi
+# ECHO POSITIONAL-ARGUMENT MASKING (gf180-gate-driver#41): mask_ask_echo_args()
+# (defined above, alongside mask_ask_positional_args()) closes the analogous
+# false-positive gap for plain `echo "..."` prose elsewhere in a multi-line
+# command -- e.g. `echo "=== search git clean -fd ask ==="` used only as a
+# diagnostic/log label, never invoking `git clean` at all. `echo` never
+# executes its own quoted argument, so masking it here is safe; the function
+# itself carves out the one case where echo's stdout is piped to an
+# interpreter, leaving that shape fully visible and still asking. ASK-tier
+# ONLY (never applied to COMMAND_GH_API_RAWFIELD_SCAN), gated on a substring
+# pre-check to keep the hot path clean for the common echo-free case.
+if [[ "$COMMAND_NO_COMMENT" == *"echo"* ]]; then
+    COMMAND_ASK_SCAN=$(mask_ask_echo_args "$COMMAND_ASK_SCAN")
 fi
 # #5797: "--arg" as a substring gate also covers "--argjson" (a superset
 # spelling of "--arg"), so no separate "--argjson" check is needed here.
 if [[ "$COMMAND_NO_COMMENT" == *"--body"* || "$COMMAND_NO_COMMENT" == *"--message"* || \
       "$COMMAND_NO_COMMENT" == *"--title"* || "$COMMAND_NO_COMMENT" == *"--notes"* || \
       "$COMMAND_NO_COMMENT" == *"--comment"* || "$COMMAND_NO_COMMENT" == *"-m"* || \
-      "$COMMAND_NO_COMMENT" == *"--search"* || "$COMMAND_NO_COMMENT" == *"--arg"* ]]; then
+      "$COMMAND_NO_COMMENT" == *"--search"* || "$COMMAND_NO_COMMENT" == *"--arg"* || \
+      "$COMMAND_NO_COMMENT" == *"--jq"* ]]; then
     COMMAND_ASK_SCAN=$(strip_literal_text "$COMMAND_ASK_SCAN")
-    COMMAND_CLOUD_ASK_SCAN=$(strip_literal_text "$COMMAND_CLOUD_ASK_SCAN")
 fi
 
 # =============================================================================
@@ -4512,109 +4560,65 @@ extract_rm_targets() {
 }
 
 # =============================================================================
-# rm-scope SAME-COMMAND mktemp RESOLUTION (#6520)
+# _wt_init_default_tmpdir() — resolves _WT_DEFAULT_TMPDIR, the parent directory
+# a bare `mktemp -d` would create its new directory in (gf180-gate-driver#144).
 #
-# The `rm-scope-unresolved-var` deny (below) fails closed on ANY expandable
-# `$` in an rm target, including the extremely common scratch-dir idiom
-#   tmpdir=$(mktemp -d) && ... && rm -rf "$tmpdir"
-# whose value is, in fact, provably rooted under /tmp (or $TMPDIR) — mktemp's
-# own contract with no output-redirecting flags. This is a NEW resolution
-# step, deliberately NOT built on resolve_var()/record_assign() (#4881,
-# #6152): that pair only ever substitutes the LITERAL text following `=`
-# (after quote-stripping), so a command-substitution RHS like `$(mktemp -d)`
-# would still start with `$` and stay unresolved even if this path called it.
+# A guard-development / self-test script routinely mints its OWN throwaway tree
+# in one command and then writes only inside it:
 #
-# rm_scope_mktemp_same_command_safe() returns success (0) ONLY when:
-#   1. The rm target, after stripping at most one layer of surrounding quotes,
-#      is a BARE `$NAME` or `${NAME}` reference — nothing else in the token
-#      (a suffix like `$NAME/sub` is deliberately excluded; fail closed).
-#   2. Scanning every ;/&/&&/||-separated segment of the SAME command text
-#      for a `NAME=...` assignment whose entire segment is EXACTLY
-#      `NAME=$(mktemp -d)` or `NAME=$(mktemp)` (optionally the same forms
-#      double-quoted) — the plain, default-temp-root-rooted invocations only.
-#      A custom template/prefix (`mktemp -d /other/dir/XXXXXX`,
-#      `mktemp --tmpdir=/other/dir`, …) never matches this exact-string test,
-#      so it is excluded from the fast path and falls through to today's
-#      fail-closed deny (routine complexity: prefer excluding an unusual
-#      mktemp shape over guessing its output root, #6520).
-#   3. Exactly ONE assignment to NAME exists anywhere in the command, and it
-#      is the safe form above. TWO OR MORE assignments to NAME — even a
-#      second, differently-shaped one appearing AFTER the safe mktemp
-#      assignment — poison the resolution and fail closed: the guard cannot
-#      tell which assignment's value the shell will see at the `rm` word, so
-#      ambiguity must never resolve to an allow.
+#     TMPROOT="$(mktemp -d)"
+#     cp .loom/hooks/guard-destructive-generic.sh "$TMPROOT/.loom/hooks/g.sh"
 #
-# On success, the caller treats the target as a proven /tmp-or-$TMPDIR-rooted
-# path and skips BOTH the unresolved-var deny AND the string-prefix scope
-# check below it — the raw `$CWD/$target` concatenation used by that check
-# still contains the literal, un-substituted `$NAME` text (this is a
-# tokenizer, not a shell evaluator) and cannot be trusted for anything beyond
-# the narrow proof made here.
+# Every such write is provably outside this repository, but `$TMPROOT` is
+# unresolvable to extract_write_targets()'s same-command resolver (record_assign
+# stores the raw `$(mktemp` text; resolve_var refuses any value that still
+# begins with `$`), so the target fell through to the catastrophic
+# `worktree-write-confinement-unresolved-var` deny — 8 of the 10 denials under
+# that tag in this repo's guard-decisions telemetry through 2026-08-17, none of
+# them a real confinement violation. (The other two bind `$(mktemp)` with no
+# `-d`, a FILE, which deliberately keeps denying — see mktempd_parent().)
 #
-# DECOY-HEREDOC BYPASS (#6549): the awk body below processes its `cmdtext`
-# argument one PHYSICAL LINE at a time with no heredoc-body awareness of its
-# own, so passing it the raw (heredoc-unmasked) command text let an attacker
-# set the REAL value of `NAME` via a shape this scan's exact `NAME=` prefix
-# match never sees (e.g. `export NAME=$(malicious_command)`), issue a live
-# `rm -rf "$NAME"`, then plant an inert, never-executed decoy
-# `NAME=$(mktemp -d)` line inside a heredoc body later in the same command
-# purely to make `total == 1 && safe == 1` come out true. The caller
-# (rm-scope SCOPE CHECK, below) now passes a heredoc-body-masked working
-# copy — see its own `COMMAND_RM_MKTEMP_SCAN` comment for why it masks
-# unconditionally (every heredoc shape, including an interpreter-fed one)
-# rather than reusing `COMMAND_ASK_SCAN`'s narrower, interpreter-aware
-# masking.
+# The runtime value of a `mktemp -d` really IS unknowable ahead of time (a fresh
+# random suffix), so this does NOT resolve the variable to the path the write
+# will have. It resolves it to a SYNTHETIC stand-in directory in the same PARENT
+# `mktemp` would use — which is all the confinement check needs, because that
+# check only ever asks "is this inside the main checkout / a managed worktree?",
+# a question the parent answers for every child.
+#
+# That indirection is what keeps the fix fail-closed rather than a blanket
+# trust of `mktemp`: the stand-in is a real, judged path, so a `TMPDIR` pointing
+# INSIDE the checkout (`TMPDIR=<repo>/tmp`) resolves into the protected area and
+# still denies, via the ordinary literal containment test, with no special case.
+#
+# This helper resolves only the DEFAULT parent (`$TMPDIR`, else /tmp). An
+# invocation that names its own parent explicitly — `mktemp -d /tmp/x.XXXX`,
+# `mktemp -d -p /var/tmp` — is handled inside the awk scan, which uses that
+# absolute literal as the parent instead; either way the parent is judged by
+# the ordinary containment test, so naming an in-repo parent still denies.
+#
+# Physical (`pwd -P`), because _WT_MAIN_ROOT is physical too — on a host where
+# /tmp is a symlink (macOS -> /private/tmp) a logical stand-in would be compared
+# against a physical root and could miss a containment it should catch.
+# Cached: this is one subshell per hook invocation at most.
 # =============================================================================
-_rm_scope_bare_var_name() {
-    local tok="$1" t c1 c2
-    t="$tok"
-    if [[ ${#t} -ge 2 ]]; then
-        c1="${t:0:1}"
-        c2="${t: -1}"
-        if [[ ("$c1" == '"' && "$c2" == '"') || ("$c1" == "'" && "$c2" == "'") ]]; then
-            t="${t:1:${#t}-2}"
+_WT_DEFAULT_TMPDIR=""
+_WT_DEFAULT_TMPDIR_INIT=0
+_wt_init_default_tmpdir() {
+    if [[ "$_WT_DEFAULT_TMPDIR_INIT" == "0" ]]; then
+        _WT_DEFAULT_TMPDIR_INIT=1
+        local _base="${TMPDIR:-/tmp}"
+        _base="${_base%/}"
+        # A relative or empty TMPDIR is itself unresolvable (it would be joined
+        # against a cwd this scan is not tracking for the mktemp call) — leave
+        # the parent empty, which disables the exception for the DEFAULT shape
+        # and keeps every such command on today's fail-closed path.
+        if [[ "$_base" == /* ]]; then
+            local _phys
+            _phys=$(cd "$_base" 2>/dev/null && pwd -P) || _phys=""
+            [[ -n "$_phys" ]] || _phys="$_base"
+            _WT_DEFAULT_TMPDIR="$_phys"
         fi
     fi
-    if [[ "$t" =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$ ]]; then
-        printf '%s' "${BASH_REMATCH[1]}"
-        return 0
-    fi
-    if [[ "$t" =~ ^\$([A-Za-z_][A-Za-z0-9_]*)$ ]]; then
-        printf '%s' "${BASH_REMATCH[1]}"
-        return 0
-    fi
-    return 1
-}
-
-rm_scope_mktemp_same_command_safe() {
-    local target="$1" cmdtext="$2" varname verdict
-    varname=$(_rm_scope_bare_var_name "$target") || return 1
-    [[ -n "$varname" ]] || return 1
-    verdict=$(printf '%s' "$cmdtext" | awk -v varname="$varname" "$_QSPLIT_AWK"'
-    {
-        $0 = qsplit($0)
-        n = split($0, segs, "\n")
-        for (i = 1; i <= n; i++) {
-            seg = segs[i]
-            sub(/^[ \t]+/, "", seg)
-            sub(/[ \t]+$/, "", seg)
-            prefix = varname "="
-            plen = length(prefix)
-            if (length(seg) > plen && substr(seg, 1, plen) == prefix) {
-                rhs = substr(seg, plen + 1)
-                total++
-                if (rhs == "$(mktemp -d)" || rhs == "$(mktemp)" || \
-                    rhs == "\"$(mktemp -d)\"" || rhs == "\"$(mktemp)\"") {
-                    safe++
-                }
-            }
-        }
-    }
-    END {
-        if (total == 1 && safe == 1) print "SAFE"
-        else print "UNSAFE"
-    }')
-    [[ "$verdict" == "SAFE" ]]
 }
 
 # =============================================================================
@@ -4641,18 +4645,6 @@ rm_scope_mktemp_same_command_safe() {
 # (phantom `<repo>/<` targets on `tee f < in`) and, for `cp`/`mv` — whose
 # destination is the LAST non-flag token — a false ALLOW where a trailing
 # `< in` displaced the real destination. See the inline comment at the scan.
-#
-# Likewise, a same-line NUMBERED-FD output redirect (`2>/dev/null`, `2>&1`,
-# `1>/tmp/x`, ...) is recognized and EXCLUDED from those same three idiom
-# scans (#6326): neither the operator token nor (for the bare/spaced form)
-# the file it writes TO is treated as an extra tee/sed-i/cp/mv file operand.
-# Without this, a trailing `2>/dev/null` on an otherwise-harmless
-# `cp src /tmp/dst 2>/dev/null` was misread as the cp/mv destination itself
-# (the LAST non-flag token), producing a bogus relative "target" that joined
-# against cwd and false-denied as a worktree-confinement bypass even though
-# the command never wrote inside the main checkout. A bare `>`/`>>` with NO
-# leading digit is deliberately left OUTSIDE this exclusion (unchanged
-# behavior) — see the inline comment at the scan.
 #
 # $2 seeds the starting cwd. A `cd <path>` segment updates cwd for LATER
 # segments of the SAME command (so `cd <worktree> && echo x > f` resolves the
@@ -4769,17 +4761,329 @@ rm_scope_mktemp_same_command_safe() {
 # inventing NEW denies; preserving an EXISTING one is the conservative side.)
 # =============================================================================
 extract_write_targets() {
-    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_VARRESOLVE_AWK""$_MASKGT_AWK""$_MASKWS_AWK""$_MASKHEREDOC_AWK"'
-    # resolve_var()/record_assign() (same-command $VAR resolution, #4881) and
-    # the DQ/SQ/AMBIG constants they use now come from the shared
-    # _VARRESOLVE_AWK snippet above (#6152) — see its header comment for the
-    # full contract. Unresolvable cases all return tok UNCHANGED, which is
-    # exactly the pre-#4881 treatment (literal, cwd-prefixed => still denied
-    # when it lands in the main checkout). Fail-closed by construction: this
-    # function can only ever REPLACE a token with a value it actually proved,
-    # never make one disappear.
+    _wt_init_default_tmpdir
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" -v deftmpdir="$_WT_DEFAULT_TMPDIR" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKGT_AWK""$_MASKWS_AWK""$_MASKHEREDOC_AWK"'
+    # Unresolvable cases all return tok UNCHANGED, which is exactly the
+    # pre-#4881 treatment (literal, cwd-prefixed => still denied when it
+    # lands in the main checkout). Fail-closed by construction: this function
+    # can only ever REPLACE a token with a value it actually proved, never
+    # make one disappear.
+    #
+    # QUOTED WRITE TARGETS (#17 fix): qsplit() leaves a quoted token with
+    # its surrounding quote characters attached (`"$WORKTREE_ABS/design/x.sch"`,
+    # literal leading `"`), so a naive `substr(tok, 1, 1) != "$"` check never
+    # fires for the quoted form of a bare variable reference -- only the
+    # unquoted `$VAR/path` spelling resolved, even though quoting a variable
+    # reference is the generally-recommended-safe shell idiom. Strip a
+    # DOUBLE-quote pair (only) from around tok before the `$`-prefix check,
+    # mirroring the shell-accuracy model this file already uses elsewhere
+    # (mark_expandable_dollars()/_scan_token_quoting() above): a real shell
+    # DOES expand `$VAR` inside double quotes, but NEVER inside single quotes
+    # -- a single-quoted target of literal shape DOLLAR-A-SLASH-evil really is
+    # a relative path to a file literally named DOLLAR-A, not a reference to
+    # variable A (the same distinction documented at the unresolved-`$`
+    # classification block below, #4921).
+    # So a SINGLE-quoted token is deliberately left untouched here and falls
+    # through unresolved exactly as it did before this fix -- widening
+    # resolution to single-quoted tokens would be a real bypass, not a false-
+    # positive fix. This only widens what can be RESOLVED, never what is
+    # returned on failure -- every failure path below still returns the
+    # original (quotes-included) `tok`, so an unresolvable or non-worktree
+    # target is exactly as fail-closed as before.
+    function resolve_var(tok,   vname, rest, vv, qc1, qc2, inner) {
+        inner = tok
+        if (length(tok) >= 2) {
+            qc1 = substr(tok, 1, 1)
+            qc2 = substr(tok, length(tok), 1)
+            if (qc1 == DQ && qc2 == DQ) {
+                inner = substr(tok, 2, length(tok) - 2)
+            }
+        }
+        if (substr(inner, 1, 1) != "$") return tok
+        if (match(inner, /^\$\{[A-Za-z_][A-Za-z0-9_]*\}/)) {
+            vname = substr(inner, RSTART + 2, RLENGTH - 3)
+            rest = substr(inner, RSTART + RLENGTH)
+        } else if (match(inner, /^\$[A-Za-z_][A-Za-z0-9_]*/)) {
+            vname = substr(inner, RSTART + 1, RLENGTH - 1)
+            rest = substr(inner, RSTART + RLENGTH)
+        } else {
+            # `$(...)`, `${VAR:-x}`, `$1`, … — not a bare variable reference.
+            return tok
+        }
+        if (!(vname in varmap)) return tok
+        vv = varmap[vname]
+        # A value that itself still starts with an unresolved "$" (chained
+        # assignment this single-pass resolver does not follow) stays
+        # unresolved rather than being guessed.
+        if (vv == "" || substr(vv, 1, 1) == "$") return tok
+        # `rest` was computed against `inner`, which already has the
+        # trailing quote (if any) stripped off, so the resolved value comes
+        # back unquoted -- identical shape to the unquoted-input case below.
+        return vv rest
+    }
+    # Record a single `NAME=value` word into varmap (value optionally wrapped
+    # in matching single/double quotes, which qsplit() copies verbatim).
+    #
+    # CONFLICTING ASSIGNMENTS POISON THE VARIABLE (#4914 review): this scan is
+    # NOT control-flow aware -- qsplit() flattens `||`/`&&`/`;` into plain
+    # segments, so `A=<in-repo> || A=/tmp/outside` reaches here as two
+    # assignments to the same name. A plain last-write-wins store would then
+    # resolve `$A` to whichever branch happens to appear LAST in the token
+    # stream, which real bash need never take (`||` short-circuits, so `$A` is
+    # the in-repo value at runtime) -- silently ALLOWing a write into the main
+    # checkout. So when a name is re-assigned a DIFFERENT value within the same
+    # command, its entry is replaced with the AMBIG sentinel instead: a
+    # `$`-leading value, which resolve_var() already refuses to substitute as
+    # an unresolved chain. The token then falls back to the literal
+    # (cwd-prefixed) treatment and denies -- the same fail-closed path every
+    # other unresolvable shape takes. Poisoning is sticky (any later assignment
+    # differs from the sentinel too) and deliberately blunt: it also covers
+    # sequential `A=x; A=y` reassignment, where resolving is *possible* in
+    # principle but the safe direction is to stop guessing. Re-assigning the
+    # SAME value is not a conflict and still resolves normally -- quotes are
+    # stripped above, before the comparison, so a bare and a quoted spelling of
+    # one value compare equal.
+    function store_assign(vname, vval) {
+        if ((vname in varmap) && varmap[vname] != vval) {
+            varmap[vname] = AMBIG
+            return
+        }
+        varmap[vname] = vval
+    }
+    function record_assign(word,   eqpos, vname, vval, vlen, c1, c2, rv) {
+        eqpos = index(word, "=")
+        if (eqpos < 2) return
+        vname = substr(word, 1, eqpos - 1)
+        vval = substr(word, eqpos + 1)
+        vlen = length(vval)
+        if (vlen >= 2) {
+            c1 = substr(vval, 1, 1)
+            c2 = substr(vval, vlen, 1)
+            if ((c1 == DQ && c2 == DQ) || (c1 == SQ && c2 == SQ)) {
+                vval = substr(vval, 2, vlen - 2)
+            }
+        }
+        # CHAIN ROOTED AT A `mktemp -d` SANDBOX (gf180-gate-driver#144): a
+        # self-test script names a subdirectory of its throwaway tree before
+        # writing into it (`TMPROOT="$(mktemp -d)"` then
+        # `WT="$TMPROOT/.loom/worktrees/issue-99"`). The stored value here
+        # still begins with `$`, which resolve_var() refuses to substitute (an
+        # unresolved chain this single-pass resolver does not follow), so every
+        # later `"$WT/..."` write stayed unresolvable. Follow the chain ONE
+        # step at record time -- assignments are recorded in stream order, so
+        # this composes transitively -- but ONLY when it lands under the
+        # mktemp -d stand-in. Every other chained value keeps the raw,
+        # deliberately-unresolved treatment byte for byte, so no existing
+        # verdict moves: this widens resolution exclusively for a root the
+        # command itself minted moments earlier.
+        if (substr(vval, 1, 1) == "$") {
+            rv = resolve_var(vval)
+            if (rv != vval && is_mktempd_path(rv)) vval = rv
+        }
+        store_assign(vname, vval)
+    }
+    # `mktemp -d` DETECTION (gf180-gate-driver#144) -- see the
+    # _wt_init_default_tmpdir() header above for why a same-command
+    # `NAME=$(mktemp -d)` binding is trustworthy where a bare `$(...)` is not.
+    #
+    # mktempd_parent() returns the PARENT directory the new sandbox would be
+    # created in ("" = not a recognized shape, i.e. keep the fail-closed deny).
+    # The recognized argument set is deliberately small; every shape outside it
+    # can put the directory somewhere this guard protects or somewhere no
+    # static scan can predict:
+    #   -d / --directory      required (a `mktemp` with no -d makes a FILE, and
+    #                         a later `"$VAR/sub"` write is then a different,
+    #                         still-unpredictable operation)
+    #   -q / --quiet          harmless, no effect on the location
+    #   -p DIR, --tmpdir=DIR  parent is DIR -- accepted only as an ABSOLUTE
+    #                         literal, and still judged (an in-repo DIR denies);
+    #                         a BARE `--tmpdir` is not accepted, since the word
+    #                         after it is the template, not the parent
+    #   TEMPLATE              parent is its dirname -- same absolute-literal
+    #                         rule, so `mktemp -d ./scratch.XXXX` (which really
+    #                         does land in the cwd) stays denied
+    # Anything else -- `-u` (prints a name, creates nothing), `-t`, an unknown
+    # flag, a second template, a template combined with -p (it is relative to
+    # DIR), a parent containing an unexpanded `$` -- returns "".
+    function mktempd_parent(cmd,   nt, t, i, w, seen_d, parent, tmpl, npos) {
+        sub(/^[ \t]+/, "", cmd)
+        sub(/[ \t]+$/, "", cmd)
+        if (cmd == "") return ""
+        nt = split(cmd, t, /[ \t]+/)
+        if (nt < 2) return ""
+        if (t[1] != "mktemp" && t[1] !~ /^\/[^ \t]*\/mktemp$/) return ""
+        seen_d = 0
+        parent = ""
+        tmpl = ""
+        npos = 0
+        for (i = 2; i <= nt; i++) {
+            w = t[i]
+            if (w == "--directory") { seen_d = 1; continue }
+            if (w == "--quiet") continue
+            if (w ~ /^-[dq]+$/) {
+                if (index(w, "d") > 0) seen_d = 1
+                continue
+            }
+            # `-p DIR` takes its argument as a separate word. A BARE
+            # `--tmpdir` deliberately is NOT accepted here: its argument is
+            # optional, so the word after it is the TEMPLATE, not the parent --
+            # reading it as a parent would be simply wrong. It falls through to
+            # the unknown-flag refusal below.
+            if (w == "-p") {
+                i++
+                if (i > nt || parent != "") return ""
+                parent = t[i]
+                continue
+            }
+            if (w ~ /^--tmpdir=/) {
+                if (parent != "") return ""
+                parent = substr(w, 10)
+                continue
+            }
+            if (substr(w, 1, 1) == "-") return ""
+            npos++
+            if (npos > 1) return ""
+            tmpl = w
+        }
+        if (!seen_d) return ""
+        # A TEMPLATE is interpreted relative to -p DIR, so the two together
+        # describe a location this simple reading would get wrong.
+        if (parent != "" && tmpl != "") return ""
+        if (tmpl != "") {
+            tmpl = mktempd_literal_abs(tmpl)
+            if (tmpl == "") return ""
+            parent = tmpl
+            sub(/\/[^\/]*$/, "", parent)
+            if (parent == "") parent = "/"
+            return parent
+        }
+        if (parent != "") return mktempd_literal_abs(parent)
+        # No explicit parent: $TMPDIR (else /tmp), resolved by the shell layer.
+        # Empty when that was itself unresolvable, which disables this shape.
+        #
+        # `deftmpdir` is the TMPDIR THIS HOOK inherited, which is the same one
+        # the tool shell would use -- unless the command SETS TMPDIR itself
+        # (`TMPDIR=<repo>/tmp T=$(mktemp -d)`, `export TMPDIR=…` on an earlier
+        # line). Then the real parent is that new value, not the inherited one,
+        # and reading the inherited one would judge the wrong directory --
+        # allowing a sandbox deliberately pointed INTO the checkout. Refuse the
+        # default shape outright whenever the command mentions a TMPDIR
+        # assignment anywhere (cheap, and fail-closed on the ambiguous side);
+        # an invocation that names its parent explicitly is unaffected, because
+        # `mktemp -p`/an absolute template ignores TMPDIR entirely.
+        if (tmpdir_assigned) return ""
+        return deftmpdir
+    }
+    # An mktemp path ARGUMENT is usable only when it is an absolute literal:
+    # a relative one is joined against a cwd this scan is not tracking for the
+    # substituted command, and one carrying an unexpanded `$`/backtick is the
+    # very kind of unknown this guard fails closed on. Returns "" otherwise.
+    function mktempd_literal_abs(w,   c1, c2, wl) {
+        wl = length(w)
+        if (wl >= 2) {
+            c1 = substr(w, 1, 1)
+            c2 = substr(w, wl, 1)
+            if ((c1 == DQ && c2 == DQ) || (c1 == SQ && c2 == SQ)) w = substr(w, 2, wl - 2)
+        }
+        if (substr(w, 1, 1) != "/") return ""
+        if (index(w, "$") > 0 || index(w, BQ) > 0 || index(w, DQ) > 0 || index(w, SQ) > 0) return ""
+        sub(/\/+$/, "", w)
+        if (w == "") w = "/"
+        return w
+    }
+    # Recognize a leading `NAME=$(mktemp -d …)` / `NAME="$(mktemp -d …)"` /
+    # backticked assignment WORD at the head of `seg`, record NAME -> a
+    # synthetic stand-in directory inside the parent that invocation would use,
+    # and return the byte length of that word (0 = no match, i.e. nothing
+    # recorded and the caller falls through to the ordinary
+    # whitespace-bounded assignment scan).
+    #
+    # This has to run BEFORE that ordinary scan, not inside record_assign():
+    # the generic scan bounds an assignment value with /[^ \t]*/, so
+    # `TMPROOT="$(mktemp -d)"` reaches record_assign() already truncated at the
+    # space to `TMPROOT="$(mktemp` -- and that TRUNCATED value, which does not
+    # begin with `$`, is what resolve_var() then happily substituted into a
+    # phantom `"$(mktemp/hosts` target. Matching the whole command substitution
+    # here is what makes the shape recognizable at all.
+    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, parent) {
+        if (!match(seg, /^[A-Za-z_][A-Za-z0-9_]*=/)) return 0
+        vname = substr(seg, 1, RLENGTH - 1)
+        val = substr(seg, RLENGTH + 1)
+        dq = 0
+        if (substr(val, 1, 1) == DQ) { dq = 1; val = substr(val, 2) }
+        if (substr(val, 1, 2) == "$(") {
+            cpos = index(val, ")")
+            if (cpos == 0) return 0
+            inner = substr(val, 3, cpos - 3)
+            tail = substr(val, cpos + 1)
+        } else if (substr(val, 1, 1) == BQ) {
+            cpos = index(substr(val, 2), BQ)
+            if (cpos == 0) return 0
+            inner = substr(val, 2, cpos - 1)
+            tail = substr(val, cpos + 2)
+        } else {
+            return 0
+        }
+        # A nested substitution/subshell inside the parens means the text
+        # between them is not the single simple command this scan verified.
+        if (index(inner, "(") > 0 || index(inner, ")") > 0) return 0
+        if (dq) {
+            if (substr(tail, 1, 1) != DQ) return 0
+            tail = substr(tail, 2)
+        }
+        # The assignment WORD must end here. A concatenation
+        # (`X=$(mktemp -d)/sub`, `X=$(mktemp -d)$SUFFIX`) is a different value
+        # than the sandbox root and is left unrecognized.
+        if (tail != "" && tail !~ /^[ \t]/) return 0
+        parent = mktempd_parent(inner)
+        if (parent == "") return 0
+        # SAME-SEGMENT REASSIGNMENT IS UNRESOLVABLE. A name re-assigned in a
+        # LATER segment is already poisoned to the AMBIG sentinel by
+        # store_assign(), but a quoted command substitution is one shape
+        # qsplit() does not segment after -- `X="$(mktemp -d)" || X=/elsewhere`
+        # arrives here as ONE segment, and the ordinary assignment scan stops
+        # at the `||`, so that second binding would never be seen at all.
+        # Refuse the whole recognition in that case: returning 0 drops the word
+        # back onto the generic (truncating) scan, i.e. exactly the fail-closed
+        # deny it gets today.
+        if (tail ~ ("(^|[^A-Za-z0-9_])" vname "=")) return 0
+        store_assign(vname, mktempd_standin(parent))
+        return length(seg) - length(tail)
+    }
+    # The stand-in path itself: a fixed child of the parent. Never the path the
+    # write will really have (that suffix is random by design) -- only a path
+    # in the same directory, which is all the confinement test needs to judge.
+    function mktempd_standin(parent) {
+        if (parent == "/") return MKTEMPD_LEAF
+        return parent MKTEMPD_LEAF
+    }
+    # Is `p` a resolved sandbox stand-in, or a path underneath one? Used by
+    # record_assign() to decide whether a CHAINED value is one this scan may
+    # follow. Note the direction of the risk: following a chain only ever
+    # replaces an unresolvable token with a LITERAL path, which the containment
+    # test below then judges on its merits -- so even a mis-recognition here
+    # cannot manufacture an allow for a path inside the checkout.
+    function is_mktempd_path(p,   ix, lf) {
+        lf = length(MKTEMPD_LEAF)
+        ix = index(p, MKTEMPD_LEAF)
+        if (ix == 0) return 0
+        if (length(p) == ix + lf - 1) return 1
+        return substr(p, ix + lf, 1) == "/"
+    }
     BEGIN {
         SEP = sprintf("%c", 31)
+        DQ = sprintf("%c", 34)
+        SQ = sprintf("%c", 39)
+        BQ = sprintf("%c", 96)
+        # Poison value for a name assigned two different values in one command
+        # (see record_assign). The leading "$" is load-bearing: it routes into
+        # the existing unresolved-chain refusal inside resolve_var().
+        AMBIG = "$__LOOM_AMBIGUOUS_ASSIGNMENT__"
+        # Prefix identifying a resolved same-command `mktemp -d` sandbox
+        # (#144), used by record_assign() to decide whether a CHAINED value is
+        # safe to follow. `deftmpdir` (the default parent, from the shell
+        # layer) arrives via -v.
+        MKTEMPD_LEAF = "/.loom-guard-mktemp-d-sandbox"
         curcwd = startcwd
     }
     # Slurp the whole (possibly multi-line) command into ONE buffer,
@@ -4798,7 +5102,7 @@ extract_write_targets() {
         # recognized heredoc body, even later in the SAME multi-line command,
         # is untouched and still flows through the unchanged pipeline below.
         #
-        # INTERPRETER-AWARE (#5351): use the _selective() variant, not plain
+        # INTERPRETER-AWARE (#5351): use a _selective() variant, not plain
         # mask_heredoc_bodies(). A write-idiom line inside a body handed to an
         # interpreter (`bash <<'EOF' ... EOF`, `sh -s <<EOF`, `cat <<EOF |
         # bash`, ...) is genuinely LIVE code to that inner interpreter, so
@@ -4810,7 +5114,28 @@ extract_write_targets() {
         # `--body "$(cat <<'EOF' ... EOF)"`), preserving the #4914/#5000/#5181
         # false-positive fixes. This gives the confinement tier the SAME
         # interpreter-awareness the catastrophic tier already has (#5198/#5205).
-        buf = mask_heredoc_bodies_selective(buf)
+        #
+        # SHELL-SPECIFIC (gf180-gate-driver#68): the variant used here is
+        # _selective_shell_only(), which keeps a body visible only when the
+        # inner interpreter is a SHELL (or is unresolvable). A body fed to
+        # python/perl/ruby/node through a QUOTED delimiter is masked, because
+        # no layer ever parses it as shell -- leaving it visible turned
+        # ordinary source text (`if len(methods) >= 10:`, `if x > 3:`) into
+        # phantom redirection targets (`=`, `3`) resolved against the main
+        # checkout and denied. See the header of that function for the full
+        # rationale and for what deliberately stays visible.
+        buf = mask_heredoc_bodies_selective_shell_only(buf)
+        # Does the command set TMPDIR anywhere? Read off the whole (masked)
+        # buffer BEFORE segmentation, because the assignment can sit in a shape
+        # the per-segment assignment scan never records -- a prefix on another
+        # command, an `export`, a line inside a function body. Any hit disables
+        # the DEFAULT-parent `mktemp -d` recognition (see mktempd_parent).
+        # Deliberately over-broad: matching the word in a comment or in a
+        # visible interpreter-fed heredoc only ever restores the deny this
+        # exception would otherwise have lifted.
+        # `--tmpdir=` is lowercase and `FOO_TMPDIR=` is excluded by the
+        # preceding-character class, so neither trips this.
+        tmpdir_assigned = (buf ~ /(^|[^A-Za-z0-9_])TMPDIR=/)
         $0 = qsplit(buf)   # quote-aware segmentation (#3755)
 
         # Whole-BUFFER quote-aware masking (#5157), not per-segment.
@@ -4867,11 +5192,26 @@ extract_write_targets() {
                     if (!sub(/^-[^ \t]*[ \t]*/, "", seg)) break
                 }
             }
-            while (match(seg, /^[A-Za-z_][A-Za-z0-9_]*=[^ \t]*([ \t]+|$)/)) {
-                assignword = substr(seg, 1, RLENGTH)
-                seg = substr(seg, RLENGTH + 1)
-                sub(/[ \t]+$/, "", assignword)
-                record_assign(assignword)
+            while (1) {
+                # `NAME=$(mktemp -d …)` is tried FIRST (#144): its value
+                # legitimately contains whitespace, so the generic scan below
+                # would otherwise truncate it mid-substitution (see
+                # the mktempd_assign_len header). Anything it does not recognize
+                # falls straight through to that scan, unchanged.
+                mklen = mktempd_assign_len(seg)
+                if (mklen > 0) {
+                    seg = substr(seg, mklen + 1)
+                    sub(/^[ \t]+/, "", seg)
+                    continue
+                }
+                if (match(seg, /^[A-Za-z_][A-Za-z0-9_]*=[^ \t]*([ \t]+|$)/)) {
+                    assignword = substr(seg, 1, RLENGTH)
+                    seg = substr(seg, RLENGTH + 1)
+                    sub(/[ \t]+$/, "", assignword)
+                    record_assign(assignword)
+                    continue
+                }
+                break
             }
             # A segment that was NOTHING but assignments writes nothing.
             # Anything left over keeps flowing into the command scan below
@@ -5041,54 +5381,69 @@ extract_write_targets() {
                 }
             }
 
-            # NUMBERED-FD OUTPUT-REDIRECT EXCLUSION (#6326) -- a same-line
-            # numbered file-descriptor redirect (`2>/dev/null`, `2>&1`,
-            # `1>/tmp/x`, ...) is a REDIRECTION OPERATOR (plus, for the
-            # attached fd-to-file form, its own operand), never an extra
-            # tee/sed-i/cp/mv file argument. Mirrors the stdin_redir exclusion
-            # immediately above, but for `[0-9]+>`/`[0-9]+>>` rather than
-            # `[0-9]*<`.
+            # STDOUT-REDIRECTION EXCLUSION (gf180-gate-driver#148) -- the
+            # fd-numbered-output-redirection analog of the STDIN-REDIRECTION
+            # EXCLUSION immediately above. A `>`/`N>`/`N>>` token (with or
+            # without a filename attached, no space) is a redirection
+            # OPERATOR, never a write-target operand, so it must not be
+            # scanned as one by the tee / sed -i / cp-mv loops below any more
+            # than a `<` may be. Left unhandled, an idiom as ordinary as
+            # `cp SRC DST 2>/dev/null` misread the attached `2>/dev/null`
+            # token as an extra cp operand -- worse, as THE operand cp/mv
+            # treats as the destination (last-non-flag-token) -- producing a
+            # phantom `<repo>/2>/dev/null` (or, once qsplit() turns a bare
+            # `&` byte into a segment separator, splitting a `2>&1` dup-to-fd
+            # token into `2>` at the end of one segment and `1` starting the
+            # next, a phantom `<repo>/2>`) that a #4178 worktree-confinement
+            # check then falsely DENIED.
             #
-            # Deliberately requires AT LEAST ONE leading digit (`[0-9]+`, not
-            # `[0-9]*`): a bare `>`/`>>` with NO leading digit is intentionally
-            # left OUTSIDE this exclusion and keeps flowing into the tee/sed/
-            # cp-mv loops exactly as before this fix -- narrowing an
-            # over-broad match must never also widen an unrelated one.
+            # Reuses the EXACT two regexes the `>`/`>>` write-target loop
+            # below already applies, so this exclusion set can never disagree
+            # with what that loop treats as a redirection operator:
+            #   `>` / `N>` / `N>>`   (bare, end-of-token) consumes the NEXT
+            #                        non-empty token too -- mirroring the
+            #                        stdin_redir bare-`<` case above, since
+            #                        that next token is the target or dup-fd
+            #                        argument belonging to this operator,
+            #                        never a second cp/mv/tee/sed operand.
+            #                        (The write-target loop below separately
+            #                        decides whether that consumed token is
+            #                        itself a real target to report -- e.g.
+            #                        skipping a `&`-prefixed dup-to-fd token
+            #                        -- but either way it is never AN OPERAND
+            #                        of the preceding cp/mv/tee/sed command,
+            #                        so this exclusion set marks it
+            #                        unconditionally.)
+            #   `>file` / `N>file` / `N>>file`  (attached) consumes only
+            #                        itself, exactly like the attached `<`
+            #                        case.
             #
-            # The genuine write-target text such a token carries is still
-            # captured separately by the dedicated `>`/`>>` scan below (which
-            # already supports an optional leading digit, `[0-9]*>>?`) --
-            # excluding the token HERE only stops it from being
-            # misappropriated as a tee/sed-i/cp/mv FILE OPERAND; it is not
-            # dropped from write-target scanning altogether.
-            #
-            # Bare-operator form (`2>` followed by a separate token, e.g.
-            # `sed -i s/a/b/ file 2> /tmp/err`): the operator token AND the
-            # single token it consumes as its target are both excluded,
-            # UNLESS that next token starts with `&` (a spaced dup-to-fd form,
-            # `2> &1` -- which duplicates a file descriptor, not a file, so
-            # nothing after it is a real operand to exclude).
-            #
-            # Attached form (`2>/dev/null`, `2>>/tmp/log`): the single token
-            # already carries both the operator and its target, so only that
-            # one token needs excluding.
-            delete numfd_redir
+            # Deliberately reused, not re-derived, per the caution in #148:
+            # this file has a long history of narrowly-scoped fixes in this
+            # exact area (#106, #4934, #5232, #5233), and an exclusion set
+            # built from a DIFFERENT (broader) pattern than the one the
+            # write-target loop itself uses could silently drop a real write
+            # target from confinement checking -- a false ALLOW / security
+            # regression, the opposite failure direction from this bug.
+            delete stdout_redir
             for (j = 1; j <= m; j++) {
                 if (toks[j] == "") continue
-                if (mtoks[j] ~ /^[0-9]+>>?$/) {
-                    numfd_redir[j] = 1
-                    if (j + 1 <= m && toks[j+1] != "" && mtoks[j+1] !~ /^&/) {
-                        numfd_redir[j+1] = 1
+                if (mtoks[j] ~ /^[0-9]*>>?$/) {
+                    stdout_redir[j] = 1
+                    for (k = j + 1; k <= m; k++) {
+                        if (toks[k] == "") continue
+                        stdout_redir[k] = 1
+                        break
                     }
-                } else if (mtoks[j] ~ /^[0-9]+>>?[^ \t&]/) {
-                    numfd_redir[j] = 1
+                } else if (mtoks[j] ~ /^[0-9]*>>?[^ \t&]/) {
+                    stdout_redir[j] = 1
                 }
             }
 
             if (toks[1] == "tee") {
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
-                    if (j in numfd_redir) continue
+                    if (j in stdout_redir) continue
                     if (toks[j] == "" || toks[j] ~ /^-/) continue
                     # Heredoc/herestring redirection (attached or quoted
                     # delimiter, or the bare double-angle-bracket / dashed
@@ -5116,44 +5471,46 @@ extract_write_targets() {
                 }
             } else if (toks[1] == "sed") {
                 has_i = 0
-                # BSD `-i` SEPARATE-ARGUMENT FORM (#5674): unlike GNU sed
-                # (where the -i option optional backup suffix is always
-                # ATTACHED to the same token -- bare `-i` or `-i.bak` -- so
-                # the very next
-                # non-flag token is always the mandatory SCRIPT argument, not
-                # a file), BSD/macOS sed requires `-i` to take its backup
-                # suffix as a SEPARATE following token, almost always the
-                # empty string (`sed -i` followed by an empty-quote argument
-                # then the script, e.g. `sed -i EMPTYQUOTES s/a/b/ file` --
-                # the idiom every reported false positive used). That
-                # inserts ONE EXTRA
-                # non-file token (the suffix) before the script, so the
-                # "skip exactly nfargs[1]" logic below -- correct for GNU,
-                # where nfargs[1] IS the script -- instead skips the suffix
-                # and lets the SCRIPT (nfargs[2], e.g. `s/a/b/`) fall through
-                # as a phantom file target, resolved against curcwd and
-                # denied as a worktree-confinement bypass for a file that was
-                # never actually written.
-                #
-                # Detected narrowly and safely: only a BARE `-i` token (not
-                # `-i.bak`, which is unambiguous GNU-attached-form and
-                # already handled) immediately followed by a token that,
-                # quote-stripped, is the EMPTY STRING -- never a plausible
-                # relative path and never a meaningful backup suffix on its
-                # own, so treating it purely as "the BSD marker" cannot hide
-                # a real write target. sed_skip then covers both the suffix
-                # AND the script (2 tokens) instead of just the script (1);
-                # every FILE argument after that is still fully scanned, so a
-                # genuine main-checkout target among them still denies.
-                bare_i_pending = 0
-                sed_skip = 1
                 nf = 0
+                # toks[] index of a candidate BSD backup-extension argument,
+                # and the nfargs[] slot that same token landed in (0 = none).
+                sed_ext_tok = 0
+                sed_ext_pos = 0
                 delete nfargs
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
-                    if (j in numfd_redir) continue
-                    if (toks[j] == "-i") { has_i = 1; bare_i_pending = 1; continue }
-                    if (toks[j] ~ /^-i/) has_i = 1
+                    if (j in stdout_redir) continue
+                    if (toks[j] ~ /^-i/) {
+                        has_i = 1
+                        # BSD/macOS sed requires a SEPARATE, possibly-empty
+                        # backup-extension argument immediately after a bare
+                        # `-i` token (the idiom `sed -i EMPTYQUOTE <script>
+                        # <file>`, EMPTYQUOTE being a pair of adjacent single
+                        # or double quotes with nothing between them); the
+                        # attached form used by GNU (`-i.bak`, or a bare `-i`
+                        # with NO separate argument) carries no such token.
+                        # qsplit()/mask_ws() preserve quote characters
+                        # VERBATIM in each token (#3755/#4934), so this
+                        # argument arrives here as the literal TWO-CHARACTER
+                        # token SQ-SQ or DQ-DQ -- never as a true awk empty
+                        # string -- so the `toks[j] == ""` check a few lines
+                        # below can never match it. Left unhandled, that
+                        # token fell through to the generic non-flag branch
+                        # and was collected into nfargs[] as if it were a
+                        # real file operand, shifting every later index by
+                        # one so the SED SCRIPT itself (not the real file
+                        # argument) printed as the write "target" -- a false
+                        # worktree-write-confinement DENY (main checkout) or
+                        # a false-negative ALLOW (worktree/tmp) depending on
+                        # which token landed in the reported position (#106).
+                        # Record it here (rather than consuming it outright)
+                        # so the AMBIGUOUS two-operand shape below can still
+                        # fall back to the pre-#106 fail-closed reading.
+                        if (toks[j] == "-i" && j + 1 <= m && !((j + 1) in stdin_redir) && (toks[j+1] == SQ SQ || toks[j+1] == DQ DQ)) {
+                            sed_ext_tok = j + 1
+                        }
+                        continue
+                    }
                     if (toks[j] ~ /^-/) continue
                     if (toks[j] == "") continue
                     # Same heredoc/herestring exclusion as the `tee` branch
@@ -5167,20 +5524,44 @@ extract_write_targets() {
                     }
                     nf++
                     nfargs[nf] = toks[j]
-                    if (bare_i_pending && nf == 1 && strip_cd_quoting(toks[j]) == "") {
-                        sed_skip = 2
-                    }
-                    bare_i_pending = 0
+                    if (j == sed_ext_tok) sed_ext_pos = nf
                 }
-                if (has_i && nf > sed_skip) {
-                    for (j = sed_skip + 1; j <= nf; j++) print curcwd SEP resolve_var(nfargs[j])
+                # DROP the BSD backup-extension argument ONLY when doing so
+                # still leaves at least two operands -- a script AND at least
+                # one file. That >= 3 floor is what keeps this a
+                # parser-correctness fix rather than a relaxation of the
+                # #4178 confinement floor: the two-operand shape
+                # `sed -i EMPTYQUOTE <one-operand>` is genuinely AMBIGUOUS
+                # across sed flavors, and the two readings disagree about
+                # whether a write happens at all --
+                #   GNU:  EMPTYQUOTE is the (empty) SCRIPT and the operand is
+                #         the FILE, so this REWRITES that file in place;
+                #   BSD:  EMPTYQUOTE is the backup extension and the operand
+                #         is the SCRIPT, with no file at all (sed would read
+                #         stdin, which BSD `sed -i` rejects outright).
+                # Dropping the token under the GNU reading would silently
+                # ALLOW a real main-checkout write, so the ambiguous shape
+                # keeps the pre-#106 fail-closed reading below instead. Only
+                # the unambiguous >= 3-operand BSD form (extension + script +
+                # file...) takes the corrected path.
+                if (has_i && sed_ext_pos > 0 && nf >= 3) {
+                    nreal = 0
+                    delete realargs
+                    for (j = 1; j <= nf; j++) {
+                        if (j == sed_ext_pos) continue
+                        nreal++
+                        realargs[nreal] = nfargs[j]
+                    }
+                    for (j = 2; j <= nreal; j++) print curcwd SEP resolve_var(realargs[j])
+                } else if (has_i && nf >= 2) {
+                    for (j = 2; j <= nf; j++) print curcwd SEP resolve_var(nfargs[j])
                 }
             } else if (toks[1] == "cp" || toks[1] == "mv") {
                 nf = 0
                 delete nfargs
                 for (j = 2; j <= m; j++) {
                     if (j in stdin_redir) continue
-                    if (j in numfd_redir) continue
+                    if (j in stdout_redir) continue
                     if (toks[j] ~ /^-/) continue
                     if (toks[j] == "") continue
                     # Same heredoc/herestring exclusion as the `tee` branch
@@ -5226,6 +5607,340 @@ extract_write_targets() {
                 }
             }
         }
+    }'
+}
+
+# =============================================================================
+# extract_git_clean_fd_targets() — segment-parsed target extraction for
+# `git clean -fd`-family invocations (gf180-gate-driver#15).
+#
+# Emits one "<cwd>\x1f<target>" line (TAB-free, US separator 0x1f — mirrors
+# extract_write_targets()'s SEP convention) per non-flag path argument of every
+# recognized `git clean -fd*` invocation, or a single "<cwd>\x1f@BARE@" line
+# for an invocation with NO path arguments (a bare `-fd` clean). Reuses the
+# SAME `cd`-tracking (`curcwd`) as extract_write_targets(), so a
+# `cd <worktree> && git clean -fd ...` or multi-line
+# `cd <worktree>\ngit clean -fd ...` script (the shape every observed
+# guard-decisions.log firing actually took) resolves relative targets against
+# the tracked cwd, not this hook's own session cwd.
+#
+# This function only EXTRACTS; it makes no allow/ask decision (filesystem
+# lookups like the `.loom-managed` sentinel walk are done by its caller in
+# plain bash, mirroring the RM-scope / write-confinement blocks above).
+#
+# Matching is intentionally as narrow as the substring pattern it replaces in
+# ASK_PATTERNS: only a segment whose first three tokens are exactly
+# `git clean -fd*` (mirroring the literal "git clean -fd" substring the old
+# entry required) is recognized as a clean invocation — `git clean -df`, a
+# split `-f -d`, or a flag between `clean` and `-fd` are NOT recognized here,
+# exactly as they were never recognized by the pattern this replaces.
+# Under-matching here only means such a shape is not narrowed at all (falls
+# through with no targets emitted, so the caller's pre-check grep — which
+# uses the SAME literal substring — never even calls this function for it);
+# it can never cause a genuine `-fd` invocation this function DOES recognize
+# to report the wrong target list.
+# =============================================================================
+extract_git_clean_fd_targets() {
+    printf '%s' "$1" | awk -v startcwd="$2" -v home="$HOME" "$_QSPLIT_AWK""$_CDEXPAND_AWK""$_CDQUOTE_AWK""$_MASKWS_AWK"'
+    BEGIN {
+        SEP = sprintf("%c", 31)
+        curcwd = startcwd
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        $0 = qsplit(buf)
+        wbuf = mask_ws($0)
+        n = split($0, segs, "\n")
+        split(wbuf, wsegs, "\n")
+        for (i = 1; i <= n; i++) {
+            seg = segs[i]
+            origlen = length(seg)
+            sub(/^[ \t]+/, "", seg)
+            sub(/^sudo[ \t]+/, "", seg)
+            sub(/^[ \t]+/, "", seg)
+            if (seg == "") continue
+            stripped = origlen - length(seg)
+            wseg = substr(wsegs[i], stripped + 1)
+            m = split(wseg, toks, /[ \t]+/)
+            if (m < 1) continue
+            for (j = 1; j <= m; j++) toks[j] = unmask_ws(toks[j])
+
+            if (toks[1] == "cd") {
+                if (m >= 2 && toks[2] != "" && toks[2] != "-") {
+                    cdarg = expand_cd_arg(toks[2], home)
+                    cdclass = strip_cd_quoting(cdarg)
+                    if (cdclass ~ /^\//) {
+                        curcwd = cdarg
+                    } else if (curcwd != "") {
+                        curcwd = curcwd "/" cdarg
+                    }
+                }
+                continue
+            }
+
+            if (m >= 3 && toks[1] == "git" && toks[2] == "clean" && toks[3] ~ /^-fd/) {
+                nf = 0
+                delete nfargs
+                for (j = 4; j <= m; j++) {
+                    if (toks[j] == "") continue
+                    # A real (or qsplit-mangled) redirection operator ends the
+                    # argument list -- everything from here on is shell
+                    # syntax, never a git-clean target. `>`/`>>`/`<` are
+                    # untouched by qsplit() and arrive as their own or an
+                    # attached token (`>file`, `2>>file`); a bare fd-dup
+                    # (`2>&1`) is a case qsplit() cannot fully preserve here
+                    # (it treats a lone `&` as a background-operator segment
+                    # split, same accepted limitation the other qsplit-based
+                    # parsers in this file share), leaving a dangling `2>`
+                    # trailing token in THIS segment -- caught by the same
+                    # pattern. Stopping here (not just skipping the one
+                    # token) is what actually matters: a token AFTER a real
+                    # operator is a redirect destination, not a clean target,
+                    # and must never be resolved/checked as one.
+                    if (toks[j] ~ /^[0-9]*(>>?|<<?)/) break
+                    if (toks[j] ~ /^-/) continue
+                    nf++
+                    nfargs[nf] = toks[j]
+                }
+                if (nf == 0) {
+                    print curcwd SEP "@BARE@"
+                } else {
+                    for (j = 1; j <= nf; j++) print curcwd SEP nfargs[j]
+                }
+            }
+        }
+    }'
+}
+
+# =============================================================================
+# COMMAND-SUBSTITUTION BODY EXTRACTION (gf180-gate-driver#90, PR #92 review)
+#
+# Emits the BODY TEXT of every command substitution in the command, one per
+# 0x1e (RS)-terminated record, innermost-first at each nesting level and
+# including every enclosing level too (so a body is reported once per span it
+# sits inside — an invocation nested three deep appears in all three bodies).
+#
+# WHY THIS EXISTS. extract_git_clean_fd_targets() (and every other parser in
+# this file built on qsplit()/mask_ws()) tokenizes with a FLAT quote toggle
+# that does not reset when a nested `$(...)`/backtick substitution opens
+# inside an outer quoted span (#4934's accepted simplification). Once the
+# scan is inside `"$(... )"`, every space for the REST of the outer quoted
+# span is masked, so a genuine invocation anywhere in that span collapses
+# into a single token and is not recognized as a `git clean -fd*` segment.
+# The gf180-gate-driver#90 fix treats "zero recognized invocations" as a
+# trivial allow, which makes that under-match a SILENT ALLOW of a real,
+# executing command — the regression the PR #92 review found with
+#     echo "<dq>$(true; git clean -fd .)<dq>"
+# (a real invocation that is neither bare nor glued to the `$(` opener).
+#
+# Extracting the substitution BODIES and re-running the SAME recognizer on
+# each of them sidesteps the tokenizer defect entirely rather than trying to
+# enumerate the shapes it cannot see: a body is a fresh command string with
+# the outer quoting stripped off, so mask_ws()'s flat toggle starts clean and
+# `true; git clean -fd .` tokenizes normally. This is a pure ASK-side safety
+# net (it can only cause an ask, never an allow) — see its caller in the
+# GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST block below.
+#
+# Quoting model (deliberately narrow, biased toward reporting MORE bodies —
+# reporting a body can only ever produce an ask, never an allow):
+#   - single-quoted spans are inert: `$(`/backtick inside them open nothing
+#     (this is what keeps `--jq '... test("git clean -fd") ...'` prose out of
+#     the results entirely);
+#   - double quotes do NOT protect `$(`/backtick — bash expands both inside
+#     double quotes, and that is precisely the shape this function exists for;
+#   - quote state is tracked PER NESTING LEVEL (a `"` inside `$( )` belongs to
+#     that substitution, not to the enclosing span) — the exact thing mask_ws()
+#     does not do;
+#   - a backslash skips the following byte (an escaped quote/`$`/backtick
+#     never changes state);
+#   - an UNTERMINATED opener emits the remainder of the string as a body. Such
+#     a command is a syntax error the shell would refuse to run, so this can
+#     only over-report — the fail-safe direction. It is also what keeps the
+#     #90 `check-duplicate.sh "<prose with a stray backtick>"` case honest:
+#     the remainder is emitted, re-parsed, and correctly yields no recognized
+#     invocation, so that case still allows on its own merits rather than by
+#     the scanner failing to look.
+# =============================================================================
+extract_command_substitution_bodies() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        SQ = sprintf("%c", 39)    # single quote
+        DQ = sprintf("%c", 34)    # double quote
+        BT = sprintf("%c", 96)    # backtick
+        BS = sprintf("%c", 92)    # backslash
+        RSEP = sprintf("%c", 30)  # RS -- record terminator between bodies
+        MAXBODIES = 200           # bound the output (fail safe: see caller)
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        n = length(s)
+        i = 1
+        depth = 0
+        emitted = 0
+        dq[0] = 0
+        sq[0] = 0
+        while (i <= n && emitted < MAXBODIES) {
+            c = substr(s, i, 1)
+            if (sq[depth]) {
+                if (c == SQ) sq[depth] = 0
+                i++
+                continue
+            }
+            if (c == BS) { i += 2; continue }
+            if (dq[depth]) {
+                if (c == DQ) { dq[depth] = 0; i++; continue }
+            } else {
+                if (c == SQ) { sq[depth] = 1; i++; continue }
+                if (c == DQ) { dq[depth] = 1; i++; continue }
+            }
+            if (c == "$" && substr(s, i + 1, 1) == "(") {
+                depth++
+                start[depth] = i + 2
+                kind[depth] = "$"
+                dq[depth] = 0
+                sq[depth] = 0
+                i += 2
+                continue
+            }
+            if (c == BT) {
+                if (depth > 0 && kind[depth] == BT) {
+                    printf "%s%s", substr(s, start[depth], i - start[depth]), RSEP
+                    emitted++
+                    depth--
+                } else {
+                    depth++
+                    start[depth] = i + 1
+                    kind[depth] = BT
+                    dq[depth] = 0
+                    sq[depth] = 0
+                }
+                i++
+                continue
+            }
+            # gf180-gate-driver#122: a ")" is only the REAL closer of the
+            # enclosing $(...) when it is not sitting inside a nested
+            # double-quoted span AT THIS DEPTH. Without the `!dq[depth]`
+            # guard, an ordinary parenthesis that is merely part of the
+            # double-quoted TEXT nested inside the substitution -- a
+            # parenthetical remark ("hello (world)"), or the residual literal
+            # `)` left behind once an escaped `\$(` opener upstream was
+            # correctly recognized as inert and never pushed its own depth --
+            # closed the substitution early. That silently TRUNCATED the body
+            # extract_git_clean_fd_targets() rescans below, before the real
+            # closer was ever reached. Two independently-confirmed
+            # consequences of the truncation: (1) the truncated body, missing
+            # its closing quote, forced qsplit() into its unterminated-quote
+            # fallback (separator-active), which then mis-split an embedded
+            # literal `;` inside the escaped example text into a phantom
+            # top-level `git clean -fd` segment -- the false ASK #122
+            # reports; (2) a genuinely live invocation positioned AFTER the
+            # truncation point in the same substitution (e.g.
+            # `$(echo "hello (world)" && git clean -fd .)`) fell outside the
+            # emitted body entirely -- a silent ALLOW, reproduced separately
+            # while diagnosing #122. `dq[depth]` already tracks exactly the
+            # double-quote state needed: real bash treats every byte inside a
+            # `"..."` span as ordinary text when looking for the matching
+            # close of $(...) (only $/backtick keep expanding), so gating on
+            # `!dq[depth]` matches that rule. A `)` while dq[depth] is 1 now
+            # falls through as ordinary text and is picked back up once the
+            # nested quote closes and the gate re-opens -- this can only
+            # WIDEN what is captured in a body (more text visible to the
+            # ask-side rescan), never narrow it, so it stays on the fail-safe
+            # (over-report) side documented above for an unterminated opener.
+            if (c == ")" && depth > 0 && kind[depth] == "$" && !dq[depth]) {
+                printf "%s%s", substr(s, start[depth], i - start[depth]), RSEP
+                emitted++
+                depth--
+                i++
+                continue
+            }
+            i++
+        }
+        # Unterminated openers still standing: emit each remaining span so an
+        # invocation hidden behind one is never invisible to the caller.
+        while (depth > 0 && emitted < MAXBODIES) {
+            printf "%s%s", substr(s, start[depth]), RSEP
+            emitted++
+            depth--
+        }
+    }'
+}
+
+# =============================================================================
+# mask_escaped_subst_openers() — neutralize BACKSLASH-ESCAPED `$(`/backtick
+# openers before a substitution BODY reaches extract_git_clean_fd_targets()
+# (gf180-gate-driver#122).
+#
+# WHY THIS EXISTS. extract_command_substitution_bodies()'s #122 fix (the
+# `!dq[depth]` guard above) now correctly extracts the FULL, untruncated body
+# of a `$(cat <<EOF ... EOF)` substitution even when that body quotes an
+# ESCAPED example invocation as inert prose (`\`git clean -fd .\`` /
+# `"\$(git clean -fd .)"`). But qsplit() (used inside
+# extract_git_clean_fd_targets() below) decides whether a double-quoted span
+# is inert with a NAIVE substring search --
+# `index(inner, "$(") == 0 && index(inner, "`") == 0` -- that does not know
+# about backslash-escaping at all. A span like `"\$(true; git clean -fd .)"`
+# still contains the raw substring `$(` (the backslash does not remove it
+# from the string), so qsplit() judges it non-inert, keeps separators ACTIVE,
+# and splits on the embedded `;` -- manufacturing the exact same phantom
+# `git clean -fd` segment the #112 fix (strip_literal_text()) already had to
+# defeat at the top-level scan. This is the substitution-body-rescan sibling
+# of that gap: strip_literal_text() runs once, upstream, on the whole
+# COMMAND_ASK_SCAN, and its dq_span_has_live_subst() parity check never sees
+# text that only becomes visible once extract_command_substitution_bodies()
+# pulls a substitution BODY back out.
+#
+# This function applies the SAME backslash-parity rule dq_span_has_live_subst
+# already uses (odd run of backslashes immediately before `$(`/backtick ==
+# escaped == inert; even run, including zero, == live) directly to a body
+# string, replacing ONLY the final escaping backslash and the opener byte
+# with a same-length inert filler ("X"). That is enough to make qsplit()'s
+# raw substring search agree with bash: after masking, an escaped
+# `"\$(...)"` span no longer contains a `$(`/backtick substring at all, so
+# qsplit() correctly treats it as inert and copies it verbatim (no internal
+# `;`/`&`/`|` split). A GENUINELY live opener -- zero or an even run of
+# backslashes before it -- is left completely untouched, so a real nested
+# invocation (the #90 "nested-but-not-glued" shapes, still pinned by their
+# own tests) is still visible to the rescan exactly as before. This can only
+# NARROW an ask (fewer phantom segments recognized), never widen one: a live
+# opener is never masked, and masking never removes or alters the target
+# text of a genuine `git clean -fd` invocation elsewhere in the body.
+# =============================================================================
+mask_escaped_subst_openers() {
+    printf '%s' "$1" | awk '
+    BEGIN {
+        BT = sprintf("%c", 96)   # backtick
+        BS = sprintf("%c", 92)   # backslash
+    }
+    { buf = buf (NR > 1 ? "\n" : "") $0 }
+    END {
+        s = buf
+        n = length(s)
+        out = ""
+        i = 1
+        while (i <= n) {
+            c = substr(s, i, 1)
+            isopener = (c == BT) || (c == "$" && substr(s, i + 1, 1) == "(")
+            if (isopener) {
+                nbs = 0
+                for (j = i - 1; j >= 1 && substr(s, j, 1) == BS; j--) nbs++
+                if (nbs % 2 == 1) {
+                    # Odd run: the immediately-preceding backslash escapes
+                    # this opener. Neutralize just that backslash + opener
+                    # pair (2 bytes -> 2 bytes, so offsets elsewhere in the
+                    # body are unaffected); every earlier backslash in the
+                    # run is untouched (it pairs off into literal backslash
+                    # bytes on its own and carries no opener meaning).
+                    out = substr(out, 1, length(out) - 1) "XX"
+                    i++
+                    continue
+                }
+            }
+            out = out c
+            i++
+        }
+        printf "%s", out
     }'
 }
 
@@ -5356,51 +6071,26 @@ expand_leading_tilde() {
     esac
 }
 
-# SCANS COMMAND_ASK_SCAN, NOT COMMAND_NO_LITERAL_TEXT (#5216, widened #6519).
-# extract_rm_targets() segments with qsplit(), which — like every
-# quote-tracking scan in this file — is driven one PHYSICAL LINE at a time and
-# has no memory of a `"` opened on an earlier line. So a heredoc BODY line
-# inside `--body "$(cat <<'EOF' … EOF)"` was segmented as if it were live
-# shell: the prose `Example payload: \`owner/name; rm -rf /\`` split on its
-# `;` into a segment whose command word is `rm`, manufacturing the target
-# ``/` `` and hard-denying a Judge comment that deletes nothing (observed on
-# PR #4357). Same failure family as #5000's phantom write targets.
-#
-# #5216 closed that ONE shape (a `<flag> "$(cat <<'EOF' … EOF)"` value
-# directly following a text-carrying flag) by scanning COMMAND_NO_LITERAL_TEXT
-# — narrow on purpose at the time, mirroring the catastrophic
-# ALWAYS_BLOCK_PATTERNS scan's own copy. But it left a SIBLING shape open
-# (#6519): `cat <<'EOF' > /tmp/x.md … EOF` writing an inert example to a file,
-# referenced LATER via `--body-file /tmp/x.md` (or any other non-substitution
-# consumer) — no flag ever sits directly before the heredoc opener, so neither
-# strip_literal_text() nor its mask_flag_cat_heredocs() helper ever sees it,
-# and a heredoc body line whose own first word happens to be `rm` (e.g. a
-# standalone "rm -rf /opt/vendor/important" example line in acceptance-
-# criteria prose) still manufactured a phantom local `rm` segment and
-# hard-denied a write that deletes nothing (reproduced against rjwalters/
-# anvil#1073's shape). This is the exact same failure family
-# parse_force_ops()/lifecycle_or_cloud_reason() already fixed by reading
-# COMMAND_ASK_SCAN (comment-stripped AND heredoc-body-masked via
-# mask_heredoc_bodies_selective()/mask_unquoted_cat_heredoc_bodies(), gated
-# only on heredoc/flag PRESENCE, not on a specific flag+substitution shape) —
-# extract_rm_targets() now matches that established pattern instead of
-# growing its own narrower one. mask_heredoc_bodies_selective() masks ONLY a
-# CLOSED, quoted-delimiter heredoc BODY and deliberately leaves an
-# INTERPRETER-fed heredoc (`bash <<EOF`, `sh -s <<EOF`, `cat <<EOF | sh`, …)
-# and everything OUTSIDE the heredoc untouched, so a REAL `rm -rf /` — bare,
-# sudo-prefixed, after a `&&`, chained after a heredoc closes, inside an
-# interpreter-fed heredoc, or smuggled through `bash -c '…'` / `-m "$(rm -rf
-# /)"` — still reaches this check unchanged; only inert, provably-non-executing
-# heredoc-body prose is newly excluded. Both `rm-protected-path` (unconditional)
-# and `rm-scope-outside-repo` (guards.rmScope-gated) consume the same
-# RM_TARGETS list built below, so this widening applies to both — matching
-# lifecycle_or_cloud_reason()'s precedent of an unconditional deny already
-# reading COMMAND_ASK_SCAN for the identical reason.
+# SCANS COMMAND_NO_LITERAL_TEXT, NOT RAW $COMMAND (#5216). extract_rm_targets()
+# segments with qsplit(), which — like every quote-tracking scan in this file —
+# is driven one PHYSICAL LINE at a time and has no memory of a `"` opened on an
+# earlier line. So a heredoc BODY line inside `--body "$(cat <<'EOF' … EOF)"`
+# was segmented as if it were live shell: the prose
+# `Example payload: \`owner/name; rm -rf /\`` split on its `;` into a segment
+# whose command word is `rm`, manufacturing the target ``/` `` and hard-denying a
+# Judge comment that deletes nothing (observed on PR #4357). Same failure family
+# as #5000's phantom write targets, and the reason fixing only the
+# ALWAYS_BLOCK_PATTERNS scan above leaves the reported command still denied.
+# The literal-redacted copy blanks exactly the quoted flag-value text (including
+# #5216's provably-inert `$(cat <<QDELIMQ … )` heredoc bodies) and nothing else,
+# so a REAL `rm -rf /` — bare, sudo-prefixed, after a `&&`, or smuggled through
+# `bash -c '…'` / `-m "$(rm -rf /)"` (neither of which is ever redacted) — still
+# reaches this check unchanged.
 #
 # Cheap pre-check keeps awk off the hot path for the ~99% of commands that have
 # no recursive/force rm at all.
-if echo "$COMMAND_ASK_SCAN" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rf]'; then
-    RM_TARGETS=$(extract_rm_targets "$COMMAND_ASK_SCAN" | head -20)
+if echo "$COMMAND_NO_LITERAL_TEXT" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rf]'; then
+    RM_TARGETS=$(extract_rm_targets "$COMMAND_NO_LITERAL_TEXT" | head -20)
 
     for target in $RM_TARGETS; do
         # Skip empty targets
@@ -5464,74 +6154,6 @@ if echo "$COMMAND_ASK_SCAN" | grep -qE 'rm[[:space:]]+-[a-zA-Z]*[rf]'; then
             # ephemeral allowlist. Default OFF preserves the permissive
             # behaviour byte-for-byte (rm_scope_repo_enabled() returns false).
             if rm_scope_repo_enabled; then
-                # Unresolved-variable fail-closed check (rjwalters/repo#244,
-                # fixing rjwalters/repo#239). extract_rm_targets() is a
-                # TOKENIZER, not a shell evaluator: a target like `"$p"` or
-                # `$TMP` reaches this loop completely unexpanded. The
-                # `$CWD/$target` concatenation above builds the literal
-                # string `<repo-root>/$p` — which lexically starts with
-                # $REPO_ROOT — so without this check the string-prefix scope
-                # test below would treat it as IN_SCOPE and silently ALLOW
-                # it, no matter what `$p` actually expands to at runtime
-                # (the #239 regression: a same-named or inherited variable
-                # can point anywhere, including outside the repo). Reuses
-                # mark_expandable_dollars() — the same shape classifier the
-                # Bash-tool write-confinement check above uses (#4921) — so
-                # an EXPANDABLE `$` (bare or double-quoted) is distinguished
-                # from a LITERAL one (single-quoted or backslash-escaped, a
-                # file genuinely named `$p`); both quote styles normalize to
-                # the same shape first. Deliberately checked BEFORE the
-                # $CWD/$target concatenation is trusted for anything else —
-                # unresolvable targets must fail closed, not fall through to
-                # the prefix check.
-                mark_expandable_dollars "$target"
-                _rm_marked="$_MARKED_TOKEN"
-                if [[ "$_rm_marked" == $'\001'* || "$_rm_marked" == /$'\001'* ]]; then
-                    # Narrow escape hatch (#6520): a same-command
-                    # `NAME=$(mktemp -d)`/`NAME=$(mktemp)` assignment proves
-                    # this variable is /tmp-or-$TMPDIR-rooted, even though the
-                    # raw token is unexpanded. See
-                    # rm_scope_mktemp_same_command_safe()'s own doc comment
-                    # (above extract_rm_targets()) for the exact, deliberately
-                    # narrow conditions. On success this target is fully
-                    # vetted — skip the string-prefix scope check below too,
-                    # since $ABS_PATH still holds the un-substituted literal
-                    # `$NAME` text and cannot be trusted for anything else.
-                    #
-                    # HEREDOC-BODY-MASKED SCAN (#6549): scans
-                    # $COMMAND_RM_MKTEMP_SCAN (lazily built just below, cached
-                    # across loop iterations), NOT the raw $COMMAND_NO_LITERAL_TEXT
-                    # -- see that variable's own definition for why. Unlike this
-                    # decision's earlier precedent (#6519's extract_rm_targets()
-                    # widening, and COMMAND_ASK_SCAN generally), this dedicated
-                    # copy masks EVERY heredoc body unconditionally, including an
-                    # interpreter-fed one (`bash <<EOF`) and an unquoted-delimiter
-                    # one whose `$(...)` the outer shell does expand while
-                    # building the body: a heredoc body is never itself a
-                    # top-level statement in the CURRENT shell -- it is either
-                    # data handed to the consuming command's stdin, or (for an
-                    # interpreter-fed opener) a script handed to a CHILD process
-                    # -- so no heredoc body line, of any shape, can ever be the
-                    # live assignment this function is trying to prove exists.
-                    # Masking it here can therefore only narrow (turn a
-                    # decoy-inflated ambiguous/false SAFE into the correct
-                    # fail-closed UNSAFE), never widen: a real, live top-level
-                    # `NAME=$(mktemp -d)` sitting outside every heredoc in the
-                    # same command is completely unaffected.
-                    if [[ -z "${COMMAND_RM_MKTEMP_SCAN+x}" ]]; then
-                        COMMAND_RM_MKTEMP_SCAN="$COMMAND_NO_LITERAL_TEXT"
-                        if [[ "$COMMAND_RM_MKTEMP_SCAN" == *"<<"* ]]; then
-                            COMMAND_RM_MKTEMP_SCAN=$(printf '%s' "$COMMAND_RM_MKTEMP_SCAN" | awk "$_MASKHEREDOC_AWK"'
-                            { buf = buf (NR > 1 ? "\n" : "") $0 }
-                            END { printf "%s", mask_heredoc_bodies(buf) }')
-                        fi
-                    fi
-                    if rm_scope_mktemp_same_command_safe "$target" "$COMMAND_RM_MKTEMP_SCAN"; then
-                        continue
-                    fi
-                    deny "BLOCKED: rm target '${target}' is an unexpanded shell variable from the path root down, so this guard cannot tell where it resolves at runtime (guards.rmScope=repo). Unresolvable rm targets fail closed (mirrors rjwalters/repo#244, fixing #239). Use an explicit literal path." "rm-scope-unresolved-var"
-                fi
-
                 IN_SCOPE=false
 
                 # Repo + worktree areas. Prefix matches carry a trailing slash
@@ -5604,68 +6226,7 @@ fi
 # contract. A cheap substring pre-check keeps the segmenter off the hot path
 # for the vast majority of Bash calls that contain none of the recognized
 # write idioms at all.
-#
-# CARVE-OUT: read-only-by-role scratch staging in `dist/` (#6021). This
-# block's threat model (above) is a session that HAS Write/Edit — a
-# Builder/Doctor denied on the Edit/Write tool falling back to a Bash write
-# to land the same edit in the main checkout. A role with NO Write/Edit tool
-# at all was never the threat this guard defends against, and such a role
-# also has no issue worktree to redirect to — the deny's own remediation
-# ("cd into your issue worktree") is not actionable for it. Concretely: the
-# Auditor validating the `worker-image-smoke` CI leg locally needs to stage
-# the release binary at `dist/loom-daemon-<target>` (the Docker build
-# context `docker/worker/Dockerfile`'s `LOOM_DAEMON_BIN` ARG documents, the
-# same convention `.github/workflows/release.yml` uses for release assets)
-# before running `docker build`, and had no way to do that without tripping
-# this guard.
-#
-# Scoped narrowly on BOTH axes so this cannot widen into a general opt-out:
-#   1. Role: LOOM_ROLE (set by role_runner/daemon dispatch, #4768) must
-#      match _WT_READONLY_ROLES below — the allowlist of roles whose
-#      `tools:` frontmatter in defaults/.claude/agents/loom-<role>.md grants
-#      no Write/Edit tool (verified against that frontmatter at the time of
-#      #6021: architect, auditor, champion, curator, guide, hermit, judge).
-#      Builder and Doctor — the only two roles WITH Write/Edit — are
-#      deliberately never in this list, and an unset/unrecognized LOOM_ROLE
-#      (every interactive Builder/Doctor session, and any automation that
-#      does not explicitly identify itself) fails CLOSED to the pre-existing
-#      deny below. If a future role gains Write/Edit, its name must be
-#      removed from this list.
-#   2. Path: the write target must resolve inside `<main-checkout>/dist/`
-#      specifically — a small, already-`.gitignore`d, well-known scratch
-#      directory this repo's own release pipeline already treats as a
-#      build-artifact staging area, NOT "anywhere outside the worktree."
 # =============================================================================
-_WT_READONLY_ROLES=" architect auditor champion curator guide hermit judge "
-
-# True if the CURRENT LOOM_ROLE identifies a role with no Write/Edit tool
-# (see the allowlist doc comment above). Case-insensitive; empty/unset
-# LOOM_ROLE never matches (fails closed).
-_wt_readonly_role_active() {
-    [[ -n "${LOOM_ROLE:-}" ]] || return 1
-    local _role_lc
-    _role_lc=$(printf '%s' "$LOOM_ROLE" | tr '[:upper:]' '[:lower:]')
-    [[ "$_WT_READONLY_ROLES" == *" ${_role_lc} "* ]]
-}
-
-# True if $1 (an absolute, normalized path) sits inside the well-known
-# `dist/` scratch directory at the main-checkout root (either root spelling).
-_wt_dist_scratch_path() {
-    local _p="$1"
-    [[ -n "$_p" ]] || return 1
-    if [[ -n "$_WT_MAIN_ROOT" ]]; then
-        case "$_p" in
-            "$_WT_MAIN_ROOT/dist"|"$_WT_MAIN_ROOT/dist"/*) return 0 ;;
-        esac
-    fi
-    if [[ -n "$_WT_MAIN_ROOT_LOGICAL" ]]; then
-        case "$_p" in
-            "$_WT_MAIN_ROOT_LOGICAL/dist"|"$_WT_MAIN_ROOT_LOGICAL/dist"/*) return 0 ;;
-        esac
-    fi
-    return 1
-}
-
 if worktree_isolation_guard_enabled && \
    { [[ "$COMMAND_ASK_SCAN" == *">"* ]] || [[ "$COMMAND_ASK_SCAN" == *"tee"* ]] || \
      [[ "$COMMAND_ASK_SCAN" == *"sed"* ]] || [[ "$COMMAND_ASK_SCAN" == *"cp "* ]] || \
@@ -5704,6 +6265,61 @@ if worktree_isolation_guard_enabled && \
             _WT_MAIN_ROOT_LOGICAL=$(cd "$CWD" 2>/dev/null && cd "$_wt_common/.." 2>/dev/null && pwd) || _WT_MAIN_ROOT_LOGICAL=""
         fi
     fi
+
+    # Identity-verify the CWD-discovered root before trusting it as "the"
+    # protected main checkout (#175). Without this, ANY git repository that
+    # happens to enclose $CWD authenticates as the main checkout, with no
+    # check that it is actually this Loom-managed project — so a `git
+    # init`'d scratch tree under /tmp (routinely created by agents testing
+    # this very guard) that happens to also carry a
+    # `.loom/worktrees/*/.loom-managed` fixture gets treated as the real main
+    # checkout, denying writes that are 100% outside the real repository.
+    #
+    # Anchor a SECOND, CWD-INDEPENDENT identity probe at SCRIPT_DIR — the
+    # on-disk location of THIS hook file itself, resolved via
+    # `${BASH_SOURCE[0]}` near the top of the file, well before the
+    # tool_input-controlled $CWD/$COMMAND are ever consulted. SCRIPT_DIR is
+    # always inside the real project this guard protects: installed at
+    # .loom/hooks/ there in production, or copied alongside a fresh git tree
+    # in the test harness (test-guard-destructive-worktree-confinement.sh),
+    # which self-consistently keeps CWD and SCRIPT_DIR in the SAME synthetic
+    # repo. It cannot be steered by a command string or a spoofed `cwd` field
+    # the way $CWD can.
+    #
+    # If the CWD-derived root does not match the script-anchored root, the
+    # CWD-derived root belongs to a DIFFERENT repository — however genuinely
+    # `git init`'d it is — and must not be trusted as "the" main checkout.
+    # Fall back to the identity-verified script-anchored root instead, so a
+    # genuine write into the REAL main checkout is still caught (criterion
+    # 2), while the foreign scratch repo is not mistaken for it (criterion
+    # 1). Only the PHYSICAL (`pwd -P`) spellings need to agree for a match —
+    # requiring BOTH spellings to disagree before calling it a mismatch means
+    # a legitimate symlink-reached path (#4495's concern) with only the
+    # LOGICAL spelling differing between the two anchors still verifies.
+    #
+    # Fails SAFE per criterion 3: if the script-anchored identity itself
+    # cannot be established (SCRIPT_DIR is not inside a git repo at all —
+    # e.g. the hook was invoked standalone, outside any checkout), this
+    # block is a no-op and _WT_MAIN_ROOT/_WT_MAIN_ROOT_LOGICAL are left
+    # exactly as derived from $CWD above — this issue rejects a WRONGLY
+    # authenticated root, it does not add a new way to fail closed.
+    _wt_script_common=""
+    _WT_SCRIPT_ROOT=""
+    _WT_SCRIPT_ROOT_LOGICAL=""
+    if [[ -n "$SCRIPT_DIR" && -d "$SCRIPT_DIR" ]]; then
+        _wt_script_common=$(cd "$SCRIPT_DIR" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null) || _wt_script_common=""
+        if [[ -n "$_wt_script_common" ]]; then
+            _WT_SCRIPT_ROOT=$(cd "$SCRIPT_DIR" 2>/dev/null && cd "$_wt_script_common/.." 2>/dev/null && pwd -P) || _WT_SCRIPT_ROOT=""
+            _WT_SCRIPT_ROOT_LOGICAL=$(cd "$SCRIPT_DIR" 2>/dev/null && cd "$_wt_script_common/.." 2>/dev/null && pwd) || _WT_SCRIPT_ROOT_LOGICAL=""
+        fi
+    fi
+    if [[ -n "$_WT_MAIN_ROOT" && -n "$_WT_SCRIPT_ROOT" ]]; then
+        if [[ "$_WT_MAIN_ROOT" != "$_WT_SCRIPT_ROOT" && "$_WT_MAIN_ROOT_LOGICAL" != "$_WT_SCRIPT_ROOT_LOGICAL" ]]; then
+            _WT_MAIN_ROOT="$_WT_SCRIPT_ROOT"
+            _WT_MAIN_ROOT_LOGICAL="$_WT_SCRIPT_ROOT_LOGICAL"
+        fi
+    fi
+
     [[ -n "$_WT_MAIN_ROOT" ]] || _WT_MAIN_ROOT="$REPO_ROOT"
     [[ -n "$_WT_MAIN_ROOT_LOGICAL" ]] || _WT_MAIN_ROOT_LOGICAL="$_WT_MAIN_ROOT"
 
@@ -5850,7 +6466,7 @@ if worktree_isolation_guard_enabled && \
                 # directory — the main checkout's own included).
                 if [[ "$_wmarked" == $'\001'* || "$_wmarked" == /$'\001'* ]]; then
                     if _wt_isolation_in_play; then
-                        deny "BLOCKED: Bash-tool write target '${_wtarget}' is an unexpanded shell variable from the path root down, so this guard cannot tell where the write lands — it may resolve to an absolute path inside the main repository checkout ('${_WT_MAIN_ROOT}'), and a Loom-managed worktree exists in this repository. Unresolvable write targets fail closed (#4921). Need this variable resolved instead? Declare it literally in the SAME command, before the write: VAR=/literal/path; <write> -- the guard's same-command resolver (record_assign()/resolve_var(), #4881) substitutes it before this check runs, so the write is judged on the real resolved path. A false or self-serving declaration gains nothing: the resolved path is still checked against this same containment rule, so it can never grant an allow beyond what writing that literal path outright would already grant (#6172). Otherwise, write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. Not a Builder and need to write here directly? Set guards.worktreeIsolation:false in .loom/config.json for the session -- an inline 'LOOM_GUARD_WORKTREE_ISOLATION=0 <command>' prefix does NOT work (this hook runs as a separate process). (#4178)" "worktree-write-confinement-unresolved-var"
+                        deny "BLOCKED: Bash-tool write target '${_wtarget}' is an unexpanded shell variable from the path root down, so this guard cannot tell where the write lands — it may resolve to an absolute path inside the main repository checkout ('${_WT_MAIN_ROOT}'), and a Loom-managed worktree exists in this repository. Unresolvable write targets fail closed (#4921). Write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. (#4178)" "worktree-write-confinement-unresolved-var"
                     fi
                     continue
                 fi
@@ -5881,11 +6497,11 @@ if worktree_isolation_guard_enabled && \
                         # value picks a top-level directory, the main
                         # checkout's own included. Same verdict as (1).
                         if _wt_isolation_in_play; then
-                            deny "BLOCKED: Bash-tool write target '${_wtarget}' has an unexpanded shell variable as its first real path component, so this guard cannot tell where the write lands — it may resolve inside the main repository checkout ('${_WT_MAIN_ROOT}'), and a Loom-managed worktree exists in this repository. Unresolvable write targets fail closed (#4921). Need this variable resolved instead? Declare it literally in the SAME command, before the write: VAR=/literal/path; <write> -- the guard's same-command resolver (record_assign()/resolve_var(), #4881) substitutes it before this check runs, so the write is judged on the real resolved path. A false or self-serving declaration gains nothing: the resolved path is still checked against this same containment rule, so it can never grant an allow beyond what writing that literal path outright would already grant (#6172). Otherwise, write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. Not a Builder and need to write here directly? Set guards.worktreeIsolation:false in .loom/config.json for the session -- an inline 'LOOM_GUARD_WORKTREE_ISOLATION=0 <command>' prefix does NOT work (this hook runs as a separate process). (#4178)" "worktree-write-confinement-unresolved-var"
+                            deny "BLOCKED: Bash-tool write target '${_wtarget}' has an unexpanded shell variable as its first real path component, so this guard cannot tell where the write lands — it may resolve inside the main repository checkout ('${_WT_MAIN_ROOT}'), and a Loom-managed worktree exists in this repository. Unresolvable write targets fail closed (#4921). Write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. (#4178)" "worktree-write-confinement-unresolved-var"
                         fi
                     elif _wt_in_protected_area "$_wknown"; then
                         if _wt_isolation_in_play; then
-                            deny "BLOCKED: Bash-tool write target '${_wtarget}' contains an unexpanded shell variable in a directory component, and its known prefix ('${_wknown}') is inside this repository's worktree/checkout area — this guard cannot tell whether the expanded path stays in your worktree or lands in the main repository checkout ('${_WT_MAIN_ROOT}'). Unresolvable write targets fail closed (#4921). Need this variable resolved instead? Declare it literally in the SAME command, before the write: VAR=/literal/path; <write> -- the guard's same-command resolver (record_assign()/resolve_var(), #4881) substitutes it before this check runs, so the write is judged on the real resolved path. A false or self-serving declaration gains nothing: the resolved path is still checked against this same containment rule, so it can never grant an allow beyond what writing that literal path outright would already grant (#6172). Otherwise, write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. Not a Builder and need to write here directly? Set guards.worktreeIsolation:false in .loom/config.json for the session -- an inline 'LOOM_GUARD_WORKTREE_ISOLATION=0 <command>' prefix does NOT work (this hook runs as a separate process). (#4178)" "worktree-write-confinement-unresolved-var"
+                            deny "BLOCKED: Bash-tool write target '${_wtarget}' contains an unexpanded shell variable in a directory component, and its known prefix ('${_wknown}') is inside this repository's worktree/checkout area — this guard cannot tell whether the expanded path stays in your worktree or lands in the main repository checkout ('${_WT_MAIN_ROOT}'). Unresolvable write targets fail closed (#4921). Write to an explicit literal path — inside your issue worktree (.loom/worktrees/issue-<N>) for repo files, or a spelled-out /tmp path for scratch. (#4178)" "worktree-write-confinement-unresolved-var"
                         fi
                     fi
                     continue
@@ -5949,19 +6565,6 @@ if worktree_isolation_guard_enabled && \
             *) continue ;;
         esac
 
-        # CARVE-OUT (#6021): a read-only-by-role session (no Write/Edit tool
-        # at all, see _WT_READONLY_ROLES doc comment above) staging a
-        # scratch build artifact under the well-known `dist/` directory —
-        # e.g. the Auditor's `cp target/release/loom-daemon
-        # dist/loom-daemon-<target>` ahead of a local `docker build` of
-        # `docker/worker/Dockerfile`. Checked BEFORE the deny below so it
-        # never reaches the worktree-isolation-bypass message; does not
-        # apply to any other path in the main checkout, and does not apply
-        # at all unless LOOM_ROLE affirmatively names a Write/Edit-free role.
-        if _wt_dist_scratch_path "$_wabs" && _wt_readonly_role_active; then
-            continue
-        fi
-
         # Target resolves inside the main checkout and outside every
         # worktree. Deny only if worktree isolation is actually in play for
         # this repo/session (a managed worktree exists somewhere); otherwise
@@ -5970,7 +6573,7 @@ if worktree_isolation_guard_enabled && \
         # base is resolved off the same main-checkout root so the "a managed
         # worktree exists" gate stays consistent with the containment test.
         if _wt_isolation_in_play; then
-            deny "BLOCKED: Bash-tool write to '${_wabs}' resolves to the main repository checkout ('${_WT_MAIN_ROOT}'), but a Loom-managed worktree exists elsewhere in this repository (this check cannot verify it belongs to the acting session — see #4245). This is a worktree-isolation bypass via Bash redirection/tee/sed -i/cp/mv — do NOT retry the write through Bash. cd into your issue worktree (.loom/worktrees/issue-<N>) and write there instead. Not a Builder and need to write here directly? Set guards.worktreeIsolation:false in .loom/config.json for the session -- an inline 'LOOM_GUARD_WORKTREE_ISOLATION=0 <command>' prefix does NOT work (this hook runs as a separate process). (#4178)" "worktree-write-confinement"
+            deny "BLOCKED: Bash-tool write to '${_wabs}' resolves to the main repository checkout ('${_WT_MAIN_ROOT}'), but a Loom-managed worktree exists elsewhere in this repository (this check cannot verify it belongs to the acting session — see #4245). This is a worktree-isolation bypass via Bash redirection/tee/sed -i/cp/mv — do NOT retry the write through Bash. cd into your issue worktree (.loom/worktrees/issue-<N>) and write there instead. (#4178)" "worktree-write-confinement"
         fi
     done <<< "$WRITE_TARGETS"
 fi
@@ -6145,7 +6748,20 @@ ASK_PATTERNS=(
     # not a false positive. The class now also admits a backtick and `(`,
     # matching the boundary class the stash-scope/read-tree checks already
     # use below (which independently had the `(` but not the backtick).
-    '(^|[;&|(`[:space:]])git clean -fd'
+    #
+    # NOTE: `git clean -fd` is NOT in this ungated array (gf180-gate-driver#15).
+    # It used to live here as a plain substring entry — every invocation asks,
+    # no matter how narrowly scoped — but every observed firing in practice
+    # (.loom/logs/guard-decisions.log) was an agent cleaning generated ngspice
+    # working-directory artifacts under its OWN worktree's `sim/` tree, never a
+    # bare `-fd`, never the repo root, never `records/`. In a headless run an
+    # unanswered ask blocks exactly like a deny, so every one of those scoped
+    # cleanups stalled work. It is now handled by the segment-parsed,
+    # scope-aware GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST block below (after
+    # the systemctl ask block) — mirrors the #5214 systemctl_ask_reason() fix
+    # shape: still asks for a bare `-fd`, a target outside the invoking
+    # worktree's `sim/` tree, or any target touching `records/`; only a fully
+    # sim/**-confined, records/-free invocation skips the ask.
     '(^|[;&|(`[:space:]])git checkout \.'
     '(^|[;&|(`[:space:]])git restore \.'
 
@@ -6288,6 +6904,263 @@ systemctl_ask_reason() {
 _SYSTEMCTL_ASK=$(systemctl_ask_reason "$COMMAND_NO_COMMENT" | head -1)
 if [[ -n "$_SYSTEMCTL_ASK" ]]; then
     ask "Command requires confirmation: $COMMAND" "ask:$_SYSTEMCTL_ASK"
+fi
+
+# =============================================================================
+# GIT CLEAN -fd SCOPED SIM-ARTIFACT ALLOWLIST (gf180-gate-driver#15)
+#
+# See the removed-entry comment in ASK_PATTERNS above for the motivating
+# guard-decisions.log evidence. extract_git_clean_fd_targets() (defined near
+# extract_write_targets() above) resolves every `git clean -fd*` invocation in
+# the command to its cwd-tracked (cd-prefix-aware) target paths. EVERY such
+# invocation must satisfy ALL of the following for the ask to be skipped:
+#   1. not bare — at least one path argument (a bare `-fd` always asks)
+#   2. the invocation's cwd resolves inside a REAL Loom-managed worktree — a
+#      `.loom-managed` sentinel walk-up, same convention as
+#      _in_any_managed_worktree() above — never the primary checkout
+#   3. the resolved target sits strictly UNDER that worktree's own `sim/`
+#      subtree (not the bare `sim` dir itself — cleaning `sim/` whole would
+#      sweep `records/` along with the generated corners/netlist-snapshots/
+#      .work artifacts it holds)
+#   4. the resolved target does not touch a `records/` path segment — the
+#      tracked, append-only evidence directories (sim/*/records/*.md) stay
+#      untouched by clean regardless of worktree/sim scoping
+#   5. the command's total extracted target count fits within
+#      _GC_TARGET_CAP, so EVERY target could actually be checked — a longer
+#      list is not scanned to completion and therefore asks (fail safe)
+#
+# Any invocation failing ANY of these still asks — identical to the
+# pre-existing behavior for that shape — and the allow is skipped entirely
+# (falls through to the ordinary ask below) unless EVERY `git clean -fd*`
+# invocation in the command passes. This block only ever chooses to ask or
+# fall through to the SAME ask the removed ASK_PATTERNS entry always
+# produced; it never denies.
+#
+# Gated by the SAME literal substring pre-check the removed ASK_PATTERNS entry
+# used, scanned against COMMAND_ASK_SCAN, so a mention of the phrase inside a
+# quoted --body/-m/--title/--notes/--comment/--jq value (already redacted
+# there) does not spuriously trigger the segment parse.
+#
+# ZERO REAL INVOCATIONS IS A TRIVIAL ALLOW (gf180-gate-driver#90): the line-
+# 5666 pre-check below is a cheap, non-segment-aware substring scan over the
+# WHOLE command text — it fires on the phrase appearing anywhere at all,
+# including inside an unrelated tool's quoted prose/description argument
+# (`check-duplicate.sh "<title>" "<description mentioning it>"`, a `gh issue
+# list --jq 'test("git clean -fd" ...)'` filter string, etc.) where no
+# segment of the command is actually `git clean -fd*`.
+# extract_git_clean_fd_targets() is quote-aware (via qsplit()) and only
+# recognizes a REAL invocation — a segment whose first three tokens are
+# literally `git clean -fd*` — so for pure prose it correctly returns NO
+# lines at all (never a lone "@BARE@"/empty-target line; every recognized
+# invocation always emits at least one line). An empty `_GC_TARGETS`
+# therefore means "zero real invocations recognized as a proper segment", a
+# structurally different outcome from "a real invocation was found but
+# failed confinement" (which always leaves at least one line for the loop
+# below to evaluate). Only the latter should ask; the former has nothing
+# real to confirm or deny, so it must fall through as an allow rather than
+# leaving the pre-check's `_GC_ASK=1` in place — UNLESS the command-
+# substitution re-scan below fires (see its own comment): this narrows the
+# ask surface only — a real invocation (recognized by
+# extract_git_clean_fd_targets() directly, or by re-running it over the
+# command-substitution bodies) still asks exactly as before. The re-scan is
+# NOT gated on `_GC_TARGETS` being empty (gf180-gate-driver#94): it is a
+# second, independent ask reason that runs whatever the direct extraction
+# found, so a confined direct target cannot vouch for the rest of the
+# command.
+#
+# KNOWN UNDER-MATCH, GUARDED SEPARATELY: extract_git_clean_fd_targets()
+# tokenizes each segment by plain whitespace after mask_ws() (#4934), whose
+# quote-tracking is a single flat toggle across the WHOLE buffer and does not
+# reset inside a nested `$(...)` command substitution. Once the scan is
+# inside a `$(...)`/backtick substitution nested in an outer quoted argument
+# (e.g. a `--body "$(cat <<EOF ... EOF)"` heredoc body), every space for the
+# REST of that outer quoted span is masked, so ANY genuine invocation in it —
+# not merely one glued directly onto the `$(` opener — collapses into a
+# single token and is not recognized as a 3-token segment. PR #92's original
+# fix only re-asserted the ask for the GLUED shape (`$(git clean -fd`), which
+# left a real, executing invocation appearing later in the same substitution
+# (`"$(true; git clean -fd .)"`) as a silent allow — the regression the PR
+# #92 review found.
+#
+# Rather than enumerating the shapes the tokenizer cannot see, the guard
+# below re-runs the SAME recognizer over the BODY of every command
+# substitution in the command (extract_command_substitution_bodies(), defined
+# alongside extract_git_clean_fd_targets() above). A body is a fresh command
+# string with the outer quoting stripped, so mask_ws() starts from a clean
+# state and the invocation tokenizes normally at any position inside it. This
+# subsumes the glued shape (the pre-existing #41 regression test
+# "unquoted-delimiter heredoc whose body performs a LIVE git clean -fd via
+# $(...) still asks" pins it) and closes the not-glued gap with it.
+#
+# COEXISTENCE, NOT ALTERNATIVES (gf180-gate-driver#94): that re-scan was
+# originally reached only when the direct extraction returned NO targets,
+# which made the two checks mutually exclusive — a directly-recognized,
+# confined invocation earlier in the command (`git clean -fd sim/x/ && echo
+# "$(true; git clean -fd /etc/passwordfile)"`) took the other branch and the
+# hidden second invocation was never scanned for at all, a silent allow. The
+# under-match above is a property of the tokenizer, not of the command, so it
+# can coexist with a perfectly resolvable invocation in the same string. The
+# re-scan therefore runs unconditionally below and raises the ask on its own
+# authority; the confinement loop's verdict on the targets it COULD see never
+# suppresses it.
+#
+# WHITESPACE-TOLERANT PRE-CHECK: the pre-check below also accepts runs of
+# whitespace between the three words (`git  clean  -fd`). The old literal
+# single-space form let a double-spaced invocation skip this block entirely,
+# so an unconfined `git  clean  -fd` never asked at all. Widening the gate can
+# only ADD asks (the block never denies, and a confined invocation still
+# reaches the same allowlist checks, which tokenize whitespace runs already).
+# =============================================================================
+if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`[:space:]])git[[:space:]]+clean[[:space:]]+-fd'; then
+    _GC_ASK=1
+    # gf180-gate-driver#122: neutralize BACKSLASH-ESCAPED `$(`/backtick
+    # openers (mask_escaped_subst_openers(), defined above) BEFORE either
+    # segment-parse below runs, gated on a cheap backslash pre-check to keep
+    # the hot path clean for the vast majority of invocations with no
+    # backslash at all. Without this, qsplit() (shared by
+    # extract_git_clean_fd_targets() and, transitively, the
+    # command-substitution rescan just below) judges whether a double-quoted
+    # span is inert with a NAIVE `index(inner, "$(")`/backtick substring
+    # search that does not know about escaping -- so a `--body` value built
+    # from a live `$(cat <<EOF ... EOF)` heredoc (never redacted by
+    # strip_literal_text(), since it genuinely executes) that ALSO quotes an
+    # escaped example invocation as inert prose (`"\$(git clean -fd .)"`,
+    # `` \`git clean -fd .\` ``) still reads as "not inert" to that naive
+    # check purely because the raw `$(`/backtick BYTES are present, escaping
+    # or not. qsplit() then keeps `;`/`&`/`|` separators ACTIVE inside that
+    # span and manufactures a phantom top-level `git clean -fd` segment out
+    # of text that never executes -- the false ask #122 reports. A
+    # genuinely LIVE opener (zero, or an even run, of backslashes before it)
+    # is left completely untouched by the mask, so a real nested invocation
+    # is exactly as visible to both scans below as it was before this fix.
+    _GC_SCAN="$COMMAND_ASK_SCAN"
+    [[ "$COMMAND_ASK_SCAN" == *'\'* ]] && _GC_SCAN=$(mask_escaped_subst_openers "$COMMAND_ASK_SCAN")
+    # Target-count bound, FAIL-SAFE (PR #19 review). EVERY extracted target
+    # must be checked before the ask can be skipped, so the bound must never
+    # silently drop targets: a plain `| head -N` would let a violating target
+    # at position N+1 go unseen and turn the "no violation found" default into
+    # an ALLOW (reproduced: 60 confined sim/** args + a 61st records/ arg
+    # wrongly allowed under the old `head -50`). Instead read up to CAP+1
+    # lines: if the extra line is present the list exceeded the bound, and a
+    # pathological invocation we refuse to scan in full falls back to the
+    # ordinary ask rather than being allowed on a partial scan.
+    _GC_TARGET_CAP=500
+    _GC_TARGETS=$(extract_git_clean_fd_targets "$_GC_SCAN" "$CWD" | head -n $((_GC_TARGET_CAP + 1)))
+    # Two INDEPENDENT ask reasons, evaluated in turn (gf180-gate-driver#94):
+    #   (1) the direct-extraction confinement loop over $_GC_TARGETS, and
+    #   (2) the command-substitution BODY re-scan.
+    # Reason (2) used to run only when (1) had nothing to look at (empty
+    # $_GC_TARGETS), which let a directly-recognized, CONFINED invocation
+    # suppress it — so a second invocation hidden in a nested `$(...)`
+    # elsewhere in the SAME command was never seen and was silently allowed.
+    # Start from "no ask" and let either reason raise it.
+    _GC_ASK=""
+    if [[ -n "$_GC_TARGETS" ]]; then
+        if [[ $(printf '%s\n' "$_GC_TARGETS" | wc -l) -gt "$_GC_TARGET_CAP" ]]; then
+            # More targets than the bound allows us to fully verify — the
+            # extracted list may be truncated, so confinement cannot be
+            # proven for all of them. Fail safe: ask.
+            _GC_ASK=1
+        fi
+        while [[ -z "$_GC_ASK" ]] && IFS=$'\037' read -r _gccwd _gctarget; do
+            [[ -z "$_gccwd" && -z "$_gctarget" ]] && continue
+
+            # Bare invocation (no path args) always asks.
+            if [[ -z "$_gctarget" || "$_gctarget" == "@BARE@" ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            # cwd must be a real, absolute, resolvable path to reason about
+            # confinement at all — anything else fails closed (asks).
+            if [[ -z "$_gccwd" || "$_gccwd" != /* ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            _gcabs=""
+            if [[ "$_gctarget" = /* ]]; then
+                _gcabs="$_gctarget"
+            else
+                _gcabs="$_gccwd/$_gctarget"
+            fi
+            _gcabs=$(normalize_abs_path "$_gcabs")
+
+            # Own worktree only — walk up from the invocation's CWD (never the
+            # target itself, which need not exist) for a real .loom-managed
+            # sentinel, mirroring _in_any_managed_worktree()'s walk above.
+            _gcwtroot=""
+            _gcwalk=$(normalize_abs_path "$_gccwd")
+            if [[ ! -d "$_gcwalk" ]]; then
+                _gcwalk="${_gcwalk%/*}"
+                [[ -z "$_gcwalk" ]] && _gcwalk="/"
+            fi
+            _gcdepth=0
+            while [[ $_gcdepth -lt 64 ]]; do
+                if [[ -f "$_gcwalk/.loom-managed" ]]; then
+                    _gcwtroot="$_gcwalk"
+                    break
+                fi
+                [[ "$_gcwalk" == "/" ]] && break
+                _gcwalk="${_gcwalk%/*}"
+                [[ -z "$_gcwalk" ]] && _gcwalk="/"
+                _gcdepth=$((_gcdepth + 1))
+            done
+            if [[ -z "$_gcwtroot" ]]; then
+                _GC_ASK=1
+                break
+            fi
+
+            # Strictly under <worktree>/sim/ — the bare sim dir itself does
+            # not qualify (would sweep records/ along with it).
+            case "$_gcabs" in
+                "$_gcwtroot/sim"/*) : ;;
+                *) _GC_ASK=1; break ;;
+            esac
+
+            # Never records/ — evidence stays untouched by clean regardless.
+            case "$_gcabs" in
+                */records|*/records/*) _GC_ASK=1; break ;;
+            esac
+        done <<< "$_GC_TARGETS"
+    fi
+
+    # Ask reason (2) — the command-substitution BODY re-scan, run
+    # UNCONDITIONALLY (gf180-gate-driver#94), i.e. whether or not the direct
+    # extraction above recognized any target and whether or not it proved
+    # every one of them confined. mask_ws()'s flat quote-tracking cannot
+    # tokenize an invocation sitting ANYWHERE inside a `$(...)`/backtick
+    # substitution nested in an outer quoted span, so re-run the SAME
+    # recognizer over each substitution BODY (outer quoting stripped ⇒ the
+    # tokenizer starts clean). Any recognized invocation there is genuine,
+    # live code, not prose, and must ask regardless of what the whole-command
+    # pass saw — an already-confirmed-confined direct target says nothing
+    # about a separately-hidden invocation in the same command.
+    #
+    # Skipped only when the ask is already decided (nothing left to raise),
+    # which keeps the cost identical to before for the ask path.
+    if [[ -z "$_GC_ASK" ]]; then
+        _GC_BODY_SEEN=0
+        while IFS= read -r -d $'\036' _gcbody; do
+            _GC_BODY_SEEN=$((_GC_BODY_SEEN + 1))
+            [[ $_GC_BODY_SEEN -gt 200 ]] && break
+            # Cheap reject first: a body with no `clean` word cannot hold a
+            # recognized `git clean -fd*` segment, so skip the awk call.
+            [[ "$_gcbody" != *clean* ]] && continue
+            if [[ -n "$(extract_git_clean_fd_targets "$_gcbody" "$CWD" | head -n 1)" ]]; then
+                _GC_ASK=1
+                break
+            fi
+        done < <(extract_command_substitution_bodies "$_GC_SCAN")
+        # Falling out of the loop with _GC_ASK still empty means: neither
+        # reason fired — no substitution body holds a recognized invocation,
+        # and every directly-recognized target (if any) was proven confined.
+        # Nothing real is left to confirm or deny, so skip the ask entirely.
+    fi
+
+    if [[ -n "$_GC_ASK" ]]; then
+        ask "Command requires confirmation: $COMMAND" "ask:(^|[;&|[:space:]])git clean -fd"
+    fi
 fi
 
 # =============================================================================
@@ -6566,18 +7439,10 @@ fi
 # shell-separator set the pre-check's own trailing class already accepted.
 # =============================================================================
 _stash_is_recover=false
-_stash_is_pop=false
 _stash_is_create=false
 if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`]|[[:space:]])git[[:space:]]+stash([[:space:]]|[;&|)`]|$)'; then
     if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`]|[[:space:]])git[[:space:]]+stash[[:space:]]+(pop|drop|clear)([[:space:]]|[;&|)`]|$)'; then
         _stash_is_recover=true
-    fi
-    # `pop` alone has a scriptable safe equivalent (safe-stash-pop.sh, #6501);
-    # `drop`/`clear` do not — they destroy an entry outright with nothing to
-    # verify afterwards. Track it separately so the main-checkout ask only
-    # names the wrapper when the wrapper actually applies.
-    if echo "$COMMAND_ASK_SCAN" | grep -qE '(^|[;&|(`]|[[:space:]])git[[:space:]]+stash[[:space:]]+pop([[:space:]]|[;&|)`]|$)'; then
-        _stash_is_pop=true
     fi
     if stash_create_invoked "$COMMAND_ASK_SCAN"; then
         _stash_is_create=true
@@ -6627,23 +7492,7 @@ if [[ "$_stash_is_recover" == true || "$_stash_is_create" == true ]] \
         # create has nothing to be redirected to and stays allowed exactly as
         # before — the create-side deny (#5754) is worktree-only by design.
         if [[ "$_stash_is_recover" == true ]]; then
-            # RECOMMENDED-PATH HINT (#6501). A raw main-checkout `git stash pop`
-            # is not just a stack-ownership hazard — it is also the mechanism
-            # behind #6499/#6502, where a conflicting pop left live
-            # `<<<<<<<`/`=======`/`>>>>>>>` markers in a tracked
-            # `.loom/config.json` that were then committed, silently breaking
-            # the daemon's config parse fleet-wide. `safe-stash-pop.sh` is the
-            # verified replacement. Named only when it PROVABLY exists and
-            # actually applies (pop, not drop/clear) — the same discipline the
-            # create-side redirect below uses before printing a literal
-            # replacement command. This stays an ASK, not a deny: `refs/stash`
-            # has no sanctioned reader other than a pop, so denying would
-            # strand work rather than protect it.
-            _stash_pop_hint=""
-            if [[ "$_stash_is_pop" == true && -f "$_stash_common_parent/.loom/scripts/safe-stash-pop.sh" ]]; then
-                _stash_pop_hint=" If you do need this entry back, use the verified wrapper instead of a raw pop: './.loom/scripts/safe-stash-pop.sh' — it snapshots the pre-pop tree, pops, verifies no conflict markers or unmerged index entries were left behind, and rolls the tree back (keeping the stash entry) when the pop conflicts, so it can never leave a tracked file carrying unresolved conflict markers for someone to commit (#6501; add --no-restore to keep a conflicted tree for manual resolution)."
-            fi
-            ask "Command requires confirmation: $COMMAND (git stash pop/drop/clear in the MAIN checkout can destroy operator-preserved state — the main checkout's stash stack is operator-owned, not scratch space for an integration check. Run test-merges in an isolated worktree instead; set guards.stashScope:false in .loom/config.json, or export LOOM_GUARD_STASH_SCOPE=0 in the agent's OWN environment before the session — an inline 'LOOM_GUARD_STASH_SCOPE=0 git stash pop' prefix does not reach this hook, which runs as a separate process)${_stash_pop_hint}" "stash-scope:main-checkout"
+            ask "Command requires confirmation: $COMMAND (git stash pop/drop/clear in the MAIN checkout can destroy operator-preserved state — the main checkout's stash stack is operator-owned, not scratch space for an integration check. Run test-merges in an isolated worktree instead; set guards.stashScope:false in .loom/config.json, or export LOOM_GUARD_STASH_SCOPE=0 in the agent's OWN environment before the session — an inline 'LOOM_GUARD_STASH_SCOPE=0 git stash pop' prefix does not reach this hook, which runs as a separate process)" "stash-scope:main-checkout"
         fi
     elif [[ -n "$_stash_toplevel" && -n "$_stash_common_parent" ]]; then
         # cwd is a linked worktree, not the main checkout. Count OTHER
@@ -6759,17 +7608,8 @@ CLOUD_ASK_PATTERNS=(
 # guard-hooks.md), so leaving it here would have left the reported stall half
 # fixed for the aws siblings. A real `aws s3 rb s3://bucket` outside a quoted
 # flag value is untouched and still asks.
-#
-# SCANS COMMAND_CLOUD_ASK_SCAN (#6002), NOT COMMAND_ASK_SCAN directly -- see
-# that variable's own definition above for why it carries additional
-# for-loop-word-list / grep-rg-jq-positional masking that COMMAND_ASK_SCAN
-# itself deliberately does not (SQL_DDL_PATTERN's competing need to still see
-# that same text). COMMAND_CLOUD_ASK_SCAN is a strict superset-redaction of
-# COMMAND_ASK_SCAN (every byte COMMAND_ASK_SCAN already masks stays masked
-# here too), so this substitution only narrows what CLOUD_ASK_PATTERNS can
-# match -- it can never widen it.
 for pattern in "${CLOUD_ASK_PATTERNS[@]}"; do
-    if echo "$COMMAND_CLOUD_ASK_SCAN" | grep -qE "$pattern" && cloud_guard_enabled; then
+    if echo "$COMMAND_ASK_SCAN" | grep -qE "$pattern" && cloud_guard_enabled; then
         ask "Command requires confirmation: $COMMAND (set guards.cloudCli:false in .loom/config.json if this repo manages cloud infra as a first-class workflow)" "cloud-cli:$pattern"
     fi
 done
