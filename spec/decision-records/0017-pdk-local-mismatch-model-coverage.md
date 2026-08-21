@@ -129,13 +129,51 @@ hand-picked capacitor sigma. Closing it requires a characterised MiM mismatch
 model (foundry data this open PDK does not ship), not a modelling assumption.
 
 **4. Exception 3's ratified ≤ 10 mV bound is unchanged.** The first campaign
-under this convention (`sim/gate-driver-indrv-mismatch/`, issue #204) runs the
-full 5 × 3 process × temperature grid at the 6 V stretch rail — the only supply
-where Exception 3 exists at all, since §5 records `IN_DRV` clearing the ceiling
-by ≥ 397 mV at every nominal-tolerance point — and finds the bound met with
-margin to spare. The bound is neither narrowed nor relaxed by that result:
-narrowing it on mismatch evidence that structurally excludes the `XCCOMP`
-capacitor ratio would overstate what was verified.
+under this convention
+(`sim/gate-driver-indrv-mismatch/records/20260821-095727-1ea8cb5.md`, issue
+#204) runs the full 5 × 3 process × temperature grid at the 6 V stretch rail —
+the only supply where Exception 3 exists at all, since §5 records `IN_DRV`
+clearing the ceiling by ≥ 397 mV at every nominal-tolerance point — with 200
+draws per point (2999 of 3000 converged). Worst observed peak **6.00266 V
+(margin −2.664 mV)** at `ss_125c_vlogic3p30v-vdrv6p00v`: indistinguishable from
+the corner-matrix figure the exception already quotes, and inside the ≤ 10 mV
+bound with 7.336 mV unspent. Per-point σ ranges 2–539 µV. The bound is neither
+narrowed nor relaxed by that result: narrowing it on mismatch evidence that
+structurally excludes the `XCCOMP` capacitor ratio would overstate what was
+verified.
+
+The physical reason the answer is "mismatch barely moves it" is decision record
+0006's own argument, now visible in data rather than asserted: `IN_DRV`'s
+quiescent high level is `VDD_DRV` **by construction**, so at the 6 V stretch
+rail it sits at the ceiling regardless of any device parameter. The same draws
+move the output stage's *device-driven* taper nodes several times further,
+which is the cross-check that the decks are not simply insensitive to mismatch.
+
+## Second finding: the ngspice version change perturbs this node more than mismatch does
+
+Not what the campaign set out to measure, and more consequential than what it
+did. The zero-sigma control — the **same deck**, mismatch off — differs from the
+committed corner-matrix record `20260818-060517-673fcf0` by up to **1324 µV**,
+roughly **2.5× the largest mismatch σ** the campaign measured and **13 % of
+Exception 3's entire ≤ 10 mV bound**. The only variable is the simulator: that
+record was taken under **ngspice-46**, this campaign under **ngspice-47**, and
+the three same-machine control legs (plain deck, and two `sw_stat_mismatch = 0`
+decks at different seeds) agree bit-for-bit with each other at every PVT point.
+
+It does **not** threaten the bound — the residue is largest at points with wide
+margin, and at the binding `ss_125c` corner the control reproduces the reference
+to under a microvolt. But it does mean the −2.66 mV figure decision records
+0006/0014 quote carries a **simulator-version uncertainty of order ±1 mV that no
+prior record stated**, and it is a further reason not to narrow the ≤ 10 mV
+bound toward the measured value. Per `CLAUDE.md` ("when something behaves oddly,
+suspect the tool or the deck before the circuit"), this is recorded as a
+tool-fidelity finding, not absorbed into the circuit claim.
+
+This repo's evidence trail currently spans **both** simulator versions — 23
+record mentions of `ngspice-46` and 10 of `ngspice-47` as of this record — so
+cross-record numeric comparisons at this precision are not automatically valid.
+Quantifying the residue across the other facets is out of scope here and is
+tracked separately.
 
 ## Alternatives considered
 
@@ -183,6 +221,12 @@ capacitor ratio would overstate what was verified.
   Exception 1 (`inb`, decision records 0003/0015) is measured by a different
   facet (`sim/level-shifter-oxide-safety/`) and has had no mismatch run at all.
   Both are open follow-ups.
+- **Cross-record numeric comparison now needs a simulator-version check.** Per
+  the second finding above, a ~1 mV `ngspice-46` → `ngspice-47` residue exists on
+  this class of narrow coupling peak. Every record already states its ngspice
+  version in its Environment block; readers comparing two records' millivolt
+  figures must actually read it rather than assume comparability. Whether the
+  residue is similar on the other facets is unmeasured.
 - **A future PDK update could invalidate the coverage table above.** It is
   pinned to open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b`. If a later
   build ships a MiM mismatch distribution, or an `nfet_06v0_stat` section, the
