@@ -243,6 +243,33 @@ First record under this convention:
 `sim/gate-driver-indrv-mismatch/records/` (issue #204,
 `spec/decision-records/0017-pdk-local-mismatch-model-coverage.md`).
 
+## Decision record: simulator-version comparability
+
+Decision record 0017's "Second finding" (issue #204) measured a **zero-sigma
+Monte Carlo control leg** — the same deck as a plain harness run, mismatch
+off — diverging from the committed `ngspice-46` corner-matrix record it
+should reproduce bit-for-bit, by up to **1.32 mV** at `IN_DRV`, purely
+because the campaign ran under `ngspice-47`. Issue #210 followed up with a
+second, independent A/B: a full 60-point `sim/gate-driver-core-drive/`
+re-run, same DUT/testbench/PDK/`reltol`, `ngspice-46` vs. `ngspice-47`
+(`sim/gate-driver-core-drive/records/20260821-113949-d2ba4d8.md`,
+superseding `20260818-060517-673fcf0.md`).
+
+| | |
+|---|---|
+| Residue magnitude | Up to **3.62 mV** on the worst §2.3-class coupling-peak measurement seen (`n1_max_v`, `sf_27c_vlogic3p30v-vdrv6p00v`); most measurements' worst-case residue across the grid is sub-mV. See the linked record's "Finding" section for the full per-measurement table. |
+| Shape | **Scattered, not systematic.** Every measurement column's sign split across the 60-point grid is mixed (both directions present, no one-sided bias), and the largest-residue points share no common process/temperature corner — this is solver/output-precision noise, not a directional physics difference between simulator versions. |
+| Effect on ratified bounds | **None observed, but not exhaustively checked.** At `spec/gate-driver.md` §5 Exception 3's binding corner (`ss_125c_vlogic3p30v-vdrv6p00v`, the only ratified bound this repo currently measures at sub-mV precision), the residue is ≈10 µV — two orders of magnitude below the bound's 7.34 mV of unspent headroom (decision record 0017 §4) — corroborating decision record 0017's own conclusion independently. Exceptions 1 and 2's facets (`sim/level-shifter-oxide-safety/`) were not re-run under this issue; their headroom (4.67 mV and 27 mV respectively against the currently-recorded worst case) is larger than this facet's worst observed residue, but that is inference from a different facet's numbers, not a direct measurement. |
+| Options considered | (a) pin an exact `ngspice` version the way `sim/pdk.json` pins a PDK variant, rejecting/warning on any other version; (b) require a simulator-version match before two records' millivolt-precision figures may be compared numerically, without forcing every environment onto one binary; (c) do nothing beyond the existing per-record Environment block (already states the version) and rely on readers to check it |
+| Chosen | (b): **a simulator-version match is required before two records are compared at sub-mV precision; no version pin is imposed.** A hard pin (option a) would fail every environment that cannot install that exact build (this issue itself had to build `ngspice-47` from source because neither `apt` nor the environment's preinstalled binary offered it) and gains little over a documented comparability rule, since the residue is small relative to every bound's headroom measured so far. Doing nothing (option c) was rejected because decision record 0017 already showed a reader can be misled by a number's precision without being told the version boundary is there — the rule needs to be stated as a requirement, not left implicit in a field nobody is prompted to cross-check. |
+| Rule | A record's **Environment** block already states its `ngspice` version (`ngspice: ngspice-<N> : ...`). Before citing two records' figures against each other at sub-mV / sub-percent precision, confirm both Environment blocks name the same `ngspice-<N>`. Comparisons across a version boundary are valid at coarser precision (pass/fail, order-of-magnitude, or figures the ratified bound's headroom comfortably exceeds) but not for a millivolt-level "this changed by X" claim — mint a same-version re-run instead, as this decision record's own linked A/B did, rather than diffing two records that already differ. This is a documentation/process rule, not a lint check: nothing in `sim/check_records.py` currently enforces it, because enforcing "compare only same-version records" requires the *comparison* to be inspectable, not just one record in isolation. |
+
+If a future facet's re-run under this rule finds a residue that *does*
+exceed a ratified bound's recorded headroom, that is a spec matter and needs
+its own decision record — this section documents a comparability
+convention, not a re-opening of any bound (`spec/gate-driver.md` §5's
+Exceptions 1–3 are unchanged by this record).
+
 ## Append-only rule
 
 `records/*.md` files are never edited or deleted after creation. A re-run or
