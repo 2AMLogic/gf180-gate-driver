@@ -1,0 +1,35 @@
+# .loom/resync-ignore — paths Loom must not overwrite or delete.
+#
+# One `.loom/`-relative path per line. Blank lines and `#` comments are
+# ignored; matching is exact (no globs). See `.loom/docs/repo-owned-files.md`.
+#
+# WHY these 5 guard hooks are pinned
+# ----------------------------------
+# They are a locally-vendored fork. Since Loom was installed here they have
+# accumulated ~20 repo-local `fix(guard)` commits (see
+# `git log --oneline -- .loom/hooks/`) that were never contributed back to
+# Loom's own `defaults/hooks/` baseline. `resync-installed.sh` overwrites
+# rather than merges, so every resync silently reverts all of them and breaks
+# the `.loom/hooks/tests/*.sh` suites.
+#
+# This has already happened twice:
+#   - `c7ba31d` reverted the PR #19/#20 guard fixes — issue #25, fixed by PR #27.
+#   - `2f96421` (2026-08-18 resync) did it again, dropping the same fixes and
+#     breaking 8/9 hook test suites; main stayed red for 11 pushes over 3 days
+#     — issue #206, restored by PR #208.
+#
+# Issue #209 added this pin so a third occurrence cannot happen.
+#
+# SCOPE: this pin stops `./.loom/scripts/resync-installed.sh` (the source of
+# both incidents) from overwriting these files, and stops the installer's
+# clean sweep from deleting them. It does NOT protect against a full reinstall
+# (`install.sh --confirm-reinstall`, `loom update`, `loom-daemon init --force`),
+# which re-copies whatever the current `defaults/` tree ships.
+#
+# Remove an entry ONLY once its local fixes are confirmed upstreamed into
+# Loom's own `defaults/hooks/` (github.com/rjwalters/loom).
+hooks/guard-background-subagents.sh
+hooks/guard-destructive-generic.sh
+hooks/guard-destructive.sh
+hooks/guard-loom-workflow.sh
+hooks/guard-worktree-paths.sh
