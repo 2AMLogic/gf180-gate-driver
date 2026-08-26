@@ -1,0 +1,557 @@
+* Frozen netlist snapshot for record 20260826-063405-a7dcce1
+* source     : sim/gate-driver-core-drive-with-uvlo-postlayout/testbench/gate_driver_core_uvlo_tb.spice
+* sha256     : be8c0e0b74f675a0fabadee885a74cb3e707de7cbff9dd2999ec787c3697940b
+* This is a verbatim copy taken at record time. Do not edit.
+* gate-driver-core-drive-with-uvlo-postlayout -- POST-LAYOUT re-run of
+* sim/gate-driver-core-drive-with-uvlo/ (issue #220's schematic-level facet),
+* against the extracted netlist of the #221-extended layout/gate_driver_core.gds
+* (issue #222, epic #219/#542 Phase 3A slice 3): same end-to-end stimulus
+* chain -- logic-in (IN) -> level_shifter -> output_stage -> 1 nF reference
+* load -- PLUS x3=uvlo actively pulling OUT low whenever VDD_DRV sits below
+* that corner's trip point, now driven against the real drawn/extracted
+* device geometry and (for the RC-parasitic DUT) interconnect parasitics
+* rather than the ideal schematic.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the gf180mcu
+* models, the corner .lib sections, .temp, this experiment's DUT fragment
+* (layout/lvs/gate_driver_core.extracted.spice or .extracted-rc.spice,
+* .include'd ahead of this file via tb.json's "dut" key / --dut), the
+* .control block and .end.
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1) -- modeled here as a
+* milliohm-scale tie, matching every sibling testbench's convention
+* (sim/gate-driver-core-drive-postlayout/testbench/gate_driver_core_tb.spice,
+* sim/gate-driver-core-drive-with-uvlo/testbench/gate_driver_core_uvlo_tb.spice).
+*
+* IN is driven at the block's actual 3.3V logic input pin, an idealized
+* rail-to-rail pulse referenced to GND_LOGIC (0 -> vlogic_val), starting low.
+* Same 300ns-high / 700ns-period shape as every sibling drive facet, for
+* direct comparability.
+*
+* Internal-node probing: unlike the schematic DUT (a hierarchical fragment
+* whose own top .subckt line is commented out, so x1/x2/x3's internal nodes
+* read as v(x2.n1) etc.), the EXTRACTED DUT is fully FLAT -- klt extract's
+* own device/net naming preserves the schematic hierarchy prefix textually
+* rather than as a dotted SPICE subcircuit path (layout/lvs/mk_extracted_dut.py's
+* T1), so the same nodes read as v(x2_n1)..v(x2_n5) (confirmed identical
+* convention in sim/gate-driver-core-drive-postlayout/) and, newly for this
+* facet, v(x3_lockout) (x3's active-high OUT-pulldown-enable signal, in
+* place of the schematic's v(x3.lockout)).
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 1n 1n 300n 700n)
+
+* 1 nF reference load (spec Sec.3), same convention as every sibling facet.
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* ---------------------------------------------------------------
+* DUT netlist included by this testbench (extracted)
+* source     : layout/lvs/gate_driver_core.extracted.spice
+* sha256     : 38db5253dee283f4da9c88b9d42b4dcef114ecaa480fb0ce650e8cd2737f9bfa
+* ---------------------------------------------------------------
+
+* Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
+*
+* extract report : layout/lvs/reports/gate_driver_core/20260826-062806-a7dcce1.extract.json
+* layout gds     : layout/gate_driver_core.gds
+* extraction deck: gf180mcu (sha256:79e71a1e7d84be3cfc82e4c70afbdf7b743ac1f361fb8e981f57831014d2e8b0)  (klt extract)
+* klt/klayout    : 0.3.0 / 0.30.11
+* devices        : 2044 {'cap_mim_2f0_m4m5_noshield': 4, 'nfet': 1105, 'pfet': 664, 'ppolyf_u': 271} -> {'nfet_03v3': 3, 'nfet_06v0': 1102, 'pfet_03v3': 1, 'pfet_06v0': 663, 'cap_mim_2f0_m4m5_noshield': 4, 'ppolyf_u': 271}
+* regenerate     : python3 layout/lvs/mk_extracted_dut.py --extract layout/lvs/reports/gate_driver_core/20260826-062806-a7dcce1.extract.json --combine -o layout/lvs/gate_driver_core.extracted.spice
+*
+* ------------------------------------------------------------------
+* Mechanical transforms applied to the extractor's own output
+* ------------------------------------------------------------------
+* T1. Flattening: the extractor's `.SUBCKT gate_driver_core ... .ENDS` wrapper
+*     is dropped -- every device/parasitic card is emitted at deck level,
+*     matching this repo's existing DUT-fragment convention
+*     (design/netlist/gate_driver_core.spice's own top .subckt line is commented
+*     out for the identical reason -- design/README.md).
+* T2. MOS cards: the extractor's `M<n> d g s b nfet|pfet L=..U W=..U` is rebound
+*     to the real gf180mcu `nfet_03v3`/`nfet_06v0`/`pfet_03v3`/`pfet_06v0`
+*     subcircuit, selected by (device class, drawn L) -- the extraction deck's
+*     generic `nfet`/`pfet` device class does not distinguish voltage flavor
+*     (gate_driver_core.checks.json's voltage_domain_warnings; also
+*     layout/lvs/make_reference.py's transform 2), but this design's drawn L
+*     cleanly disjoint-identifies it. `nf=1 m=1`: each extracted device is one
+*     drawn finger, so the schematic's `nf`/`m` multipliers are already spent as
+*     real, separately-extracted geometry. Emitted as an `X<n>` subcircuit call,
+*     matching design/netlist/gate_driver_core.spice's own device cards, because
+*     those PDK models ARE .subckts: ngspice will resolve an `M` card against a
+*     subcircuit of that name, but then expands `m=<n>` into n separate
+*     subcircuit instances instead of passing m down to the model -- measured at
+*     3.32 s of CPU for the `X` form of this netlist versus ~2200 s for the `M`
+*     form, at bit-identical measured results.
+* T3. MOS junction geometry: AS/AD/PS/PD are carried through verbatim from the
+*     extractor's own measured `as_um2`/`ad_um2`/`ps_um`/`pd_um` (unlike
+*     gf180-bandgap's deck, this deck's gf180mcu extractor reports these
+*     directly -- no recomputation needed).
+* T4. MOS body terminal: rebound to the real rail this design's schematic ties
+*     that flavor to -- GND_LOGIC/GND_DRV for NMOS, VDD_LOGIC/VDD_DRV for PMOS,
+*     selected by the same (class, L) binning as T2. Issue #132 drew real
+*     per-device body-tie geometry for every device (both flavors), and a real
+*     `klt extract` of that geometry now measures exactly this assignment on its
+*     own (PMOS: each device's own real Nwell-tie net; NMOS: the deck's global
+*     substrate identity, which is itself now wired to real labeled
+*     GND_LOGIC/GND_DRV metal instead of floating -- klayout-tools #1128,
+*     layout/lvs/make_reference.py's transform 3/5) -- so this transform is now
+*     a redundant assertion of an already-measured fact, not a fabrication
+*     filling a gap the deck cannot see. It stays a rebind (rather than reading
+*     `dev['nets']['b']` directly) so GND_LOGIC and GND_DRV keep their own
+*     separate names here -- the deck's own raw extraction merges both grounds
+*     into one synthesized joined label (`GND_DRV|GND_LOGIC`) it has no
+*     equivalent synthesized label for on the supply side, and T5's per-net
+*     parasitic stars are keyed by the schematic's own real net names, not that
+*     merged one. See BA1/BA2 and layout/README.md.
+* T5. Parasitics (only when `klt extract --parasitics` was used): each named
+*     net's own per-terminal star (device leg -> resistor -> hub) and hub ->
+*     capacitor -> ground-reference are carried through verbatim from
+*     `parasitics.nets[]`, renaming only the ground reference itself (`vsubs` ->
+*     GND_LOGIC, T4/BA3, since the deck reports no parasitics entry for `vsubs`
+*     as a net in its own right). Net-to-net coupling capacitance
+*     (`parasitics.nets[].coupled`) is NOT emitted -- a documented scope
+*     reduction, not a silent drop; every ground-referenced term is measured,
+*     every coupling term is omitted, stated once here rather than per-record.
+*     Since issue #132 the extraction deck reports BOTH ground rails as one
+*     merged net (klayout-tools #1128), which has no single hub of its own here:
+*     every terminal on it belongs to exactly one real ground domain by (class,
+*     L) (T4/BA1), so each of its legs is emitted with the leg's OWN device's
+*     real GND_LOGIC/GND_DRV as that leg's hub -- the same per-device rebind the
+*     leg net itself gets, never one shared hub (which would reroute one
+*     domain's return current through the testbench's inter-rail tie; see
+*     MERGED_GROUND_RAW). That reproduces exactly the pre-#132 topology, where
+*     each rail's own star hub WAS that rail's node: 297 ground-rail R legs
+*     (issue #184). The merged net's own measured ground capacitance is emitted
+*     once between the two real rails it spans (GND_DRV<->GND_LOGIC), the same
+*     place the pre-#132 GND_DRV star's cap landed -- the deck reports one
+*     lumped value for the merged metal and resolves no per-domain split, so it
+*     is carried whole rather than apportioned by assertion.
+* T6. (only with --combine, and only on a non-parasitic extraction) Device
+*     folding: parallel-identical fingers of one schematic device (exactly
+*     matching (model, d, g, s, body, L, W, AD, AS, PD, PS) after T2/T4) are
+*     folded back into one `m=<n>` card. This is a simulation- cost
+*     optimization, not a fidelity change -- an ideal parallel combination of n
+*     identical devices *is* `m=n` in SPICE -- needed because 959
+*     individually-instantiated fingers (one per drawn finger, this script's
+*     default) cost roughly three orders of magnitude more simulation time than
+*     the same circuit as `m=`-scaled instances, to the point of being
+*     PVT-grid-infeasible within a bounded evidence run.
+* T7. (issue #166/#201) Passive cards: a CAP_CLASSES device (this design's only
+*     case: the four-deep XCCOMP MiM series stack) has no d/g/s/b terminals and
+*     no gf180mcu subcircuit to rebind to -- it is emitted directly as an
+*     ngspice `C<n> a b <value>` card, `value` carried through verbatim from the
+*     extractor's own measured `params.c_f` (the same two-term area+perimeter
+*     model make_reference.py's transform 6 restates over the schematic
+*     geometry). Never grouped by --combine: with only four instances there is
+*     no simulation-cost case for folding them, and each occupies a distinct
+*     position in the series chain (distinct nets), so no two are ever
+*     combine-eligible anyway. Its two terminals still route through T5's
+*     per-net leg resistor the same as any MOS terminal when --parasitics is
+*     present -- the merged-ground body-terminal skip below is scoped to MOS
+*     devices only so it cannot mistake a capacitor's `b` terminal for a MOS
+*     body leg.
+* T8. (issue #201) Anonymous-net rename: any net the extractor names `$N` (its
+*     own convention for a net with no schematic label -- this design's first
+*     real case is T7's XCCOMP inter-cap nodes) is rewritten to `ANON<N>`
+*     wherever it would otherwise appear as a bare SPICE node token. `$`
+*     starting a token is an inline-comment marker to ngspice, so left as-is
+*     these nets silently truncate every card that names them -- no simulator
+*     error, just a per-card `... is not a valid ... line, ignored!` warning
+*     outside this script's or run_corners.py's own PASS/FAIL summary. Applied
+*     at every point a raw extractor net name reaches a bare node position
+*     (`leg_of()`'s return, and T5's per-net star loop); never applied to a name
+*     only ever embedded inside a longer instance name (e.g. an R-leg card's own
+*     `R$18__t0` name field), since a `$` that is not a token's first character
+*     does not trigger this.
+* T9. (issue #221/#222) Passive cards: a RES_CLASSES device (this design's only
+*     case: uvlo's Rref/R1/R2/Rfb bias-resistor network, drawn as a chain of
+*     `ppolyf_u` unit resistors) has no d/g/s/b terminals and no gf180mcu
+*     subcircuit to rebind to -- it is emitted directly as an ngspice `R<n> a b
+*     <value>` card, `value` carried through verbatim from the extractor's own
+*     measured `params.r_ohm`. Its `a`/`b` terminals still route through T5's
+*     per-net leg resistor the same as any MOS or CAP_CLASSES terminal when
+*     --parasitics is present. Its third terminal (`w`, the device's own
+*     guard/tap net) is NOT referenced by the emitted `R` card at all -- see BA4
+*     -- so it is never looked up via leg_of() for this device. Unlike
+*     --combine's MOS finger folding, no attempt is made to fold a schematic
+*     resistor's own drawn chain of unit resistors back into one series value:
+*     ngspice sums a chain of series `R` cards exactly, at no extra simulation
+*     cost (unlike a MOS `M`-vs-`X`-card finger count, chaining resistor cards
+*     is not a solver-cost concern), so every unit resistor is emitted
+*     individually regardless of --combine.
+*
+* ------------------------------------------------------------------
+* Back-annotated: terminals/nets the extraction deck cannot resolve
+* ------------------------------------------------------------------
+* BA1  NMOS body -> GND_LOGIC (3.3V flavor) / GND_DRV (6V flavor)
+*      (issue #132: real substrate-tie geometry now measures this same
+*       assignment directly -- klt lvs reports zero device.body_unverified
+*       mismatches for either flavor. Kept as a rebind, not a fabrication,
+*       so GND_LOGIC/GND_DRV keep separate names here -- see T4)
+* BA2  PMOS body -> VDD_LOGIC (3.3V flavor) / VDD_DRV (6V flavor)
+*      (issue #132: real well-tie geometry now measures this same
+*       assignment directly, per device -- redundant with T4, not a gap)
+* BA3  parasitic ground-cap reference `vsubs` -> GND_LOGIC
+*      (GND_LOGIC/GND_DRV are one electrical node by design intent;
+*       GND_LOGIC is the documented, arbitrary choice of the two. `vsubs`
+*       itself no longer appears in a real extraction of this layout --
+*       see make_reference.py transform 3 -- but a --parasitics run's
+*       own per-net table is still keyed by the schematic's pre-merge
+*       net names, so this rename is still the correct lookup key)
+* BA4  RES_CLASSES device's `w` (guard/tap) terminal -> not modeled
+*      (gf180mcu's ppolyf_u resistor model exposes a third terminal for
+*       the device's own guard-ring/substrate tap; the plain two-terminal
+*       `R` card T9 emits has no node for it. This is a documented scope
+*       reduction, not a silent drop: the schematic's own bare `R` cards
+*       (design/netlist/uvlo.spice) never modeled a guard-tap terminal
+*       either, so nothing measurable at the schematic level is lost)
+*
+* sha256 (this file, sans this line): 1e303be68481f12294e7293ab7fc2da3
+* Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
+* drain/gate/source connectivity, and (when present) the per-net
+* ground-referenced RC parasitics -- is measured, not asserted.
+
+* FLAT form: device/parasitic cards at deck level, no `.SUBCKT` wrapper --
+* matches this repo's existing DUT-fragment convention (T1).
+
+X1 x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X2 x1_na IN GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X3 x1_nb x1_inb GND_LOGIC GND_LOGIC nfet_03v3 L=0.28U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X4 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X5 GND_DRV x2_n3 x2_n4 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X6 GND_DRV x2_n4 x2_n5 GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=27
+X7 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X8 GND_DRV x2_n5 OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X9 GND_DRV x3_lockout OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=399
+X10 GND_DRV x3_lockout OUT GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X11 IN_DRV x1_nbuf1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X12 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=109
+X13 OUT x2_n5 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X14 OUT x3_lockout GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=399
+X15 OUT x3_lockout GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X16 x1_nbuf1 x1_ncb GND_DRV GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X17 x1_nca VDD_LOGIC x1_na GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X18 x1_ncb VDD_LOGIC x1_nb GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X19 x2_n1 IN_DRV GND_DRV GND_DRV nfet_06v0 L=0.7U W=2U nf=1 ad=0.84P as=0.84P pd=4.84U ps=4.84U m=1
+X20 x2_n2 x2_n1 GND_DRV GND_DRV nfet_06v0 L=0.7U W=8U nf=1 ad=3.36P as=3.36P pd=16.84U ps=16.84U m=1
+X21 x2_n3 x2_n2 GND_DRV GND_DRV nfet_06v0 L=0.7U W=33U nf=1 ad=13.86P as=13.86P pd=66.84U ps=66.84U m=1
+X22 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=6
+X23 x2_n4 x2_n3 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X24 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=26
+X25 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X26 x2_n5 x2_n4 GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X27 x3_lockout x3_ncompn GND_DRV GND_DRV nfet_06v0 L=0.7U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X28 x3_ncompn x3_nref x3_ntail GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X29 x3_ncompp x3_ndiv x3_ntail GND_DRV nfet_06v0 L=0.7U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X30 x3_nref x3_nref GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
+X31 x3_ntail x3_nref GND_DRV GND_DRV nfet_06v0 L=0.7U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+X32 x3_uvlo_ok x3_lockout GND_DRV GND_DRV nfet_06v0 L=0.7U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
+X33 x1_inb IN VDD_LOGIC VDD_LOGIC pfet_03v3 L=0.28U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
+X34 IN_DRV x1_nbuf1 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X35 OUT x2_n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=249
+X36 OUT x2_n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X37 VDD_DRV x2_n3 x2_n4 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=14
+X38 VDD_DRV x2_n3 x2_n4 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X39 VDD_DRV x2_n4 x2_n5 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=60
+X40 VDD_DRV x2_n4 x2_n5 VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X41 VDD_DRV x2_n5 OUT VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=249
+X42 VDD_DRV x2_n5 OUT VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=2.1P pd=20.84U ps=10.42U m=1
+X43 x1_nbuf1 x1_ncb VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=5U nf=1 ad=2.1P as=2.1P pd=10.84U ps=10.84U m=1
+X44 x1_nca x1_ncb VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
+X45 x1_ncb x1_nca VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=3U nf=1 ad=1.26P as=1.26P pd=6.84U ps=6.84U m=1
+X46 x2_n1 IN_DRV VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=4.4U nf=1 ad=1.848P as=1.848P pd=9.64U ps=9.64U m=1
+X47 x2_n2 x2_n1 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=18U nf=1 ad=7.56P as=7.56P pd=36.84U ps=36.84U m=1
+X48 x2_n3 x2_n2 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=73U nf=1 ad=30.66P as=30.66P pd=146.84U ps=146.84U m=1
+X49 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=14
+X50 x2_n4 x2_n3 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X51 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=2.1P pd=10.42U ps=10.42U m=60
+X52 x2_n5 x2_n4 VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=2.1P as=4.2P pd=10.42U ps=20.84U m=1
+X53 x3_lockout x3_ncompn VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=10U nf=1 ad=4.2P as=4.2P pd=20.84U ps=20.84U m=1
+X54 x3_ncompn x3_ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X55 x3_ncompp x3_ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=15U nf=1 ad=6.3P as=6.3P pd=30.84U ps=30.84U m=1
+X56 x3_uvlo_ok x3_lockout VDD_DRV VDD_DRV pfet_06v0 L=0.55U W=20U nf=1 ad=8.4P as=8.4P pd=40.84U ps=40.84U m=1
+
+* T7: passive cards (CAP_CLASSES devices -- issue #166's XCCOMP stack)
+C1770 x1_ncb ANON293 5.4516e-14
+C1771 ANON294 ANON293 5.4516e-14
+C1772 ANON294 ANON295 5.4516e-14
+C1773 IN_DRV ANON295 5.4516e-14
+
+* T9: passive cards (RES_CLASSES devices -- issue #221/#222's uvlo bias-resistor network)
+R1774 VDD_DRV ANON22 66666.7
+R1775 ANON22 ANON23 66666.7
+R1776 ANON23 ANON26 66666.7
+R1777 ANON26 ANON27 66666.7
+R1778 ANON27 ANON30 66666.7
+R1779 ANON30 ANON31 66666.7
+R1780 x3_nref ANON21 66666.7
+R1781 ANON21 ANON24 66666.7
+R1782 ANON24 ANON25 66666.7
+R1783 ANON25 ANON28 66666.7
+R1784 ANON28 ANON29 66666.7
+R1785 ANON29 ANON31 66666.7
+R1786 VDD_DRV ANON32 55000
+R1787 ANON32 ANON33 55000
+R1788 ANON33 ANON34 55000
+R1789 ANON34 ANON35 55000
+R1790 ANON35 ANON36 55000
+R1791 ANON36 ANON37 55000
+R1792 ANON37 ANON38 55000
+R1793 ANON38 ANON39 55000
+R1794 x3_ndiv ANON40 55000
+R1795 ANON40 ANON42 55000
+R1796 ANON42 ANON44 55000
+R1797 ANON44 ANON45 55000
+R1798 ANON45 ANON46 55000
+R1799 ANON46 ANON47 55000
+R1800 ANON47 ANON48 55000
+R1801 ANON48 ANON39 55000
+R1802 x3_uvlo_ok ANON49 66666.7
+R1803 x3_ndiv ANON41 66666.7
+R1804 ANON49 ANON50 66666.7
+R1805 ANON41 ANON43 66666.7
+R1806 ANON50 ANON51 66666.7
+R1807 ANON43 GND_DRV 66666.7
+R1808 ANON51 ANON52 66666.7
+R1809 ANON52 ANON53 66666.7
+R1810 ANON53 ANON54 66666.7
+R1811 ANON54 ANON55 66666.7
+R1812 ANON55 ANON56 66666.7
+R1813 ANON57 ANON59 66666.7
+R1814 ANON59 ANON60 66666.7
+R1815 ANON60 ANON63 66666.7
+R1816 ANON63 ANON65 66666.7
+R1817 ANON65 ANON66 66666.7
+R1818 ANON66 ANON69 66666.7
+R1819 ANON69 ANON71 66666.7
+R1820 ANON71 ANON56 66666.7
+R1821 ANON57 ANON58 66666.7
+R1822 ANON58 ANON61 66666.7
+R1823 ANON61 ANON62 66666.7
+R1824 ANON62 ANON64 66666.7
+R1825 ANON64 ANON67 66666.7
+R1826 ANON67 ANON68 66666.7
+R1827 ANON68 ANON70 66666.7
+R1828 ANON70 ANON72 66666.7
+R1829 ANON73 ANON74 66666.7
+R1830 ANON74 ANON76 66666.7
+R1831 ANON76 ANON78 66666.7
+R1832 ANON78 ANON81 66666.7
+R1833 ANON81 ANON82 66666.7
+R1834 ANON82 ANON84 66666.7
+R1835 ANON84 ANON86 66666.7
+R1836 ANON86 ANON72 66666.7
+R1837 ANON73 ANON75 66666.7
+R1838 ANON75 ANON77 66666.7
+R1839 ANON77 ANON79 66666.7
+R1840 ANON79 ANON80 66666.7
+R1841 ANON80 ANON83 66666.7
+R1842 ANON83 ANON85 66666.7
+R1843 ANON85 ANON87 66666.7
+R1844 ANON87 ANON88 66666.7
+R1845 ANON89 ANON90 66666.7
+R1846 ANON89 ANON91 66666.7
+R1847 ANON90 ANON93 66666.7
+R1848 ANON91 ANON94 66666.7
+R1849 ANON93 ANON96 66666.7
+R1850 ANON94 ANON97 66666.7
+R1851 ANON96 ANON100 66666.7
+R1852 ANON97 ANON99 66666.7
+R1853 ANON99 ANON102 66666.7
+R1854 ANON100 ANON103 66666.7
+R1855 ANON103 ANON105 66666.7
+R1856 ANON102 ANON106 66666.7
+R1857 ANON105 ANON108 66666.7
+R1858 ANON106 ANON109 66666.7
+R1859 ANON108 ANON88 66666.7
+R1860 ANON109 ANON111 66666.7
+R1861 ANON112 ANON113 66666.7
+R1862 ANON112 ANON92 66666.7
+R1863 ANON113 ANON115 66666.7
+R1864 ANON92 ANON95 66666.7
+R1865 ANON115 ANON117 66666.7
+R1866 ANON95 ANON98 66666.7
+R1867 ANON98 ANON101 66666.7
+R1868 ANON117 ANON119 66666.7
+R1869 ANON119 ANON121 66666.7
+R1870 ANON101 ANON104 66666.7
+R1871 ANON104 ANON107 66666.7
+R1872 ANON121 ANON123 66666.7
+R1873 ANON107 ANON110 66666.7
+R1874 ANON123 ANON125 66666.7
+R1875 ANON125 ANON127 66666.7
+R1876 ANON110 ANON111 66666.7
+R1877 ANON128 ANON114 66666.7
+R1878 ANON128 ANON129 66666.7
+R1879 ANON114 ANON116 66666.7
+R1880 ANON129 ANON131 66666.7
+R1881 ANON131 ANON133 66666.7
+R1882 ANON116 ANON118 66666.7
+R1883 ANON118 ANON120 66666.7
+R1884 ANON133 ANON135 66666.7
+R1885 ANON135 ANON137 66666.7
+R1886 ANON120 ANON122 66666.7
+R1887 ANON137 ANON139 66666.7
+R1888 ANON122 ANON124 66666.7
+R1889 ANON139 ANON141 66666.7
+R1890 ANON124 ANON126 66666.7
+R1891 ANON141 ANON143 66666.7
+R1892 ANON126 ANON127 66666.7
+R1893 ANON144 ANON130 66666.7
+R1894 ANON144 ANON145 66666.7
+R1895 ANON145 ANON147 66666.7
+R1896 ANON130 ANON132 66666.7
+R1897 ANON132 ANON134 66666.7
+R1898 ANON147 ANON149 66666.7
+R1899 ANON149 ANON151 66666.7
+R1900 ANON134 ANON136 66666.7
+R1901 ANON136 ANON138 66666.7
+R1902 ANON151 ANON153 66666.7
+R1903 ANON153 ANON155 66666.7
+R1904 ANON138 ANON140 66666.7
+R1905 ANON155 ANON157 66666.7
+R1906 ANON140 ANON142 66666.7
+R1907 ANON157 ANON159 66666.7
+R1908 ANON142 ANON143 66666.7
+R1909 ANON160 ANON146 66666.7
+R1910 ANON160 ANON161 66666.7
+R1911 ANON161 ANON163 66666.7
+R1912 ANON146 ANON148 66666.7
+R1913 ANON163 ANON165 66666.7
+R1914 ANON148 ANON150 66666.7
+R1915 ANON150 ANON152 66666.7
+R1916 ANON165 ANON167 66666.7
+R1917 ANON152 ANON154 66666.7
+R1918 ANON167 ANON169 66666.7
+R1919 ANON169 ANON171 66666.7
+R1920 ANON154 ANON156 66666.7
+R1921 ANON156 ANON158 66666.7
+R1922 ANON171 ANON173 66666.7
+R1923 ANON173 ANON175 66666.7
+R1924 ANON158 ANON159 66666.7
+R1925 ANON176 ANON162 66666.7
+R1926 ANON176 ANON177 66666.7
+R1927 ANON162 ANON164 66666.7
+R1928 ANON177 ANON179 66666.7
+R1929 ANON179 ANON181 66666.7
+R1930 ANON164 ANON166 66666.7
+R1931 ANON166 ANON168 66666.7
+R1932 ANON181 ANON183 66666.7
+R1933 ANON168 ANON170 66666.7
+R1934 ANON183 ANON185 66666.7
+R1935 ANON185 ANON187 66666.7
+R1936 ANON170 ANON172 66666.7
+R1937 ANON172 ANON174 66666.7
+R1938 ANON187 ANON189 66666.7
+R1939 ANON189 ANON191 66666.7
+R1940 ANON174 ANON175 66666.7
+R1941 ANON192 ANON193 66666.7
+R1942 ANON192 ANON178 66666.7
+R1943 ANON193 ANON195 66666.7
+R1944 ANON178 ANON180 66666.7
+R1945 ANON180 ANON182 66666.7
+R1946 ANON195 ANON197 66666.7
+R1947 ANON182 ANON184 66666.7
+R1948 ANON197 ANON199 66666.7
+R1949 ANON199 ANON201 66666.7
+R1950 ANON184 ANON186 66666.7
+R1951 ANON186 ANON188 66666.7
+R1952 ANON201 ANON203 66666.7
+R1953 ANON188 ANON190 66666.7
+R1954 ANON203 ANON205 66666.7
+R1955 ANON205 ANON207 66666.7
+R1956 ANON190 ANON191 66666.7
+R1957 ANON208 ANON209 66666.7
+R1958 ANON208 ANON194 66666.7
+R1959 ANON209 ANON211 66666.7
+R1960 ANON194 ANON196 66666.7
+R1961 ANON196 ANON198 66666.7
+R1962 ANON211 ANON213 66666.7
+R1963 ANON213 ANON215 66666.7
+R1964 ANON198 ANON200 66666.7
+R1965 ANON200 ANON202 66666.7
+R1966 ANON215 ANON217 66666.7
+R1967 ANON217 ANON219 66666.7
+R1968 ANON202 ANON204 66666.7
+R1969 ANON219 ANON221 66666.7
+R1970 ANON204 ANON206 66666.7
+R1971 ANON206 ANON207 66666.7
+R1972 ANON221 ANON223 66666.7
+R1973 ANON224 ANON210 66666.7
+R1974 ANON224 ANON225 66666.7
+R1975 ANON225 ANON227 66666.7
+R1976 ANON210 ANON212 66666.7
+R1977 ANON212 ANON214 66666.7
+R1978 ANON227 ANON229 66666.7
+R1979 ANON229 ANON231 66666.7
+R1980 ANON214 ANON216 66666.7
+R1981 ANON216 ANON218 66666.7
+R1982 ANON231 ANON233 66666.7
+R1983 ANON233 ANON235 66666.7
+R1984 ANON218 ANON220 66666.7
+R1985 ANON235 ANON237 66666.7
+R1986 ANON220 ANON222 66666.7
+R1987 ANON222 ANON223 66666.7
+R1988 ANON237 ANON239 66666.7
+R1989 ANON240 ANON241 66666.7
+R1990 ANON240 ANON226 66666.7
+R1991 ANON241 ANON243 66666.7
+R1992 ANON226 ANON228 66666.7
+R1993 ANON228 ANON230 66666.7
+R1994 ANON243 ANON245 66666.7
+R1995 ANON245 ANON247 66666.7
+R1996 ANON230 ANON232 66666.7
+R1997 ANON247 ANON249 66666.7
+R1998 ANON232 ANON234 66666.7
+R1999 ANON234 ANON236 66666.7
+R2000 ANON249 ANON251 66666.7
+R2001 ANON251 ANON253 66666.7
+R2002 ANON236 ANON238 66666.7
+R2003 ANON253 ANON255 66666.7
+R2004 ANON238 ANON239 66666.7
+R2005 ANON256 ANON242 66666.7
+R2006 ANON256 ANON257 66666.7
+R2007 ANON242 ANON244 66666.7
+R2008 ANON257 ANON259 66666.7
+R2009 ANON259 ANON261 66666.7
+R2010 ANON244 ANON246 66666.7
+R2011 ANON261 ANON263 66666.7
+R2012 ANON246 ANON248 66666.7
+R2013 ANON263 ANON265 66666.7
+R2014 ANON248 ANON250 66666.7
+R2015 ANON250 ANON252 66666.7
+R2016 ANON265 ANON267 66666.7
+R2017 ANON267 ANON269 66666.7
+R2018 ANON252 ANON254 66666.7
+R2019 ANON254 ANON255 66666.7
+R2020 ANON269 ANON271 66666.7
+R2021 ANON272 ANON273 66666.7
+R2022 ANON272 ANON258 66666.7
+R2023 ANON273 ANON275 66666.7
+R2024 ANON258 ANON260 66666.7
+R2025 ANON260 ANON262 66666.7
+R2026 ANON275 ANON277 66666.7
+R2027 ANON277 ANON279 66666.7
+R2028 ANON262 ANON264 66666.7
+R2029 ANON279 ANON281 66666.7
+R2030 ANON264 ANON266 66666.7
+R2031 ANON266 ANON268 66666.7
+R2032 ANON281 ANON283 66666.7
+R2033 ANON283 ANON285 66666.7
+R2034 ANON268 ANON270 66666.7
+R2035 ANON285 ANON287 66666.7
+R2036 ANON270 ANON271 66666.7
+R2037 x3_ndiv ANON274 66666.7
+R2038 ANON274 ANON276 66666.7
+R2039 ANON276 ANON278 66666.7
+R2040 ANON278 ANON280 66666.7
+R2041 ANON280 ANON282 66666.7
+R2042 ANON282 ANON284 66666.7
+R2043 ANON284 ANON286 66666.7
+R2044 ANON286 ANON287 66666.7

@@ -29,10 +29,12 @@ written down where a reader of the evidence records can audit it.
 **What is measured** (carried through unchanged from the layout): every
 device's existence, drawn W/L, and per-terminal drain/gate/source
 connectivity on the deck's Poly2/COMP/Contact/Metal1..2/Via1 stack --
-including the drawn finger decomposition (959 discrete transistors, not the
-schematic's ``nf``/``m`` multipliers) and, when the extraction was run with
-``--parasitics``, the per-net first-order lumped RC parasitics on every
-*named* net.
+including the drawn finger decomposition (1769 discrete transistors as of
+issue #221's uvlo-extended layout, not the schematic's ``nf``/``m``
+multipliers), the four ``cap_mim_2f0_m4m5_noshield`` MiM capacitors (T7), the
+271 ``ppolyf_u`` unit resistors of uvlo's bias-resistor network (T9, issue
+#221/#222), and, when the extraction was run with ``--parasitics``, the
+per-net first-order lumped RC parasitics on every *named* net.
 
 **What is back-annotated** (asserted from the schematic + drawn L, because
 the deck cannot see it) is listed in ``BACK_ANNOTATIONS`` and reproduced in
@@ -76,6 +78,20 @@ MODEL_AND_BODY_BY_CLASS_L = {
 #: still fails loudly through `_model_and_body` instead of silently being
 #: treated as a capacitor. See T7.
 CAP_CLASSES = {"cap_mim_2f0_m4m5_noshield"}
+
+#: Extraction-deck device classes with no `_model_and_body` entry and no
+#: `d`/`g`/`s`/`b` terminal set at all -- issue #221/#222's `uvlo` bias-resistor
+#: network (`Rref`/`R1`/`R2`/`Rfb`, drawn via `klt gen res_array`,
+#: `layout/gen_gate_driver_core.py`) extracts as a chain of two-terminal
+#: ``ppolyf_u`` unit resistors (``a``/``b``, plus a third ``w`` guard/tap
+#: terminal -- see BA4) instead of the schematic's single lumped `R` card.
+#: Confirmed against a real `klt extract` run of the #221-extended GDS: the
+#: deck reports the device's own measured `r_ohm` directly (no recomputation
+#: needed, same as `cap_mim_2f0_m4m5_noshield`'s `c_f`). Named explicitly, for
+#: the same reason `CAP_CLASSES` is: an unexpected new passive class still
+#: fails loudly through `_model_and_body` instead of silently being treated as
+#: a resistor. See T9.
+RES_CLASSES = {"ppolyf_u"}
 
 #: Ground reference every net's parasitic ground capacitor ties to, replacing
 #: the deck's synthesized `vsubs` substrate net (`klt extract`'s single
@@ -270,6 +286,26 @@ TRANSFORMS = [
         "an R-leg card's own `R$18__t0` name field), since a `$` that is "
         "not a token's first character does not trigger this.",
     ),
+    (
+        "T9",
+        "(issue #221/#222) Passive cards: a RES_CLASSES device (this design's "
+        "only case: uvlo's Rref/R1/R2/Rfb bias-resistor network, drawn as a "
+        "chain of `ppolyf_u` unit resistors) has no d/g/s/b terminals and no "
+        "gf180mcu subcircuit to rebind to -- it is emitted directly as an "
+        "ngspice `R<n> a b <value>` card, `value` carried through verbatim "
+        "from the extractor's own measured `params.r_ohm`. Its `a`/`b` "
+        "terminals still route through T5's per-net leg resistor the same as "
+        "any MOS or CAP_CLASSES terminal when --parasitics is present. Its "
+        "third terminal (`w`, the device's own guard/tap net) is NOT "
+        "referenced by the emitted `R` card at all -- see BA4 -- so it is "
+        "never looked up via leg_of() for this device. Unlike --combine's MOS "
+        "finger folding, no attempt is made to fold a schematic resistor's "
+        "own drawn chain of unit resistors back into one series value: "
+        "ngspice sums a chain of series `R` cards exactly, at no extra "
+        "simulation cost (unlike a MOS `M`-vs-`X`-card finger count, chaining "
+        "resistor cards is not a solver-cost concern), so every unit "
+        "resistor is emitted individually regardless of --combine.",
+    ),
 ]
 
 BACK_ANNOTATIONS = [
@@ -288,6 +324,13 @@ BACK_ANNOTATIONS = [
     "      see make_reference.py transform 3 -- but a --parasitics run's",
     "      own per-net table is still keyed by the schematic's pre-merge",
     "      net names, so this rename is still the correct lookup key)",
+    "BA4  RES_CLASSES device's `w` (guard/tap) terminal -> not modeled",
+    "     (gf180mcu's ppolyf_u resistor model exposes a third terminal for",
+    "      the device's own guard-ring/substrate tap; the plain two-terminal",
+    "      `R` card T9 emits has no node for it. This is a documented scope",
+    "      reduction, not a silent drop: the schematic's own bare `R` cards",
+    "      (design/netlist/uvlo.spice) never modeled a guard-tap terminal",
+    "      either, so nothing measurable at the schematic level is lost)",
 ]
 
 
@@ -308,7 +351,23 @@ def _fmt(value: float) -> str:
 #: PASS/FAIL summary never surfaces (issue #201 -- caught only by manually
 #: reading ngspice's own log after the XCCOMP caps it should have added
 #: measured *zero* effect on every corner, bit-for-bit). See T8.
+#:
+#: Issue #222: `klt` 0.3.0+g3f98b441bf2f (re-extracting the #221-extended GDS)
+#: now writes this same anonymous convention as `\$N` (a literal backslash
+#: ahead of the dollar sign) in every **net-name** JSON field -- confirmed
+#: against a real extraction: the *device*-name field for the identical
+#: device is still the unescaped `$N` (e.g. device `$1774`'s own `b` net is
+#: `\$22`), so the escaping is inconsistent even within one report and is not
+#: gated by any `schema_version` bump. This is a `klt`/deck tool-version
+#: behavior change, not a design change (filed generically against
+#: `2AMLogic/klayout-tools` per CLAUDE.md's friction protocol --
+#: `2AMLogic/klayout-tools#1439`) -- handled here by accepting both the
+#: legacy bare `$N` and the current `\$N` spelling, so this script keeps
+#: working against either a fresh extraction or an older committed
+#: report/fixture.
 def _spice_node(name: str) -> str:
+    if name.startswith("\\$"):
+        return "ANON" + name[2:]
     return "ANON" + name[1:] if name.startswith("$") else name
 
 
@@ -420,11 +479,16 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
             return own_ground
         return MERGED_GROUND_NODE + raw[len(MERGED_GROUND_RAW) :]
 
-    # T7: CAP_CLASSES devices (this design's only case: the four `XCCOMP*` MiM
-    # caps) have no d/g/s/b terminals, so they are pulled out of the MOS
-    # loops below entirely rather than forced through `_model_and_body`.
-    mos_devices = [dev for dev in extract["devices"] if dev["class"] not in CAP_CLASSES]
+    # T7/T9: CAP_CLASSES devices (the four `XCCOMP*` MiM caps) and RES_CLASSES
+    # devices (uvlo's Rref/R1/R2/Rfb bias-resistor network, issue #221/#222)
+    # have no d/g/s/b terminals, so both are pulled out of the MOS loops below
+    # entirely rather than forced through `_model_and_body`.
+    mos_devices = [
+        dev for dev in extract["devices"]
+        if dev["class"] not in CAP_CLASSES and dev["class"] not in RES_CLASSES
+    ]
     cap_devices = [dev for dev in extract["devices"] if dev["class"] in CAP_CLASSES]
+    res_devices = [dev for dev in extract["devices"] if dev["class"] in RES_CLASSES]
 
     if not combine:
         for dev in sorted(mos_devices, key=lambda d: (d["class"], d["name"])):
@@ -473,6 +537,21 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
                 f"{leg_of(dev, 'b', dev['nets']['b'])} {_fmt(params['c_f'])}"
             )
 
+    if res_devices:
+        lines += [
+            "",
+            "* T9: passive cards (RES_CLASSES devices -- issue #221/#222's uvlo "
+            "bias-resistor network)",
+        ]
+        for dev in sorted(res_devices, key=lambda d: d["name"]):
+            cls, name, params = dev["class"], dev["name"], dev["params"]
+            counts[cls] = counts.get(cls, 0) + 1
+            inst = name.lstrip("$")
+            lines.append(
+                f"R{inst} {leg_of(dev, 'a', dev['nets']['a'])} "
+                f"{leg_of(dev, 'b', dev['nets']['b'])} {_fmt(params['r_ohm'])}"
+            )
+
     par_count = {"r": 0, "c": 0}
     if parasitics is not None:
         lines += ["", "* T5: per-net parasitic star (klt extract --parasitics), coupling excluded"]
@@ -502,17 +581,22 @@ def emit(extract: dict, combine: bool = False) -> tuple[list[str], dict]:
         # resistance now that issue #132 draws real tap geometry): `emit()`
         # never calls `leg_of()` for the body slot, T4 binds it directly to a
         # real rail with no series R, so a body leg node would be referenced
-        # by its R card alone. Scoped to non-CAP_CLASSES (MOS) devices so a
-        # CAP_CLASSES device's own `b` terminal -- a real capacitor plate,
-        # not a body -- is never mistaken for one and dropped (issue
-        # #166/#201's T7).
+        # by its R card alone. Scoped to non-CAP_CLASSES/non-RES_CLASSES (MOS)
+        # devices so a CAP_CLASSES device's own `b` terminal -- a real
+        # capacitor plate, not a body -- (issue #166/#201's T7) or a
+        # RES_CLASSES device's own `b` terminal -- a real resistor lead, not a
+        # body -- (issue #221/#222's T9) is never mistaken for one and
+        # dropped. Both passive classes' `a`/`b` terminals still need their
+        # own real, measured leg resistance modeled here, exactly like a
+        # MOS's d/g/s.
+        _no_body_concept = CAP_CLASSES | RES_CLASSES
         devices_by_name = {dev["name"]: dev for dev in extract["devices"]}
         for net in sorted(parasitics["nets"], key=lambda n: n["net"]):
             merged = net["net"] == MERGED_GROUND_RAW
             hub = _spice_node(net["hub_net"])  # T8: e.g. an XCCOMP inter-cap net's own hub
             for terminal in net["terminals"]:
                 term_dev = devices_by_name[terminal["device"]]
-                if term_dev["class"] not in CAP_CLASSES and terminal["terminal"].upper() == "B":
+                if term_dev["class"] not in _no_body_concept and terminal["terminal"].upper() == "B":
                     continue
                 leg = terminal["leg_net"]
                 leg_hub = hub
