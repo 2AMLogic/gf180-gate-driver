@@ -84,6 +84,17 @@ gf180mcu medium-voltage devices, per
   0.10 Ω at end of discharge and 125 °C, with the supply bus itself eating
   26–30 mΩ of that same budget.
 
+## Chipalooza
+
+Facet (a) (the ratified high-voltage gate driver above) is proposed for Open
+Circuit Design's Chipalooza Challenge #5 (GF180MCU / Wafer.Space). See
+[`docs/chipalooza/challenge-5-proposal.md`](docs/chipalooza/challenge-5-proposal.md)
+for the submission-ready proposal: type of block, I/O list mapped to the
+Challenge's pad budget, functional description, a target-specification table
+with every row cited to a dated `sim/` record, a bench test plan for the
+packaged part, and this design's currently-open findings stated plainly, not
+relaxed to make a row pass.
+
 ## Repo layout
 
 ```
