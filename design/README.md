@@ -6,31 +6,41 @@ Schematic capture is xschem; simulation is ngspice via the corner runner in
 ```
 design/
   xschemrc              repo xschem config: resolves the PDK, adds repo symbol libraries
-  gate_driver_core.sch  TOP cell: instantiates level_shifter + output_stage
+  gate_driver_core.sch  TOP cell: instantiates level_shifter + output_stage + uvlo
   gate_driver_core.sym  its hierarchical symbol (must sit here, see below)
   level_shifter.sch     sub-cell (spec §4), + level_shifter.sym
   output_stage.sch      sub-cell (spec §3), + output_stage.sym
+  uvlo.sch              sub-cell (spec §5, decision record 0001 Decisions 4-5), + uvlo.sym
   symbols/              repo-local .sym files that are NOT schematic-derived
   netlist/              xschem-generated .spice netlists
 ```
 
 ## Cell hierarchy
 
-`gate_driver_core` is the top cell: it instantiates `level_shifter` (`x1`) and
-`output_stage` (`x2`) and wires them per `spec/gate-driver.md` and
-`spec/decision-records/0001` Decision 1's port list —
+`gate_driver_core` is the top cell: it instantiates `level_shifter` (`x1`),
+`output_stage` (`x2`) and `uvlo` (`x3`, issue #220) and wires them per
+`spec/gate-driver.md` and `spec/decision-records/0001` Decision 1's port list —
 
 ```
 IN ─▶ x1 level_shifter ─▶ IN_DRV ─▶ x2 output_stage ─▶ OUT
       (VDD/GND_LOGIC + VDD/GND_DRV)   (VDD/GND_DRV)
+
+x3 uvlo (VDD_DRV, GND_DRV, OUT) -- monitors VDD_DRV only, actively pulls
+OUT low (independent of IN/IN_DRV) whenever VDD_DRV is below the release
+threshold (decision record 0001 Decision 5)
 ```
 
-`IN_DRV` is the only signal net between the two sub-cells; `VDD_DRV`/`GND_DRV`
-are shared, and `VDD_LOGIC`/`GND_LOGIC`/`IN` reach the level shifter only. Both
-sub-cells are non-inverting (the level shifter's 2-inverter drive-rail output
-buffer; the output stage's 6-stage chain), so the block is non-inverting per
-decision record 0001, Decision 3. UVLO (spec §5) is in scope for this increment
-but has no implemented sub-cell yet, so it is not instantiated in the top cell.
+`IN_DRV` is the only signal net between `x1`/`x2`; `VDD_DRV`/`GND_DRV` are
+shared across all three sub-cells, and `VDD_LOGIC`/`GND_LOGIC`/`IN` reach the
+level shifter only. `x1`/`x2` are non-inverting (the level shifter's
+2-inverter drive-rail output buffer; the output stage's 6-stage chain), so
+the block is non-inverting per decision record 0001, Decision 3, independent
+of UVLO's own OUT-override. Measured PVT numbers for `x3`'s trip
+thresholds/hysteresis/response time diverge substantially from decision
+record 0001 Decision 4's targets at temperature/process extremes — see
+`spec/decision-records/0018-uvlo-comparator-pvt-measurement.md` and
+`design/uvlo-comparator-sizing.md` before assuming the typ numbers hold at
+every corner.
 
 **Hierarchical schematic-cell symbols must live next to their `.sch`, not in
 `symbols/`.** xschem auto-descends into a child schematic only when the

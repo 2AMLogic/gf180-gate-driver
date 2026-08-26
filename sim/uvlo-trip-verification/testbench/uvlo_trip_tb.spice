@@ -1,0 +1,30 @@
+* uvlo-trip-verification -- generic-CLI stimulus fragment (op-point subset
+* only; --list/--check-env discovery per sim/README.md's facet-index table).
+*
+* DUT (harness "dut", see tb.json): design/netlist/uvlo.spice -- the
+* standalone UVLO comparator/reference cell (issue #220), a FLAT netlist
+* fragment (no .subckt wrapper), so every internal node (nref, ndiv,
+* ntail, ncompp, ncompn, lockout, uvlo_ok) is directly probeable here, not
+* just the three external pins (VDD_DRV, GND_DRV, OUT).
+*
+* This fragment alone is NOT what produces the authoritative trip-voltage/
+* hysteresis/response-time record -- that needs a slow transient triangle-
+* wave ramp of VDD_DRV per (process, temperature) point, which
+* run_uvlo_trip.py composes directly rather than through this static op
+* fragment (see that script's module docstring and tb.json's
+* "description"/"subset_reason").
+*
+* rpu/cload emulate the minimal external boundary condition on OUT (a weak
+* attempt to hold it high, plus a small gate-load-scale capacitance) so the
+* pulldown's behavior is observable even in this standalone cell, without
+* assuming anything about output_stage's specific drive strength (that
+* arbitration is exercised separately by
+* sim/gate-driver-core-drive-with-uvlo/).
+
+* No declared rails (tb.json "rails": {}) -- fixed literal bias, not a
+* harness-substituted <rail>_val parameter (see tb.json's subset_reason).
+vsup VDD_DRV 0 dc 5.0
+vgnd GND_DRV 0 dc 0
+
+rpu VDD_DRV OUT 100k
+cload OUT GND_DRV 6f

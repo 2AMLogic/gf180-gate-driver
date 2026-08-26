@@ -179,29 +179,46 @@ class DegenerateParamsTest(unittest.TestCase):
 
 
 class CommittedNetlistTest(unittest.TestCase):
-    """The committed netlist is all ``nf=1``, so the committed GDS is unaffected.
+    """The committed netlist is all ``nf=1``; this pins the netlist-side count.
 
-    Both numbers below are the ones ``layout/README.md`` and
-    ``gate_driver_core.provenance.json`` publish; they are hard-coded here so
-    that a future netlist edit which *does* change the drawn transistor count
-    fails this suite instead of silently invalidating the committed GDS's
-    ``sha256``.
+    Historically both numbers here also matched ``layout/README.md`` and
+    ``gate_driver_core.provenance.json`` (24 devices / 959 transistors) --
+    they were the same fact read two ways, so a netlist edit that changed the
+    drawn transistor count would fail this suite instead of silently
+    invalidating the committed GDS's ``sha256``.
+
+    Issue #220 (schematic-only slice) added `x3=uvlo` -- 11 new transistors,
+    10 at `nf=1 m=1` and one large pulldown at `nf=1 m=800` -- to
+    `design/gate_driver_core.sch` / `design/netlist/gate_driver_core.spice`,
+    per that issue's own explicit deliverable ("gate_driver_core.sch
+    instantiates UVLO... regenerated and committed") and epic #542's stated
+    phase split ("schematic + pre-layout sim -> layout + post-layout sim").
+    Layout/DRC/LVS -- including regenerating the committed GDS to draw the
+    new UVLO transistors -- is explicitly out of scope for #220 and deferred
+    to #221 ("layout extension needs this schematic + netlist as its LVS
+    reference"). The numbers below are therefore intentionally updated to
+    match the new committed *netlist* (24 + 11 = 35 devices, 959 + 810 = 1769
+    fingers) ahead of the GDS: `layout/README.md` and
+    `gate_driver_core.provenance.json` still (correctly) describe the
+    CURRENT, unregenerated GDS (24 devices / 959 transistors) until #221
+    regenerates it -- that divergence is the expected, tracked state of this
+    transition, not a bug either document should silently paper over.
     """
 
     def test_every_committed_device_line_is_nf1(self):
         # Read as raw text rather than through parse_netlist -- this assertion
-        # is what licenses the "no behavior change" claim, so it must not go
-        # through the parser under test.
+        # is what licenses the "no behavior change [to nf]" claim, so it must
+        # not go through the parser under test.
         with open(NETLIST_PATH, encoding="utf-8") as handle:
             text = handle.read()
         nf_values = re.findall(r"\bnf=(\S+)", text)
-        self.assertEqual(len(nf_values), 24)
+        self.assertEqual(len(nf_values), 35)
         self.assertEqual(set(nf_values), {"1"})
 
     def test_committed_netlist_device_and_transistor_counts(self):
         _ports, devices = parse_netlist(NETLIST_PATH)
-        self.assertEqual(len(devices), 24)
-        self.assertEqual(sum(d.fingers for d in devices), 959)
+        self.assertEqual(len(devices), 35)
+        self.assertEqual(sum(d.fingers for d in devices), 1769)
 
 
 class PassiveDeviceTest(unittest.TestCase):
@@ -263,8 +280,11 @@ class PassiveDeviceTest(unittest.TestCase):
         self.assertEqual(passive.minus, "IN_DRV")
 
     def test_committed_netlist_has_four_passives_in_series(self):
+        # Device count updated to 35 by issue #220 (x3=uvlo) -- see
+        # CommittedNetlistTest's docstring above; the passive (MIM cap) chain
+        # itself is untouched by that change, still 4 devices in series.
         _ports, devices, passives = parse_netlist_full(NETLIST_PATH)
-        self.assertEqual(len(devices), 24)
+        self.assertEqual(len(devices), 35)
         self.assertEqual(
             [p.name for p in passives],
             ["x1_XCCOMP1", "x1_XCCOMP2", "x1_XCCOMP3", "x1_XCCOMP4"],

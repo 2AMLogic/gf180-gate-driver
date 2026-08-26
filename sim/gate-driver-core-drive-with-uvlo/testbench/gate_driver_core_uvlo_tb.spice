@@ -1,0 +1,49 @@
+* gate-driver-core-drive-with-uvlo -- END-TO-END stimulus + reference load
+* for design/netlist/gate_driver_core.spice NOW INCLUDING x3=uvlo (issue
+* #220), substantiating spec/gate-driver.md Sec.3's block-level drive
+* targets end-to-end (as sim/gate-driver-core-drive/ already does) AND
+* decision record 0001 Decisions 4-5's UVLO-lockout output behavior --
+* does OUT correctly stay low while VDD_DRV sits below that corner's own
+* trip point, independent of IN.
+*
+* This is a NEW experiment directory, not an edit of
+* sim/gate-driver-core-drive/ -- that facet's own records remain untouched
+* (append-only evidence, sim/README.md). Stimulus is otherwise identical to
+* that facet's gate_driver_core_tb.spice (same IN pulse timing, same 1nF
+* reference load) so the two are directly comparable; the DUT differs (x3
+* now instantiated) and this file adds two extra always-succeeding status
+* measurements for x3's internal `lockout`/`uvlo_ok` nodes (see tb.json).
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the
+* gf180mcu models, the corner .lib sections, .temp, this experiment's DUT
+* fragment (design/netlist/gate_driver_core.spice, .include'd ahead of this
+* file -- see tb.json's "dut" key), the .control block and .end.
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1) -- modeled here as a
+* milliohm-scale tie, matching every sibling testbench's convention.
+*
+* IN is driven at the block's actual 3.3V logic input pin, an idealized
+* rail-to-rail pulse referenced to GND_LOGIC (0 -> vlogic_val), starting
+* low. Same 300ns-high / 700ns-period shape as sim/gate-driver-core-drive/'s
+* own stimulus, for direct comparability.
+*
+* Internal-node probing: because the DUT's top cell is a FRAGMENT (its own
+* `.subckt gate_driver_core` line is commented out), x1/x2/x3 are
+* instantiated at this deck's top level, so IN_DRV is a plain top-level
+* node and output_stage's taper nodes are `v(x2.n1)`..`v(x2.n5)` as in the
+* sibling facet -- x3's internal comparator/buffer nodes are similarly
+* reached as `v(x3.lockout)` (the active-high OUT-pulldown-enable signal)
+* and `v(x3.uvlo_ok)` (its complement).
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 1n 1n 300n 700n)
+
+* 1 nF reference load (spec Sec.3), same convention as
+* sim/gate-driver-core-drive/testbench/gate_driver_core_tb.spice.
+vimeas OUT outcap
+cload outcap GND_DRV 1n
