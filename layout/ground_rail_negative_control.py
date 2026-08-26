@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """Prove ``check_gate_driver_core.py``'s ``ground_rail_isolation`` PASS is real.
 
-That check is, since issue #132, the **only** automated signal that would catch
-an accidental short between ``GND_LOGIC`` and ``GND_DRV`` in the drawn
-interconnect:
+That check is the one automated signal for an accidental short between
+``GND_LOGIC`` and ``GND_DRV`` in the drawn interconnect that depends on
+nothing but the drawn metal:
 
-* ``klt extract`` (and therefore ``klt lvs``) reports the two rails as one
-  merged net regardless of the drawn metal, because gf180mcu's curated deck
-  ties every NMOS body to one hardcoded substrate global -- klayout-tools #1128;
-* the ``devices`` check normalizes the same merge away (``_canon_net``);
-* DRC does not cover it either: two same-layer shapes on *different* nets that
+* ``klt extract`` (and therefore ``klt lvs``) reported the two rails as one
+  merged net regardless of the drawn metal when issue #132 added this check,
+  because gf180mcu's curated deck ties every NMOS body to one hardcoded
+  substrate global -- klayout-tools #1128.  Issue #221 found that merge gone
+  on every *ordinary* terminal under the currently-installed `klt`
+  (klayout-tools #1149, deck-behavior drift), so LVS can see such a short
+  again today -- but only for as long as the deck keeps behaving that way,
+  which is exactly the thing #1149 shows can change under a fixed design;
+* the ``devices`` check compares the two rails verbatim again for the same
+  reason (issue #221 removed its ``_canon_net`` collapse);
+* DRC does not cover it at all: two same-layer shapes on *different* nets that
   overlap merge into one polygon, so no spacing rule fires.
 
 So a PASS from it is only evidence if the same invocation would have *failed*

@@ -269,7 +269,7 @@
   },
   "generator": {
     "path": "layout/gen_gate_driver_core.py",
-    "sha256": "b0818d0c9062763ff3e2048f72b2cc551f5dd837008b7752efdb6a74b1983069"
+    "sha256": "fa7f2ffac07b45171d229f5ac3fbdbec099c2acca816b8058475bfca4d5100ce"
   },
   "tools": {
     "klt_version": "klt 0.3.0+gc27f7eccf49c",
@@ -281,8 +281,8 @@
     "note": "the klayout build and the extraction deck's content hash are recorded in gate_driver_core.checks.json (klt extract's own provenance block)"
   },
   "git": {
-    "commit": "fdf17d971dcb2d28bc9efeb812ec0e3ee60595e5",
-    "describe": "fdf17d9-dirty"
+    "commit": "5f9d6c0155bce64f3b1235d9dcf60e441e626ee0",
+    "describe": "5f9d6c0-dirty"
   },
   "placement": [
     {

@@ -65,11 +65,14 @@ from __future__ import annotations
 import os
 import re
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from check_gate_driver_core import (  # noqa: E402  (path set above)
+    expected_devices,
+    extracted_devices,
     ground_rail_isolation_verdict,
     mim_stack_verdict,
     routed_nets,
@@ -428,17 +431,97 @@ class MalformedDeviceLineTest(unittest.TestCase):
             )
 
 
+class DeviceKeyGroundDomainTest(unittest.TestCase):
+    """The ``devices`` check tells ``GND_LOGIC`` from ``GND_DRV`` (issue #221).
+
+    ``check_gate_driver_core.py`` used to run every net name in its device
+    comparison key through a ``_canon_net`` helper that collapsed the two
+    ground rails onto one token, because the `klt` build of the day merged
+    them in the extracted netlist (klayout-tools #1128).  Issue #221 showed
+    that merge no longer happens on any *ordinary* terminal (#1149), and the
+    collapse was removed -- otherwise a device wired to the wrong domain's
+    ground would produce a key identical to the correct one, and this
+    independent audit would silently stop covering the cross-domain property
+    CLAUDE.md calls this design's central problem.
+
+    That regression cannot be demonstrated from the committed GDS (the layout
+    is correct), so it is pinned here against synthetic input, on the
+    schematic/extraction shape several real devices in this netlist have: an
+    NMOS whose *source* sits directly on one of the two ground rails.  Both
+    halves of ``check_devices``'s comparison are exercised as they run in the
+    real check -- ``expected_devices`` over the schematic side,
+    ``extracted_devices`` over a one-line extracted netlist.
+    """
+
+    @staticmethod
+    def _device(ground: str) -> Device:
+        return Device(
+            name="MTEST",
+            model="nfet_03v3",
+            w_um=10.0,
+            l_um=0.6,
+            fingers=1,
+            d="x1_inb",
+            g="IN",
+            s=ground,
+            b=ground,
+        )
+
+    @staticmethod
+    def _extracted_line(ground: str, bulk: str = "GND_LOGIC") -> str:
+        """One device as klt writes it: ``X<id> <t1> <gate> <t3> <bulk> <model>``.
+
+        ``bulk`` defaults to ``GND_LOGIC`` for *either* rail on purpose: that
+        is the deck's one hardcoded substrate global (klayout-tools #1128),
+        which is exactly why the key compares gate and source/drain only and
+        leaves the body terminal to `klt lvs` (``lvs/make_reference.py``'s
+        transform 3).
+        """
+        return f"XMTEST x1_inb IN {ground} {bulk} nfet_03v3 W=10u L=0.6u\n"
+
+    def _found(self, text: str):
+        handle = tempfile.NamedTemporaryFile(
+            "w", suffix=".spice", delete=False, encoding="utf-8"
+        )
+        try:
+            handle.write(text)
+            handle.close()
+            return extracted_devices(handle.name)
+        finally:
+            os.unlink(handle.name)
+
+    def test_correctly_wired_device_matches_on_either_rail(self):
+        """The check still passes a correct device on either ground domain."""
+        for ground in ("GND_LOGIC", "GND_DRV"):
+            with self.subTest(ground=ground):
+                self.assertEqual(
+                    expected_devices([self._device(ground)]),
+                    self._found(self._extracted_line(ground)),
+                )
+
+    def test_cross_wired_ground_domain_is_flagged(self):
+        """Logic ground where the schematic says driver ground must not match."""
+        expected = expected_devices([self._device("GND_LOGIC")])
+        found = self._found(self._extracted_line("GND_DRV"))
+        self.assertNotEqual(expected, found)
+        # Reads out of the check exactly as a real miswire would: one device
+        # missing from the layout, one unexpected device found in it.
+        self.assertEqual(sum((expected - found).values()), 1)
+        self.assertEqual(sum((found - expected).values()), 1)
+
+
 class GroundRailIsolationVerdictTest(unittest.TestCase):
     """``check_gate_driver_core.ground_rail_isolation_verdict`` rules correctly.
 
-    Issue #132 draws real substrate-tie geometry for both grounds, which makes
-    `klt extract` report ``GND_LOGIC``/``GND_DRV`` as one merged net
-    (klayout-tools #1128).  Neither ``klt lvs`` nor the ``devices`` check can
-    tell the two rails apart any more, and DRC never could (two overlapping
-    same-layer shapes on different nets merge into one polygon with no spacing
-    violation to raise).  The ``ground_rail_isolation`` check is the only thing
-    left that would catch a real short in the drawn interconnect -- so its
-    *failing* directions have to be pinned, not just its passing one.
+    This check rules on the *drawn* Metal1/Via1/Metal2 interconnect alone --
+    no deck, no device recognition, no substrate global -- which is what
+    makes it independent of whatever the extraction deck merges in any given
+    `klt` build (klayout-tools #1128, and the #1149 drift issue #221 found:
+    the two rails extract separately again on ordinary terminals, so `klt
+    lvs` and the ``devices`` check can see a cross-domain short too).  DRC
+    never could: two overlapping same-layer shapes on different nets merge
+    into one polygon with no spacing violation to raise.  Its *failing*
+    directions have to be pinned, not just its passing one.
 
     The failing cases cannot be produced from the committed stream by
     construction (the layout is correct), so they are exercised here against
@@ -483,7 +566,7 @@ class GroundRailIsolationVerdictTest(unittest.TestCase):
         )
 
     def test_shorted_grounds_fail(self):
-        """The exact failure this check exists for -- and LVS can no longer see."""
+        """The exact failure this check exists for, ruled on the drawn metal."""
         verdict = ground_rail_isolation_verdict(
             self._response([["GND_DRV", "GND_LOGIC"], ["OUT"], ["VDD_DRV"]]), self.NETS
         )

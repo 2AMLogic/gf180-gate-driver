@@ -249,12 +249,15 @@ that remains, follows from reading `klayout-tools`' own
   `check_gate_driver_core.py`'s [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132)
   check verifies independently of the extractor's substrate-identity model —
   `klt components` over Metal1/Via1/Metal2 only, net names off the Metal2 text
-  layer, no deck globals. That check is the *only* remaining automated signal
-  that would catch a real short between the two domains (`klt lvs` cannot,
-  because of this very merge; DRC cannot, because two overlapping same-layer
-  shapes raise no spacing violation), so it carries its own known-good/
-  known-bad control — `ground_rail_negative_control.py` — exactly like the
-  DRC and LVS verdicts do.
+  layer, no deck globals. That check is the only signal for a real short
+  between the two domains that depends on nothing but the drawn metal — `klt
+  lvs` and the `devices` check can see one too now that the rails extract
+  separately (above), but only for as long as the deck keeps behaving that
+  way, and #1149 is the demonstration that it need not; DRC cannot see one at
+  all, because two overlapping same-layer shapes raise no spacing violation.
+  So it carries its own known-good/known-bad control —
+  `ground_rail_negative_control.py` — exactly like the DRC and LVS verdicts
+  do.
 - **PCOMP guard ring — closed, and contacted on two of its four strokes.** A
   closed rectangular Comp+Pplus ring around `DNWELL_DRV`, offset far enough
   out to leave a real, non-touching gap from both `DNWELL_DRV`'s own marker
@@ -407,25 +410,43 @@ rather than replaying how it was made. Its output is committed as
 
 #### Why `ground_rail_isolation` exists (#132)
 
-Drawing real substrate ties for *both* grounds removed the only two automated
-signals that used to distinguish them, at the same time:
+Drawing real substrate ties for *both* grounds looked, at the time, like it had
+removed both automated signals that used to distinguish them at once:
 
-* `klt extract` — and therefore `klt lvs` — now reports `GND_LOGIC` and
-  `GND_DRV` as one merged net no matter what the metal does, because
-  gf180mcu's curated deck ties every NMOS body to one hardcoded substrate
-  global ([klayout-tools #1128](https://github.com/2AMLogic/klayout-tools/issues/1128),
-  and [Known gaps](#known-gaps));
-* the `devices` check normalises that same merge away (`_canon_net`) so it can
-  still compare against the schematic.
+* `klt extract` — and therefore `klt lvs` — reported `GND_LOGIC` and `GND_DRV`
+  as one merged net no matter what the metal did, because gf180mcu's curated
+  deck ties every NMOS body to one hardcoded substrate global
+  ([klayout-tools #1128](https://github.com/2AMLogic/klayout-tools/issues/1128));
+* the `devices` check normalised that same merge away (a `_canon_net` helper)
+  so it could still compare against the schematic.
 
-DRC does not cover the gap either: two same-layer shapes on **different** nets
-that overlap merge into one polygon, so no spacing rule fires — the failure is
-invisible to a spacing check by construction. `ground_rail_isolation` is
-therefore the only thing left that would catch a genuine short between the two
-domains in the drawn interconnect, and it rules on the drawn metal rather than
-on the extractor's model of the substrate. Its ruling is stated over *all*
-nets, not just the two grounds, so an `OUT`/`VDD_DRV` short fails it the same
-way.
+**Issue #221 revised the first half of that, and removed the second.** Under
+the `klt` build now installed, the deck's substrate global surfaces as
+`GND_LOGIC` on the NMOS *body* terminal only; `GND_DRV` extracts as its own,
+separate net on every ordinary terminal, on the *byte-identical* pre-#221 GDS
+as well as the current one — a `klayout-tools` deck-behavior drift
+([#1149](https://github.com/2AMLogic/klayout-tools/issues/1149)), written up in
+[Known gaps](#known-gaps). So `klt lvs` and the `devices` check can both see a
+cross-domain short again today, and `check_gate_driver_core.py`'s device
+comparison now compares the two ground names verbatim rather than collapsing
+them — the collapse would otherwise have made a device wired to logic ground
+indistinguishable from one wired to driver ground, which is exactly the
+cross-domain property this block exists to get right
+(`DeviceKeyGroundDomainTest` in
+[`test_gen_gate_driver_core.py`](test_gen_gate_driver_core.py) pins the
+distinction, since a correct GDS cannot demonstrate it). The body-only form of
+the same normalisation survives in `lvs/make_reference.py`'s `_body_net()`,
+for `klt lvs`, which *does* compare the bulk terminal.
+
+`ground_rail_isolation` keeps its full value regardless, for two reasons.
+It is the only one of the three signals that rules on the **drawn metal**
+rather than on the extractor's model of the substrate — and #1149 is itself the
+demonstration that that model can change under a fixed design, without the
+design changing at all. And DRC covers none of it either way: two same-layer
+shapes on **different** nets that overlap merge into one polygon, so no spacing
+rule fires — the failure is invisible to a spacing check by construction. Its
+ruling is stated over *all* nets, not just the two grounds, so an
+`OUT`/`VDD_DRV` short fails it the same way.
 
 Its PASS has a committed negative control, like the DRC and LVS verdicts:
 
@@ -869,7 +890,9 @@ re-litigation is #163's scope.
 - **The RC DUT's ground rails are no longer ideal — the residual is how the
   merged net's one lumped capacitance is placed (issue
   [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184), closed).**
-  Because the deck reports the two grounds as one merged net (previous gap),
+  Because the RC extraction the committed DUT is built from reports the two
+  grounds as one merged net (the `klt` 0.2.0 behavior the previous gap
+  describes, before the #1149 drift),
   `mk_extracted_dut.py`'s T5 used to skip that net's parasitic star outright,
   leaving both rails as ideal zero-ohm nodes — 297 R legs and the
   `GND_DRV`↔`GND_LOGIC` cap short of the pre-#132 RC DUT, and **optimistic,
