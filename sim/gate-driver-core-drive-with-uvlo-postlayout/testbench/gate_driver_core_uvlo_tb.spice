@@ -1,0 +1,47 @@
+* gate-driver-core-drive-with-uvlo-postlayout -- POST-LAYOUT re-run of
+* sim/gate-driver-core-drive-with-uvlo/ (issue #220's schematic-level facet),
+* against the extracted netlist of the #221-extended layout/gate_driver_core.gds
+* (issue #222, epic #219/#542 Phase 3A slice 3): same end-to-end stimulus
+* chain -- logic-in (IN) -> level_shifter -> output_stage -> 1 nF reference
+* load -- PLUS x3=uvlo actively pulling OUT low whenever VDD_DRV sits below
+* that corner's trip point, now driven against the real drawn/extracted
+* device geometry and (for the RC-parasitic DUT) interconnect parasitics
+* rather than the ideal schematic.
+*
+* Netlist FRAGMENT. The harness supplies the title, .include of the gf180mcu
+* models, the corner .lib sections, .temp, this experiment's DUT fragment
+* (layout/lvs/gate_driver_core.extracted.spice or .extracted-rc.spice,
+* .include'd ahead of this file via tb.json's "dut" key / --dut), the
+* .control block and .end.
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1) -- modeled here as a
+* milliohm-scale tie, matching every sibling testbench's convention
+* (sim/gate-driver-core-drive-postlayout/testbench/gate_driver_core_tb.spice,
+* sim/gate-driver-core-drive-with-uvlo/testbench/gate_driver_core_uvlo_tb.spice).
+*
+* IN is driven at the block's actual 3.3V logic input pin, an idealized
+* rail-to-rail pulse referenced to GND_LOGIC (0 -> vlogic_val), starting low.
+* Same 300ns-high / 700ns-period shape as every sibling drive facet, for
+* direct comparability.
+*
+* Internal-node probing: unlike the schematic DUT (a hierarchical fragment
+* whose own top .subckt line is commented out, so x1/x2/x3's internal nodes
+* read as v(x2.n1) etc.), the EXTRACTED DUT is fully FLAT -- klt extract's
+* own device/net naming preserves the schematic hierarchy prefix textually
+* rather than as a dotted SPICE subcircuit path (layout/lvs/mk_extracted_dut.py's
+* T1), so the same nodes read as v(x2_n1)..v(x2_n5) (confirmed identical
+* convention in sim/gate-driver-core-drive-postlayout/) and, newly for this
+* facet, v(x3_lockout) (x3's active-high OUT-pulldown-enable signal, in
+* place of the schematic's v(x3.lockout)).
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 1n 1n 300n 700n)
+
+* 1 nF reference load (spec Sec.3), same convention as every sibling facet.
+vimeas OUT outcap
+cload outcap GND_DRV 1n

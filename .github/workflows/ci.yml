@@ -159,10 +159,10 @@ jobs:
         run: |
           set -euo pipefail
           python3 layout/lvs/mk_extracted_dut.py --check \
-            --extract layout/lvs/reports/gate_driver_core/20260818-092501-c2493cb.extract.json \
+            --extract layout/lvs/reports/gate_driver_core/20260826-062806-a7dcce1.extract.json \
             --combine -o layout/lvs/gate_driver_core.extracted.spice
           python3 layout/lvs/mk_extracted_dut.py --check \
-            --extract layout/lvs/reports/gate_driver_core/20260818-103925-ec34094.pex-extract.json \
+            --extract layout/lvs/reports/gate_driver_core/20260826-062028-a7dcce1.pex-extract.json \
             -o layout/lvs/gate_driver_core.extracted-rc.spice
 
       - name: Environment check (informational -- no PDK on this runner)

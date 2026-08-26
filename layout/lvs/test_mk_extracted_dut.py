@@ -350,6 +350,125 @@ class AnonymousNetNameTest(unittest.TestCase):
         self.assertTrue(lines)
         self._assert_no_bare_dollar_token(lines)
 
+    def test_spice_node_rewrites_the_backslash_escaped_form_too(self) -> None:
+        """Issue #222: `klt` 0.3.0+g3f98b441bf2f escapes an anonymous net's
+        `$N` as `\\$N` (a literal backslash) in every net-name JSON field --
+        confirmed against a real re-extraction of the #221-extended GDS, and
+        inconsistent with the *device*-name field for the same device, which
+        stays unescaped `$N` (see `_spice_node`'s own docstring). Both
+        spellings must resolve to the same `ANON<N>` node so this script
+        works against either a fresh extraction or an older committed
+        report/fixture.
+        """
+        self.assertEqual(mk._spice_node("\\$22"), "ANON22")
+        self.assertEqual(mk._spice_node("$22"), "ANON22")
+        # a bare backslash with no following '$' is not this convention and
+        # must pass through unchanged (no false-positive rewrite)
+        self.assertEqual(mk._spice_node("x1\\ncb"), "x1\\ncb")
+
+
+class ResistorDeviceTest(unittest.TestCase):
+    """Issue #221/#222: `uvlo`'s bias-resistor network (`Rref`/`R1`/`R2`/`Rfb`,
+    drawn as a chain of `ppolyf_u` unit resistors via `klt gen res_array`)
+    extracts as a new, three-terminal (`a`/`b`/`w`) device class with no
+    `_model_and_body` entry -- ``RES_CLASSES`` pulls it out of the MOS loops
+    the same way ``CAP_CLASSES`` already does for the XCCOMP MiM stack (T7),
+    and emits it as a plain two-terminal ``R`` card (T9). Built from a
+    synthetic extract dict, like ``AnonymousNetNameTest`` above, so this stays
+    covered independent of whether a committed report happens to exercise it.
+    """
+
+    @staticmethod
+    def _synthetic_extract(*, with_parasitics: bool) -> dict:
+        devices = [
+            {
+                "class": "ppolyf_u",
+                "name": "$100",
+                "params": {
+                    "r_ohm": 66666.666667, "l_um": 80.0, "w_um": 0.42,
+                    "area_um2": 33.6, "perimeter_um": 160.84,
+                },
+                "nets": {"a": "VDD_DRV", "b": "\\$101", "w": "GND_LOGIC"},
+            },
+            {
+                "class": "ppolyf_u",
+                "name": "$102",
+                "params": {
+                    "r_ohm": 66666.666667, "l_um": 80.0, "w_um": 0.42,
+                    "area_um2": 33.6, "perimeter_um": 160.84,
+                },
+                "nets": {"a": "\\$101", "b": "GND_DRV", "w": "GND_LOGIC"},
+            },
+        ]
+        extract: dict = {"devices": devices, "parasitics": None}
+        if with_parasitics:
+            extract["parasitics"] = {
+                "nets": [
+                    {
+                        "net": "\\$101",
+                        "hub_net": "\\$101",
+                        "capacitance_ff": 1.0,
+                        "terminals": [
+                            {
+                                "device": "$100", "terminal": "b",
+                                "leg_net": "\\$101__t0", "resistance_ohm": 1.0,
+                            },
+                            {
+                                "device": "$102", "terminal": "a",
+                                "leg_net": "\\$101__t1", "resistance_ohm": 1.0,
+                            },
+                        ],
+                    },
+                ],
+            }
+        return extract
+
+    def test_emits_a_plain_two_terminal_r_card_per_unit_resistor(self) -> None:
+        lines, info = mk.emit(self._synthetic_extract(with_parasitics=False))
+        r_cards = [c for c in _cards(lines) if c[0].startswith("R")]
+        self.assertEqual(len(r_cards), 2)
+        self.assertEqual(r_cards[0], ["R100", "VDD_DRV", "ANON101", "66666.7"])
+        self.assertEqual(r_cards[1], ["R102", "ANON101", "GND_DRV", "66666.7"])
+        self.assertEqual(info["devices"]["ppolyf_u"], 2)
+
+    def test_the_w_terminal_is_never_referenced_by_the_r_card(self) -> None:
+        lines, _ = mk.emit(self._synthetic_extract(with_parasitics=False))
+        r_cards = [c for c in _cards(lines) if c[0].startswith("R")]
+        for card in r_cards:
+            self.assertNotIn("GND_LOGIC", card, "the 'w' guard/tap terminal must not appear (BA4)")
+
+    def test_never_folded_by_combine(self) -> None:
+        """Unlike MOS fingers, --combine must not attempt to fold two
+        electrically-distinct series unit resistors into one card -- there is
+        no simulation-cost case for it (T9), and folding would silently
+        change the circuit (two distinct series resistors are not the same
+        as one resistor with `m=2`).
+        """
+        lines, info = mk.emit(self._synthetic_extract(with_parasitics=False), combine=True)
+        r_cards = [c for c in _cards(lines) if c[0].startswith("R")]
+        self.assertEqual(len(r_cards), 2)
+        self.assertEqual(info["devices"]["ppolyf_u"], 2)
+
+    def test_resistor_terminals_route_through_t5_parasitic_legs(self) -> None:
+        lines, info = mk.emit(self._synthetic_extract(with_parasitics=True))
+        r_cards = [c for c in _cards(lines) if c[0].startswith("R")]
+        # both unit resistors' shared internal node is now a parasitic leg,
+        # not the bare net name -- confirms T9's terminals flow through the
+        # same leg_of() lookup as any MOS/CAP_CLASSES terminal.
+        self.assertTrue(any("ANON101__t0" in card for card in r_cards))
+        self.assertTrue(any("ANON101__t1" in card for card in r_cards))
+        self.assertEqual(info["parasitics"]["r"], 2)
+
+    def test_unknown_passive_class_still_fails_loudly(self) -> None:
+        """A genuinely new, un-modeled device class must raise through
+        `_model_and_body`, not be silently mistaken for a resistor -- the
+        same guarantee `CAP_CLASSES`/`RES_CLASSES` already give each other.
+        """
+        extract = self._synthetic_extract(with_parasitics=False)
+        extract["devices"][0]["class"] = "some_future_passive"
+        with self.assertRaises(SystemExit):
+            mk.emit(extract)
+
 
 if __name__ == "__main__":
     unittest.main()
