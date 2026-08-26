@@ -80,9 +80,13 @@ from gen_gate_driver_core import (  # noqa: E402  (path set above)
     GenError,
     Interconnect,
     Passive,
+    Resistor,
     _device_from_tokens,
+    _resistor_from_tokens,
     parse_netlist,
     parse_netlist_full,
+    resistor_array_params,
+    resistor_ohms,
 )
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "lvs"))
@@ -283,7 +287,7 @@ class PassiveDeviceTest(unittest.TestCase):
         # Device count updated to 35 by issue #220 (x3=uvlo) -- see
         # CommittedNetlistTest's docstring above; the passive (MIM cap) chain
         # itself is untouched by that change, still 4 devices in series.
-        _ports, devices, passives = parse_netlist_full(NETLIST_PATH)
+        _ports, devices, passives, _resistors = parse_netlist_full(NETLIST_PATH)
         self.assertEqual(len(devices), 35)
         self.assertEqual(
             [p.name for p in passives],
@@ -319,9 +323,80 @@ class PassiveDeviceTest(unittest.TestCase):
 
     def test_passive_is_reported_in_full_but_hidden_from_the_mos_parser(self):
         ports_a, devices_a = parse_netlist(NETLIST_PATH)
-        ports_b, devices_b, _passives = parse_netlist_full(NETLIST_PATH)
+        ports_b, devices_b, _passives, _resistors = parse_netlist_full(NETLIST_PATH)
         self.assertEqual(ports_a, ports_b)
         self.assertEqual([d.name for d in devices_a], [d.name for d in devices_b])
+
+
+class ResistorDeviceTest(unittest.TestCase):
+    """``uvlo``'s bare-``R`` bias resistors parse and size correctly (issue #221).
+
+    ``design/netlist/uvlo.spice``'s ``Rref``/``R1``/``R2``/``Rfb`` are ideal
+    SPICE ``R`` elements (an ohms value, no drawn geometry) -- unlike
+    :class:`Device`/:class:`Passive`, which both come from ``X`` lines naming
+    a model.
+    """
+
+    def test_bare_resistor_line_parses(self):
+        resistor = _resistor_from_tokens(
+            "Rref VDD_DRV nref 800k m=1".split(), {}, prefix="x3_"
+        )
+        self.assertIsInstance(resistor, Resistor)
+        self.assertEqual(resistor.name, "x3_Rref")
+        self.assertAlmostEqual(resistor.value_ohm, 800000.0, places=3)
+        self.assertEqual(resistor.plus, "x3_VDD_DRV")
+        self.assertEqual(resistor.minus, "x3_nref")
+
+    def test_resistor_terminals_resolve_through_the_instance_mapping(self):
+        resistor = _resistor_from_tokens(
+            "Rref VDD_DRV nref 800k m=1".split(), {"VDD_DRV": "VDD_DRV"}, prefix="x3_"
+        )
+        self.assertEqual(resistor.plus, "VDD_DRV")
+        self.assertEqual(resistor.minus, "x3_nref")
+
+    def test_m_other_than_one_raises(self):
+        with self.assertRaises(GenError):
+            _resistor_from_tokens("R1 a b 100k m=2".split(), {}, prefix="")
+
+    def test_committed_netlist_has_four_resistors(self):
+        _ports, devices, _passives, resistors = parse_netlist_full(NETLIST_PATH)
+        self.assertEqual(len(devices), 35)
+        self.assertEqual(
+            [(r.name, r.value_ohm, r.plus, r.minus) for r in resistors],
+            [
+                ("x3_Rref", 800000.0, "VDD_DRV", "x3_nref"),
+                ("x3_R1", 880000.0, "VDD_DRV", "x3_ndiv"),
+                ("x3_R2", 200000.0, "x3_ndiv", "GND_DRV"),
+                ("x3_Rfb", 16000000.0, "x3_uvlo_ok", "x3_ndiv"),
+            ],
+        )
+
+    def test_resistor_array_params_reproduce_the_target_value_exactly(self):
+        """``resistor_ohms`` inverts ``resistor_array_params`` bit-for-bit.
+
+        This is what makes the LVS reference (``make_reference.py`` transform
+        7) and the drawn geometry agree: both call these two functions on the
+        same ``value_ohm``.
+        """
+        for value_ohm in (800000.0, 880000.0, 200000.0, 16000000.0, 1.0, 1e9):
+            num, rows, length_um = resistor_array_params(value_ohm)
+            self.assertGreaterEqual(num, 1)
+            self.assertGreaterEqual(rows, 1)
+            self.assertGreater(length_um, 0.0)
+            self.assertAlmostEqual(resistor_ohms(num, length_um), value_ohm, delta=value_ohm * 1e-9)
+
+    def test_resistor_array_params_folds_a_large_value_into_multiple_rows(self):
+        # Rfb=16 Mohm would be a single ~19.2mm strip undrawn -- must fold.
+        num, rows, length_um = resistor_array_params(16_000_000.0)
+        self.assertGreater(num, 1)
+        self.assertGreater(rows, 1)
+        self.assertLessEqual(length_um, 80.0 + 1e-9)
+
+    def test_zero_or_negative_value_raises(self):
+        with self.assertRaises(GenError):
+            resistor_array_params(0.0)
+        with self.assertRaises(GenError):
+            resistor_array_params(-100.0)
 
 
 class MalformedDeviceLineTest(unittest.TestCase):

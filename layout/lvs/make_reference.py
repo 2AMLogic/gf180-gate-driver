@@ -35,30 +35,48 @@ and does not cover" for the full rationale):
    unrelated device class from the layout's plain ``nfet``, and the whole
    compare fails to find a single correspondence -- confirmed against a real
    `klt lvs` run of the committed GDS.
-3. **NMOS body terminal -> the schematic's own GND_LOGIC/GND_DRV assignment,
-   canonicalized by transform 5 below (issue #132, revised).** gf180mcu's
-   curated extraction deck draws no distinct p-substrate tap layer and --
-   confirmed by reading `klayout-tools`' own `extract.py` -- ties *every*
-   NMOS body, in every layout, to one hardcoded global identity
+3. **NMOS body terminal -> the deck's one global substrate identity, which
+   this design's own drawn tie geometry happens to name ``GND_LOGIC``
+   (issue #132, revised again for issue #221).** gf180mcu's curated
+   extraction deck draws no distinct p-substrate tap layer and -- confirmed
+   by reading `klayout-tools`' own `extract.py` -- ties *every* NMOS body,
+   in every layout, to one hardcoded global identity
    (``ExtractionDeck.substrate_net``, internal name ``vsubs``, via KLayout's
    ``connect_global``) regardless of which DNWELL/LVPWELL region a device's
    diffusion sits in (klayout-tools #1128, filed upstream -- there is no way
    to scope a drawn substrate tap to only one of this design's two domains).
-   That part of the limitation is real and permanent. But once real Pplus tie
-   geometry is drawn for *both* grounds (`body_ties()`), that global identity
-   stops being an anonymous placeholder: it becomes directly, physically
-   wired to real labeled Metal1 (both `GND_LOGIC` and `GND_DRV`), so `klt
-   extract` names the merged node after that real metal instead of falling
-   back to its own synthesized `vsubs` label -- confirmed against a real
-   extraction, `vsubs` does not appear anywhere in the extracted netlist's
-   pin list once both taps are drawn. The two domains are still merged (see
-   transform 5), but the merged identity is now a *real* net the schematic
-   also names (transform 5's `GND_DRV|GND_LOGIC`), not a synthesized
-   placeholder -- so the reference uses the device's own real body net here,
-   exactly like transform 4 already does for PMOS. This turned out to fully
-   resolve `klt lvs`'s ``device.body_unverified`` finding for NMOS too (not
-   only reduce its severity): a real `klt lvs` run against this geometry
-   reports zero ``device.body_unverified`` mismatches, on either flavor.
+   That part of the limitation is real and permanent, and the body terminal
+   of every one of this layout's 1105 drawn NMOS devices (both domains)
+   still resolves to exactly one net, confirmed against a real extraction of
+   the issue #221-extended GDS.
+
+   **What changed (issue #221): that merged identity no longer also absorbs
+   `GND_DRV`.** An earlier revision of this transform (and of transform 5
+   below) additionally claimed the merged identity gets *named* after
+   whichever real metal directly straps a tap into it, and that both
+   `GND_LOGIC`'s (native-substrate) and `GND_DRV`'s (isolated-LVPWELL)
+   taps do so once `body_ties()` draws both -- producing one joined pin
+   `GND_DRV|GND_LOGIC`, confirmed at the time against a real extraction on
+   `klt` 0.2.0. Re-running that *exact, byte-identical, previously-clean*
+   GDS (``git show ec34094:layout/gate_driver_core.gds``) through the `klt`
+   now installed (0.3.0, a different `provenance.deck.content_hash`)
+   reproduces neither claim: the merged identity now surfaces under the
+   literal name ``GND_LOGIC`` alone, and ``GND_DRV`` extracts as its own,
+   separate, unmerged net on every terminal -- on both the pre-#221 GDS
+   *and* this issue's UVLO-extended one. This is exactly the generic
+   tool-gap `klayout-tools` issue #1149 already tracks upstream ("gf180mcu
+   deck: substrate/well-tap recognition behavior changed between deck
+   builds, silently invalidating previously-passing LVS evidence") -- filed
+   the same day the old evidence was recorded, and already closed there, so
+   this script adapts to the deck's current, real behavior rather than
+   re-filing a duplicate. Net effect for this transform: the reference
+   canonicalizes an NMOS body terminal to the literal string ``"GND_LOGIC"``
+   (:data:`BODY_NET`) regardless of which of the two the schematic names,
+   and no longer folds `GND_DRV` into it anywhere else (see transform 5,
+   removed). This still fully resolves `klt lvs`'s ``device.body_unverified``
+   finding for NMOS (a real `klt lvs` run against the current geometry
+   reports zero, on either flavor) -- only the *ordinary* d/g/s use of
+   `GND_DRV` stops being folded into that same identity.
 4. **PMOS body terminal -> the schematic's own VDD_LOGIC/VDD_DRV assignment
    (issue #132).** Unlike #3, this *is* achievable: `klt`'s gf180mcu deck
    derives a genuine per-Nwell-island well tie from an Nplus-covered Comp
@@ -75,24 +93,28 @@ and does not cover" for the full rationale):
    with no cross-device or cross-domain merge risk, unlike #3. So this
    transform now uses ``device.b`` directly instead of a per-instance
    anonymous placeholder.
-5. **GND_LOGIC/GND_DRV -> one merged net, everywhere they appear (not only
-   as a body terminal) (issue #132).** Transform 3's global substrate
-   identity is not scoped to the body terminal alone: once real Pplus tie
-   geometry is drawn for *both* grounds (`body_ties()`), `connect_global`
-   ties every net that Metal1-contacts either domain's substrate tap into
-   that one identity -- which, transitively, is every net-terminal
-   (source/drain, not just body) that is directly wired to `GND_LOGIC` or
-   `GND_DRV` metal. Confirmed against a real extraction: the layout-side
-   netlist reports one merged pin, literally named ``GND_DRV|GND_LOGIC``
-   (`klt`'s own join of the two original labels, alphabetical order), and
-   drops from 18 to 17 named nets. `VDD_LOGIC`/`VDD_DRV` are unaffected --
-   each PMOS well island is its own geometrically independent net (transform
-   4), so there is no equivalent global identity on the supply side. This is
-   the same real electrical fact transform 3 already documents (Decision 1:
-   one electrical reference node, split into two pins only at the pad ring),
-   now surfacing on ordinary device terminals instead of only body
-   terminals, so the reference must merge the two net *names* -- not just
-   the body assignment -- to match.
+5. **(Removed by issue #221.) `GND_LOGIC` and `GND_DRV` are two genuinely
+   separate nets on every *ordinary* (non-body) terminal, and the reference
+   now states them as such.** An earlier revision of this transform folded
+   both names together everywhere a device used either one, reasoning that
+   real substrate-tie geometry for both domains made `connect_global` merge
+   them transitively on ordinary source/drain terminals too, not just on
+   body. Transform 3 above records why that no longer reproduces under the
+   currently-installed deck build (klayout-tools issue #1149): `GND_DRV`
+   does not merge with the body-terminal identity (or with `GND_LOGIC`) on
+   any terminal any more. Removing this transform is not just chasing the
+   tool's current behavior, though -- it also matches this block's own
+   ratified architecture better than the old assumption did:
+   `spec/decision-records/0001` (Decision 1) states the two grounds are "one
+   electrical reference node, split into two pins **only at the pad
+   ring**." This layout is the bare core block, with no pad ring drawn --
+   so at *this* level, `GND_LOGIC` and `GND_DRV` are correctly two distinct,
+   unconnected nets, and a body-tie side effect that happened to merge them
+   anyway (on the old deck build) was standing in for a tie this block does
+   not itself draw, not confirming one that exists. `VDD_LOGIC`/`VDD_DRV`
+   were never subject to this transform (each PMOS well island is its own
+   geometrically independent net, transform 4) and are unaffected either
+   way.
 6. **MiM capacitors carry an extracted capacitance, not a schematic one
    (issue #166).** The schematic states the ``XCCOMP*`` stack as geometry
    (``c_width``/``c_length``), because that is what a layout can draw and
@@ -104,6 +126,26 @@ and does not cover" for the full rationale):
    (:data:`MIM_AREA_CAP_F_UM2` / :data:`MIM_PERIM_CAP_F_UM`, below), which is
    a *derivation* from the netlist's own numbers -- not a value copied back
    out of an extraction, which would make the compare circular.
+7. **Bare-``R`` resistors -> a 3-terminal ``ppolyf_u`` device, at the
+   schematic's own ohms value (issue #221).** ``uvlo.spice``'s
+   ``Rref``/``R1``/``R2``/``Rfb`` state only an ideal resistance, no drawn
+   geometry (``design/uvlo-comparator-sizing.md``: a physical realization is
+   this issue's own scope). ``layout/gen_gate_driver_core.py``'s
+   :func:`~gen_gate_driver_core.resistor_array_params` sizes a
+   ``klt gen res_array`` block (gf180mcu's ``ppolyf_u``, 350 ohm/sq) to draw
+   that exact ohms value, confirmed against a real ``klt extract`` run:
+   ``r_ohm == 350 * l_um / w_um`` exactly, device class ``ppolyf_u``, three
+   terminals ``a``/``b``/``w`` -- the third (``w``) is the same deck-global
+   substrate identity every NMOS body ties to (transform 3, :data:`BODY_NET`
+   under the currently-installed deck), which a resistor's own ideal
+   two-terminal schematic model was never otherwise going to name.
+   `kdb.NetlistComparer`'s resistor
+   value comparison is tight (confirmed empirically: matches at a ~4e-7
+   relative difference, mismatches at ~4e-6), so the reference states
+   *exactly* the same ``value_ohm`` the netlist itself carries -- the
+   generator's own :func:`~gen_gate_driver_core.resistor_array_params`/
+   :func:`~gen_gate_driver_core.resistor_ohms` pair guarantees the drawn
+   geometry reproduces it, not a value copied back out of an extraction.
 
 Usage::
 
@@ -132,12 +174,25 @@ import gen_gate_driver_core as generator  # noqa: E402
 #: docstring above) back to this module finds the name defined somewhere.
 SUBSTRATE_NET = "vsubs"
 
-#: The two schematic grounds that real body-tie geometry (issue #132's
-#: `body_ties()`) merges into one net at extraction time -- transform 5
-#: above. Matches `klt extract`'s own synthesized joined pin name exactly
-#: (`"|".join(sorted(...))`, confirmed against a real extraction).
-_MERGED_GROUND_NETS = ("GND_DRV", "GND_LOGIC")
-MERGED_GROUND_NET = "|".join(sorted(_MERGED_GROUND_NETS))
+#: The two schematic net names that can appear as an NMOS body/resistor-
+#: substrate terminal, both of which canonicalize to :data:`BODY_NET`
+#: (transform 3) -- `body_ties()` draws real Pplus tie geometry for each,
+#: and the deck's global substrate identity (`connect_global`) ties every
+#: NMOS body to one node regardless of which of the two a given device's
+#: own tap happens to be strapped to.
+_BODY_NET_ALIASES = ("GND_DRV", "GND_LOGIC")
+
+#: The literal name the deck's merged global substrate identity currently
+#: surfaces under (issue #221 revision -- see transform 3's docstring entry
+#: for why this is `"GND_LOGIC"` alone rather than a `GND_DRV`-joined
+#: string, and klayout-tools issue #1149 for the upstream deck-behavior-
+#: drift this adapts to). Confirmed against a real extraction of this
+#: layout: every one of its 1105 drawn NMOS devices' body terminal reads
+#: exactly this, on both this issue's UVLO-extended GDS and the pre-#221
+#: one. **Not** used for `GND_DRV`/`GND_LOGIC` on any *other* (non-body)
+#: terminal -- those keep their own schematic name unchanged (transform 5,
+#: removed).
+BODY_NET = "GND_LOGIC"
 
 TOP = "gate_driver_core"
 
@@ -176,35 +231,35 @@ def mim_capacitance_f(width_um: float, length_um: float) -> float:
     )
 
 
-def _canon(net: str) -> str:
-    """Apply transform 5: fold ``GND_LOGIC``/``GND_DRV`` to one merged net."""
-    return MERGED_GROUND_NET if net in _MERGED_GROUND_NETS else net
+def _body_net(net: str) -> str:
+    """Apply transform 3: canonicalize an NMOS/resistor body terminal.
+
+    Only ever called on a *body* (or resistor-substrate) terminal -- an
+    ordinary d/g/s or resistor plus/minus terminal keeps its own schematic
+    name unchanged (transform 5, removed; see the module docstring).
+    """
+    return BODY_NET if net in _BODY_NET_ALIASES else net
 
 
 def build_reference() -> tuple[str, dict]:
-    _top_ports, devices, passives = generator.parse_netlist_full(
+    _top_ports, devices, passives, resistors = generator.parse_netlist_full(
         generator.NETLIST_PATH
     )
 
     lines: list[str] = []
-    counts = {"nfet": 0, "pfet": 0, "cap": 0}
+    counts = {"nfet": 0, "pfet": 0, "cap": 0, "res": 0}
     used_nets: set[str] = set()
 
     for device in devices:
-        # PMOS: the schematic's own body net (transform 4). NMOS: the
-        # schematic's own body net too, canonicalized by transform 5 -- see
-        # that transform's docstring entry for why the deck's *global*
-        # substrate identity (SUBSTRATE_NET) is no longer the right model
-        # once real tie geometry exists for both grounds: that identity is
-        # now itself directly, physically wired to real labeled metal
-        # (GND_LOGIC and GND_DRV), so `klt extract` names it after that real
-        # metal instead of falling back to its own synthesized `vsubs`
-        # placeholder -- confirmed against a real extraction (`vsubs` no
-        # longer appears anywhere in the extracted netlist's pin list).
-        body = device.b
-        # Transform 5: GND_LOGIC/GND_DRV merge on every terminal, not just
-        # body, once real tie geometry is drawn for both.
-        d, g, s, body = (_canon(n) for n in (device.d, device.g, device.s, body))
+        # d/g/s keep their own schematic name unchanged -- `GND_DRV` and
+        # `GND_LOGIC` are two genuinely separate nets on these terminals
+        # (transform 5, removed). Only the body terminal canonicalizes
+        # (transform 3): PMOS to its own real per-device Nwell-tie net
+        # (transform 4, already device.b -- `_body_net` is a no-op for a
+        # VDD_LOGIC/VDD_DRV value), NMOS to the deck's one global substrate
+        # identity, `BODY_NET`.
+        d, g, s = device.d, device.g, device.s
+        body = _body_net(device.b)
         used_nets.update((d, g, s, body))
         counts[device.flavor] += device.fingers
         for finger in range(device.fingers):
@@ -220,9 +275,11 @@ def build_reference() -> tuple[str, dict]:
     # the model token as a third, bulk terminal). The class name is what pairs
     # this side with `klt extract`'s own `cap_mim_2f0_m4m5_noshield` devices;
     # KLayout matches device-class names case-insensitively, so the reader's
-    # up-casing is harmless.
+    # up-casing is harmless. Neither terminal is ever `GND_DRV`/`GND_LOGIC`
+    # (the chain lives entirely on the level shifter's own internal/IN_DRV
+    # nets), so no canonicalization applies here.
     for passive in passives:
-        plus, minus = (_canon(n) for n in (passive.plus, passive.minus))
+        plus, minus = passive.plus, passive.minus
         used_nets.update((plus, minus))
         counts["cap"] += 1
         lines.append(
@@ -230,17 +287,55 @@ def build_reference() -> tuple[str, dict]:
             f"C={mim_capacitance_f(passive.w_um, passive.l_um):.6g}"
         )
 
+    # Transform 7: the uvlo bias resistor network (issue #221). A netlist `R`
+    # element is *folded* by the generator into `num` series unit resistors
+    # (`resistor_array_params`, `Interconnect.resistors`) -- so, exactly like
+    # transform 6's MiM series chain, the reference must state each drawn
+    # unit device and its real interior series node, not one lumped device at
+    # the netlist's ohms value: `klt lvs` compares devices one-for-one, and a
+    # single-device reference against `num` drawn units is a device-count
+    # mismatch even though the two are electrically equivalent (confirmed
+    # against a real `klt lvs` run -- a lumped reference reported 0/1777
+    # devices matched). Every unit is written
+    # `R<name>_<i> <a> <b> <w> ppolyf_u R=<value>` -- confirmed against a real
+    # `klt lvs` run that this is the spelling `NetlistSpiceReader` reads as a
+    # 3-terminal device of class `ppolyf_u` with an `R=` parameter, pairing
+    # with `klt extract`'s own `ppolyf_u` devices. `plus`/`minus` are ordinary
+    # two-terminal connections (one of R2's two is literally `GND_DRV`) and
+    # keep their own schematic name unchanged, exactly like a MOS d/g/s
+    # terminal; only the synthesized third terminal is the deck's global
+    # substrate identity every NMOS body also ties to, so it canonicalizes
+    # through `_body_net`. The `num - 1` interior nodes are synthesized here
+    # (the schematic states one ideal resistor, no internal nodes) but stay
+    # unpromoted (never added to `named_nets`/pins, same as the MiM stack's
+    # interior nodes) -- `klt extract` leaves the layout's own matching
+    # jumpers unlabeled too, so both sides resolve them structurally rather
+    # than by name.
+    for resistor in resistors:
+        plus, minus = resistor.plus, resistor.minus
+        num, _rows, length_um = generator.resistor_array_params(resistor.value_ohm)
+        unit_ohm = generator.resistor_ohms(1, length_um)
+        nodes = [plus] + [f"{resistor.name}_n{i}" for i in range(1, num)] + [minus]
+        used_nets.update(nodes)
+        used_nets.add(BODY_NET)
+        counts["res"] += num
+        for i in range(num):
+            lines.append(
+                f"R{resistor.name}_{i} {nodes[i]} {nodes[i + 1]} "
+                f"{BODY_NET} ppolyf_u R={unit_ohm:.9g}"
+            )
+
     # Pins: every net named directly on a device terminal (`klt extract`
     # promotes every such labeled net to a top-level pin when the layout is
-    # flat with no sub-cell instances left to demote them -- confirmed
-    # against a real extraction: 17 named nets (18 schematic net names, minus
-    # one for the GND_LOGIC/GND_DRV merge, transform 5). No separate
-    # synthesized `vsubs` pin: both PMOS body (transform 4) and NMOS body
-    # (transform 3, revised) now resolve into this same named-net set, since
-    # real tie geometry wires the deck's global substrate identity directly
-    # to real labeled metal instead of leaving it an anonymous placeholder --
-    # `vsubs` does not appear anywhere in a real extraction of this layout
-    # any more.
+    # flat with no sub-cell instances left to demote them). `GND_LOGIC` and
+    # `GND_DRV` are now both real, separate pins (transform 5 removed) --
+    # confirmed against a real extraction of the issue #221-extended GDS: 18
+    # named nets, no merge. No separate synthesized `vsubs` pin: both PMOS
+    # body (transform 4) and NMOS body (transform 3) resolve into a named net
+    # this set already carries, since real tie geometry wires the deck's
+    # global substrate identity directly to real labeled metal instead of
+    # leaving it an anonymous placeholder -- `vsubs` does not appear anywhere
+    # in a real extraction of this layout.
     #
     # The MiM stack's own interior nodes (``x1_nccomp1``..``3``) are
     # deliberately *not* pins and deliberately not labeled in the layout
@@ -251,8 +346,8 @@ def build_reference() -> tuple[str, dict]:
     # point -- the comparer has to find the four-deep series chain
     # topologically, anchored at the two named ends.
     named_nets = {d.d for d in devices} | {d.g for d in devices} | {d.s for d in devices}
-    named_nets |= {d.b for d in devices}
-    pins = sorted({_canon(n) for n in named_nets})
+    named_nets |= {_body_net(d.b) for d in devices}
+    pins = sorted(named_nets)
 
     header = [
         "* LVS reference netlist for gate_driver_core -- GENERATED, do not edit.",
@@ -260,12 +355,14 @@ def build_reference() -> tuple[str, dict]:
         "* Produced by layout/lvs/make_reference.py from",
         "* design/netlist/gate_driver_core.spice via",
         "* layout/gen_gate_driver_core.py's own parse_netlist_full(), applying the",
-        "* six mechanical transforms documented in that script's module docstring.",
+        "* seven mechanical transforms documented in that script's module docstring.",
         "*",
         f"* MOS devices: {counts['nfet']} nfet + {counts['pfet']} pfet "
         f"({len(devices)} schematic instances, expanded to drawn finger count)",
         f"* MiM caps  : {counts['cap']} ({len(passives)} schematic instances, "
         "1:1 -- one drawn plate pair each)",
+        f"* Resistors : {counts['res']} ppolyf_u ({len(resistors)} schematic "
+        "instances, 1:1 -- one folded res_array block each)",
         "",
         f".SUBCKT {TOP} " + " ".join(pins),
     ]
@@ -276,6 +373,7 @@ def build_reference() -> tuple[str, dict]:
         "nets": sorted(used_nets),
         "devices": len(devices),
         "passives": len(passives),
+        "resistors": len(resistors),
     }
 
 
@@ -295,6 +393,7 @@ def main() -> int:
     print(f"wrote {args.output}")
     print(f"  devices : {info['devices']} schematic instances -> {info['counts']} fingers")
     print(f"  passives: {info['passives']} MiM cap(s)")
+    print(f"  resistors: {info['resistors']} ppolyf_u")
     print(f"  pins    : {' '.join(info['pins'])}")
     print(f"  nets    : {len(info['nets'])}")
     return 0

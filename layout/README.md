@@ -26,16 +26,21 @@ layout/
 
 ## Status: DRC-clean and LVS-match, within a stated deck scope
 
+The block now includes all three sub-cells the schematic instantiates —
+`level_shifter`, `output_stage`, and (issue #221) `uvlo` (UVLO comparator +
+reference, including its bias-resistor network) — not just the first two.
+
 | | |
 |---|---|
-| Device list matches the schematic | yes — 24 netlist devices → 959 transistors, plus the 4-deep `XCCOMP*` MiM series stack, verified |
+| Device list matches the schematic | yes — 35 netlist devices → 1769 transistors, the 4-deep `XCCOMP*` MiM series stack, and (#221) 271 `ppolyf_u` resistor primitives, verified |
 | Gate/source/drain connectivity matches | yes — verified device-by-device against the netlist |
 | Compensation capacitor drawn | **yes (#166)** — four `cap_mim_2f0_m4m5_noshield` plates in series, 5.0 × 5.0 µm each, on the process-fixed Metal4-FuseTop-Metal5 pair; extracted, LVS-matched, and its three interior nodes asserted floating ([below](#the-xccomp-mim-compensation-stack-166)) |
+| `uvlo` bias-resistor network drawn | **yes (#221)** — `Rref`/`R1`/`R2`/`Rfb`, each a `klt gen res_array` block of series `ppolyf_u` unit resistors sized to the schematic's own ohms value ([`resistor_array_params`](gen_gate_driver_core.py)); extracted and LVS-matched |
 | 3.3 V and 5 V/6 V devices in separate DNWELL regions | yes — verified geometrically (DRM 7.2) |
 | DRC-clean | yes — `status: clean`, 0 violations, **within the deck scope below** |
-| LVS-clean | yes — `status: match`, 963/963 devices, 20/20 nets, 17/17 pins, **1 warning-only finding below (unrelated to body ties)** |
-| Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 959 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 660 PMOS, `GND_LOGIC`/`GND_DRV` for the 299 NMOS). `klt lvs`'s `device.body_unverified` finding — 959 mismatches before this issue — is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for the one real, permanent side effect: the two grounds extract as one merged net) |
-| Post-layout simulation | yes — two full PVT-grid records on the LVS-verified extracted netlist (with and without interconnect RC), `sim/gate-driver-core-drive-postlayout/`. Both records' overall verdict is `FAIL` on **inherited** misses the schematic-side record already carries — [enumerated below](#post-layout-simulation), not summarised away |
+| LVS-clean | yes — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins, **1 warning-only finding below (unrelated to body ties)** |
+| Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 1769 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 664 PMOS, the deck's global substrate identity for the 1105 NMOS). `klt lvs`'s `device.body_unverified` finding is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for how the two grounds now compare — revised by issue #221) |
+| Post-layout simulation | **pending re-verification against this GDS (issue #222)** — the committed PVT-grid records under `sim/gate-driver-core-drive-postlayout/` were extracted from the pre-#221 (level_shifter + output_stage only) GDS; re-running them against the uvlo-extended extracted netlist is explicitly the next slice of #219, not this issue's scope. [Below](#post-layout-simulation) still describes that pre-#221 evidence as what it is |
 
 Both verdicts are real (each has a committed negative control, below) but
 neither is a tapeout signoff: the deck does not carry rules for this layout's
@@ -71,9 +76,11 @@ klt cells layout/gate_driver_core.gds
 
 ## How it is built
 
-1. **Flatten.** The two sub-cells `level_shifter` (`x1`) and `output_stage`
-   (`x2`) are flattened into one device list carrying top-level net names.
-   Internal sub-cell nets keep an `x1_`/`x2_` prefix (`x1_nca`, `x2_n3`, …).
+1. **Flatten.** The three sub-cells `level_shifter` (`x1`), `output_stage`
+   (`x2`) and (issue #221) `uvlo` (`x3`) are flattened into one device list
+   carrying top-level net names, plus one bare-`R` resistor list for `uvlo`'s
+   own bias network (`Rref`/`R1`/`R2`/`Rfb`). Internal sub-cell nets keep an
+   `x1_`/`x2_`/`x3_` prefix (`x1_nca`, `x2_n3`, `x3_ndiv`, …).
 2. **Devices — `klt gen mos_array`, once per netlist device.** A device with
    `W=W nf=N m=M` is drawn as a single unit device folded into `N*M` parallel
    gate fingers of width `W/N` each (`finger_topology: "parallel"`), which is
@@ -81,7 +88,7 @@ klt cells layout/gate_driver_core.gds
    transistor whose width is itself split across `N` fingers, all sharing one
    source, drain and gate strap. `klt extract` reads them back as `N*M`
    parallel transistors, so the layout's transistor count equals the
-   netlist's (959) rather than 24, and the total drawn width is `W*M`
+   netlist's (1769) rather than 35, and the total drawn width is `W*M`
    whatever `N` is.
 
    Both halves of that handoff are load-bearing and both are confirmed rather
@@ -98,24 +105,35 @@ klt cells layout/gate_driver_core.gds
    that folds a device cannot silently draw an `N`×-too-wide transistor.
 
 [klt-gen]: https://github.com/2AMLogic/klayout-tools/blob/main/docs/cli/gen.md
-3. **Wiring + markers — `klt draw`, once.** One flat cell carrying the Metal2
+3. **Resistors — `klt gen res_array`, once per netlist `R` element (issue
+   #221).** `uvlo`'s `Rref`/`R1`/`R2`/`Rfb` state an ideal ohms value with no
+   drawn geometry, so [`resistor_array_params`](gen_gate_driver_core.py)
+   folds each into `num` series `ppolyf_u` unit resistors (gf180mcu's base
+   350 Ω/sq poly resistor, `klt gen res_array`'s only flavor this deck
+   implements) sized to reproduce that exact value.
+4. **Wiring + markers — `klt draw`, once.** One flat cell carrying the Metal2
    net rails, the Metal1 stubs and gate routes, the Via1 stack between them,
    the net-name labels, the voltage-domain marker geometry, every PMOS
    device's well-tie tap, the PCOMP guard ring (#132 — see
-   "[Body ties and guard ring](#body-ties-and-guard-ring-132)" below), and the
+   "[Body ties and guard ring](#body-ties-and-guard-ring-132)" below), the
    `XCCOMP*` MiM capacitor stack (#166 — see
-   "[The XCCOMP MiM compensation stack](#the-xccomp-mim-compensation-stack-166)").
-4. **Composition — `klt gen-compose`** with `placement.strategy: "explicit"`,
-   merging the 24 device cells and the wiring cell into one
-   `gate_driver_core` top cell at the origins step 2 computed.
+   "[The XCCOMP MiM compensation stack](#the-xccomp-mim-compensation-stack-166)"),
+   and (issue #221) `uvlo`'s bias-resistor escape wiring — see
+   "[Resistor network](#resistor-network-uvlo-221)" below.
+5. **Composition — `klt gen-compose`** with `placement.strategy: "explicit"`,
+   merging the 35 device cells, the 4 resistor cells and the wiring cell into
+   one `gate_driver_core` top cell at the origins steps 2/3 computed.
 
 ### Floorplan
 
 Every device is a left-aligned horizontal strip; strips stack upward in
 netlist order — the four thin-oxide 3.3 V devices first, then a 20 µm domain
-gap, then the twenty thick-oxide 5 V/6 V devices. `mos_array` puts a strip's
-source pad on its left edge, its drain pad on its right edge and its gate pad
-on its top edge, which gives a router-free orthogonal wiring scheme:
+gap, then the thirty-one thick-oxide 5 V/6 V devices (up from twenty pre-#221:
+`output_stage`'s ten plus `uvlo`'s own eleven MOSFETs, one of them — `MPD`,
+the OUT pulldown — folded `m=800`, by far the widest single strip in the
+block). `mos_array` puts a strip's source pad on its left edge, its drain pad
+on its right edge and its gate pad on its top edge, which gives a
+router-free orthogonal wiring scheme:
 
 - net rails run **vertically on Metal2**, in a channel left of the strips
   (sources and gates) and a channel right of them (drains);
@@ -126,15 +144,45 @@ on its top edge, which gives a router-free orthogonal wiring scheme:
   in a cross-over band above the whole stack.
 
 Metal1 stubs therefore pass *under* unrelated Metal2 rails with no via, which
-is what keeps the scheme short-free without a router. The result is
-553 × 494 µm — dominated by `x2_XMP6`/`x2_XMN6`, the 500- and 220-finger final
-output devices.
+is what keeps the scheme short-free without a router — except for the one
+place that stopped being true once `MPD`'s 800-finger fold made the device
+column ~900 µm wide (issue #221): a resistor's own escape wire back to its
+net's rail is drawn on **Metal3**, not Metal1, specifically because a
+same-layer Metal1 crossing against some device's own now-block-wide drain
+stub is no longer confined to "empty" territory — see
+"[Resistor network](#resistor-network-uvlo-221)" below for the incident this
+was fixed against. The result is 1643.84 × 714.78 µm (plus the resistor
+column further east, outside that box's own device-rail footprint) —
+dominated by `x3_XMPD`, the 800-finger `uvlo` pulldown.
+
+### Resistor network (`uvlo`, #221)
+
+`Interconnect.resistors()` in
+[`gen_gate_driver_core.py`](gen_gate_driver_core.py) wires each placed
+`res_array` block into its netlist net: a short Metal1 jumper chains
+consecutive series units using the block's own reported per-unit pin
+coordinates (never a flat run across a whole multi-unit row, which shorts the
+chain — see the method's own docstring for the incident that taught this),
+and each chain's two open ends drop clear of the block, cross onto Metal3 via
+a local Via1/Via2 stack, and run back to the target net's own rail on Metal3
+before a final Via2 merges onto the rail. That last leg is Metal3
+specifically because the device column is now wide enough (`MPD`'s 800-finger
+fold, ~900 µm) that a same-layer Metal1 run back to a rail is no longer
+"empty" territory to cross — a first pass drawn on Metal1 shorted `uvlo`'s own
+`GND_DRV` to the unrelated level-shifter net `x1_inb`, and a second pass that
+moved *only* the horizontal leg to Metal3 but kept a full-height Metal3
+*vertical* drop at every end shorted five different nets together instead
+(`GND_DRV`/`VDD_DRV`/`x3_ndiv`/`x3_nref`/`x3_uvlo_ok`) — confirmed against
+real `klt lvs` runs both times. Every end's entire Metal3 footprint now stays
+inside its own narrow, structurally-distinct y-band (no vertical leg at all,
+just a landing at the rail's own y), which is what makes two ends'
+geometry unable to collide by construction rather than by inspection.
 
 ### Body ties and guard ring (#132)
 
 `Interconnect.body_ties()`/`Interconnect.guard_ring()` in
 [`gen_gate_driver_core.py`](gen_gate_driver_core.py) draw the substrate/well
-tap and PCOMP guard-ring geometry this issue tracks. Every one of the 959
+tap and PCOMP guard-ring geometry this issue tracks. Every one of the 1769
 drawn transistors gets its own tap, and the guard ring is closed and
 grounded. What each one does, and the one real (not a layout gap) limitation
 that remains, follows from reading `klayout-tools`' own
@@ -160,36 +208,44 @@ that remains, follows from reading `klayout-tools`' own
 - **NMOS substrate ties — real, per-device, and drawn for both domains.**
   Every NMOS device gets its own Comp+Pplus+Contact+Metal1 tap, wired to its
   own group's ground rail (`GND_LOGIC` for the four 3.3 V devices,
-  `GND_DRV` for the twenty 5 V/6 V devices, whose taps land inside their own
-  `LVPWELL` patch). `klt`'s gf180mcu deck still ties *every* NMOS body, in
-  every layout, to one hardcoded global identity
-  (`ExtractionDeck.substrate_net`, via KLayout's `connect_global`) regardless
-  of which DNWELL/LVPWELL region a device's diffusion sits in — confirmed by
-  reading `extract.py` directly, filed upstream as a generic tool gap
-  (klayout-tools [#1128](https://github.com/2AMLogic/klayout-tools/issues/1128),
-  per CLAUDE.md's friction protocol) — so a real tap drawn anywhere merges
-  *every* NMOS body (both domains) onto that one identity, and `GND_LOGIC`
-  merges with `GND_DRV` in `klt`'s own extracted netlist as a result (a
-  synthesized joined label, `GND_DRV|GND_LOGIC`). That merge turned out to be
-  survivable rather than disqualifying: `spec/decision-records/0001`
-  Decision 1 already ratifies `GND_LOGIC`/`GND_DRV` as **one** electrical
-  reference node (option (c), genuinely isolated grounds, was considered and
-  rejected), and once real taps exist for *both* domains, the deck's global
-  identity stops being an anonymous placeholder — it is directly, physically
-  wired to real labeled metal, so `klt extract` names the merged node after
-  that real metal instead of its own synthesized `vsubs` fallback. The net
-  effect: `klt lvs`'s `device.body_unverified` finding is **fully resolved**
-  for NMOS too, not merely downgraded — a real `klt lvs` run against this
-  geometry reports **zero** `device.body_unverified` mismatches, on either
-  flavor. See "[What the LVS verdict covers](#what-the-lvs-verdict-covers)"
-  for the counts, and `lvs/make_reference.py`'s transforms 3 and 5 for how
-  the reference models the merge (and `layout/lvs/mk_extracted_dut.py`'s T4
-  for how the merge is un-done again for simulation, so the testbench still
-  has a net literally named `GND_LOGIC`/`GND_DRV` to drive).
+  `GND_DRV` for the thirty-one 5 V/6 V devices, up from twenty pre-#221,
+  whose taps land inside their own `LVPWELL` patch). `klt`'s gf180mcu deck
+  still ties *every* NMOS body, in every layout, to one hardcoded global
+  identity (`ExtractionDeck.substrate_net`, via KLayout's `connect_global`)
+  regardless of which DNWELL/LVPWELL region a device's diffusion sits in —
+  confirmed by reading `extract.py` directly, filed upstream as a generic
+  tool gap (klayout-tools
+  [#1128](https://github.com/2AMLogic/klayout-tools/issues/1128), per
+  CLAUDE.md's friction protocol) — so a real tap drawn anywhere merges
+  *every* NMOS body (both domains) onto that one identity. **Issue #221
+  update:** under the `klt` build now installed, that identity surfaces
+  under the literal name `GND_LOGIC` alone — `GND_DRV` does **not** also
+  merge into it (or into `GND_LOGIC`) on any *ordinary* (non-body) terminal.
+  An earlier revision of this section (and of `lvs/make_reference.py`)
+  claimed the opposite, based on a real extraction of the pre-#221 GDS
+  against `klt` 0.2.0; re-running that *exact, byte-identical* GDS against
+  the currently-installed build (a different `provenance.deck.content_hash`)
+  no longer reproduces the merge — a known, already-tracked `klayout-tools`
+  deck-behavior drift (issue
+  [#1149](https://github.com/2AMLogic/klayout-tools/issues/1149)). This also
+  matches `spec/decision-records/0001` Decision 1 better than the old
+  assumption did: the two grounds are one electrical reference node only via
+  a pad ring this bare core block does not itself draw (option (c),
+  genuinely isolated grounds, was considered and rejected at the *decision*
+  level, but a pad-ring tie — not a body-tie side effect — is how that
+  decision is meant to be realized). The net effect on body verification is
+  unchanged either way: `klt lvs`'s `device.body_unverified` finding is
+  **fully resolved** for NMOS, not merely downgraded — a real `klt lvs` run
+  against this geometry reports **zero** `device.body_unverified`
+  mismatches, on either flavor, at both the pre-#221 and the current device
+  count. See "[What the LVS verdict covers](#what-the-lvs-verdict-covers)"
+  for the counts, and `lvs/make_reference.py`'s transform 3 for how the
+  reference models the body identity now (and `layout/lvs/mk_extracted_dut.py`'s
+  T4 for how it is rebound again for simulation, so the testbench still has
+  a net literally named `GND_LOGIC`/`GND_DRV` to drive).
 
-  This merge is the *extractor's* model, not this layout's own routing: the
-  two ground rails are drawn as separate Metal2 nets and stay separate in the
-  drawn interconnect end to end, which
+  `GND_LOGIC` and `GND_DRV` are, and always were, drawn as separate Metal2
+  nets that stay separate in the drawn interconnect end to end, which
   `check_gate_driver_core.py`'s [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132)
   check verifies independently of the extractor's substrate-identity model —
   `klt components` over Metal1/Via1/Metal2 only, net names off the Metal2 text
@@ -343,10 +399,10 @@ rather than replaying how it was made. Its output is committed as
 
 | Check | What it does |
 |---|---|
-| `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `nf=N m=M` must appear as `N*M` transistors of width `W/N` and the same L, whose gate net and unordered source/drain pair match. Passing means 959/959 with no missing and no unexpected device. |
+| `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `nf=N m=M` must appear as `N*M` transistors of width `W/N` and the same L, whose gate net and unordered source/drain pair match. Passing means 1769/1769 with no missing and no unexpected device (up from 959/959 pre-#221; resistors are audited by `klt lvs` against `lvs/make_reference.py` instead of by this check — see that script's own module docstring). |
 | `mim_stack` | The same extraction, read for the four `XCCOMP*` MiM capacitors (#166). Asserts the count, each device's *extracted* `c_width`/`c_length` against the schematic's, that walking from the schematic chain's first node traverses every capacitor exactly once and lands on its last node (a *parallel* stack has the identical device count and plate geometry — only the walk tells them apart), and that every interior node touches exactly two capacitor terminals, no transistor terminal and no top-level pin. That last ruling is the mechanical form of "`nccomp1`..`3` are floating" — see [below](#why-mim_stack-exists-166). |
-| `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. Asserts exactly 40 active regions inside (20 5 V/6 V devices + 20 of their own body-tie taps, issue #132) and 12 outside (4 3.3 V devices + 4 of their own taps + 4 guard-ring strokes). |
-| `ground_rail_isolation` | `klt components` over the **routed metal only** — Metal1 (34/0) and Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge, net names from the Metal2 text layer (36/10). No deck, no device recognition, no substrate global. Asserts no component carries two distinct net names, every routed net resolves to exactly one component, and `GND_LOGIC`/`GND_DRV` land in different components — 18 nets, 18 components. See [why this check exists](#why-ground_rail_isolation-exists-132). |
+| `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. Asserts exactly 62 active regions inside (31 5 V/6 V devices + 31 of their own body-tie taps, up from 40/20 pre-#221's uvlo addition) and 12 outside (4 3.3 V devices + 4 of their own taps + 4 guard-ring strokes, unchanged). |
+| `ground_rail_isolation` | `klt components` over the **routed metal only** — Metal1 (34/0) and Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge, net names from the Metal2 text layer (36/10). No deck, no device recognition, no substrate global. Asserts no component carries two distinct net names, every routed net resolves to exactly one component, and `GND_LOGIC`/`GND_DRV` land in different components — 25 nets, 25 components (up from 18/18 pre-#221's uvlo/resistor addition). See [why this check exists](#why-ground_rail_isolation-exists-132). |
 | `voltage_domain` | `klt layers --flattened` for the marker layers, plus the `voltage_domain_warnings` block `klt extract` returns — see the deck caveat below. |
 
 #### Why `ground_rail_isolation` exists (#132)
@@ -492,16 +548,13 @@ mismatch means the deck build itself has moved, not that this layout changed.
 
 ### DRC (`klt drc`)
 
-Latest report: [`layout/drc/reports/gate_driver_core/20260818-092452-c2493cb.drc.json`](drc/reports/gate_driver_core/20260818-092452-c2493cb.drc.json)
+Latest report: [`layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json`](drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json)
 — `status: clean`, `violation_count: 0`, deck `gf180mcu`, run against the
 stream whose content hash is the committed `gate_driver_core.provenance.json`'s
-(issue #166: the four-deep `XCCOMP*` MiM stack and its Metal3/Metal4/Metal5
-escape routing, still DRC-clean — including all three MIM Option B rules the
-deck ships). Re-running `klt drc` on the committed GDS reproduces that report
-byte for byte (confirmed fresh after rebasing onto issue #190's reproducibility
-re-verification, same `provenance.deck.content_hash` as the prior
-[`20260818-075725-6ba5ede`](drc/reports/gate_driver_core/20260818-075725-6ba5ede.drc.json)
-report it supersedes).
+(issue #221: the `uvlo` sub-cell and its bias-resistor network are now part of
+the drawn block too — still DRC-clean, including all three MIM Option B rules
+the deck ships). Re-running `klt drc` on the committed GDS reproduces that
+report byte for byte.
 
 #### What the DRC verdict covers
 
@@ -511,8 +564,8 @@ before quoting "DRC clean":
 | Field in the report | Value here | What it means |
 |---|---|---|
 | `coverage.deck_scope` | 10 DRM sections (Nwell, Comp, Poly2, Contact, Metaln, Vian, MetalTop, MIM option B, DRC_BJT, bond pad) | the deck is a **curated subset** of the gf180mcu DRM, not the whole manual |
-| `coverage.layers_checked` | **15** (21/0, 22/0, 30/0, 33/0, 34/0, 35/0, 36/0, **38/0, 40/0, 41/0, 42/0, 46/0**, 55/0, **75/0, 81/0**) | the deck layers this stream actually uses. Seven are new as of issue #166 — the MiM stack's own Metal4/FuseTop/Via4/Metal5 plates and the Via2/Metal3/Via3 escape that reaches them — so the block is no longer a two-metal layout and the Metaln/Vian/MIM rules that used to be skipped now actually run |
-| `coverage.layers_in_stream_without_rules` | **7 — 12/0 `DNWELL`, 31/0 `Pplus`, 32/0 `Nplus`, 36/10, 117/5 `CAP_MK`, 117/10 `MIM_L_MK`, 204/0 `LVPWELL`** | `31/0`/`32/0` come from issue #132's per-device body-tie taps (`Pplus` for every NMOS substrate/LVPWELL tie and the guard ring, `Nplus` for every PMOS well tie — gf180mcu's `tap_nplus`/`tap_pplus` derivation, klayout-tools #1084); `117/5`/`117/10` are issue #166's MiM device-recognition markers. This curated *DRC* deck checks no rule against any of them (only the *extraction* deck reads them, and for the two MiM markers that is exactly their job). The DNWELL/LVPWELL spacing and enclosure rules of DRM 7.2, and the guard-ring's own geometry, remain **not** checked by this verdict |
+| `coverage.layers_checked` | **15** (21/0, 22/0, 30/0, 33/0, 34/0, 35/0, 36/0, 38/0, 40/0, 41/0, 42/0, 46/0, 55/0, 75/0, 81/0) | the deck layers this stream actually uses — unchanged in count by issue #221's resistor network (it draws only `poly2`/`contact`/`metal1`/`metal2`/`metal3`, all already in this set) |
+| `coverage.layers_in_stream_without_rules` | **9 — 12/0 `DNWELL`, 31/0 `Pplus`, 32/0 `Nplus`, 36/10, 49/0, 110/5, 117/5 `CAP_MK`, 117/10 `MIM_L_MK`, 204/0 `LVPWELL`** | `31/0`/`32/0` come from issue #132's per-device body-tie taps (`Pplus` for every NMOS substrate/LVPWELL tie and the guard ring, `Nplus` for every PMOS well tie — gf180mcu's `tap_nplus`/`tap_pplus` derivation, klayout-tools #1084); `117/5`/`117/10` are issue #166's MiM device-recognition markers; `49/0`/`110/5` are new as of issue #221 — the `ppolyf_u` resistor device-recognition markers `klt gen res_array` draws for `uvlo`'s bias network. This curated *DRC* deck checks no rule against any of them (only the *extraction* deck reads them, and that is exactly their job). The DNWELL/LVPWELL spacing and enclosure rules of DRM 7.2, and the guard-ring's own geometry, remain **not** checked by this verdict |
 | `coverage.rules_skipped` | **4** (metaltop width/space, pad, BJT) | down from 23: only rules for layers this layout still does not draw. The MIM Option B and Metal3/Metal4/Metal5 + Via2/Via3/Via4 rules that dominated the old skip list are live now |
 | `coverage.voltage_domain_warnings` | 1 | the deck models `DF.1a`/`DF.3a` COMP width/space as `_LV`/`_MV` pairs scoped to the `Dualgate` marker, but **every other rule still applies 3.3 V thresholds to thick-oxide geometry** — see the `Dualgate` gap below |
 
@@ -532,47 +585,58 @@ A deck that returns `clean` for everything would fail that control.
 
 ### LVS (`klt extract` + `klt lvs`)
 
-Latest report: [`layout/lvs/reports/gate_driver_core/20260818-092501-c2493cb.lvs.json`](lvs/reports/gate_driver_core/20260818-092501-c2493cb.lvs.json)
-— engine **`klayout`** (klayout 0.30.10), `status: match` (confirmed fresh
-after rebasing onto issue #190's reproducibility re-verification, same
-`provenance.deck.content_hash` as the prior
-[`20260818-075733-6ba5ede`](lvs/reports/gate_driver_core/20260818-075733-6ba5ede.lvs.json)
-report it supersedes):
+Latest report: [`layout/lvs/reports/gate_driver_core/20260826-044712-fdf17d9.lvs.json`](lvs/reports/gate_driver_core/20260826-044712-fdf17d9.lvs.json)
+— engine **`klayout`** (klayout 0.30.11), `status: match`, against the
+issue #221-extended GDS (`level_shifter` + `output_stage` + `uvlo`, plus
+`uvlo`'s bias-resistor network):
 
 | | layout | reference | matched |
 |---|---|---|---|
-| devices | 963 | 963 | **963** |
-| nets | 20 | 20 | **20** |
-| pins | 17 | 17 | **17** |
+| devices | 2044 | 2044 | **2044** |
+| nets | 295 | 295 | **295** |
+| pins | 25 | 25 | **25** |
 
-Device count is 959 transistors + the four `XCCOMP*` MiM capacitors (#166),
-each matched with its own `c_width`/`c_length` and its measured capacitance.
-Net count is 17 named nets + the stack's three interior nodes, which are
-matched **topologically**: the layout labels none of them, so `klt extract`
-leaves them internal and unnamed, and the comparer has to find the four-deep
-series chain itself, anchored at the two named ends. That is why pins stay at
-17 while nets go to 20.
-
-(The 17 named nets are themselves down from 30 pre-#132: the 11 anonymous
-per-instance PMOS well nets folded into the real `VDD_LOGIC`/`VDD_DRV` pins
-their devices' bodies belong to, and `GND_LOGIC`/`GND_DRV` collapsed into one
-— both issue #132's body-tie taps; see below for why the ground merge happens
-and why it is not a routing problem.)
+Device count is 1769 transistors + the four `XCCOMP*` MiM capacitors (#166)
++ 271 `ppolyf_u` resistor primitives (issue #221 — `uvlo`'s `Rref`/`R1`/`R2`/
+`Rfb`, each folded into a `klt gen res_array` block of series unit
+resistors). Net count is 25 named nets + the MiM stack's three interior
+nodes + each resistor's own `num - 1` interior series nodes, matched
+**topologically**: the layout labels none of them, so `klt extract` leaves
+them internal and unnamed, and the comparer has to find each chain itself,
+anchored at its own named ends.
 
 The reference netlist ([`lvs/gate_driver_core.ref.spice`](lvs/gate_driver_core.ref.spice))
 is **generated, never hand-edited** — `lvs/make_reference.py` derives it from
-`design/netlist/gate_driver_core.spice` and applies six mechanical
-transforms that the extraction deck's own capabilities force (finger
-expansion, generic `nfet`/`pfet` device class, NMOS body → the schematic's
-own `GND_LOGIC`/`GND_DRV` assignment, PMOS body → the schematic's own
-`VDD_LOGIC`/`VDD_DRV` assignment, — issue #132's own discovery —
-`GND_LOGIC`/`GND_DRV` merging into one net on *every* terminal they appear
-on, not just body, and — issue #166's — the MiM stack restated through the
-deck's own two-term capacitance model, since `kdb.NetlistComparer` compares a
-matched pair's parameters directly). `run_lvs.py` regenerates it before every
-run, so a stale reference cannot quietly pass, and
-`lvs/test_make_reference.py` pins each transform's structural facts in CI
-without needing `klt` or the PDK.
+`design/netlist/gate_driver_core.spice` and applies mechanical transforms
+that the extraction deck's own capabilities force (finger expansion, generic
+`nfet`/`pfet` device class, NMOS body → the deck's one global substrate
+identity — issue #132's own discovery, revised by issue #221 (see below) —
+PMOS body → the schematic's own `VDD_LOGIC`/`VDD_DRV` assignment, issue
+#166's MiM stack restated through the deck's own two-term capacitance model,
+and issue #221's bare-`R` resistors restated as one 3-terminal `ppolyf_u`
+device per drawn series unit). `run_lvs.py` regenerates it before every run,
+so a stale reference cannot quietly pass, and `lvs/test_make_reference.py`
+pins each transform's structural facts in CI without needing `klt` or the
+PDK.
+
+**Issue #221 revision: `GND_LOGIC` and `GND_DRV` no longer merge on ordinary
+terminals.** A prior revision of this reference folded both ground names
+into one net everywhere either appeared (not just on a device's body
+terminal), reasoning that real substrate-tie geometry for both grounds
+(issue #132) made the deck's global substrate identity absorb both
+transitively. Re-running the *exact, byte-identical, previously-`match`* GDS
+this section used to cite against the `klt` build now installed no longer
+reproduces that merge: `GND_DRV` extracts as its own, separate, unmerged pin
+on every terminal, on both the pre-#221 GDS and this issue's UVLO-extended
+one. This is a known, already-tracked `klayout-tools` deck-behavior drift
+(issue #1149, filed the same day the old evidence was recorded), not a
+regression in this layout — see `make_reference.py`'s own docstring
+(transforms 3 and 5) for the full account, including why removing the merge
+also matches `spec/decision-records/0001`'s own architecture better (the two
+grounds are one electrical node only via a pad ring this bare core block
+does not itself draw). Only the NMOS *body* terminal still canonicalizes, to
+the literal net `GND_LOGIC` (the deck's global identity's current real
+name).
 
 #### What the LVS verdict covers
 
@@ -581,27 +645,29 @@ difference** — listed here rather than dropped:
 
 | Category | Side | Finding |
 |---|---|---|
-| `topology` | layout | a device class with no counterpart on the other side, **and no devices of that class extracted either** — klt states in the finding itself that this is not a real topology mismatch (it is one of the deck's unused classes: BJT, resistor, diodes; the MiM cap class left that list as of #166, which draws real devices on it). Pre-existing, unrelated to body ties — present in every report this repo has committed for this design |
+| `topology` | layout | a device class with no counterpart on the other side, **and no devices of that class extracted either** — klt states in the finding itself that this is not a real topology mismatch (it is one of the deck's unused classes: BJT, diodes; the resistor class left that list as of #221, which draws real devices on it, same as the MiM cap class did as of #166). Pre-existing, unrelated to body ties — present in every report this repo has committed for this design |
 
 The `device.body_unverified` finding this table used to carry — 660 PMOS
-bodies, then, after a first pass of this issue's own geometry, 299 NMOS
-bodies — is **gone entirely** as of issue #132: `match` here now means
-drain/gate/source connectivity, device sizing, *and* body bias for every one
-of the 959 transistors all match the schematic. See
+bodies, then, after a first pass of issue #132's own geometry, 299 NMOS
+bodies — is **gone entirely** as of issue #132, and stays gone through issue
+#221's much larger device count: `match` here now means drain/gate/source
+connectivity, device sizing, *and* body bias for every one of the 1769
+transistors and 271 resistor primitives all match the schematic. See
 "[Body ties and guard ring](#body-ties-and-guard-ring-132)" above for why
 drawing a real NMOS substrate tie for both grounds resolves this rather than
-merely downgrading it, and what it costs (`GND_LOGIC`/`GND_DRV` extract as
-one net).
+merely downgrading it.
 
 #### Is `match` a real verdict?
 
-`layout/lvs/lvs_negative_control.py` deletes exactly **one** of the 963
-reference device cards and re-runs the identical comparison: the verdict
-flips to `status: mismatch` with a `device.unmatched` error and 962 reference
-devices. Committed as
-[`layout/lvs/reports/negative-control/`](lvs/reports/negative-control/). A
+`layout/lvs/lvs_negative_control.py` deletes exactly one reference device
+card and re-runs the identical comparison, flipping the verdict to
+`status: mismatch` with a `device.unmatched` error and one fewer reference
+device. Committed as
+[`layout/lvs/reports/negative-control/`](lvs/reports/negative-control/) (from
+the pre-#221 device count; the mechanism — one card removed, one
+`device.unmatched` finding — is unaffected by the design growing). A
 comparator that pattern-matched a summary rather than comparing device by
-device would not catch a 963-vs-962 delta. (The expected count is read off
+device would not catch a one-device delta. (The expected count is read off
 the reference rather than written into the control, so it keeps saying "one
 fewer than whatever the schematic has" as the design changes.)
 
@@ -614,6 +680,13 @@ capacitor. So the value
 decoration.
 
 ### Post-layout simulation
+
+**This section describes evidence recorded against the pre-#221 GDS**
+(`level_shifter` + `output_stage` only, no `uvlo`) — re-running it against
+the issue #221-extended, uvlo-and-resistor-bearing extracted netlist is
+explicitly the next slice of epic #219 (issue #222), not this issue's own
+scope. Nothing below this note has been re-verified against the current
+`gate_driver_core.gds`.
 
 The LVS-extracted netlist is turned into a simulatable DUT by
 [`lvs/mk_extracted_dut.py`](lvs/mk_extracted_dut.py), whose module docstring
@@ -749,41 +822,50 @@ re-litigation is #163's scope.
   own geometry, are unchecked by any automated verdict in this repo (the
   guard ring #132 draws satisfies the *presence* requirement, not a DRC rule
   this deck can check).
-- **Every body terminal ties to a real net, but the deck's own NMOS model
-  merges the two grounds into one net (issue #132).** Every PMOS body ties to
-  the schematic's own `VDD_LOGIC`/`VDD_DRV` via a real per-device well tap,
-  and every NMOS body ties to the schematic's own `GND_LOGIC`/`GND_DRV` via a
-  real per-device substrate/LVPWELL tap (`Interconnect.body_ties()`) — `klt
-  lvs` reports **zero** `device.body_unverified` mismatches, closing the
-  finding that used to cover all 959 bodies (660 PMOS, then 299 NMOS after a
-  first pass of this issue's own geometry). The one real, permanent
-  consequence: `klt`'s gf180mcu deck ties *every* NMOS body, in every layout,
-  to one hardcoded global identity regardless of DNWELL/LVPWELL enclosure
-  (read directly from `extract.py`'s `connect_global` handling, not inferred
-  from a warning message), so once real taps exist for *both* domains, `klt
-  extract` also merges every ordinary terminal wired to either ground rail
-  into one net (`GND_DRV|GND_LOGIC` in its own raw output). That merge is the
-  *extractor's* model, not this layout's own routing — `GND_LOGIC` and
-  `GND_DRV` are drawn and stay as two separate Metal2 nets end to end, which
+- **Every body terminal ties to a real net (issue #132), and — as of issue
+  #221 — the two grounds no longer merge on any *other* terminal.** Every
+  PMOS body ties to the schematic's own `VDD_LOGIC`/`VDD_DRV` via a real
+  per-device well tap, and every NMOS body ties to the deck's one hardcoded
+  global substrate identity via a real per-device substrate/LVPWELL tap
+  (`Interconnect.body_ties()`) — `klt lvs` reports **zero**
+  `device.body_unverified` mismatches, closing the finding that used to
+  cover all 959 bodies (660 PMOS, then 299 NMOS after a first pass of issue
+  #132's own geometry), and still zero at issue #221's much larger device
+  count. **What changed:** an earlier revision of this bullet (and of
+  `lvs/make_reference.py`) additionally claimed that once real taps existed
+  for *both* domains, `klt extract` also merged every *ordinary* terminal
+  wired to either ground rail into one net (`GND_DRV|GND_LOGIC` in its own
+  raw output) — confirmed at the time against `klt` 0.2.0. Re-running that
+  *exact, byte-identical* GDS through the `klt` build now installed (0.3.0,
+  a different `provenance.deck.content_hash`) no longer reproduces that
+  merge: the global substrate identity surfaces as `GND_LOGIC` alone, and
+  `GND_DRV` extracts as its own, separate, unmerged net on every terminal —
+  on both the pre-#221 GDS and this issue's UVLO-extended one. This is a
+  known, already-tracked `klayout-tools` deck-behavior drift (issue
+  [#1149](https://github.com/2AMLogic/klayout-tools/issues/1149), filed the
+  same day the old evidence was recorded), and it also turns out to match
+  `spec/decision-records/0001` Decision 1 better than the old assumption
+  did: the two grounds are one electrical node only via a pad ring this bare
+  core block does not itself draw, so two genuinely separate nets at *this*
+  level is the electrically correct picture, not a gap the old merge was
+  papering over. `GND_LOGIC` and `GND_DRV` are drawn and stay as two
+  separate Metal2 nets end to end either way, which
   `check_gate_driver_core.py`'s
-  [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132) check (added
-  by this same issue, precisely because the merge takes `klt lvs` out of the
-  picture for this one property) verifies independently of the extractor's
-  substrate model, with its own known-good/known-bad control — and it is also
-  the electrical fact `spec/decision-records/0001`
-  Decision 1 already ratifies (one electrical reference node, split into two
-  pins only at the pad ring). Filed upstream as the underlying tool
-  limitation: klayout-tools
+  [`ground_rail_isolation`](#why-ground_rail_isolation-exists-132) check
+  (added by issue #132) verifies independently of the extractor's substrate
+  model, with its own known-good/known-bad control. The underlying "one
+  NMOS body, every domain" tool limitation itself is unaffected and remains
+  filed upstream: klayout-tools
   [#1128](https://github.com/2AMLogic/klayout-tools/issues/1128). See
   "[Body ties and guard ring](#body-ties-and-guard-ring-132)" above for the
   full mechanism, and "[Post-layout simulation](#post-layout-simulation)"
   below for the re-run evidence against the now-fully-verified extracted
-  netlist. The post-layout DUT still **rebinds** (rather than reads directly)
-  every body terminal to `GND_LOGIC`/`GND_DRV`/`VDD_LOGIC`/`VDD_DRV`
-  (`mk_extracted_dut.py`'s T4/BA1/BA2) — not because the assertion is
-  unmeasured any more (it now matches real extraction on both flavors), but
-  because the testbench needs a net literally named `GND_LOGIC`/`GND_DRV` to
-  drive, and the deck's own raw merged label is not one.
+  netlist. The post-layout DUT still **rebinds** (rather than reads
+  directly) every body terminal to
+  `GND_LOGIC`/`GND_DRV`/`VDD_LOGIC`/`VDD_DRV` (`mk_extracted_dut.py`'s
+  T4/BA1/BA2) — not because the assertion is unmeasured any more (it now
+  matches real extraction on both flavors), but because the testbench needs
+  a net literally named `GND_LOGIC`/`GND_DRV` to drive.
 - **The RC DUT's ground rails are no longer ideal — the residual is how the
   merged net's one lumped capacitance is placed (issue
   [#184](https://github.com/2AMLogic/gf180-gate-driver/issues/184), closed).**

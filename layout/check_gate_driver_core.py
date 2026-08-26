@@ -802,7 +802,11 @@ def _redact_local_paths(value):
 
 
 def run(gds: str, pdk: str, work_dir: str) -> dict:
-    _, devices, passives = parse_netlist_full(NETLIST_PATH)
+    # Resistors (issue #221) are audited by `klt lvs` against
+    # `lvs/make_reference.py`'s reference netlist, not by this script's own
+    # checks -- none of the checks below (devices/mim_stack/dnwell_partition/
+    # ground_rail_isolation/voltage_domain) need the resistor list.
+    _, devices, passives, _resistors = parse_netlist_full(NETLIST_PATH)
     device_check = check_devices(gds, pdk, devices, work_dir)
     extract_report = device_check.pop("extract_report")
     extracted_path = device_check.pop("extracted_path")

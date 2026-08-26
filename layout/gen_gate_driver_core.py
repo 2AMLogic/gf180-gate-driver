@@ -11,9 +11,10 @@ script against ``design/netlist/gate_driver_core.spice`` and the gf180mcu PDK.
 Flow (all geometry is produced by `klt`, per the repo's stated tooling -- this
 script never links klayout itself and needs nothing but the standard library):
 
-1.  Parse ``design/netlist/gate_driver_core.spice`` and flatten the two
-    sub-cells (``level_shifter`` x1, ``output_stage`` x2) into one device list
-    with top-level net names.
+1.  Parse ``design/netlist/gate_driver_core.spice`` and flatten the three
+    sub-cells (``level_shifter`` x1, ``output_stage`` x2, ``uvlo`` x3, issue
+    #221) into one MOS device list, one MiM-capacitor list and one bare-``R``
+    resistor list, all with top-level net names.
 2.  ``klt gen mos_array`` once per netlist device. A netlist device with
     ``W=W nf=N m=M`` is drawn as a single ``1x1`` unit device folded into
     ``N*M`` parallel gate fingers of ``W/N`` each (``finger_topology:
@@ -33,8 +34,12 @@ script never links klayout itself and needs nothing but the standard library):
     the two Metal2 rails the series chain terminates on
     (:meth:`Interconnect.mim_caps`).
 4.  ``klt gen-compose`` (``placement.strategy: "explicit"``) merges every
-    device cell plus the interconnect cell into one ``gate_driver_core`` top
-    cell at the origins this script computed.
+    device cell, every resistor cell and the interconnect cell into one
+    ``gate_driver_core`` top cell at the origins this script computed.
+5.  ``klt gen res_array`` once per netlist ``R`` element -- ``uvlo``'s
+    ``Rref``/``R1``/``R2``/``Rfb`` (issue #221), folded into ``num`` series
+    unit resistors and chained by :meth:`Interconnect.resistors`. See
+    :func:`resistor_array_params`.
 
 Floorplan
 ---------
@@ -79,6 +84,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -269,6 +275,91 @@ MIM_RAIL_TAP_DROP_UM = 1.0  # Via2 tap point, below a Metal2 rail's own top.
 MV_MODELS = {"nfet_06v0", "pfet_06v0"}
 LV_MODELS = {"nfet_03v3", "pfet_03v3"}
 
+# uvlo's bias resistor network (issue #221): `Rref`/`R1`/`R2`/`Rfb` are bare
+# SPICE `R` elements in design/netlist/uvlo.spice (an ideal ohms value, no
+# physical W/L -- design/uvlo-comparator-sizing.md is explicit that a physical
+# realization is *this* issue's scope, not #220's). `klt gen res_array`'s
+# "generic" flavor is the only one this klt build implements for gf180mcu
+# (its 'high'/'xhigh' sheet-rho options are sky130-only per `klt gen --list`,
+# filed upstream as klayout-tools friction) -- it draws gf180mcu's base
+# `ppolyf_u` device (350 ohm/sq, confirmed against a real `klt extract` run:
+# `r_ohm == 350 * l_um / w_um` exactly, class `ppolyf_u`, 3 terminals a/b/w
+# where `w` is the deck's global substrate identity -- the same one every
+# NMOS body ties to, see body_ties()'s docstring).
+#
+# A single unit resistor at RES_WIDTH_UM would need an impractically long
+# strip for uvlo's largest value (Rfb=16 Mohm is 19.2mm of 0.42um-wide poly),
+# so :func:`resistor_array_params` folds it into `num` series unit resistors
+# of `length_um` each (`Interconnect.resistors()` chains them with short
+# Metal1 jumpers between consecutive `res_array` ports, using their own
+# reported coordinates -- the same "matched array, wiring is the caller's
+# job" contract `body_ties()`'s per-device taps already rely on), arranged
+# into `rows` via `res_array`'s own boustrophedon fold.
+RES_SHEET_RHO_OHM_SQ = 350.0  # ppolyf_u ('generic' res_array flavor), gf180mcu
+RES_WIDTH_UM = 0.42  # unit resistor width -- res_array's own default
+RES_SPACING_UM = 0.5  # res_array's own default unit-to-unit spacing
+RES_MAX_UNIT_LENGTH_UM = 80.0  # cap on one series unit's drawn length
+RES_UNITS_PER_ROW = 8  # units per res_array row-fold
+RES_ROW_GAP_UM = 6.0  # vertical gap between two different resistors' blocks
+RES_COLUMN_MARGIN_UM = 8.0  # device column's right rail -> resistor column
+RES_ENDPOINT_CLEARANCE_UM = 1.0  # a resistor block's bbox -> its own escape
+# lane (below the bottom row / above the top row) -- must stay under
+# RES_ROW_GAP_UM so two vertically-stacked resistors' escape lanes never
+# collide (see Interconnect.resistors()).
+
+
+def resistor_array_params(value_ohm: float) -> tuple[int, int, float]:
+    """``(num, rows, length_um)`` for a ``klt gen res_array`` request.
+
+    ``num`` series unit resistors of ``length_um`` (all ``RES_WIDTH_UM`` wide),
+    chained in series by :meth:`Interconnect.resistors`, draw ``value_ohm``
+    exactly under gf180mcu's ``ppolyf_u`` sheet-rho model -- see
+    :func:`resistor_ohms`, the exact inverse of this sizing arithmetic, which
+    both this generator and ``lvs/make_reference.py`` call on the *same*
+    ``(num, length_um)`` pair so the drawn geometry and the LVS reference
+    cannot disagree about the resistor's value.
+    """
+    if value_ohm <= 0:
+        raise GenError(f"resistor value must be > 0 ohm (got {value_ohm!r})")
+    total_len_um = value_ohm * RES_WIDTH_UM / RES_SHEET_RHO_OHM_SQ
+    min_num = max(1, math.ceil(total_len_um / RES_MAX_UNIT_LENGTH_UM))
+    # Prefer an exact integer divisor of total_len_um for `num`, so every
+    # series unit gets the *same*, exactly round-number length_um. This is
+    # load-bearing, not cosmetic: `klt gen res_array`'s own row-fold geometry
+    # has been observed to draw a handful of femto-ohm-scale length
+    # differences between a row's "forward" and "mirrored" (boustrophedon)
+    # orientations for a non-integer length_um -- confirmed against a real
+    # `klt extract` run, an 880 kohm / 14-unit request (length_um =
+    # 75.428571...) drew alternating 62857.5 / 62856.6666667 ohm units
+    # instead of one consistent value (a ~1.3e-5 relative spread), which is
+    # over `kdb.NetlistComparer`'s much tighter default tolerance (confirmed
+    # separately: it matches a resistor value at a ~4e-7 relative difference
+    # but not ~4e-6) and produced a real `klt lvs` topological mismatch on an
+    # otherwise-correctly-wired chain. Every value this repo's committed
+    # netlist actually resistor_array_params()s (800k/880k/200k/16M ohm)
+    # makes total_len_um an exact integer, so this loop always finds a clean
+    # divisor; a future value that does not still gets *a* valid sizing
+    # (falling through to num=min_num) rather than a hard failure -- just
+    # without this guarantee, which lvs/test_make_reference.py does not
+    # exercise for such a value today.
+    num = min_num
+    total_len_int = round(total_len_um)
+    if abs(total_len_um - total_len_int) < 1e-6 and total_len_int > 0:
+        for candidate in range(min_num, total_len_int + 1):
+            if total_len_int % candidate == 0:
+                num = candidate
+                break
+        else:
+            num = total_len_int
+    length_um = total_len_um / num
+    rows = max(1, math.ceil(num / RES_UNITS_PER_ROW))
+    return num, rows, length_um
+
+
+def resistor_ohms(num: int, length_um: float) -> float:
+    """The series resistance ``num`` unit resistors of ``length_um`` draw."""
+    return num * RES_SHEET_RHO_OHM_SQ * length_um / RES_WIDTH_UM
+
 # Passive (non-MOS) device model families this netlist may contain.  gf180mcu
 # spells its capacitor primitives `cap_mim_*` / `cap_nmos*` / `cap_pmos*`, and
 # they carry `c_width`/`c_length` rather than a MOSFET's `W`/`L`.
@@ -447,28 +538,58 @@ class Passive:
         }
 
 
+class Resistor:
+    """One flattened two-terminal bare-SPICE ``R`` element, top-level nets.
+
+    Today these are ``uvlo``'s ``Rref``/``R1``/``R2``/``Rfb`` (issue #221),
+    each a bare ``R<name> <n1> <n2> <value>`` line -- an ideal ohms value, no
+    drawn geometry in the schematic (design/uvlo-comparator-sizing.md: "not a
+    layout deliverable ... layout is #221"). Kept distinct from
+    :class:`Device`/:class:`Passive` for the same reason those are distinct
+    from each other: a resistor is drawn by neither ``klt gen mos_array`` nor
+    the hand-drawn MiM plates, but by ``klt gen res_array``
+    (:meth:`Interconnect.resistors`).
+    """
+
+    def __init__(self, name: str, value_ohm: float, plus: str, minus: str) -> None:
+        self.name = name
+        self.value_ohm = value_ohm
+        self.plus = plus
+        self.minus = minus
+
+    def as_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "value_ohm": self.value_ohm,
+            "nets": {"plus": self.plus, "minus": self.minus},
+        }
+
+
 def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
     """Flatten ``gate_driver_core.spice`` into (top port list, MOS device list).
 
-    Thin wrapper over :func:`parse_netlist_full` that drops the passive list,
-    kept because every downstream consumer of this parser
+    Thin wrapper over :func:`parse_netlist_full` that drops the passive and
+    resistor lists, kept because every downstream consumer of this parser
     (``check_gate_driver_core.py``, ``lvs/make_reference.py``) is MOS-only by
-    construction: both audit the drawn transistors of the committed GDS, which
-    contains no passive today.  Anything that *generates* layout should call
-    :func:`parse_netlist_full` instead, so an undrawn passive is visible rather
-    than silently absent.
+    construction: both audit the drawn transistors of the committed GDS.
+    Anything that *generates* layout should call :func:`parse_netlist_full`
+    instead, so an undrawn passive/resistor is visible rather than silently
+    absent.
     """
-    top_ports, devices, _passives = parse_netlist_full(path)
+    top_ports, devices, _passives, _resistors = parse_netlist_full(path)
     return top_ports, devices
 
 
-def parse_netlist_full(path: str) -> tuple[list[str], list[Device], list[Passive]]:
-    """Flatten ``gate_driver_core.spice`` into (top ports, MOS devices, passives).
+def parse_netlist_full(
+    path: str,
+) -> tuple[list[str], list[Device], list[Passive], list[Resistor]]:
+    """Flatten ``gate_driver_core.spice`` into (ports, MOS devices, passives, resistors).
 
     Returns the top cell's port names in ``.subckt`` order, every MOS device in
-    the design, and every non-MOS (passive) device, with each terminal renamed
-    to the *top-level* net it resolves to through the ``x1``/``x2`` instance
-    lines.
+    the design, every non-MOS ``X`` passive device, and every bare-SPICE ``R``
+    resistor element (issue #221 -- ``uvlo``'s ``Rref``/``R1``/``R2``/``Rfb``),
+    with each terminal renamed to the *top-level* net it resolves to through
+    the ``x1``/``x2``/``x3`` instance lines.
     """
     with open(path, encoding="utf-8") as handle:
         lines = _logical_lines(handle.read())
@@ -494,11 +615,20 @@ def parse_netlist_full(path: str) -> tuple[list[str], list[Device], list[Passive
             continue
         if line.startswith("*"):
             continue
-        if not low.startswith("x"):
+        if not (low.startswith("x") or low.startswith("r")):
             continue
         tokens = line.split()
         if current is None:
-            # Top-level subcircuit instance: X<name> <nets...> <subckt>
+            # Top-level subcircuit instance: X<name> <nets...> <subckt>. This
+            # netlist never instantiates a bare resistor at the top level
+            # (every 'R' line lives inside a sub-cell body, e.g. uvlo's own
+            # Rref/R1/R2/Rfb) -- refuse loudly rather than mis-parse one as an
+            # instance if that ever changes.
+            if not low.startswith("x"):
+                raise GenError(
+                    f"{path}: top-level resistor line {line!r} is not "
+                    "supported -- every resistor must live inside a sub-cell"
+                )
             top_instances.append((tokens[0], tokens[1:-1], tokens[-1]))
         else:
             subckts[current][1].append(tokens)
@@ -510,6 +640,7 @@ def parse_netlist_full(path: str) -> tuple[list[str], list[Device], list[Passive
 
     devices: list[Device] = []
     passives: list[Passive] = []
+    resistors: list[Resistor] = []
     for inst_name, inst_nets, subckt_name in top_instances:
         if subckt_name not in subckts:
             raise GenError(f"{path}: instance {inst_name} names unknown cell {subckt_name}")
@@ -521,12 +652,37 @@ def parse_netlist_full(path: str) -> tuple[list[str], list[Device], list[Passive
             )
         mapping = {f: a for f, a in zip(formal, inst_nets)}
         for tokens in body:
+            if tokens[0].lower().startswith("r"):
+                resistors.append(_resistor_from_tokens(tokens, mapping, prefix=f"{inst_name}_"))
+                continue
             parsed = _device_from_tokens(tokens, mapping, prefix=f"{inst_name}_")
             if isinstance(parsed, Passive):
                 passives.append(parsed)
             else:
                 devices.append(parsed)
-    return top_ports, devices, passives
+    return top_ports, devices, passives, resistors
+
+
+def _resistor_from_tokens(tokens: list[str], mapping: dict[str, str], prefix: str) -> Resistor:
+    """Build a :class:`Resistor` from a bare ``R<name> <n1> <n2> <value> ...`` line.
+
+    Unlike a MOS/passive ``X`` line, a bare SPICE ``R`` element names no model
+    -- ``value`` is the resistance directly (issue #221: ``uvlo.spice``'s
+    ``Rref``/``R1``/``R2``/``Rfb``, e.g. ``Rref VDD_DRV nref 800k m=1``).
+    """
+    if len(tokens) < 4:
+        raise GenError(f"{tokens[0]}: resistor line has too few fields: {' '.join(tokens)!r}")
+    name, n1, n2, value_tok = tokens[0], tokens[1], tokens[2], tokens[3]
+    params = dict(_PARAM_RE.findall(" ".join(tokens[4:])))
+    m = int(round(_spice_number(params.get("m", "1"))))
+    if m != 1:
+        raise GenError(f"{name}: m={m} is not drawn -- this generator draws one physical resistor per netlist R element")
+    return Resistor(
+        name=f"{prefix}{name}",
+        value_ohm=_spice_number(value_tok),
+        plus=mapping.get(n1, f"{prefix}{n1}"),
+        minus=mapping.get(n2, f"{prefix}{n2}"),
+    )
 
 
 def _split_instance(tokens: list[str]) -> tuple[str, list[str], str, dict[str, str]]:
@@ -714,6 +870,44 @@ def generate_device_cells(
     return reports
 
 
+def generate_resistor_cells(
+    resistors: list[Resistor], out_dir: str, pdk: str
+) -> dict[str, dict]:
+    """Run ``klt gen res_array`` once per resistor; return name -> generator report.
+
+    Sizing comes from :func:`resistor_array_params` (issue #221) -- one
+    ``res_array`` block per netlist ``R`` element, folded into ``num`` series
+    unit resistors across ``rows``.
+    """
+    reports: dict[str, dict] = {}
+    for resistor in resistors:
+        num, rows, length_um = resistor_array_params(resistor.value_ohm)
+        params = {
+            "length_um": round(length_um, 6),
+            "width_um": RES_WIDTH_UM,
+            "spacing_um": RES_SPACING_UM,
+            "num": num,
+            "rows": rows,
+            "dummy": 0,
+            "flavor": "generic",
+        }
+        gds_path = os.path.join(out_dir, f"{resistor.name}.gds")
+        report = _klt(
+            "gen",
+            "res_array",
+            "--pdk",
+            pdk,
+            "--params",
+            json.dumps(params),
+            "--cell-name",
+            resistor.name,
+            "-o",
+            gds_path,
+        )
+        reports[resistor.name] = report
+    return reports
+
+
 # --------------------------------------------------------------------------- #
 # Floorplan
 # --------------------------------------------------------------------------- #
@@ -773,6 +967,78 @@ def place_devices(devices: list[Device], reports: dict[str, dict]) -> list[Place
     return placements
 
 
+_RES_PORT_RE = re.compile(r"^R(\d+)_(A|B)$")
+
+
+class ResistorPlacement:
+    """Absolute placement of one ``res_array`` block (issue #221).
+
+    ``units`` is ``[(A_um, B_um), ...]`` in unit-index order -- the two
+    terminal coordinates of each series unit resistor, in this block's
+    absolute (post-origin) frame.  :meth:`Interconnect.resistors` chains
+    ``units[i][1]`` (B) to ``units[i+1][0]`` (A) with a short jumper, and
+    wires ``units[0][0]``/``units[-1][1]`` out to the resistor's own two nets.
+    """
+
+    def __init__(self, resistor: Resistor, report: dict, origin_x: float, origin_y: float):
+        self.resistor = resistor
+        self.report = report
+        self.x = origin_x
+        self.y = origin_y
+        bbox = report["bbox_um"]
+        self.x0 = bbox["x0"] + origin_x
+        self.y0 = bbox["y0"] + origin_y
+        self.x1 = bbox["x1"] + origin_x
+        self.y1 = bbox["y1"] + origin_y
+        by_index: dict[int, dict[str, tuple[float, float]]] = {}
+        for port in report.get("ports", []):
+            match = _RES_PORT_RE.match(port["name"])
+            if not match:
+                raise GenError(
+                    f"res_array report for {report.get('cell_name')} has an "
+                    f"unrecognized port name {port['name']!r} (expected R<i>_A/_B)"
+                )
+            index, terminal = int(match.group(1)), match.group(2)
+            by_index.setdefault(index, {})[terminal] = (
+                port["x_um"] + origin_x,
+                port["y_um"] + origin_y,
+            )
+        expected_num, _rows, _length_um = resistor_array_params(resistor.value_ohm)
+        missing = [i for i in range(len(by_index)) if by_index.get(i, {}).keys() != {"A", "B"}]
+        if missing or len(by_index) != expected_num:
+            raise GenError(
+                f"res_array report for {report.get('cell_name')} does not "
+                f"carry exactly A/B ports for units 0..{expected_num - 1}"
+            )
+        self.units = [(by_index[i]["A"], by_index[i]["B"]) for i in range(len(by_index))]
+
+
+def place_resistors(
+    resistors: list[Resistor],
+    reports: dict[str, dict],
+    start_x: float,
+    start_y: float,
+) -> list[ResistorPlacement]:
+    """Stack every resistor's ``res_array`` block vertically at ``start_x``.
+
+    Placed as its own column, entirely north of nothing in particular but
+    always east of every device rail (``start_x`` is the caller's
+    already-computed clear-of-everything x) -- so it never overlaps
+    ``DNWELL_DRV`` regardless of the marker's own x-extent, the same
+    "outside every device's bbox" property :meth:`Interconnect.guard_ring`
+    relies on, just along the other axis.
+    """
+    placements: list[ResistorPlacement] = []
+    cursor = start_y
+    for resistor in resistors:
+        report = reports[resistor.name]
+        bbox = report["bbox_um"]
+        origin_y = cursor - bbox["y0"]
+        placements.append(ResistorPlacement(resistor, report, start_x, origin_y))
+        cursor = origin_y + bbox["y1"] + RES_ROW_GAP_UM
+    return placements
+
+
 # --------------------------------------------------------------------------- #
 # Interconnect / marker cell
 # --------------------------------------------------------------------------- #
@@ -808,12 +1074,19 @@ class Interconnect:
         self.placements = placements
         self.nets = nets
         self.passives = list(passives or [])
+        #: Resistor blocks (issue #221), attached after construction via
+        #: :meth:`set_resistors` once their own ``res_array`` origins are
+        #: known -- see module-level ``build()``.
+        self.resistor_placements: list["ResistorPlacement"] = []
         self.shapes: list[dict] = []
         self.labels: list[dict] = []
         #: Provenance for the drawn MiM stack, filled in by :meth:`mim_caps`
         #: and echoed into ``gate_driver_core.provenance.json`` -- one entry
         #: per drawn capacitor, naming the plate rectangles it was drawn as.
         self.mim_records: list[dict] = []
+        #: Provenance for the drawn resistor network (issue #221), filled in
+        #: by :meth:`resistors`.
+        self.resistor_records: list[dict] = []
         # guard_ring()'s ring is strapped to the 3.3V group's own ground
         # rail -- this block's substrate reference, since the 3.3V devices
         # sit directly on native substrate outside every DNWELL (see that
@@ -842,6 +1115,10 @@ class Interconnect:
         #: whatever it ends up being, so the row never lands on top of drawn
         #: circuitry regardless of how the floorplan below it grows.
         self.north_edge_y = self.rail_y1
+
+    def set_resistors(self, placements: list["ResistorPlacement"]) -> None:
+        """Attach already-placed resistor blocks (issue #221) for :meth:`resistors`."""
+        self.resistor_placements = placements
 
     # -- primitives -------------------------------------------------------- #
 
@@ -1540,10 +1817,170 @@ class Interconnect:
                     _rect(via_layer, x - half_via, y - half_via, x + half_via, y + half_via)
                 )
 
+    # -- resistor network (issue #221) -------------------------------------- #
+
+    def resistors(self) -> None:
+        """Wire every placed ``res_array`` block into its netlist net (issue #221).
+
+        Each block is ``num`` series unit resistors (:func:`resistor_array_params`);
+        this method chains unit ``i``'s ``B`` port to unit ``i+1``'s ``A`` port
+        with a short Metal1 jumper (using the *exact* coordinates
+        ``klt gen res_array`` reported -- same-row units land at the same y,
+        a row transition at the same x, per its own boustrophedon fold, so a
+        plain ``_hbar``/``_vbar`` always suffices; anything else means the
+        fold changed shape and this refuses rather than drawing a bad short).
+
+        The chain's two open ends -- unit 0's ``A``, the last unit's ``B`` --
+        then stub out to the resistor's own ``plus``/``minus`` net rail. By
+        the fold's own numbering, unit 0 is always in the *bottom* row and
+        the last unit always in the *top* row (``res_array`` fills row 0
+        first, then row 1, ...), so each end's stub first drops (unit 0) or
+        rises (the last unit) clear of the block's own bbox -- past every
+        other row's Metal1 pads, which occupy only their own row's narrow
+        y-band -- before turning to run west to the rail. A flat stub run
+        straight from a multi-unit row's *far* end to the rail, at the row's
+        own y, would instead cross directly over every unit in between (all
+        on the same Metal1 y-band) and short the whole chain together --
+        confirmed the hard way: a first pass of this method did exactly that
+        and a real `klt lvs` run reported R1/R2's entire interior chain
+        merged into one net.
+
+        **The long-distance run back to the rail is drawn on Metal3, not
+        Metal1 (issue #221 fix).** A first pass ran that whole leg on Metal1,
+        reasoning that "Metal1 does not connect to Metal2 without a Via1, the
+        same 'stubs cross under unrelated rails' property every other stub in
+        this class relies on" -- true for *rails* (Metal2), but the resistor
+        column sits well east of `column_x1` (the widest drawn device --
+        uvlo's own `MPD`, m=800, spans nearly 900um), so *every* device's own
+        drain stub (:meth:`device_wiring`) now also runs on Metal1 nearly the
+        full width of the block, at that device's own pad y. A same-layer
+        Metal1 escape run from the resistor column back to a device-side
+        rail is therefore no longer confined to "empty" territory the way it
+        was when the drawn block was narrow: confirmed the hard way a second
+        time, a real `klt lvs` run reported `uvlo`'s own `GND_DRV` net
+        electrically merged with the unrelated level-shifter net `x1_inb`,
+        because `R2`'s Metal1 escape lane (y from its own block position)
+        happened to cross `XMPINV`'s Metal1 drain stub (y from *its* pad,
+        clear across the block) at the same y band. Landing the long leg on
+        Metal3 instead -- the same "crosses the whole interconnect without a
+        single via into it" technique :meth:`mim_caps` already uses for its
+        own chain-end escape -- makes that crossing layer-safe unconditionally:
+        Metal3 never interacts with a device's Metal1 stub, or with a Metal2
+        rail, without an explicit Via2 this method places only at its own two
+        endpoints.
+
+        **The Via2-to-rail landing sits at the escape's own `lane_y`, not up
+        near the top of the rail.** A first pass of this Metal3 rework
+        landed every end's Via2 near `self.rail_y1` (mirroring
+        :meth:`mim_caps`'s own `tap_y`), reasoning that any point along a
+        rail's full-height span is an equally valid connection -- true in
+        isolation, but it meant every end's Metal3 lane grew a second,
+        *vertical* leg spanning nearly the whole design height at that net's
+        own rail x. With eight ends (four resistors x two terminals) each
+        contributing one such near-full-height strip, several pairs of
+        those verticals crossed a *third* net's own horizontal lane whose x
+        happened to reach that far (`R2`'s minus lane alone reaches from
+        `GND_DRV`'s rail all the way to its own last unit, deep inside the
+        resistor column) -- confirmed the hard way a third time, a real `klt
+        lvs` run reported `GND_DRV`/`VDD_DRV`/`x3_ndiv`/`x3_nref`/
+        `x3_uvlo_ok` all merged into one net. Every end's own `lane_y` is
+        already distinct from every other end's (:func:`place_resistors`'s
+        `RES_ROW_GAP_UM` spacing, more than twice `RES_ENDPOINT_CLEARANCE_UM`
+        apart, keeps every resistor's own below/above escape y clear of
+        every other resistor's), so landing directly at `(rail, lane_y)`
+        needs no vertical Metal3 leg at all -- each end's entire Metal3
+        footprint is then confined to its own narrow y-band, and two ends
+        can only ever collide if their y-bands do, which they structurally
+        cannot.
+        """
+        half_via = VIA_SIZE_UM / 2.0
+        for placement in self.resistor_placements:
+            resistor = placement.resistor
+            units = placement.units
+            for (_a, prev_b), (next_a, _b) in zip(units, units[1:]):
+                if prev_b[1] == next_a[1]:
+                    self.shapes.append(_hbar(L_METAL1, prev_b[0], next_a[0], prev_b[1], STUB_WIDTH_UM))
+                elif prev_b[0] == next_a[0]:
+                    self.shapes.append(_vbar(L_METAL1, prev_b[1], next_a[1], prev_b[0], STUB_WIDTH_UM))
+                else:
+                    raise GenError(
+                        f"{resistor.name}: res_array's unit ports are not "
+                        "row/column-aligned between consecutive units -- "
+                        "cannot draw a straight series jumper"
+                    )
+
+            # The resistor column sits east of every device (place_resistors()
+            # -- module-level build()'s resistor_start_x is derived from
+            # right_rail_x), so each escape lane reaches back toward the
+            # *right* rail, not the left one -- using left_rail_x here would
+            # draw a lane spanning the entire block westward, merging every
+            # net whose own rail it happened to land on along the way.
+            below_y = placement.y0 - RES_ENDPOINT_CLEARANCE_UM
+            above_y = placement.y1 + RES_ENDPOINT_CLEARANCE_UM
+            ends = (
+                (resistor.plus, units[0][0], below_y),
+                (resistor.minus, units[-1][1], above_y),
+            )
+            for net, (px, py), lane_y in ends:
+                rail = self.right_rail_x[net]
+                # Short Metal1 run from the unit's own pin down/up to the
+                # lane y, then Via1+Via2 up onto a local Metal2 landing --
+                # entirely within the resistor's own column (x >= every
+                # device's own bbox), clear of every device's own Metal1
+                # wiring by construction (see :func:`place_resistors`).
+                self.shapes.append(_vbar(L_METAL1, min(py, lane_y), max(py, lane_y), px, STUB_WIDTH_UM, name=net))
+                self.shapes.append(
+                    _rect(L_METAL1, px - LANDING_UM / 2, lane_y - LANDING_UM / 2, px + LANDING_UM / 2, lane_y + LANDING_UM / 2)
+                )
+                self.shapes.append(
+                    _rect(L_VIA1, px - half_via, lane_y - half_via, px + half_via, lane_y + half_via)
+                )
+                self.shapes.append(
+                    _rect(L_METAL2, px - LANDING_UM / 2, lane_y - LANDING_UM / 2, px + LANDING_UM / 2, lane_y + LANDING_UM / 2)
+                )
+                self.shapes.append(
+                    _rect(L_VIA2, px - half_via, lane_y - half_via, px + half_via, lane_y + half_via)
+                )
+                # The long leg itself: Metal3, from the local landing back to
+                # the target rail's own x, entirely at this end's own
+                # `lane_y` -- no separate vertical leg, so this end's whole
+                # Metal3 footprint stays inside its own narrow y-band (see
+                # the docstring above for why that is load-bearing). The
+                # Via2 at the rail end lands directly on the rail polygon
+                # (which spans the full design height, so any y along it is
+                # a valid tie-in).
+                self.shapes.append(_hbar(L_METAL3, rail, px, lane_y, MIM_LANE_WIDTH_UM, name=net))
+                for x in (px, rail):
+                    self.shapes.append(
+                        _rect(L_METAL3, x - LANDING_UM / 2, lane_y - LANDING_UM / 2, x + LANDING_UM / 2, lane_y + LANDING_UM / 2)
+                    )
+                self.shapes.append(
+                    _rect(L_VIA2, rail - half_via, lane_y - half_via, rail + half_via, lane_y + half_via)
+                )
+
+            _num, _rows, length_um = resistor_array_params(resistor.value_ohm)
+            self.resistor_records.append(
+                {
+                    "name": resistor.name,
+                    "value_ohm": resistor.value_ohm,
+                    "nets": {"plus": resistor.plus, "minus": resistor.minus},
+                    "num": len(units),
+                    "drawn_ohm": resistor_ohms(len(units), length_um),
+                    "origin_um": {"x": round(placement.x, 4), "y": round(placement.y, 4)},
+                    "bbox_um": {
+                        "x0": round(placement.x0, 4),
+                        "y0": round(placement.y0, 4),
+                        "x1": round(placement.x1, 4),
+                        "y1": round(placement.y1, 4),
+                    },
+                }
+            )
+
     def build(self) -> dict:
         self.rails()
         self.jumpers()
         self.device_wiring()
+        self.resistors()
         self.voltage_domain_markers()
         self.body_ties()
         self.guard_ring()
@@ -1564,11 +2001,15 @@ def compose(
     out_gds: str,
     out_dir: str,
     pdk: str,
+    resistor_placements: list["ResistorPlacement"] | None = None,
 ) -> dict:
     blocks = [
         {"id": p.device.name, "generator_report": p.report} for p in placements
     ]
     origins = {p.device.name: {"x": p.x, "y": p.y} for p in placements}
+    for rp in resistor_placements or []:
+        blocks.append({"id": rp.resistor.name, "generator_report": rp.report})
+        origins[rp.resistor.name] = {"x": rp.x, "y": rp.y}
     blocks.append({"id": "interconnect", "generator_report": interconnect_report})
     origins["interconnect"] = {"x": 0.0, "y": 0.0}
     order = [b["id"] for b in blocks]
@@ -1617,7 +2058,7 @@ def build(out_dir: str, pdk: str) -> dict:
     work_dir = os.path.join(out_dir, "build")
     os.makedirs(work_dir, exist_ok=True)
 
-    top_ports, devices, passives = parse_netlist_full(NETLIST_PATH)
+    top_ports, devices, passives, resistors = parse_netlist_full(NETLIST_PATH)
     undrawable = [p for p in passives if p.model != MIM_MODEL]
     if undrawable:
         # Loud on purpose: a passive this generator cannot draw means the GDS
@@ -1637,6 +2078,37 @@ def build(out_dir: str, pdk: str) -> dict:
 
     nets = sorted({n for d in devices for n in (d.d, d.g, d.s)})
     interconnect = Interconnect(placements, nets, passives)
+
+    # Resistor network (issue #221): every net a netlist R element names is
+    # already a MOS d/g/s net (confirmed for uvlo's Rref/R1/R2/Rfb), so it
+    # already has a Metal2 rail from `Interconnect.__init__` above -- sizing
+    # and placement need no further coupling to the interconnect beyond the
+    # rail x-extent it already computed, which is why this can happen before
+    # `interconnect.build()` runs.
+    resistor_reports = generate_resistor_cells(resistors, work_dir, pdk)
+    resistor_start_x = (
+        max(interconnect.right_rail_x.values()) + RES_COLUMN_MARGIN_UM
+        if interconnect.right_rail_x
+        else 0.0
+    )
+    # Start the resistor column far enough above `rail_y0` that even the
+    # *lowest* resistor's own "below" escape lane (`RES_ENDPOINT_CLEARANCE_UM`
+    # below its own block bbox.y0) still lands inside the rails' own drawn
+    # y0..y1 span, not below it. A first pass started the column exactly at
+    # `rail_y0` (matching the rails' own bottom edge), which put that lowest
+    # lane a further `RES_ENDPOINT_CLEARANCE_UM` *below* rail_y0 -- outside
+    # every rail's own drawn extent, so the Via2 landing meant to merge onto
+    # a rail there touched nothing: confirmed the hard way, a real `klt lvs`
+    # run reported that resistor's own "plus" pin as a dangling, one-terminal
+    # anonymous net rather than the schematic net it was meant to reach.
+    # `LANDING_UM` of headroom on top of the clearance keeps the landing
+    # pad's own footprint (not just its center point) inside the rail.
+    resistor_start_y = interconnect.rail_y0 + RES_ENDPOINT_CLEARANCE_UM + LANDING_UM
+    resistor_placements = place_resistors(
+        resistors, resistor_reports, resistor_start_x, resistor_start_y
+    )
+    interconnect.set_resistors(resistor_placements)
+
     interconnect_request = interconnect.build()
     request_path = os.path.join(work_dir, "draw-request.json")
     with open(request_path, "w", encoding="utf-8") as handle:
@@ -1664,7 +2136,9 @@ def build(out_dir: str, pdk: str) -> dict:
     }
 
     out_gds = os.path.join(out_dir, f"{TOP_CELL}.gds")
-    compose_report = compose(placements, interconnect_report, out_gds, work_dir, pdk)
+    compose_report = compose(
+        placements, interconnect_report, out_gds, work_dir, pdk, resistor_placements
+    )
 
     provenance = {
         "top_cell": TOP_CELL,
@@ -1680,6 +2154,7 @@ def build(out_dir: str, pdk: str) -> dict:
             "device_count": len(devices),
             "transistor_count": sum(d.fingers for d in devices),
             "passive_count": len(passives),
+            "resistor_count": len(resistors),
             # Netlist devices this generator does not draw. An empty list is
             # the "layout covers the whole netlist" statement; it has been
             # empty since issue #166 drew the `XCCOMP*` MiM stack, and
@@ -1690,6 +2165,11 @@ def build(out_dir: str, pdk: str) -> dict:
             # plate rectangle and the series node each terminal landed on
             # (issue #166 / spec/decision-records/0014).
             "passives_drawn": interconnect.mim_records,
+            # The drawn resistor network, one entry per netlist R element
+            # (issue #221) -- num series units, its computed drawn ohms
+            # (matches value_ohm by construction, see resistor_ohms()), and
+            # its own block placement.
+            "resistors_drawn": interconnect.resistor_records,
         },
         "generator": {
             "path": os.path.relpath(os.path.abspath(__file__), REPO_ROOT),
@@ -1724,6 +2204,7 @@ def build(out_dir: str, pdk: str) -> dict:
         ],
         "compose_warnings": compose_report.get("warnings", []),
         "devices": [d.as_dict() for d in devices],
+        "resistors": [r.as_dict() for r in resistors],
     }
     provenance_path = os.path.join(out_dir, f"{TOP_CELL}.provenance.json")
     with open(provenance_path, "w", encoding="utf-8") as handle:
@@ -1735,6 +2216,7 @@ def build(out_dir: str, pdk: str) -> dict:
         "compose": compose_report,
         "devices": devices,
         "passives": passives,
+        "resistors": resistors,
     }
 
 
@@ -1778,6 +2260,10 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"passives     : {len(result['passives'])} MiM cap(s) drawn "
         f"({', '.join(p.name for p in result['passives']) or 'none'})"
+    )
+    print(
+        f"resistors    : {len(result['resistors'])} drawn "
+        f"({', '.join(r.name for r in result['resistors']) or 'none'})"
     )
     return 0
 

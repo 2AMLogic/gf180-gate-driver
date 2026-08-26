@@ -4,21 +4,22 @@
   "top_cell": "gate_driver_core",
   "pdk": {
     "variant": "gf180mcuD",
-    "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+    "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
   },
   "provenance": {
-    "klt_version": "0.2.0",
-    "klayout_version": "0.30.10",
+    "klt_version": "0.3.0",
+    "klayout_version": "0.30.11",
     "pdk": {
       "name": "gf180mcuD",
-      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+      "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
     },
     "deck": {
       "name": "gf180mcu",
-      "content_hash": "sha256:6a323622d93c1b4716a7874c37ee3d825bd08398c3c030c85175e44e2cc229a3"
+      "content_hash": "sha256:79e71a1e7d84be3cfc82e4c70afbdf7b743ac1f361fb8e981f57831014d2e8b0",
+      "released": true
     },
     "input": {
-      "content_hash": "sha256:0656ab4c377c3bb1643d867842ff04488a3d9a0a452aa8da7c7a7f990fa3a564"
+      "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f"
     }
   },
   "passed": true,
@@ -26,15 +27,16 @@
     {
       "name": "devices",
       "passed": true,
-      "netlist_devices": 24,
-      "expected_transistors": 959,
-      "extracted_transistors": 959,
+      "netlist_devices": 35,
+      "expected_transistors": 1769,
+      "extracted_transistors": 1769,
       "extracted_device_counts": {
         "cap_mim_2f0_m4m5_noshield": 4,
-        "nfet": 299,
-        "pfet": 660
+        "nfet": 1105,
+        "pfet": 664,
+        "ppolyf_u": 271
       },
-      "extracted_net_count": 20,
+      "extracted_net_count": 295,
       "extracted_netlist": "layout/gate_driver_core.extracted.spice",
       "missing": [],
       "unexpected": []
@@ -49,26 +51,26 @@
       ],
       "chain": [
         "x1_ncb",
-        "$18",
-        "$19",
-        "$20",
+        "$293",
+        "$294",
+        "$295",
         "IN_DRV"
       ],
       "interior_nodes": [
         {
-          "net": "$18",
+          "net": "$293",
           "capacitor_terminals": 2,
           "on_transistor": false,
           "is_pin": false
         },
         {
-          "net": "$19",
+          "net": "$294",
           "capacitor_terminals": 2,
           "on_transistor": false,
           "is_pin": false
         },
         {
-          "net": "$20",
+          "net": "$295",
           "capacitor_terminals": 2,
           "on_transistor": false,
           "is_pin": false
@@ -80,47 +82,1972 @@
       "name": "dnwell_partition",
       "passed": true,
       "dnwell_regions": 1,
-      "mv_devices": 20,
+      "mv_devices": 31,
       "lv_devices": 4,
-      "mv_pfet_taps": 10,
+      "mv_pfet_taps": 14,
       "lv_pfet_taps": 1,
-      "mv_nfet_taps": 10,
+      "mv_nfet_taps": 17,
       "lv_nfet_taps": 3,
-      "active_regions_in_dnwell": 40,
+      "active_regions_in_dnwell": 62,
       "active_regions_outside_dnwell": 12,
       "dnwell_bbox_um": {
         "left": -4.15,
         "bottom": 84.18,
-        "right": 489.57,
-        "top": 466.62
+        "right": 900.42,
+        "top": 658.68
       },
       "failures": []
     },
     {
       "name": "ground_rail_isolation",
       "passed": true,
-      "component_count": 18,
-      "expected_nets": 18,
+      "component_count": 300,
+      "expected_nets": 25,
       "ground_components": {
         "GND_DRV": [
-          "gate_driver_core:17"
+          "gate_driver_core:24"
         ],
         "GND_LOGIC": [
-          "gate_driver_core:16"
+          "gate_driver_core:23"
         ]
       },
       "components": [
         {
-          "component": "gate_driver_core:17",
+          "component": "gate_driver_core:25",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:26",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:27",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:28",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:29",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:30",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:31",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:32",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:33",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:34",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:35",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:36",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:37",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:38",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:39",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:40",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:41",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:42",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:43",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:44",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:45",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:46",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:47",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:48",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:49",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:50",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:51",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:52",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:53",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:54",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:55",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:56",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:57",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:58",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:59",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:60",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:61",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:62",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:63",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:64",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:65",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:66",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:67",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:68",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:69",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:70",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:71",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:72",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:73",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:74",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:75",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:76",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:77",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:78",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:79",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:80",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:81",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:82",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:83",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:84",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:85",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:86",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:87",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:88",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:89",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:90",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:91",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:92",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:93",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:94",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:95",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:96",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:97",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:98",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:99",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:100",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:101",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:102",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:103",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:104",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:105",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:106",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:107",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:108",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:109",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:110",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:111",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:112",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:113",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:114",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:115",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:116",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:117",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:118",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 1,
+          "via1_shapes": 1
+        },
+        {
+          "component": "gate_driver_core:119",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:120",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:121",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:122",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:123",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:124",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:125",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:126",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:127",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:128",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:129",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:130",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:131",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:132",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:133",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:134",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:135",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:136",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:137",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:138",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:139",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:140",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:141",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:142",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:143",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:144",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:145",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:146",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:147",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:148",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:149",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:150",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:151",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:152",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:153",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:154",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:155",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:156",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:157",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:158",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:159",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:160",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:161",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:162",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:163",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:164",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:165",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:166",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:167",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:168",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:169",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:170",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:171",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:172",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:173",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:174",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:175",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:176",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:177",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:178",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:179",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:180",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:181",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:182",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:183",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:184",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:185",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:186",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:187",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:188",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:189",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:190",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:191",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:192",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:193",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:194",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:195",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:196",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:197",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:198",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:199",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:200",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:201",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:202",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:203",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:204",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:205",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:206",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:207",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:208",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:209",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:210",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:211",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:212",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:213",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:214",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:215",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:216",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:217",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:218",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:219",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:220",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:221",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:222",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:223",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:224",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:225",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:226",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:227",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:228",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:229",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:230",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:231",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:232",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:233",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:234",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:235",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:236",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:237",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:238",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:239",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:240",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:241",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:242",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:243",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:244",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:245",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:246",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:247",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:248",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:249",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:250",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:251",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:252",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:253",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:254",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:255",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:256",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:257",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:258",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:259",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:260",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:261",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:262",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:263",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:264",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:265",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:266",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:267",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:268",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:269",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:270",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:271",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:272",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:273",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:274",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:275",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:276",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:277",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:278",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:279",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:280",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:281",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:282",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:283",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:284",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:285",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:286",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:287",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:288",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:289",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:290",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:291",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:292",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:293",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:294",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:295",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:296",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:297",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:298",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:299",
+          "nets": [],
+          "m1_shapes": 3,
+          "m2_shapes": 0,
+          "via1_shapes": 0
+        },
+        {
+          "component": "gate_driver_core:24",
           "nets": [
             "GND_DRV"
           ],
-          "m1_shapes": 351,
+          "m1_shapes": 1189,
           "m2_shapes": 2,
-          "via1_shapes": 20
+          "via1_shapes": 32
         },
         {
-          "component": "gate_driver_core:16",
+          "component": "gate_driver_core:23",
           "nets": [
             "GND_LOGIC"
           ],
@@ -129,7 +2056,7 @@
           "via1_shapes": 10
         },
         {
-          "component": "gate_driver_core:15",
+          "component": "gate_driver_core:22",
           "nets": [
             "IN"
           ],
@@ -138,7 +2065,7 @@
           "via1_shapes": 5
         },
         {
-          "component": "gate_driver_core:14",
+          "component": "gate_driver_core:21",
           "nets": [
             "IN_DRV"
           ],
@@ -147,25 +2074,25 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:13",
+          "component": "gate_driver_core:20",
           "nets": [
             "OUT"
           ],
-          "m1_shapes": 729,
+          "m1_shapes": 1532,
           "m2_shapes": 2,
-          "via1_shapes": 4
+          "via1_shapes": 5
         },
         {
-          "component": "gate_driver_core:12",
+          "component": "gate_driver_core:19",
           "nets": [
             "VDD_DRV"
           ],
-          "m1_shapes": 721,
+          "m1_shapes": 745,
           "m2_shapes": 2,
-          "via1_shapes": 22
+          "via1_shapes": 30
         },
         {
-          "component": "gate_driver_core:11",
+          "component": "gate_driver_core:18",
           "nets": [
             "VDD_LOGIC"
           ],
@@ -174,7 +2101,7 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:10",
+          "component": "gate_driver_core:17",
           "nets": [
             "x1_inb"
           ],
@@ -183,7 +2110,7 @@
           "via1_shapes": 5
         },
         {
-          "component": "gate_driver_core:9",
+          "component": "gate_driver_core:16",
           "nets": [
             "x1_na"
           ],
@@ -192,7 +2119,7 @@
           "via1_shapes": 4
         },
         {
-          "component": "gate_driver_core:8",
+          "component": "gate_driver_core:15",
           "nets": [
             "x1_nb"
           ],
@@ -201,7 +2128,7 @@
           "via1_shapes": 4
         },
         {
-          "component": "gate_driver_core:7",
+          "component": "gate_driver_core:14",
           "nets": [
             "x1_nbuf1"
           ],
@@ -210,7 +2137,7 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:6",
+          "component": "gate_driver_core:13",
           "nets": [
             "x1_nca"
           ],
@@ -219,7 +2146,7 @@
           "via1_shapes": 5
         },
         {
-          "component": "gate_driver_core:5",
+          "component": "gate_driver_core:12",
           "nets": [
             "x1_ncb"
           ],
@@ -228,7 +2155,7 @@
           "via1_shapes": 7
         },
         {
-          "component": "gate_driver_core:4",
+          "component": "gate_driver_core:11",
           "nets": [
             "x2_n1"
           ],
@@ -237,7 +2164,7 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:3",
+          "component": "gate_driver_core:10",
           "nets": [
             "x2_n2"
           ],
@@ -246,7 +2173,7 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:2",
+          "component": "gate_driver_core:9",
           "nets": [
             "x2_n3"
           ],
@@ -255,7 +2182,7 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:1",
+          "component": "gate_driver_core:8",
           "nets": [
             "x2_n4"
           ],
@@ -264,13 +2191,76 @@
           "via1_shapes": 6
         },
         {
-          "component": "gate_driver_core:0",
+          "component": "gate_driver_core:7",
           "nets": [
             "x2_n5"
           ],
           "m1_shapes": 195,
           "m2_shapes": 2,
           "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:6",
+          "nets": [
+            "x3_lockout"
+          ],
+          "m1_shapes": 21,
+          "m2_shapes": 2,
+          "via1_shapes": 7
+        },
+        {
+          "component": "gate_driver_core:5",
+          "nets": [
+            "x3_ncompn"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:4",
+          "nets": [
+            "x3_ncompp"
+          ],
+          "m1_shapes": 17,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:3",
+          "nets": [
+            "x3_ndiv"
+          ],
+          "m1_shapes": 7,
+          "m2_shapes": 2,
+          "via1_shapes": 3
+        },
+        {
+          "component": "gate_driver_core:2",
+          "nets": [
+            "x3_nref"
+          ],
+          "m1_shapes": 18,
+          "m2_shapes": 2,
+          "via1_shapes": 6
+        },
+        {
+          "component": "gate_driver_core:1",
+          "nets": [
+            "x3_ntail"
+          ],
+          "m1_shapes": 12,
+          "m2_shapes": 2,
+          "via1_shapes": 5
+        },
+        {
+          "component": "gate_driver_core:0",
+          "nets": [
+            "x3_uvlo_ok"
+          ],
+          "m1_shapes": 9,
+          "m2_shapes": 2,
+          "via1_shapes": 4
         }
       ],
       "failures": []
@@ -280,15 +2270,10 @@
       "passed": true,
       "marker_shape_counts": {
         "DNWELL": 1,
-        "LVPWELL": 10,
+        "LVPWELL": 17,
         "Dualgate": 1
       },
-      "klt_voltage_domain_warnings": [
-        {
-          "marker": "55/0",
-          "description": "Dualgate (55/0) marks gf180mcu's 5V/6V thick-oxide voltage domain. This curated deck models it for the DF.1a/DF.3a COMP width/space rules only, which ship as _LV/_MV pairs (0.22/0.30 and 0.28/0.36 um) scoped to the marker; every other DRC rule still applies the 3.3V/_LV thresholds regardless of Dualgate's presence (e.g. DF.6 COMP extend beyond gate 0.24 vs. 0.40, PL.5a/PL.5b field poly to COMP 0.10 vs. 0.30 -- all in um, and neither transcribed in this deck yet), and MOS extraction always binds the 3.3V models (nfet_03v3/pfet_03v3) even to a transistor drawn entirely inside Dualgate."
-        }
-      ],
+      "klt_voltage_domain_warnings": [],
       "failures": []
     }
   ]
