@@ -1,0 +1,22 @@
+{
+  "name": "uvlo-trip-verification",
+  "description": "Standalone UVLO comparator/reference (design/uvlo.sch, issue #220) rising/falling trip voltage, hysteresis, and lockout response time against spec/decision-records/0001 Decisions 4-5. This manifest lets sim/run_corners.py run a small representative op-point subset (--list/--check-env discovery); the authoritative evidence record -- full triangle-wave trip-voltage extraction plus a lockout step-response time measurement over the full process x temperature PVT grid -- is produced by run_uvlo_trip.py, which drives sim/harness's library (pdk.py, corners.py, report.py) directly, because a DC-hysteresis trip-voltage sweep (a bistable/regenerative circuit; a raw .dc sweep does not converge reliably for this class of circuit, so a slow transient triangle-wave ramp is used instead) plus a separate step-response timing measurement does not fit a single tb.json op-point grid.",
+  "claim": "spec/gate-driver.md#5-protection-scope-uvlo; spec/decision-records/0001-block-interface-and-uvlo-parameters.md Decisions 4-5 -- see spec/decision-records/0018-uvlo-comparator-pvt-measurement.md and run_uvlo_trip.py's records/ output for the full measured PVT comparison; this manifest's own generic-CLI run reports a raw op-point bias only.",
+  "netlist": "uvlo_trip_tb.spice",
+  "dut": "design/netlist/uvlo.spice",
+  "rails": {},
+  "temperatures_c": [-40, 27, 125],
+  "corners": ["mos"],
+  "analyses": ["op"],
+  "subset_reason": "No two-rail supply axis: this is a single-VDD_DRV drive-rail-domain cell (no VDD_LOGIC/GND_LOGIC pins at all, decision record 0001 Decision 5) whose supply IS the swept quantity the actual campaign measures internally via its own transient triangle-wave ramp (0V->6V->0V), not the harness's +/-10% tied-supply grid -- see the 'nosupply' corner-id convention in sim/README.md. This generic-CLI run collapses the (already-absent) two-rail axis the same way sim/device-mv-fet/testbench/tb.json does; run_uvlo_trip.py's own records/ output sweeps VDD_DRV 0-6V internally per (process, temperature) point instead.",
+  "measure": {
+    "vref_v": "v(nref)"
+  },
+  "checks": {
+    "vref_v": {
+      "min": -0.1,
+      "max": 6.6,
+      "description": "sanity range only (op point at the stimulus fragment's t=0 bias, not a trip-voltage measurement) -- the real trip-voltage/hysteresis/response-time evidence is run_uvlo_trip.py's records/ output, not this generic op-point check."
+    }
+  }
+}

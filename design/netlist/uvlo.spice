@@ -1,0 +1,67 @@
+* uvlo.spice -- xschem-generated netlist fragment
+* Source: design/uvlo.sch (xschem -x -n -s, gf180mcuD)
+* Drive-rail UVLO comparator/reference sub-cell (spec/gate-driver.md sec5;
+* spec/decision-records/0001, Decisions 4-5). External nodes (netlisted
+* .subckt port order, NOT necessarily schematic ipin/opin placement order --
+* design/README.md -- see design/uvlo.sym's header for the authoritative
+* order this cell's parent instantiations must connect by name against):
+*   VDD_DRV -- 5V nominal / 6V stretch drive rail (block VDD_DRV)
+*   OUT     -- block OUT net; this cell actively pulls it low (MPD) while
+*              VDD_DRV is below the trip point, overriding IN
+*              unconditionally (decision record 0001 Decision 5)
+*   GND_DRV -- drive rail return (block GND_DRV)
+* This is a netlist FRAGMENT: devices only, no .include/.lib/.temp/.control/.end
+* (design/README.md) -- a testbench supplies models, corners, temp and sources.
+* Regenerate: source sim/env.sh; xschem --rcfile design/xschemrc -x -q -n -s
+*   -o design/netlist design/uvlo.sch; then strip the sch_path/sym_path/.end
+* lines per design/README.md and re-add this header.
+*
+* Component values (see design/uvlo.sch's header for the full derivation and
+* design/uvlo-comparator-sizing.md for the tuning history): Rref=800k biases
+* the diode-connected Vt reference (MREF); R1=880k/R2=200k/Rfb=16000k form
+* the resistive divider + positive-feedback hysteresis network; MTAIL/MINP/
+* MINN/MLOADP/MLOADN are the 5T differential comparator (MINP/MINN's bulk
+* ties to GND_DRV, not their own source/tail node -- gf180mcu is a bulk
+* process with one shared NMOS substrate per spec/gate-driver.md's device
+* convention, so a source-tied body would be a real body-effect error, not
+* a simplification); MPINV1/MNINV1 and MPINV2/MNINV2 are the two-inverter
+* digital buffer (ncompn -> lockout -> uvlo_ok); MPD (W=10u m=800) is the
+* OUT pulldown.
+*
+* MEASURED PVT numbers (sim/uvlo-trip-verification/, issue #220) diverge
+* substantially from decision record 0001 Decision 4's targets at
+* temperature/process extremes -- see
+* spec/decision-records/0018-uvlo-comparator-pvt-measurement.md before citing
+* the typ numbers above as representative of every corner.
+
+**.subckt uvlo VDD_DRV OUT GND_DRV
+*.ipin VDD_DRV
+*.ipin GND_DRV
+*.opin OUT
+Rref VDD_DRV nref 800k m=1
+XMREF nref nref GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+R1 VDD_DRV ndiv 880k m=1
+R2 ndiv GND_DRV 200k m=1
+Rfb uvlo_ok ndiv 16000k m=1
+XMTAIL ntail nref GND_DRV GND_DRV nfet_06v0 L=0.7u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINP ncompp ndiv ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINN ncompn nref ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADP ncompp ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADN ncompn ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV1 lockout ncompn VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV1 lockout ncompn GND_DRV GND_DRV nfet_06v0 L=0.7u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV2 uvlo_ok lockout VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV2 uvlo_ok lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPD OUT lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=800
+**.ends

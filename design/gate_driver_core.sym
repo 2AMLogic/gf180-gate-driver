@@ -1,6 +1,7 @@
 v {xschem version=3.4.7 file_version=1.2
 
-* gate_driver_core -- top-level gate-driver block (issue #98)
+* gate_driver_core -- top-level gate-driver block (issue #98; issue #220
+* added x3 uvlo, no port-list change)
 * Hierarchical symbol for design/gate_driver_core.sch, auto-generated from
 * the schematic's ipin/opin instances with
 * `awk -f <xschem>/make_sym.awk 300 gate_driver_core.sch` per
@@ -10,7 +11,9 @@ v {xschem version=3.4.7 file_version=1.2
 * schematic instead of netlisting an empty subcircuit.
 * Regenerate (do not hand-edit pin geometry) if gate_driver_core.sch's port
 * list changes; the only hand-added content here is this comment block.
-* Pin (B-line) order below fixes the derived netlist's .subckt port order:
+* Pin (B-line) order below fixes the derived netlist's .subckt port order
+* (unchanged by issue #220's x3 addition -- x3 uses only pre-existing
+* VDD_DRV/GND_DRV/OUT ports, no new top-level port):
 *   VDD_LOGIC GND_LOGIC IN OUT VDD_DRV GND_DRV
 }
 K {type=subcircuit

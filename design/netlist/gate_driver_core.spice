@@ -1,7 +1,8 @@
 * gate_driver_core.spice -- xschem-generated hierarchical netlist fragment
 * Source: design/gate_driver_core.sch (issue #98), which instantiates
-* design/level_shifter.sch (x1) and design/output_stage.sch (x2) as
-* sub-cells. Regenerate with (from the repo root, after `source sim/env.sh`):
+* design/level_shifter.sch (x1), design/output_stage.sch (x2) and
+* design/uvlo.sch (x3, issue #220) as sub-cells. Regenerate with (from the
+* repo root, after `source sim/env.sh`):
 *   xschem --rcfile design/xschemrc -x -q -n -s -o design/netlist \
 *     design/gate_driver_core.sch
 *   grep -v -e '^\*\* sch_path:' -e '^\*\* sym_path:' -e '^\.end$' \
@@ -42,9 +43,15 @@
 * for why the series stack (gf180mcuD's fixed 2 fF/um2 MIM density plus DRM
 * rule MIMTM.8a's 25um2 minimum MIM area).
 *
-* NOT present: UVLO (spec Sec.5, decision record 0001 Decisions 4-5) is in
-* scope for this increment but has no implemented sub-cell yet, so this top
-* cell is the level-shifter + output-stage signal path only.
+* x3 uvlo (issue #220, spec Sec.5, decision record 0001 Decisions 4-5)
+* monitors VDD_DRV only and actively pulls OUT low (its own MPD pulldown)
+* whenever VDD_DRV is below the release threshold, independent of
+* IN/IN_DRV. Measured PVT numbers for x3's trip thresholds/hysteresis/
+* response time diverge substantially from decision record 0001 Decision
+* 4's targets at temperature/process extremes -- see
+* spec/decision-records/0018-uvlo-comparator-pvt-measurement.md and
+* sim/uvlo-trip-verification/records/ before citing the typ numbers as
+* representative of every corner.
 **.subckt gate_driver_core VDD_LOGIC GND_LOGIC IN OUT VDD_DRV GND_DRV
 *.ipin VDD_LOGIC
 *.ipin GND_LOGIC
@@ -54,6 +61,7 @@
 *.opin OUT
 x1 IN VDD_LOGIC GND_LOGIC VDD_DRV GND_DRV IN_DRV level_shifter
 x2 VDD_DRV IN_DRV OUT GND_DRV output_stage
+x3 VDD_DRV OUT GND_DRV uvlo
 **.ends
 
 * expanding   symbol:  level_shifter.sym # of pins=6
@@ -126,5 +134,39 @@ XMP6 OUT n5 VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10.0u nf=1 ad='int((nf+1)/2) * W
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=500
 XMN6 OUT n5 GND_DRV GND_DRV nfet_06v0 L=0.70u W=10.0u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
 + ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=220
+.ends
+
+
+* expanding   symbol:  uvlo.sym # of pins=3
+.subckt uvlo VDD_DRV OUT GND_DRV
+*.ipin VDD_DRV
+*.ipin GND_DRV
+*.opin OUT
+Rref VDD_DRV nref 800k m=1
+XMREF nref nref GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+R1 VDD_DRV ndiv 880k m=1
+R2 ndiv GND_DRV 200k m=1
+Rfb uvlo_ok ndiv 16000k m=1
+XMTAIL ntail nref GND_DRV GND_DRV nfet_06v0 L=0.7u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINP ncompp ndiv ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINN ncompn nref ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADP ncompp ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADN ncompn ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV1 lockout ncompn VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV1 lockout ncompn GND_DRV GND_DRV nfet_06v0 L=0.7u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV2 uvlo_ok lockout VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV2 uvlo_ok lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPD OUT lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=800
 .ends
 

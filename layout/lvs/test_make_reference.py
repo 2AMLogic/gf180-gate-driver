@@ -36,11 +36,20 @@ class MakeReferenceTest(unittest.TestCase):
         self.text, self.info = make_reference.build_reference()
 
     def test_device_and_finger_counts_match_layout_provenance(self) -> None:
-        # gate_driver_core.provenance.json: 24 netlist devices, 959 transistors,
-        # plus the four-deep MiM compensation stack (issue #166).
-        self.assertEqual(self.info["devices"], 24)
+        # gate_driver_core.provenance.json still (correctly) publishes the
+        # CURRENT, unregenerated GDS's counts (24 netlist devices, 959
+        # transistors) -- issue #220 (schematic-only slice) added x3=uvlo (11
+        # new netlist devices: 7 nfet_06v0 -- 6 at nf=1 m=1, one pulldown at
+        # nf=1 m=800 -- and 4 pfet_06v0, all nf=1 m=1) to the committed
+        # NETLIST only; regenerating the GDS to draw them is explicitly out
+        # of scope for #220 and deferred to #221 (see
+        # layout/test_gen_gate_driver_core.py's CommittedNetlistTest
+        # docstring for the same transitional-gap note). This reference is
+        # built directly from the netlist, so its counts track #220's netlist
+        # change now: 24+11=35 devices, 299+806=1105 nfet / 660+4=664 pfet.
+        self.assertEqual(self.info["devices"], 35)
         self.assertEqual(self.info["passives"], 4)
-        self.assertEqual(self.info["counts"], {"nfet": 299, "pfet": 660, "cap": 4})
+        self.assertEqual(self.info["counts"], {"nfet": 1105, "pfet": 664, "cap": 4})
 
     def test_nfet_bodies_all_tie_to_the_merged_ground_net(self) -> None:
         """Every extracted NMOS body compares against the one merged ground.
@@ -60,7 +69,10 @@ class MakeReferenceTest(unittest.TestCase):
         nfet_lines = [
             line for line in self.text.splitlines() if line.startswith("M") and " nfet " in line
         ]
-        self.assertEqual(len(nfet_lines), 299)
+        # 299 + 806 (issue #220's x3=uvlo: 6 nfet_06v0 at nf=1 m=1 plus one
+        # nf=1 m=800 pulldown) -- see test_device_and_finger_counts_match_
+        # layout_provenance's comment for the transitional-gap context.
+        self.assertEqual(len(nfet_lines), 1105)
         bodies = {line.split()[4] for line in nfet_lines}
         self.assertEqual(bodies, {make_reference.MERGED_GROUND_NET})
 
@@ -83,7 +95,9 @@ class MakeReferenceTest(unittest.TestCase):
         pfet_lines = [
             line for line in self.text.splitlines() if line.startswith("M") and " pfet " in line
         ]
-        self.assertEqual(len(pfet_lines), 660)
+        # 660 + 4 (issue #220's x3=uvlo: 4 pfet_06v0, all nf=1 m=1) -- see
+        # test_device_and_finger_counts_match_layout_provenance's comment.
+        self.assertEqual(len(pfet_lines), 664)
         bodies = {line.split()[4] for line in pfet_lines}
         self.assertEqual(bodies, {"VDD_LOGIC", "VDD_DRV"})
 
@@ -100,18 +114,25 @@ class MakeReferenceTest(unittest.TestCase):
         self.assertEqual(model_tokens, {"nfet", "pfet"})
 
     def test_pin_list_matches_extraction_promotion(self) -> None:
-        """17 pins: 18 named schematic nets, minus the GND_LOGIC/GND_DRV merge.
+        """24 pins: 18 named schematic nets (pre-#220), minus the
+        GND_LOGIC/GND_DRV merge, plus issue #220's x3=uvlo's 7 new internal
+        nets (nref, ndiv, ntail, ncompp, ncompn, lockout, uvlo_ok).
 
-        Confirmed against a real `klt extract` run's ``pin_count``: every net
-        named on a device terminal (source/drain/gate *and*, since issue
-        #132, body) in the flattened schematic is promoted -- no separate
-        synthesized ``vsubs`` pin, since real tie geometry resolves the
-        deck's global substrate identity onto real labeled metal instead
-        (transform 3, revised).
+        Confirmed against a real `klt extract` run's ``pin_count`` (pre-#220
+        baseline): every net named on a device terminal (source/drain/gate
+        *and*, since issue #132, body) in the flattened schematic is
+        promoted -- no separate synthesized ``vsubs`` pin, since real tie
+        geometry resolves the deck's global substrate identity onto real
+        labeled metal instead (transform 3, revised). This reference is
+        built directly from the netlist, so it already reflects #220's new
+        uvlo internal nets even though the corresponding GDS/extraction has
+        not been regenerated yet (#221) -- see
+        test_device_and_finger_counts_match_layout_provenance's comment for
+        the same transitional-gap note.
         """
         header = next(line for line in self.text.splitlines() if line.startswith(".SUBCKT"))
         pins = header.split()[2:]
-        self.assertEqual(len(pins), 17)
+        self.assertEqual(len(pins), 24)
         self.assertNotIn(make_reference.SUBSTRATE_NET, pins)
         self.assertEqual(pins, self.info["pins"])
 
@@ -156,7 +177,9 @@ class MakeReferenceTest(unittest.TestCase):
             r"^M\S+ \S+ \S+ \S+ \S+ (nfet|pfet) L=[\d.]+U W=[\d.]+U$"
         )
         device_lines = [line for line in self.text.splitlines() if line.startswith("M")]
-        self.assertEqual(len(device_lines), 959)
+        # 959 + 810 (issue #220's x3=uvlo, see
+        # test_device_and_finger_counts_match_layout_provenance's comment).
+        self.assertEqual(len(device_lines), 1769)
         for line in device_lines:
             self.assertRegex(line, pattern)
 

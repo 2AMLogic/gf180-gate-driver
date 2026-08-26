@@ -1,0 +1,29 @@
+v {xschem version=3.4.7 file_version=1.2
+
+* uvlo -- hierarchical-cell symbol for design/uvlo.sch. Per design/README.md,
+* this symbol lives beside its schematic (not under design/symbols/) so
+* xschem descends into uvlo.sch when this symbol is placed in a parent
+* schematic (e.g. design/gate_driver_core.sch's x3 instance).
+* Auto-generated from the schematic's ipin/opin instances with
+* `awk -f <xschem>/make_sym.awk 300 uvlo.sch`; the only hand-added content
+* here is this comment block -- regenerate (do not hand-edit pin geometry)
+* if uvlo.sch's port list changes.
+* Pin (B-line) order below fixes the derived netlist's .subckt port order:
+*   VDD_DRV OUT GND_DRV
+}
+K {type=subcircuit
+format="@name @pinlist @symname"
+template="name=x1"
+}
+T {@symname} -36 -6 0 0 0.3 0.3 {}
+T {@name} 285 -32 0 0 0.2 0.2 {}
+P 4 5 280 -20 -280 -20 -280 20 280 20 280 -20 {}
+B 5 -302.5 -12.5 -297.5 -7.5 {name=VDD_DRV dir=in}
+L 4 -300 -10 -280 -10 {}
+T {VDD_DRV} -275 -14 0 0 0.2 0.2 {}
+B 5 297.5 -12.5 302.5 -7.5 {name=OUT dir=out}
+L 4 280 -10 300 -10 {}
+T {OUT} 275 -14 0 1 0.2 0.2 {}
+B 5 -302.5 7.5 -297.5 12.5 {name=GND_DRV dir=in}
+L 4 -300 10 -280 10 {}
+T {GND_DRV} -275 6 0 0 0.2 0.2 {}
