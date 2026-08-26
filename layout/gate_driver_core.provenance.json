@@ -2,17 +2,17 @@
   "top_cell": "gate_driver_core",
   "layout": {
     "path": "layout/gate_driver_core.gds",
-    "sha256": "0656ab4c377c3bb1643d867842ff04488a3d9a0a452aa8da7c7a7f990fa3a564",
+    "sha256": "54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
     "bbox_um": {
-      "x0": -33.6,
+      "x0": -44.800000000000004,
       "y0": -2.0,
-      "x1": 519.17,
-      "y1": 510.92
+      "x1": 1599.04,
+      "y1": 712.78
     }
   },
   "source_netlist": {
     "path": "design/netlist/gate_driver_core.spice",
-    "sha256": "fbf94883ef318dcb5c438e279f8633ffdffb7559fae222b6dc27ae1c31bb5971",
+    "sha256": "1d44250367d95eaa935645036a80f682c2e31770f908b90b46b9cc7c26dcb83c",
     "top_ports": [
       "VDD_LOGIC",
       "GND_LOGIC",
@@ -21,9 +21,10 @@
       "VDD_DRV",
       "GND_DRV"
     ],
-    "device_count": 24,
-    "transistor_count": 959,
+    "device_count": 35,
+    "transistor_count": 1769,
     "passive_count": 4,
+    "resistor_count": 4,
     "passives_not_drawn": [],
     "passives_drawn": [
       {
@@ -45,9 +46,9 @@
             "net": "x1_ncb",
             "rect_um": [
               0.0,
-              504.72,
+              706.58,
               6.2,
-              510.92
+              712.78
             ]
           },
           "top": {
@@ -58,9 +59,9 @@
             "net": "x1_nccomp1",
             "rect_um": [
               0.6,
-              505.32,
+              707.18,
               5.6,
-              510.32
+              712.18
             ]
           }
         }
@@ -84,9 +85,9 @@
             "net": "x1_nccomp2",
             "rect_um": [
               7.4,
-              504.72,
+              706.58,
               13.6,
-              510.92
+              712.78
             ]
           },
           "top": {
@@ -97,9 +98,9 @@
             "net": "x1_nccomp1",
             "rect_um": [
               8.0,
-              505.32,
+              707.18,
               13.0,
-              510.32
+              712.18
             ]
           }
         }
@@ -123,9 +124,9 @@
             "net": "x1_nccomp2",
             "rect_um": [
               14.8,
-              504.72,
+              706.58,
               21.0,
-              510.92
+              712.78
             ]
           },
           "top": {
@@ -136,9 +137,9 @@
             "net": "x1_nccomp3",
             "rect_um": [
               15.4,
-              505.32,
+              707.18,
               20.4,
-              510.32
+              712.18
             ]
           }
         }
@@ -162,9 +163,9 @@
             "net": "IN_DRV",
             "rect_um": [
               22.2,
-              504.72,
+              706.58,
               28.4,
-              510.92
+              712.78
             ]
           },
           "top": {
@@ -175,31 +176,113 @@
             "net": "x1_nccomp3",
             "rect_um": [
               22.8,
-              505.32,
+              707.18,
               27.8,
-              510.32
+              712.18
             ]
           }
+        }
+      }
+    ],
+    "resistors_drawn": [
+      {
+        "name": "x3_Rref",
+        "value_ohm": 800000.0,
+        "nets": {
+          "plus": "VDD_DRV",
+          "minus": "x3_nref"
+        },
+        "num": 12,
+        "drawn_ohm": 800000.0,
+        "origin_um": {
+          "x": 948.82,
+          "y": -0.4
+        },
+        "bbox_um": {
+          "x0": 948.82,
+          "y0": -0.4,
+          "x1": 1436.36,
+          "y1": 0.84
+        }
+      },
+      {
+        "name": "x3_R1",
+        "value_ohm": 880000.0,
+        "nets": {
+          "plus": "VDD_DRV",
+          "minus": "x3_ndiv"
+        },
+        "num": 16,
+        "drawn_ohm": 880000.0,
+        "origin_um": {
+          "x": 948.82,
+          "y": 6.84
+        },
+        "bbox_um": {
+          "x0": 948.82,
+          "y0": 6.84,
+          "x1": 1487.04,
+          "y1": 8.08
+        }
+      },
+      {
+        "name": "x3_R2",
+        "value_ohm": 200000.0,
+        "nets": {
+          "plus": "x3_ndiv",
+          "minus": "GND_DRV"
+        },
+        "num": 3,
+        "drawn_ohm": 200000.0,
+        "origin_um": {
+          "x": 948.82,
+          "y": 14.08
+        },
+        "bbox_um": {
+          "x0": 948.82,
+          "y0": 14.08,
+          "x1": 1192.34,
+          "y1": 14.5
+        }
+      },
+      {
+        "name": "x3_Rfb",
+        "value_ohm": 16000000.0,
+        "nets": {
+          "plus": "x3_uvlo_ok",
+          "minus": "x3_ndiv"
+        },
+        "num": 240,
+        "drawn_ohm": 16000000.0,
+        "origin_um": {
+          "x": 948.82,
+          "y": 20.5
+        },
+        "bbox_um": {
+          "x0": 948.82,
+          "y0": 20.5,
+          "x1": 1599.04,
+          "y1": 44.7
         }
       }
     ]
   },
   "generator": {
     "path": "layout/gen_gate_driver_core.py",
-    "sha256": "c6096bdeae086867753d7bb4c1f15e5b8604e5c9cec450226d3cfc11448cffd1"
+    "sha256": "fa7f2ffac07b45171d229f5ac3fbdbec099c2acca816b8058475bfca4d5100ce"
   },
   "tools": {
-    "klt_version": "klt 0.2.0",
+    "klt_version": "klt 0.3.0+gc27f7eccf49c",
     "pdk": {
       "name": "gf180mcuD",
       "variant": "gf180mcuD",
-      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+      "version": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b"
     },
     "note": "the klayout build and the extraction deck's content hash are recorded in gate_driver_core.checks.json (klt extract's own provenance block)"
   },
   "git": {
-    "commit": "6ba5edece2cf5fbf849340700e481b39d311272e",
-    "describe": "6ba5ede-dirty"
+    "commit": "5f9d6c0155bce64f3b1235d9dcf60e441e626ee0",
+    "describe": "5f9d6c0-dirty"
   },
   "placement": [
     {
@@ -537,6 +620,160 @@
         "y1": 462.62
       },
       "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMREF",
+      "origin_um": {
+        "x": 0.0,
+        "y": 465.82
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 465.82,
+        "x1": 1.54,
+        "y1": 476.64
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMTAIL",
+      "origin_um": {
+        "x": 0.0,
+        "y": 479.84
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 479.84,
+        "x1": 1.54,
+        "y1": 500.66
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMINP",
+      "origin_um": {
+        "x": 0.0,
+        "y": 503.86
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 503.86,
+        "x1": 1.54,
+        "y1": 519.68
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMINN",
+      "origin_um": {
+        "x": 0.0,
+        "y": 522.88
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 522.88,
+        "x1": 1.54,
+        "y1": 538.7
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMLOADP",
+      "origin_um": {
+        "x": 0.0,
+        "y": 542.05
+      },
+      "bbox_um": {
+        "x0": -0.15,
+        "y0": 541.9,
+        "x1": 1.54,
+        "y1": 558.02
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMLOADN",
+      "origin_um": {
+        "x": 0.0,
+        "y": 561.37
+      },
+      "bbox_um": {
+        "x0": -0.15,
+        "y0": 561.22,
+        "x1": 1.54,
+        "y1": 577.34
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMPINV1",
+      "origin_um": {
+        "x": 0.0,
+        "y": 580.69
+      },
+      "bbox_um": {
+        "x0": -0.15,
+        "y0": 580.54,
+        "x1": 1.54,
+        "y1": 591.66
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMNINV1",
+      "origin_um": {
+        "x": 0.0,
+        "y": 594.86
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 594.86,
+        "x1": 1.54,
+        "y1": 600.68
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMPINV2",
+      "origin_um": {
+        "x": 0.0,
+        "y": 604.03
+      },
+      "bbox_um": {
+        "x0": -0.15,
+        "y0": 603.88,
+        "x1": 1.54,
+        "y1": 625.0
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMNINV2",
+      "origin_um": {
+        "x": 0.0,
+        "y": 628.2
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 628.2,
+        "x1": 1.54,
+        "y1": 639.02
+      },
+      "domain": "5V/6V"
+    },
+    {
+      "id": "x3_XMPD",
+      "origin_um": {
+        "x": 0.0,
+        "y": 642.22
+      },
+      "bbox_um": {
+        "x0": 0.0,
+        "y0": 642.22,
+        "x1": 896.42,
+        "y1": 654.68
+      },
+      "domain": "5V/6V"
     }
   ],
   "compose_warnings": [
@@ -563,7 +800,22 @@
     "block 'interconnect' is placed 0.00um from block 'x2_XMP5' (strategy: explicit), closer than x2_XMP5's own declared drc_hints.min_spacing_um of 0.40um",
     "block 'interconnect' is placed 0.00um from block 'x2_XMN5' (strategy: explicit), closer than x2_XMN5's own declared drc_hints.min_spacing_um of 0.40um",
     "block 'interconnect' is placed 0.00um from block 'x2_XMP6' (strategy: explicit), closer than x2_XMP6's own declared drc_hints.min_spacing_um of 0.40um",
-    "block 'interconnect' is placed 0.00um from block 'x2_XMN6' (strategy: explicit), closer than x2_XMN6's own declared drc_hints.min_spacing_um of 0.40um"
+    "block 'interconnect' is placed 0.00um from block 'x2_XMN6' (strategy: explicit), closer than x2_XMN6's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMREF' (strategy: explicit), closer than x3_XMREF's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMTAIL' (strategy: explicit), closer than x3_XMTAIL's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMINP' (strategy: explicit), closer than x3_XMINP's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMINN' (strategy: explicit), closer than x3_XMINN's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMLOADP' (strategy: explicit), closer than x3_XMLOADP's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMLOADN' (strategy: explicit), closer than x3_XMLOADN's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMPINV1' (strategy: explicit), closer than x3_XMPINV1's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMNINV1' (strategy: explicit), closer than x3_XMNINV1's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMPINV2' (strategy: explicit), closer than x3_XMPINV2's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMNINV2' (strategy: explicit), closer than x3_XMNINV2's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_XMPD' (strategy: explicit), closer than x3_XMPD's own declared drc_hints.min_spacing_um of 0.40um",
+    "block 'interconnect' is placed 0.00um from block 'x3_Rref' (strategy: explicit), closer than x3_Rref's own declared drc_hints.min_spacing_um of 0.50um",
+    "block 'interconnect' is placed 0.00um from block 'x3_R1' (strategy: explicit), closer than x3_R1's own declared drc_hints.min_spacing_um of 0.50um",
+    "block 'interconnect' is placed 0.00um from block 'x3_R2' (strategy: explicit), closer than x3_R2's own declared drc_hints.min_spacing_um of 0.50um",
+    "block 'interconnect' is placed 0.00um from block 'x3_Rfb' (strategy: explicit), closer than x3_Rfb's own declared drc_hints.min_spacing_um of 0.50um"
   ],
   "devices": [
     {
@@ -876,6 +1128,183 @@
         "g": "x2_n5",
         "s": "GND_DRV",
         "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMREF",
+      "model": "nfet_06v0",
+      "w_um": 10.0,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_nref",
+        "g": "x3_nref",
+        "s": "GND_DRV",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMTAIL",
+      "model": "nfet_06v0",
+      "w_um": 20.0,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_ntail",
+        "g": "x3_nref",
+        "s": "GND_DRV",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMINP",
+      "model": "nfet_06v0",
+      "w_um": 14.999999999999998,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_ncompp",
+        "g": "x3_ndiv",
+        "s": "x3_ntail",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMINN",
+      "model": "nfet_06v0",
+      "w_um": 14.999999999999998,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_ncompn",
+        "g": "x3_nref",
+        "s": "x3_ntail",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMLOADP",
+      "model": "pfet_06v0",
+      "w_um": 14.999999999999998,
+      "l_um": 0.55,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_ncompp",
+        "g": "x3_ncompp",
+        "s": "VDD_DRV",
+        "b": "VDD_DRV"
+      }
+    },
+    {
+      "name": "x3_XMLOADN",
+      "model": "pfet_06v0",
+      "w_um": 14.999999999999998,
+      "l_um": 0.55,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_ncompn",
+        "g": "x3_ncompp",
+        "s": "VDD_DRV",
+        "b": "VDD_DRV"
+      }
+    },
+    {
+      "name": "x3_XMPINV1",
+      "model": "pfet_06v0",
+      "w_um": 10.0,
+      "l_um": 0.55,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_lockout",
+        "g": "x3_ncompn",
+        "s": "VDD_DRV",
+        "b": "VDD_DRV"
+      }
+    },
+    {
+      "name": "x3_XMNINV1",
+      "model": "nfet_06v0",
+      "w_um": 5.0,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_lockout",
+        "g": "x3_ncompn",
+        "s": "GND_DRV",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMPINV2",
+      "model": "pfet_06v0",
+      "w_um": 20.0,
+      "l_um": 0.55,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_uvlo_ok",
+        "g": "x3_lockout",
+        "s": "VDD_DRV",
+        "b": "VDD_DRV"
+      }
+    },
+    {
+      "name": "x3_XMNINV2",
+      "model": "nfet_06v0",
+      "w_um": 10.0,
+      "l_um": 0.7,
+      "fingers": 1,
+      "nets": {
+        "d": "x3_uvlo_ok",
+        "g": "x3_lockout",
+        "s": "GND_DRV",
+        "b": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_XMPD",
+      "model": "nfet_06v0",
+      "w_um": 10.0,
+      "l_um": 0.7,
+      "fingers": 800,
+      "nets": {
+        "d": "OUT",
+        "g": "x3_lockout",
+        "s": "GND_DRV",
+        "b": "GND_DRV"
+      }
+    }
+  ],
+  "resistors": [
+    {
+      "name": "x3_Rref",
+      "value_ohm": 800000.0,
+      "nets": {
+        "plus": "VDD_DRV",
+        "minus": "x3_nref"
+      }
+    },
+    {
+      "name": "x3_R1",
+      "value_ohm": 880000.0,
+      "nets": {
+        "plus": "VDD_DRV",
+        "minus": "x3_ndiv"
+      }
+    },
+    {
+      "name": "x3_R2",
+      "value_ohm": 200000.0,
+      "nets": {
+        "plus": "x3_ndiv",
+        "minus": "GND_DRV"
+      }
+    },
+    {
+      "name": "x3_Rfb",
+      "value_ohm": 16000000.0,
+      "nets": {
+        "plus": "x3_uvlo_ok",
+        "minus": "x3_ndiv"
       }
     }
   ]

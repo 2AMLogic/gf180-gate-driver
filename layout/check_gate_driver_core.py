@@ -77,16 +77,30 @@ the stream, not a replay of how it was built:
     net's label resolves to exactly one component, so the no-two-names ruling
     cannot pass vacuously because a label or a rail went missing.
 
-    This check exists because issue #132's real substrate-tie geometry
-    **removed the two automated signals that used to cover the same ground**:
-    `klt extract` now reports ``GND_LOGIC``/``GND_DRV`` as one merged net
-    (klayout-tools #1128 -- the extraction deck ties every NMOS body to one
-    hardcoded substrate global, see ``_canon_net`` below), so neither
-    ``klt lvs`` nor this file's own ``devices`` check can still tell the two
-    rails apart.  DRC does not cover it either: two same-layer shapes on
-    different nets that *overlap* merge into one polygon and raise no spacing
-    violation.  Without this check, an accidental short between the two
-    domains in the drawn interconnect would be caught by nothing at all.
+    This check was added by issue #132, when drawing real substrate-tie
+    geometry for *both* grounds appeared to remove the two extraction-side
+    signals that used to distinguish them: against the `klt` build of the day,
+    `klt extract` -- and therefore `klt lvs` -- reported ``GND_LOGIC`` and
+    ``GND_DRV`` as one merged net regardless of the drawn metal, because the
+    deck ties every NMOS body to one hardcoded substrate global
+    (klayout-tools #1128).
+
+    **Issue #221 disproved the merge half of that.** Under the `klt` build
+    now installed, that global substrate identity surfaces as ``GND_LOGIC``
+    on the NMOS *body* terminal only; ``GND_DRV`` extracts as its own,
+    separate net on every ordinary terminal (klayout-tools #1149, a deck
+    behavior drift -- re-running the *byte-identical* pre-#221 GDS no longer
+    reproduces the merge; see ``layout/README.md``'s "Known gaps").  So
+    ``klt lvs`` and this file's ``devices`` check can both see a cross-domain
+    short again today, and this check is no longer the sole signal.
+
+    It keeps its full value regardless, for two reasons.  It is the only one
+    of the three that rules on the *drawn interconnect* rather than on the
+    extractor's model of the substrate -- and #1149 is precisely the
+    demonstration that that model can change under a design without the
+    design changing at all.  And DRC covers none of it either way: two
+    same-layer shapes on different nets that *overlap* merge into one polygon
+    and raise no spacing violation.
 
 ``voltage_domain``
     ``klt layers --flattened`` for the marker layers, plus the
@@ -148,39 +162,48 @@ DEFAULT_PDK = "gf180mcuD"
 _PARAM_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(\S+)")
 
 #: GND_LOGIC (3.3V group) and GND_DRV (5V/6V group) -- two drawn Metal2 nets,
-#: two schematic pins, but the one electrical reference node
-#: spec/decision-records/0001 Decision 1 ratifies. See `_canon_net` below.
+#: two schematic pins, and (issue #221) two genuinely separate *extracted*
+#: nets on every ordinary terminal. spec/decision-records/0001 Decision 1
+#: makes them one electrical reference node only through a pad ring this bare
+#: core block does not itself draw, so distinct is the electrically correct
+#: picture at this level. Used by `ground_rail_isolation_verdict` below.
 _GROUND_NETS = frozenset({"GND_LOGIC", "GND_DRV"})
 
 
-def _canon_net(net: str) -> str:
-    """Collapse ``GND_LOGIC``/``GND_DRV`` (and klt's own merged label for the
-    two, e.g. ``"GND_DRV|GND_LOGIC"``) to one canonical token, for comparison
-    purposes only.
-
-    Issue #132 draws real substrate-tie geometry for *both* of this design's
-    grounds (``GND_LOGIC`` for the 3.3V group, ``GND_DRV`` for the 5V/6V
-    group -- ``Interconnect.body_ties()``). gf180mcu's curated `klt`
-    extraction deck ties every NMOS body to one hardcoded global substrate
-    identity regardless of DNWELL/LVPWELL enclosure (klayout-tools #1128,
-    confirmed by reading `extract.py`'s own `connect_global` handling) -- so
-    once both grounds carry a real tie, `klt extract` also reports every
-    device terminal actually wired to either rail as one merged net (its own
-    synthesized ``"GND_DRV|GND_LOGIC"``-style label), not the two separate
-    rails the schematic and the drawn metal both keep distinct. That merge is
-    the *extractor's* model, not a real short in the drawn interconnect (see
-    `body_ties()`'s docstring and `layout/README.md`'s "Known gaps"), so it
-    is normalized away here for this check's device-connectivity comparison
-    the same way `layout/lvs/make_reference.py` normalizes it for `klt lvs`.
-    Every other net name is returned unchanged.
-    """
-    if set(net.split("|")) & _GROUND_NETS:
-        return "|".join(sorted(_GROUND_NETS))
-    return net
-
-
 def _device_key(flavor: str, w_um: float, l_um: float, gate: str, ds: frozenset) -> tuple:
-    return (flavor, round(w_um, 3), round(l_um, 3), _canon_net(gate), frozenset(_canon_net(n) for n in ds))
+    """The comparison key for one transistor: flavor, geometry, and net names.
+
+    **Net names are compared verbatim, ``GND_LOGIC`` and ``GND_DRV``
+    included.**  An earlier revision of this module ran every name here
+    through a ``_canon_net`` helper that collapsed the two grounds (and klt's
+    own ``"GND_DRV|GND_LOGIC"`` merged label for them) onto one token,
+    because gf180mcu's curated deck ties every NMOS body to one hardcoded
+    substrate global (klayout-tools #1128) and, against the `klt` build of
+    the day, that merge propagated to every terminal wired to either rail --
+    so comparing them verbatim would have failed on a correct layout.
+
+    Issue #221 re-ran the *byte-identical* pre-#221 GDS through the currently
+    installed `klt` and found that merge is gone (klayout-tools #1149, a deck
+    behavior drift): the global substrate identity now surfaces as
+    ``GND_LOGIC`` on the NMOS **body** terminal alone, and ``GND_DRV``
+    extracts as its own separate net everywhere else.  The canonicalization
+    was therefore removed rather than narrowed, because there is no body
+    terminal left in this key to narrow it *to*: klt writes a 4-terminal MOS
+    as ``X<id> <t1> <gate> <t3> <bulk> <model>`` and :func:`extracted_devices`
+    passes only ``<gate>`` and the ``{<t1>, <t3>}`` pair in here -- all of
+    them ordinary terminals.  ``lvs/make_reference.py``'s ``_body_net()``
+    holds the surviving, body-only form of the same transform, for `klt lvs`,
+    which *does* compare the bulk terminal.
+
+    Keeping the collapse would have cost this check the one thing CLAUDE.md
+    calls the design's central problem: a device wired to logic ground where
+    the schematic says driver ground (or the reverse) produced an identical
+    key, so this independent audit could not see a cross-domain wiring error
+    that `klt lvs` and ``ground_rail_isolation`` would both still catch.
+    ``DeviceKeyGroundDomainTest`` in ``layout/test_gen_gate_driver_core.py``
+    pins the distinction.
+    """
+    return (flavor, round(w_um, 3), round(l_um, 3), gate, frozenset(ds))
 
 
 def expected_devices(devices: list[Device]) -> collections.Counter:
@@ -255,11 +278,13 @@ def _clean_net(token: str) -> str:
     """One extracted terminal token as a plain net name.
 
     KLayout's SPICE writer escapes a generated (unlabeled) net's name with a
-    backslash -- ``\\$18`` -- and joins two labels on one net with ``|``. The
-    backslash is escaping, not part of the name; the merge is normalized by
-    :func:`_canon_net` like everywhere else in this module.
+    backslash -- ``\\$18`` -- so the backslash is escaping, not part of the
+    name.  Nothing else is rewritten: a ``|``-joined name (klt's way of
+    reporting one net that carries two labels) is left exactly as extracted,
+    so that if one ever reappears it reads as the short it would be rather
+    than being normalized out of sight (issue #221; see :func:`_device_key`).
     """
-    return _canon_net(token.replace("\\", ""))
+    return token.replace("\\", "")
 
 
 def extracted_capacitors(spice_path: str) -> list[dict]:
@@ -392,8 +417,8 @@ def mim_stack_verdict(
     chain: list[str] = []
     interior: list[dict] = []
     if passives and len(capacitors) == len(passives):
-        start = _canon_net(passives[0].plus)
-        end = _canon_net(passives[-1].minus)
+        start = passives[0].plus
+        end = passives[-1].minus
         incident: dict[str, list[dict]] = collections.defaultdict(list)
         for cap in capacitors:
             incident[cap["a"]].append(cap)
@@ -408,7 +433,7 @@ def mim_stack_verdict(
                     f"net {node} touches {len(options)} unvisited capacitor "
                     "terminal(s) walking the series chain, expected exactly 1 "
                     f"-- the extracted stack is not the schematic's series "
-                    f"chain {[_canon_net(p.plus) for p in passives] + [end]}"
+                    f"chain {[p.plus for p in passives] + [end]}"
                 )
                 break
             cap = options[0]
@@ -634,12 +659,13 @@ def ground_rail_isolation_verdict(response: dict, expected_nets: list[str]) -> d
 
     Three rulings, in the order their failure messages read best:
 
-    1. **No component carries two distinct net names.**  This is the ruling
-       that replaces what `klt lvs` can no longer see: two rails joined by any
-       drawn Metal1/Via1/Metal2 path land in one component and carry both
+    1. **No component carries two distinct net names.**  Two rails joined by
+       any drawn Metal1/Via1/Metal2 path land in one component and carry both
        labels.  It is deliberately stated over *all* nets rather than only the
        two grounds -- the general form costs nothing and catches, say, an
-       ``OUT``/``VDD_DRV`` short the same way.
+       ``OUT``/``VDD_DRV`` short the same way.  It rules on the drawn metal
+       only, so unlike `klt lvs` it does not depend on what the extraction
+       deck's substrate global merges in any given `klt` build (#1128/#1149).
     2. **Every expected net resolves to exactly one component.**  Zero means
        the rail or its label vanished (which would make ruling 1 pass
        vacuously); more than one means the net is drawn open, split across
@@ -699,9 +725,10 @@ def ground_rail_isolation_verdict(response: dict, expected_nets: list[str]) -> d
             failures.append(
                 "GND_LOGIC and GND_DRV share one drawn metal component "
                 f"({ground_owners['GND_DRV'][0]}) -- the two ground domains are "
-                "shorted in the drawn interconnect, which `klt lvs` can no "
-                "longer see (klayout-tools #1128 merges them in the extracted "
-                "netlist regardless)"
+                "shorted in the drawn interconnect, ruled here on the drawn "
+                "metal alone, with no dependence on whatever the extraction "
+                "deck's substrate global happens to merge (klayout-tools "
+                "#1128/#1149)"
             )
 
     return {
@@ -802,7 +829,11 @@ def _redact_local_paths(value):
 
 
 def run(gds: str, pdk: str, work_dir: str) -> dict:
-    _, devices, passives = parse_netlist_full(NETLIST_PATH)
+    # Resistors (issue #221) are audited by `klt lvs` against
+    # `lvs/make_reference.py`'s reference netlist, not by this script's own
+    # checks -- none of the checks below (devices/mim_stack/dnwell_partition/
+    # ground_rail_isolation/voltage_domain) need the resistor list.
+    _, devices, passives, _resistors = parse_netlist_full(NETLIST_PATH)
     device_check = check_devices(gds, pdk, devices, work_dir)
     extract_report = device_check.pop("extract_report")
     extracted_path = device_check.pop("extracted_path")
