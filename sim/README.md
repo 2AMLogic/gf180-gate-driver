@@ -342,12 +342,13 @@ actually followed by every facet, not just described in the abstract.
 | `gate-driver-core-drive-with-uvlo-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); Challenge #5 rails via a temporary `tb.json` `rails`/`stretch`/`checks` override, see decision record 0019 | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
 | `output-stage-drive` | `python3 sim/run_corners.py output-stage-drive` | `spec/gate-driver.md` §3 |
 | `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
+| `level-shifter-oxide-safety-postlayout` | `python3 sim/run_corners.py level-shifter-oxide-safety-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §4, §2.3, §5 Exception 1 |
 | `device-mv-fet` | `PDK_ROOT=... PDK=gf180mcuD sim/device-mv-fet/run_device_mv_fet.py` (dedicated script — see its own module docstring; `python3 sim/run_corners.py device-mv-fet` runs only a small representative subset for `--list`/`--check-env` discovery) | `spec/gate-driver.md` §2.5 |
 | `low-side-power-switch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch/run_low_side_power_switch.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py low-side-power-switch` runs only a representative subset) | `spec/low-side-power-switch.md` §2.1 |
 | `gate-driver-indrv-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/gate-driver-core-drive/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 3, §2.3 |
 | `low-side-power-switch-ronw-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/low-side-power-switch/`'s testbench verbatim) | `spec/low-side-power-switch.md` §2.1, §2.2 |
 
-All ten entries resolve the PDK the same way (`sim/harness/README.md`'s
+All eleven entries resolve the PDK the same way (`sim/harness/README.md`'s
 `GF180_PDK_PATH` → `PDK_ROOT`/`PDK` → `sim/pdk.local.json` → `sim/pdk.json` →
 built-in search-root order); `sim/pdk.json` commits this repo's default
 variant (`gf180mcuD`), and `sim/env.sh` exports the resolved path/variant to

@@ -471,7 +471,7 @@ undershoot band that `layout/README.md` attributes to the extracted net
 capacitance damping the ringing (0/60 points fail under RC vs. 12/60
 parasitic-free). What it does **not** re-verify post-layout:
 
-- **`spec/gate-driver.md` §5 Exception 1** — the level shifter's own
+- ~~**`spec/gate-driver.md` §5 Exception 1** — the level shifter's own
   internal thin-oxide overshoot on `inb` (decision records 0003/0015). No
   `sim/gate-driver-core-drive-with-uvlo-postlayout/` (nor the pre-UVLO
   `sim/gate-driver-core-drive-postlayout/`) record measures `inb`, `na`, or
@@ -479,10 +479,45 @@ parasitic-free). What it does **not** re-verify post-layout:
   `tpdhl`/`ipeak_source`/`ipeak_sink`/`vout`/`vin`/`indrv`/`n1`…`n5`/
   `uvlo_lockout_at_in_high`/`uvlo_vout_at_in_high_v`/`uvlo_vdrv_at_in_high_v`
   only — the level shifter's own internal nodes are not on that list). That
-  claim's only evidence remains schematic-level,
+  claim's only evidence remained schematic-level,
   `sim/level-shifter-oxide-safety/records/20260818-071216-5260603.md`, and
-  there is no `level-shifter-oxide-safety`-equivalent postlayout facet
-  directory today.
+  there was no `level-shifter-oxide-safety`-equivalent postlayout facet
+  directory.~~ **Resolved by `sim/level-shifter-oxide-safety-postlayout/`**
+  (issue #235): the schematic facet's full measurement set
+  (`vgate_thinox_max`, `vna_peak`, `vnb_peak`, `vccomp_dev_max`/
+  `vccomp_stack_max`, `t_plh_ns`/`t_phl_ns`, the two functional ratios) is
+  now ported to the flat, hierarchy-prefixed node names (`x1_inb`, `x1_na`,
+  `x1_nb`, `IN_DRV`) the whole-block extracted DUT
+  (`layout/lvs/gate_driver_core.extracted{,-rc}.spice`) uses — the level
+  shifter has no independent top-cell boundary in `layout/gate_driver_core.gds`
+  ([decision record
+  0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md)
+  Finding 6 records the same fact for `uvlo`), so this facet reuses the
+  same whole-block DUT `sim/gate-driver-core-drive-with-uvlo-postlayout/`
+  runs against, not a standalone extracted level shifter. The four
+  extracted `XCCOMP` series-stack inter-cap nodes (`nccomp1`/`nccomp2`/
+  `nccomp3` in the schematic) have no schematic-level port name of their
+  own, so `klt extract` reports them as anonymous nets; per this facet's
+  testbench header they are real, reproducible, directly-probeable
+  `ANON<N>` nodes in both committed extracted netlists (not silently
+  dropped), so `vccomp_dev_max`/`vccomp_stack_max` port unchanged too. Both
+  DUT variants reproduce the same verdict pattern as the schematic facet
+  (15/60 points FAIL the uniform 3.63 V check at the `vlogic3p63v` +10 %
+  corner, decision record 0003/0015's ratified Exception 1) and stay
+  inside decision record 0015's ≤ 3.670 V bound: worst `inb` excursion
+  3.66471 V (34.71 mV over the 3.63 V rail, no-RC, binding corner
+  `ss_125c_vlogic3p63v-vdrv5p50v`, matching the schematic facet's own
+  binding corner) and 3.64277 V (12.77 mV over rail, RC, binding corner
+  `ss_-40c_vlogic3p63v-vdrv5p50v` — RC parasitics shrink the overshoot by
+  roughly an order of magnitude and shift the binding corner from
+  `ss_125c` to `ss_-40c`, both records' own "Finding" sections have the
+  full per-corner comparison table). `vna_peak`/`vnb_peak` stay comfortably
+  under the 3.63 V ceiling at all 60 points in both DUTs (worst 2.7716 V /
+  2.75254 V no-RC, 2.72318 V / 2.63639 V RC). Records:
+  [`sim/level-shifter-oxide-safety-postlayout/records/20260910-011224-b6ec657.md`](../sim/level-shifter-oxide-safety-postlayout/records/20260910-011224-b6ec657.md)
+  (no-RC),
+  [`sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md`](../sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md)
+  (RC).
 - **A standalone, post-layout re-measurement of `uvlo`'s own
   trip/hysteresis/response-time facet** — `uvlo` has no independent top-cell
   boundary in `layout/gate_driver_core.gds` (only per-device leaf cells and
@@ -578,6 +613,9 @@ spec-decision follow-ups, not documentation gaps):
 - Level-shifter-oxide-safety record (current): [`sim/level-shifter-oxide-safety/records/20260817-010243-2165a49.md`](../sim/level-shifter-oxide-safety/records/20260817-010243-2165a49.md)
 - Level-shifter-oxide-safety record (superseded): [`sim/level-shifter-oxide-safety/records/20260808-052057-5fbdb2d.md`](../sim/level-shifter-oxide-safety/records/20260808-052057-5fbdb2d.md)
 - Level-shifter-oxide-safety testbench: [`sim/level-shifter-oxide-safety/testbench/level_shifter_tb.spice`](../sim/level-shifter-oxide-safety/testbench/level_shifter_tb.spice)
+- Level-shifter-oxide-safety-postlayout record (no-RC): [`sim/level-shifter-oxide-safety-postlayout/records/20260910-011224-b6ec657.md`](../sim/level-shifter-oxide-safety-postlayout/records/20260910-011224-b6ec657.md)
+- Level-shifter-oxide-safety-postlayout record (RC): [`sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md`](../sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md)
+- Level-shifter-oxide-safety-postlayout testbench: [`sim/level-shifter-oxide-safety-postlayout/testbench/gate_driver_core_level_shifter_oxide_tb.spice`](../sim/level-shifter-oxide-safety-postlayout/testbench/gate_driver_core_level_shifter_oxide_tb.spice)
 - Spec: [`spec/gate-driver.md`](../spec/gate-driver.md) §3 (targets), §5 (protection scope / documented exceptions)
 - Decision records: [0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md), [0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md), [0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md), [0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md), [0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md), [0018](../spec/decision-records/0018-uvlo-comparator-pvt-measurement.md), [0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md), [0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md)
-- Re-read table: issue #62 (item 8); epic tracking: issue #22; end-to-end campaign: issue #100 (closed, PR #135); this rollup: issue #107; UVLO schematic PVT: issue #220; layout UVLO extension: issue #221 (PR #225); post-layout re-verification with UVLO: issue #222 (PR #227, decision record 0019); this refresh: issue #233
+- Re-read table: issue #62 (item 8); epic tracking: issue #22; end-to-end campaign: issue #100 (closed, PR #135); this rollup: issue #107; UVLO schematic PVT: issue #220; layout UVLO extension: issue #221 (PR #225); post-layout re-verification with UVLO: issue #222 (PR #227, decision record 0019); this refresh: issue #233; Exception 1 post-layout re-verification: issue #235
