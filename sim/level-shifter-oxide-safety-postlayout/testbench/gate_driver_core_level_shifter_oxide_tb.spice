@@ -1,0 +1,86 @@
+* level-shifter-oxide-safety-postlayout -- POST-LAYOUT re-run of
+* sim/level-shifter-oxide-safety/ (spec/gate-driver.md sec4 cascode clamp,
+* sec2.3 thin-oxide gate ceiling, decision records 0003/0014/0015), against
+* the extracted netlist of layout/gate_driver_core.gds.
+*
+* DUT (harness "dut", see tb.json): the WHOLE-BLOCK extracted netlist
+* (layout/lvs/gate_driver_core.extracted.spice / .extracted-rc.spice), NOT a
+* standalone extracted level_shifter -- the level shifter has no independent
+* top-cell boundary in layout/gate_driver_core.gds (only per-device leaf
+* cells and the flat gate_driver_core top; same fact decision record 0019
+* Finding 6 records for uvlo), so this is the same DUT
+* sim/gate-driver-core-drive-with-uvlo-postlayout/ uses. The level shifter's
+* own devices carry the schematic's x1_* hierarchy prefix textually (T1
+* flattening, layout/lvs/mk_extracted_dut.py), so its internal nodes are
+* still directly probeable, just under new names -- see the mapping table
+* below.
+*
+* Node-name mapping vs. the schematic facet
+* (sim/level-shifter-oxide-safety/testbench/level_shifter_tb.spice):
+*
+*   schematic (level_shifter.spice)   extracted (gate_driver_core.extracted{,-rc}.spice)
+*   --------------------------------  --------------------------------------------------
+*   in                                 IN
+*   inb                                 x1_inb
+*   na                                  x1_na
+*   nb                                  x1_nb
+*   vdd_logic / gnd_logic               VDD_LOGIC / GND_LOGIC
+*   vdd_drv / gnd_drv                   VDD_DRV / GND_DRV
+*   out   (level shifter's own output,  IN_DRV  (the block-level inter-cell
+*          block-internal in the          net feeding output_stage's first
+*          schematic facet's own DUT)     taper stage, x2_n1's gate)
+*   ncb                                  x1_ncb
+*   nccomp1 / nccomp2 / nccomp3          ANON293 / ANON294 / ANON295 (see
+*                                        "XCCOMP nodes" below)
+*
+* XCCOMP nodes (decision records 0007/0014, issue #166/#201 T7/T8): the
+* four-deep XCCOMP1..XCCOMP4 MiM series-compensation stack's three internal
+* nodes have no schematic label of their own even in the schematic netlist
+* (nccomp1/nccomp2/nccomp3 are xschem-assigned, not block ports), so `klt
+* extract` reports them as anonymous `$N` nets -- T8's mechanical rename
+* turns these into literal `ANON<N>` tokens rather than dropping them. This
+* is NOT a silent gap: `ANON293`/`ANON294`/`ANON295` are real, directly
+* probeable node names in both committed extracted netlists, confirmed by
+* grep against layout/lvs/gate_driver_core.extracted.spice (C1770..C1773)
+* and layout/lvs/gate_driver_core.extracted-rc.spice (same instance numbers,
+* `__t<n>` parasitic-leg suffixes stripped at the RC hub) as of this
+* facet's own commit -- so vccomp_dev_max/vccomp_stack_max ARE reproduced
+* here, not silently dropped. The one caveat worth recording: `ANON<N>`'s
+* numeric suffix is an artifact of the extractor's own net-enumeration
+* order, not a stable identifier -- a future re-extraction (new GDS, new
+* `klt` version) could renumber it, so this fragment's C1770-era naming is
+* pinned to the two DUT snapshots' committed sha256, not to `ANON293` as a
+* name in the abstract.
+*
+* Stimulus: same fast-edge pulse shape as the schematic facet (0.5ns
+* rise/fall, 40ns high, 80ns period, 200ns window) -- this measures the
+* level shifter's own internal gate-drive-feedthrough transient, which is
+* set by the cell's own switching speed, not by the downstream load on
+* IN_DRV, so the schematic facet's stimulus and measurement-time offsets
+* (t=59ns mid-pulse-high, t=19ns pre-edge-low) port unchanged for direct
+* corner-for-corner comparison against
+* sim/level-shifter-oxide-safety/records/20260818-071216-5260603.md.
+*
+* Output load: the real post-layout load on IN_DRV is the extracted gate
+* capacitance of output_stage's own first taper stage (x2_n1), reached
+* through the same DUT that also carries uvlo and the 1 nF reference load
+* on the block's final OUT pin (spec Sec.3) -- included here (not omitted)
+* so the level shifter sees its complete, real post-layout environment even
+* though this facet's own checks only measure nodes upstream of OUT.
+*
+* GND_LOGIC and GND_DRV are two pins but one electrical reference node by
+* design intent (decision record 0001, Decision 1) -- modeled here as a
+* milliohm-scale tie, matching every sibling testbench's convention.
+
+vsup_logic VDD_LOGIC 0        dc {vlogic_val}
+vsup_drv   VDD_DRV   0        dc {vdrv_val}
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vin IN GND_LOGIC pulse(0 {vlogic_val} 20n 0.5n 0.5n 40n 80n)
+
+* 1 nF reference load on the block's final output (spec Sec.3), same
+* convention as sim/gate-driver-core-drive-with-uvlo-postlayout/ -- present
+* so the level shifter drives its real post-layout environment, even though
+* this facet's own measurements stop at IN_DRV.
+cload OUT GND_DRV 1n

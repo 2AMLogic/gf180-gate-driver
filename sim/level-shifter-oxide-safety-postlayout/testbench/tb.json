@@ -1,0 +1,76 @@
+{
+  "name": "level-shifter-oxide-safety-postlayout",
+  "description": "POST-LAYOUT re-run of sim/level-shifter-oxide-safety/ (spec/gate-driver.md sec4 cascode/clamped level shifter; sec2.3 thin-oxide gate ceiling; decision records 0003/0014/0015): the same transient thin-oxide gate-to-any-node excursion, functional correctness and propagation delay measurements, ported to the flat, hierarchy-prefixed node names the extracted whole-block DUT (layout/lvs/gate_driver_core.extracted.spice / .extracted-rc.spice) uses -- the level shifter has no independent top-cell boundary in layout/gate_driver_core.gds, so this is the same DUT sim/gate-driver-core-drive-with-uvlo-postlayout/ runs against, with the output stage, uvlo and the 1 nF reference load present so the level shifter sees its real post-layout load on IN_DRV. See testbench/*.spice header for the full node-name mapping and the XCCOMP-node reproducibility note.",
+  "claim": "spec/gate-driver.md#4-level-shifter-topology-33-v-logic--56-v-drive-rail; spec/gate-driver.md#23-dc-gate-voltage-ceiling-thin-oxide-vs-thick-oxide",
+  "netlist": "gate_driver_core_level_shifter_oxide_tb.spice",
+  "dut": "layout/lvs/gate_driver_core.extracted.spice",
+  "corners": ["mos"],
+  "temperatures_c": [-40, 27, 125],
+  "stretch": true,
+  "options": ["gmin=1e-9", "method=gear"],
+  "analyses": [
+    "tran 20p 200n",
+    "let dq1 = abs(v(IN)-v(x1_inb))",
+    "let dq2 = abs(v(IN)-v(GND_LOGIC))",
+    "let dq3 = abs(v(IN)-v(VDD_LOGIC))",
+    "let dq4 = abs(v(IN)-v(x1_na))",
+    "let dq5 = abs(v(x1_inb)-v(x1_nb))",
+    "let dq6 = abs(v(x1_inb)-v(GND_LOGIC))",
+    "meas tran mq1 max dq1",
+    "meas tran mq2 max dq2",
+    "meas tran mq3 max dq3",
+    "meas tran mq4 max dq4",
+    "meas tran mq5 max dq5",
+    "meas tran mq6 max dq6",
+    "let thinox_worst = max(max(max(mq1,mq2),max(mq3,mq4)),max(mq5,mq6))",
+    "meas tran na_peak max v(x1_na)",
+    "meas tran nb_peak max v(x1_nb)",
+    "let dvc1 = abs(v(x1_ncb)-v(ANON293))",
+    "let dvc2 = abs(v(ANON293)-v(ANON294))",
+    "let dvc3 = abs(v(ANON294)-v(ANON295))",
+    "let dvc4 = abs(v(ANON295)-v(IN_DRV))",
+    "let dvcstack = abs(v(x1_ncb)-v(IN_DRV))",
+    "meas tran mvc1 max dvc1",
+    "meas tran mvc2 max dvc2",
+    "meas tran mvc3 max dvc3",
+    "meas tran mvc4 max dvc4",
+    "meas tran vccomp_stack max dvcstack",
+    "let vccomp_dev = max(max(mvc1,mvc2),max(mvc3,mvc4))",
+    "meas tran t_plh trig v(IN) val=1.65 rise=1 targ v(IN_DRV) val=2.5 rise=1",
+    "meas tran t_phl trig v(IN) val=1.65 fall=1 targ v(IN_DRV) val=2.5 fall=1",
+    "meas tran vout_hi_abs find v(IN_DRV) at=59n",
+    "meas tran vout_lo_abs find v(IN_DRV) at=19n",
+    "meas tran vdrv_now find v(VDD_DRV) at=59n",
+    "let outhi_ratio = vout_hi_abs/vdrv_now",
+    "let outlo_ratio = vout_lo_abs/vdrv_now"
+  ],
+  "measure": {
+    "vgate_thinox_max": "thinox_worst",
+    "vna_peak": "na_peak",
+    "vnb_peak": "nb_peak",
+    "vccomp_dev_max": "vccomp_dev",
+    "vccomp_stack_max": "vccomp_stack",
+    "t_plh_ns": "t_plh*1e9",
+    "t_phl_ns": "t_phl*1e9",
+    "vout_hi_ratio": "outhi_ratio",
+    "vout_lo_ratio": "outlo_ratio"
+  },
+  "checks": {
+    "vgate_thinox_max": {
+      "max": 3.63,
+      "description": "spec sec2.3: no thin-oxide gate-to-any-node DC/transient excursion may exceed 3.63V, at any instant, any corner -- the sec4 topology's central claim. Ported unchanged from sim/level-shifter-oxide-safety/ -- decision record 0003/0015's ratified Exception 1 band bounds inb's overshoot at the vlogic3p63v corner (<=3.670V) separately from this uniform check; see this facet's own record narrative for the Exception 1 comparison."
+    },
+    "vout_hi_ratio": {
+      "min": 0.95,
+      "description": "IN held high (t=59ns, mid-pulse) -> IN_DRV (the level shifter's own output, block-internal net feeding output_stage) must track VDD_DRV (non-inverting, decision record 0001 Decision 3)."
+    },
+    "vout_lo_ratio": {
+      "max": 0.05,
+      "description": "IN held low (t=19ns, pre-edge) -> IN_DRV must sit near GND_DRV (non-inverting, off state)."
+    },
+    "vccomp_dev_max": {
+      "max": 6.0,
+      "description": "decision record 0014: worst-case transient voltage across ANY ONE of the four extracted XCCOMP MiM series-stack legs (x1_ncb-ANON293, ANON293-ANON294, ANON294-ANON295, ANON295-IN_DRV), against the gf180mcu MiM capacitor's 6V rating -- ported unchanged from sim/level-shifter-oxide-safety/, see testbench/*.spice header for why these ANON<N> nodes are real and reproducible, not dropped."
+    }
+  }
+}
