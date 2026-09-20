@@ -117,12 +117,9 @@
 
 set -euo pipefail
 
-# ANSI color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
+# ANSI color codes (one line — file-size-ratchet offset for the #8248 guard
+# above; verbatim, behavior-preserving join of the five assignments).
+RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
 error() { echo -e "${RED}Error: $*${NC}" >&2; exit 1; }
 info() { echo -e "${BLUE}$*${NC}"; }
@@ -652,8 +649,29 @@ _check_no_open_stacked_children
 # for downstream consumers that still require explicit surface bumps.
 # Guard faults retain the existing best-effort behavior; only a confirmed
 # forbidden version edit blocks. Dry-run reports without attempting a merge.
+#
+# WHICH REF'S CHECKER IS THE ORACLE (#8284): normally the operator checkout's
+# copy — i.e. the default branch's — which is the right oracle for every PR
+# that does not change the version policy itself. It is the WRONG oracle for a
+# PR whose whole purpose is to change the version-bearing SET, because the
+# default branch's copy still encodes the OLD set: such a PR can never pass a
+# guard that runs it. Not hypothetical — PR #8190 (#8147, dropping CLAUDE.md
+# from the set) was blocked here by main's checker reporting
+# `CLAUDE.md: '0.19.168' -> ''`, while CI's `defaults-version-bump-check` job
+# — which checks out `pull_request.head.sha` and runs the checker from THAT
+# tree — passed on the same commit. The operator merged it with a hand-patched
+# scratch copy of this script.
+#
+# So when this PR's OWN commits (merge-base..head, so base-branch drift never
+# counts) touch the version-policy machinery — the checker itself,
+# version-check-gate.sh, or scripts/version.sh, the three files that define
+# what "version-bearing" means — extract the checker from the PR HEAD and
+# evaluate that instead, exactly as CI does, and name the ref used in the
+# guard's output. A head lookup that fails falls BACK to the default branch's
+# copy (saying so) rather than skipping the comparison: a lookup error must
+# never become a free pass.
 _check_defaults_version_bump_collision() {
-  local check_script="$REPO_ROOT/defaults/scripts/check-defaults-version-bump.sh"
+  local checker_rel="defaults/scripts/check-defaults-version-bump.sh" check_script="$REPO_ROOT/defaults/scripts/check-defaults-version-bump.sh" current_main_sha="" merge_base="" head_checker=""
   [[ -x "$check_script" ]] || return 0
   [[ -n "${DEFAULT_BRANCH_NAME:-}" ]] || return 0
   [[ -n "${PR_HEAD_SHA:-}" ]] || return 0
@@ -666,7 +684,6 @@ _check_defaults_version_bump_collision() {
   # single early-exit instead of proceeding with a possibly-stale fetch.
   git -C "$REPO_ROOT" fetch --quiet origin "$DEFAULT_BRANCH_NAME" "$PR_BRANCH" 2>/dev/null || return 0
 
-  local current_main_sha
   current_main_sha="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "origin/$DEFAULT_BRANCH_NAME" 2>/dev/null || true)"
   [[ -n "$current_main_sha" ]] || return 0
 
@@ -677,42 +694,49 @@ _check_defaults_version_bump_collision() {
 
   # The checker's shallow-history fallback compares raw tips. That cannot
   # establish who changed a version; refuse to label it a confirmed edit.
-  if ! git -C "$REPO_ROOT" merge-base "$current_main_sha" "$PR_HEAD_SHA" >/dev/null 2>&1; then
+  # The merge base is also what scopes the machinery-touch test below to this
+  # PR's own commits, so it is captured rather than discarded.
+  if ! merge_base="$(git -C "$REPO_ROOT" merge-base "$current_main_sha" "$PR_HEAD_SHA" 2>/dev/null)"; then
     warning "Version policy guard: PR ancestry unavailable; skipping unverified comparison."
     return 0
   fi
 
-  local check_output check_rc
-  check_rc=0
-  check_output=$(cd "$REPO_ROOT" && "$check_script" --forbid-bump --base "$current_main_sha" --head "$PR_HEAD_SHA" 2>&1) || check_rc=$?
+  local check_output check_rc=0 checker_ref="'$DEFAULT_BRANCH_NAME' ($current_main_sha)"
 
-  if [[ "$check_rc" -eq 0 ]]; then
-    return 0
+  # Does this PR's own diff change the version-policy machinery? If so the
+  # PR head's checker is the oracle, matching CI (see the header above).
+  if [[ -n "$(git -C "$REPO_ROOT" diff --name-only "$merge_base" "$PR_HEAD_SHA" -- "$checker_rel" defaults/scripts/version-check-gate.sh scripts/version.sh 2>/dev/null)" ]]; then
+    head_checker="$(mktemp "${TMPDIR:-/tmp}/loom-version-policy-checker.XXXXXX")"
+    if git -C "$REPO_ROOT" show "$PR_HEAD_SHA:$checker_rel" >"$head_checker" 2>/dev/null && [[ -s "$head_checker" ]] && chmod +x "$head_checker"; then
+      check_script="$head_checker"; checker_ref="the PR head ($PR_HEAD_SHA)"
+    else rm -f "$head_checker"; head_checker=""; fi
+    warning "Version policy guard: this PR's own commits change the version-policy machinery, so the guard evaluates the checker from $checker_ref — the ref CI's defaults-version-bump-check job evaluates (#8284). A head lookup that fails falls back to '$DEFAULT_BRANCH_NAME''s copy, never to skipping the check."
   fi
+
+  check_output=$(cd "$REPO_ROOT" && "$check_script" --forbid-bump --base "$current_main_sha" --head "$PR_HEAD_SHA" 2>&1) || check_rc=$?
+  [[ -z "$head_checker" ]] || rm -f "$head_checker"
+
+  [[ "$check_rc" -ne 0 ]] || return 0
 
   # A non-zero, non-1 exit (bad usage, unresolved ref) is a guard-internal
   # problem, not a confirmed version edit — report and skip rather than block a
   # merge on a guard fault.
   if [[ "$check_rc" -ne 1 ]]; then
-    warning "Version policy guard: check-defaults-version-bump.sh exited $check_rc against current '$DEFAULT_BRANCH_NAME' ($current_main_sha) — skipping (not a confirmed version edit):"
-    warning "$check_output"
-    return 0
+    warning "Version policy guard: check-defaults-version-bump.sh (from $checker_ref) exited $check_rc against current '$DEFAULT_BRANCH_NAME' ($current_main_sha) — skipping (not a confirmed version edit):"$'\n'"$check_output"; return 0
   fi
 
-  local msg
-  msg="Merge blocked: PR #$PR_NUMBER hand-edits a version-bearing value (#7827).
+  local msg="Merge blocked: PR #$PR_NUMBER hand-edits a version-bearing value (#7827).
 
 $check_output
 
-Revert the version-value changes authored by this PR, preserving its other
-changes, then rerun CI and review. Version bumps are applied automatically
-by the merge workflow (#7743); a no-surface-change marker cannot waive this policy."
+Revert the version-value changes authored by this PR, preserving its other changes,
+then rerun CI and review. Version bumps are applied automatically by the merge workflow
+(#7743); a no-surface-change marker cannot waive this policy. (Checker from $checker_ref.)"
 
   # --dry-run still runs the guard and REPORTS the would-be block, but honors
   # the dry-run contract (never exits 1) — same shape as the guard above.
   if [[ "$DRY_RUN" == "true" ]]; then
-    warning "[dry-run] Would BLOCK merge of PR #$PR_NUMBER: forbidden version edit relative to '$DEFAULT_BRANCH_NAME' ($current_main_sha)."
-    return 0
+    warning "[dry-run] Would BLOCK merge of PR #$PR_NUMBER: forbidden version edit relative to '$DEFAULT_BRANCH_NAME' ($current_main_sha), per the checker from $checker_ref."; return 0
   fi
 
   error "$msg"
@@ -879,6 +903,61 @@ _check_loom_pr_label
 # a fresh Judge verdict, not a flag.
 _check_verdict_label_contradiction() { local msg rc=0; msg="$(printf '%s\n' "$PR_LABELS" | "${LOOM_DAEMON_BIN:-loom-daemon}" merge-pr verdict-contradiction --pr "$PR_NUMBER" --head-sha "$PR_HEAD_SHA" 2>/dev/null)" || rc=$?; [[ $rc -eq 0 && "$msg" == "LOOM-VERDICT-CLEAN" ]] && return 0; [[ $rc -eq 1 && "$msg" == "Merge blocked:"* ]] || msg="Merge blocked: PR #$PR_NUMBER's verdict-label contradiction guard (#8112) could not run — '${LOOM_DAEMON_BIN:-loom-daemon} merge-pr verdict-contradiction' exited $rc without the LOOM-VERDICT-CLEAN signal. A guard that cannot run refuses the merge rather than passing it: a caller cannot tell 'found nothing' from 'never ran', so only a positive clean signal is accepted. Build or install loom-daemon (cargo build --release -p loom-daemon, or re-run the Loom installer), then re-run this merge."; if [[ "$DRY_RUN" == "true" ]]; then warning "[dry-run] Would BLOCK merge of PR #$PR_NUMBER: $msg"; return 0; fi; error "$msg"; }
 _check_verdict_label_contradiction
+
+# ---------------------------------------------------------------------------
+# Pre-merge required-check freshness guard (#8248).
+#
+# THE INCIDENT: main went red on 2026-09-18 while every gate worked. #8078's
+# File Size Ratchet ran green at 2026-09-17T22:54Z; #8204 tightened that
+# baseline entry 1845->1815 at 11:45Z the next day; #8078 hand-merged at 20:31Z
+# with its 22h-old green result never re-run, landing 1816 onto a 1815
+# baseline. A check result is evidence about ONE tree; a ratchet baseline is
+# repo-global mutable state. When the base branch moves (especially when a
+# ratchet tightens), an in-flight PR's green results become statements about a
+# world that no longer exists — and the forge keeps displaying them green,
+# because branch protection only asks "did this check pass on this head SHA?".
+#
+# THE RULE: a green run of a REQUIRED check whose start predates the commit
+# time of the base branch's current tip is not evidence about the tree this PR
+# will merge onto. The decision (recorded, #8248): options (1) this guard and
+# (2) narrowing check-file-size-budget.sh --update both ship; option (3)
+# (branch ruleset requiring up-to-date branches) is rejected — it forces a
+# rebase per merge at a cadence this fleet (125-commits-behind PRs are
+# ordinary) would pay constantly.
+#
+# Scope choices, so review does not have to infer them: only GREEN runs (a
+# stale failure already blocks via branch protection); only REQUIRED contexts
+# (informational checks are not merge evidence); a required context with no
+# run at all is left to the forge's own BLOCKED state (one mechanism per
+# behaviour, ci-principles rule 4); pending runs are left to the wait paths
+# (no verdict yet, so no stale evidence). FAILS CLOSED when the guard cannot
+# run or cannot determine either timestamp — an unknown freshness must refuse,
+# never pass (ci-principles rule 6). GitHub-only: Gitea's status API (which
+# forge_get_check_runs maps from) carries no run timestamps.
+#
+# The decision itself is `loom-daemon merge-pr stale-checks` (Rust,
+# loom-daemon/src/merge_pr/stale_checks.rs — slice 3 of the merge-pr port,
+# #8191), which resolves the base tip, the required contexts (rulesets +
+# classic protection, #8103) and the head's check runs itself, and prints a
+# refusal naming the check and BOTH timestamps. 0 + the LOOM-STALE-CHECKS-
+# CLEAN sentinel = fresh; 1 = stale (refusal on stdout); anything else —
+# including a missing/old binary that does not know the subcommand — is
+# rewritten to a fail-closed refusal below, mirroring the verdict-label guard
+# above (#8112). --dry-run reports the would-be block without exiting 1, same
+# dry-run contract as every guard here. No bypass flag: overriding "this
+# evidence is stale" is not an operator assertion like --allow-unapproved
+# (missing review); the remedy is re-dating the check (re-run the job or push
+# any no-op commit), which is cheap and always correct. Known residual: on
+# --auto's queued path the server may complete the merge minutes after checks
+# pass, outside this guard's single pre-merge evaluation — that seconds-scale
+# window is the same one every non-ratchet change already runs in, and is not
+# the 22-hour exposure this guard exists to close.
+#
+# This file is at its file-size-ratchet ceiling (file-size-policy.md), so the
+# function is one dense line and the two MAX_MERGE_RETRIES/MERGE_RETRY_DELAY
+# pairs below are joined (verbatim, behavior-preserving) to offset it.
+_check_required_check_freshness() { [[ "$FORGE_TYPE" == "github" ]] || return 0; local msg rc=0 base_ref; base_ref="$(echo "$PR_JSON" | jq -r '.base.ref // empty')"; [[ -n "$base_ref" ]] || base_ref="${DEFAULT_BRANCH_NAME:-main}"; msg="$("${LOOM_DAEMON_BIN:-loom-daemon}" merge-pr stale-checks --pr "$PR_NUMBER" --repo "$REPO_NWO" --head-sha "$PR_HEAD_SHA" --base-ref "$base_ref" 2>/dev/null)" || rc=$?; [[ $rc -eq 0 && "$msg" == "LOOM-STALE-CHECKS-CLEAN" ]] && return 0; [[ $rc -eq 1 ]] || msg="Merge blocked: PR #$PR_NUMBER's required-check freshness guard (#8248) could not run — 'loom-daemon merge-pr stale-checks' exited $rc without the LOOM-STALE-CHECKS-CLEAN signal. A guard that cannot run refuses the merge rather than passing it: a caller cannot tell 'every required check is fresh' from 'never checked', so only a positive clean signal is accepted. Build or install loom-daemon (cargo build --release -p loom-daemon, or re-run the Loom installer), then re-run this merge."; if [[ "$DRY_RUN" == "true" ]]; then warning "[dry-run] Would BLOCK merge of PR #$PR_NUMBER: $msg"; return 0; fi; error "$msg"; }
+_check_required_check_freshness
 
 # ---------------------------------------------------------------------------
 # Partial-increment closing-keyword conflict detection (#4569, extended by
@@ -1923,8 +2002,7 @@ if [[ "$AUTO_MERGE" == "true" ]]; then
     exit 0
   fi
 
-  MAX_MERGE_RETRIES=3
-  MERGE_RETRY_DELAY=5
+  MAX_MERGE_RETRIES=3; MERGE_RETRY_DELAY=5
   AUTO_MERGE_OK=false
 
   # #3820: repo has auto-merge disabled → wait for checks, then fall through to
@@ -2527,8 +2605,7 @@ fi
 
 # Merge via API (using the repo's detected/allowed merge method, #7754) with
 # retry for stale branch
-MAX_MERGE_RETRIES=3
-MERGE_RETRY_DELAY=5
+MAX_MERGE_RETRIES=3; MERGE_RETRY_DELAY=5
 
 for MERGE_ATTEMPT in $(seq 1 $MAX_MERGE_RETRIES); do
   MERGE_RESPONSE=$(forge_merge_pr "$REPO_NWO" "$PR_NUMBER" "$MERGE_PRECONDITION_SHA" "$REPO_MERGE_METHOD" 2>&1) && break  # Success, exit loop
