@@ -107,8 +107,13 @@ must move with it, and CI enforces that:
    ```
 
 `klt` install for grading-only (no klayout, no PDK — this is what the
-`signoff` CI job does):
+`signoff` CI job does). The pin is the exact source commit the committed
+report was graded with; the PyPI `0.5.0` wheel predates it (it bundles the
+10-item tiers doc and lacks the `source_doc_content_hash` report field, so
+its render can never match `tier-report.json`). `jsonschema` is required
+because `klt`'s CLI entry imports it eagerly:
 
 ```bash
-pip install --no-deps klayout-tools==0.5.0
+pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@2b1e55e51bb803c082e8857da44687f3e37ebfc0"
+pip install 'jsonschema>=4.0'
 ```

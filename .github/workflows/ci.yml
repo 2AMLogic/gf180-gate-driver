@@ -215,17 +215,23 @@ jobs:
       - name: Install klt (signoff-only, --no-deps)
         # `klt signoff --manifest` reads committed JSON envelopes and
         # parses the tiers doc bundled inside the klayout-tools wheel; it
-        # never touches the klayout module or a PDK, so --no-deps is enough
-        # on this PDK-free runner (verified locally: a bare venv holding
-        # only this wheel renders the committed report). The version pin
-        # is load-bearing for freshness, not hygiene -- a newer klt can
-        # bundle a changed tiers doc (the 2026-09-17 item-11 growth,
-        # klayout-tools #2025, is exactly that shape), which re-grades the
-        # committed manifest; this job diffs the fresh render against the
-        # committed tier report, so upgrading klt becomes a deliberate PR
-        # that also refreshes verification/signoff/, never a silent
-        # grading change.
-        run: pip install --no-deps klayout-tools==0.5.0
+        # never imports the klayout module and needs no PDK, so --no-deps
+        # keeps this PDK-free runner light. The PyPI 0.5.0 wheel is NOT
+        # usable here: it was built from the v0.5.0 tag and predates both
+        # the 2026-09-17 eleventh tiers item (klayout-tools #2025) and the
+        # report's source_doc_content_hash schema (#2191), so its render
+        # can never match the committed 11-item tier report. This pin is
+        # the exact source commit the report was graded with -- moving it
+        # is a deliberate PR that also refreshes verification/signoff/
+        # (the fresh render is diffed against the committed report below),
+        # never a silent grading change; when a PyPI release carrying item
+        # 11 lands, replace both install lines with that pinned release.
+        # jsonschema is installed because klt's CLI entry imports it
+        # eagerly (klt kb validate; observed as a CI failure on the first
+        # run of this job), while klayout itself stays unnecessary.
+        run: |
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@2b1e55e51bb803c082e8857da44687f3e37ebfc0"
+          pip install 'jsonschema>=4.0'
 
       - name: Re-grade the committed block manifest
         # Exit 3 from the re-run means "rendered successfully with honestly

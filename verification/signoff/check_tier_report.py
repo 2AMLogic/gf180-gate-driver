@@ -27,9 +27,11 @@ gap, not a failure to grade). Exit ``0`` is the same success once the block
 reaches T1. Only exit ``1``/``2`` (bad manifest, unreadable evidence) or a
 compare mismatch fails CI.
 
-Stdlib-only, like everything in this repo. CI installs
-``klayout-tools==0.5.0 --no-deps``: ``klt signoff`` reads JSON envelopes and
-parses the bundled tiers doc, it never touches the klayout module or a PDK.
+Stdlib-only, like everything in this repo. CI installs klt from the pinned
+source commit in `.github/workflows/ci.yml` (the PyPI 0.5.0 wheel predates
+the eleventh tiers item and the report schema this record uses):
+``klt signoff`` reads JSON envelopes and parses the bundled tiers doc, it
+never touches the klayout module or a PDK.
 
 Usage (repo root or anywhere beneath it)::
 
@@ -146,13 +148,16 @@ def anchor_citations(manifest: dict) -> list[str]:
 
 def render_fresh_report(klt: str) -> tuple[int, dict | None, str]:
     """Pass 2: re-run the grader and return (exit, report, stderr)."""
-    proc = subprocess.run(
-        [klt, "signoff", "--manifest", str(MANIFEST), "--format", "json"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            [klt, "signoff", "--manifest", str(MANIFEST), "--format", "json"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (FileNotFoundError, OSError) as exc:
+        return 127, None, f"cannot launch klt {klt!r}: {exc}"
     if proc.returncode not in RENDER_EXIT_CODES:
         detail = (proc.stderr or proc.stdout).strip() or f"exit {proc.returncode}"
         return proc.returncode, None, detail
