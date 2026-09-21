@@ -9,6 +9,7 @@
     "test:harness": "python3 sim/test_harness_checks.py",
     "sim:env": "python3 sim/run_corners.py --check-env",
     "sim:smoke": "python3 sim/run_corners.py smoke-mv-inverter",
+    "signoff:check": "python3 verification/signoff/check_tier_report.py",
     "lint": "bash .github/scripts/lint.sh"
   }
 }
