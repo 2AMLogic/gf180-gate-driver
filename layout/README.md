@@ -22,6 +22,8 @@ layout/
   drc/                              klt drc runner + committed reports (#105)
   lvs/                              klt extract/lvs runner, reference netlist,
                                     extracted DUT netlists, committed reports (#105)
+  erc-supply-spec.json              the T1 item-11 klt erc supply spec (#238)
+  erc/                              klt erc runner + committed reports (#238)
 ```
 
 ## Status: DRC-clean and LVS-match, within a stated deck scope
@@ -699,6 +701,73 @@ the reference flips the verdict to `mismatch` with `device.unmatched` on every
 capacitor. So the value
 [`lvs/make_reference.py`](lvs/make_reference.py) derives is load-bearing, not
 decoration.
+
+### Supply-island ERC (`klt erc`, #238)
+
+T1 item 11 (power delivery, structural — klayout-tools
+`docs/design-evidence-tiers.md`, added 2026-09-17) grades the *structural*
+supply question: is every supply actually connected to what it powers, as
+one electrical island per supply? For an analog block it rests on a
+`klt erc` supply-spec run plus the item-4 LVS reference having carried the
+supply nets in its compare.
+
+Latest report:
+[`layout/erc/reports/gate_driver_core/20260921-155739-3249587.erc.json`](erc/reports/gate_driver_core/20260921-155739-3249587.erc.json)
+— `erc_status: clean`, `erc_finding_count: 0`, every one of the four
+declared supplies (`VDD_LOGIC`/`GND_LOGIC`/`VDD_DRV`/`GND_DRV`,
+[`erc-supply-spec.json`](erc-supply-spec.json)) resolving to exactly one
+electrical island: zero `erc.unconnected_net`, zero `erc.supply_short`. The
+report's `provenance.input.content_hash` is the committed GDS's own sha256
+(`54f02626…`, matching `gate_driver_core.provenance.json`). The item-4 LVS
+half is already on the record: all four supply nets appear in
+`20260826-062806-a7dcce1.lvs.json`'s `net_correspondence`, each paired
+layout↔reference.
+
+Two things the report's clean read depends on, stated here because a
+future reader re-running it must know them:
+
+- **`--deck gf180mcu` is load-bearing.** `klt erc`'s connectivity graph is
+  device-blind, and the `uvlo`'s bias strings (`Rref`/`R1`/`R2`/`Rfb`) are
+  drawn `ppolyf_u` devices that deliberately span `VDD_DRV` and `GND_DRV`.
+  Without the curated deck's device-marker subtraction those resistor
+  bodies read as wires and the run reports a false `erc.supply_short`
+  between the two supplies (the mirror-image artifact documented upstream
+  as klayout-tools [#2183], fixed by the `devices[]`/`--deck` mechanism —
+  [#2205]/[#2217]). With `--deck`, exactly the 271 unit-resistor bodies
+  (9011.52 µm² of RES_MK-marked poly) and the XCCOMP MIM plates are carved
+  out, echoed in `provenance.devices` with `source: "deck"`. A klt build
+  predating `--deck` (before klayout-tools#2217) exits 2 on this runner —
+  that is a tool-version fact, not a layout failure.
+- **`erc.missing_tie` is not computed** — the spec ships without `ties[]`
+  per issue #238, an absence of evidence rather than evidence of absence
+  (and this block's split-rail well topology is not expressible in the
+  schema's one-net-per-tie form anyway; see the spec's `_comment` for the
+  full reasoning). The well-tie evidence standing in for it is the item-4
+  LVS closure: every one of the 1769 drawn transistors has a real, drawn,
+  contacted body tie to the schematic's own net, `klt lvs` reports zero
+  `device.body_unverified` and a 2044/2044 device, 295/295 net, 25/25 pin
+  match — plus the drawn guard/substrate-tap rings (#183).
+
+Re-running produces a new append-only report (never overwrites this one):
+
+```bash
+python3 layout/erc/run_erc.py layout/gate_driver_core.gds
+```
+
+The committed report was produced by
+`klt 0.5.0+gb15edf5e3a2e.dirty` (klayout-tools at git rev `b15edf5e`, the
+recorded revision where `--deck` device-marker auto-detection ships;
+reproduce the build with `uv tool install --from
+"git+https://github.com/2AMLogic/klayout-tools@b15edf5e"` or a scratch
+`uv venv`, and/or pass `--klt <path>` to the runner). The PATH-installed
+pin (`0.5.0+g2b1e55e51bb8.dirty` at the time of this report) predates
+`--deck` — before trusting a re-run, diff the report's
+`provenance.deck.content_hash` and `provenance.klt_version` against what
+is actually installed, per the pinning section above.
+
+[#2183]: https://github.com/2AMLogic/klayout-tools/issues/2183
+[#2205]: https://github.com/2AMLogic/klayout-tools/pull/2205
+[#2217]: https://github.com/2AMLogic/klayout-tools/pull/2217
 
 ### Post-layout simulation
 
