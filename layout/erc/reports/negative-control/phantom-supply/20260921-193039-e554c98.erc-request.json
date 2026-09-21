@@ -1,0 +1,17 @@
+{
+  "arm": "phantom-supply",
+  "layout": {
+    "file": "layout/gate_driver_core.gds",
+    "deck": "gf180mcu"
+  },
+  "spec": {
+    "file": "layout/build/erc-negative-control.spec-phantom-supply.json",
+    "perturbation": {
+      "kind": "phantom nets[] entry",
+      "entry": {
+        "name": "VDD_CONTROL",
+        "kind": "supply"
+      }
+    }
+  }
+}

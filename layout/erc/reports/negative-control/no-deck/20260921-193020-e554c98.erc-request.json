@@ -1,0 +1,11 @@
+{
+  "arm": "no-deck",
+  "layout": {
+    "file": "layout/gate_driver_core.gds",
+    "deck": null
+  },
+  "spec": {
+    "file": "layout/erc-supply-spec.json",
+    "perturbation": null
+  }
+}

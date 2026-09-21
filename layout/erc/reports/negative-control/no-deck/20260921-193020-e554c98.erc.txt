@@ -1,0 +1,131 @@
+file: layout/gate_driver_core.gds
+spec: layout/erc-supply-spec.json
+pdk: None
+findings_only: False
+status: violations
+gate_role: poly2
+gates: 15
+
+gate0 (x3_ncompp): gate_area=16.5 um^2 antenna_verdict=unchecked
+  poly2: step=17.1888 um^2  cumulative=17.1888 um^2  antenna_ratio=1.041745 (max=None) verdict=unchecked
+  Metal1: step=1415.3568 um^2  cumulative=1432.5456 um^2  antenna_ratio=86.820945 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2546.5936 um^2  antenna_ratio=154.339006 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2546.5936 um^2  antenna_ratio=154.339006 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2546.5936 um^2  antenna_ratio=154.339006 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2546.5936 um^2  antenna_ratio=154.339006 (max=None) verdict=unchecked
+
+gate1 (x3_ncompn): gate_area=9.0 um^2 antenna_verdict=unchecked
+  poly2: step=9.6888 um^2  cumulative=9.6888 um^2  antenna_ratio=1.076533 (max=None) verdict=unchecked
+  Metal1: step=1410.7173 um^2  cumulative=1420.4061 um^2  antenna_ratio=157.8229 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2534.4541 um^2  antenna_ratio=281.606011 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2534.4541 um^2  antenna_ratio=281.606011 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2534.4541 um^2  antenna_ratio=281.606011 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2534.4541 um^2  antenna_ratio=281.606011 (max=None) verdict=unchecked
+
+gate2 (x2_n2): gate_area=63.25 um^2 antenna_verdict=unchecked
+  poly2: step=63.9388 um^2  cumulative=63.9388 um^2  antenna_ratio=1.01089 (max=None) verdict=unchecked
+  Metal1: step=1385.9973 um^2  cumulative=1449.9361 um^2  antenna_ratio=22.923891 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2563.9841 um^2  antenna_ratio=40.537298 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2563.9841 um^2  antenna_ratio=40.537298 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2563.9841 um^2  antenna_ratio=40.537298 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2563.9841 um^2  antenna_ratio=40.537298 (max=None) verdict=unchecked
+
+gate3 (x2_n1): gate_area=15.5 um^2 antenna_verdict=unchecked
+  poly2: step=16.1888 um^2  cumulative=16.1888 um^2  antenna_ratio=1.044439 (max=None) verdict=unchecked
+  Metal1: step=1373.1573 um^2  cumulative=1389.3461 um^2  antenna_ratio=89.635232 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2503.3941 um^2  antenna_ratio=161.509297 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2503.3941 um^2  antenna_ratio=161.509297 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2503.3941 um^2  antenna_ratio=161.509297 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2503.3941 um^2  antenna_ratio=161.509297 (max=None) verdict=unchecked
+
+gate4 (IN_DRV,x1_ncb): gate_area=11.72 um^2 antenna_verdict=unchecked
+  poly2: step=13.442 um^2  cumulative=13.442 um^2  antenna_ratio=1.146928 (max=None) verdict=unchecked
+  Metal1: step=2724.5319 um^2  cumulative=2737.9739 um^2  antenna_ratio=233.61552 (max=None) verdict=unchecked
+  Metal2: step=2228.096 um^2  cumulative=4966.0699 um^2  antenna_ratio=423.726101 (max=None) verdict=unchecked
+  Metal3: step=34.4478 um^2  cumulative=5000.5177 um^2  antenna_ratio=426.665333 (max=None) verdict=unchecked
+  Metal4: step=169.36 um^2  cumulative=5169.8777 um^2  antenna_ratio=441.115845 (max=None) verdict=unchecked
+  Metal5: step=16.8 um^2  cumulative=5186.6777 um^2  antenna_ratio=442.549292 (max=None) verdict=unchecked
+
+gate5 (x1_nca): gate_area=1.65 um^2 antenna_verdict=unchecked
+  poly2: step=1.9944 um^2  cumulative=1.9944 um^2  antenna_ratio=1.208727 (max=None) verdict=unchecked
+  Metal1: step=1359.5955 um^2  cumulative=1361.5899 um^2  antenna_ratio=825.206 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2475.6379 um^2  antenna_ratio=1500.386606 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2475.6379 um^2  antenna_ratio=1500.386606 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2475.6379 um^2  antenna_ratio=1500.386606 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2475.6379 um^2  antenna_ratio=1500.386606 (max=None) verdict=unchecked
+
+gate6 (x1_nbuf1): gate_area=18.75 um^2 antenna_verdict=unchecked
+  poly2: step=19.4388 um^2  cumulative=19.4388 um^2  antenna_ratio=1.036736 (max=None) verdict=unchecked
+  Metal1: step=1360.8453 um^2  cumulative=1380.2841 um^2  antenna_ratio=73.615152 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2494.3321 um^2  antenna_ratio=133.031045 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2494.3321 um^2  antenna_ratio=133.031045 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2494.3321 um^2  antenna_ratio=133.031045 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2494.3321 um^2  antenna_ratio=133.031045 (max=None) verdict=unchecked
+
+gate7 (x1_inb): gate_area=5.6 um^2 antenna_verdict=unchecked
+  poly2: step=5.9444 um^2  cumulative=5.9444 um^2  antenna_ratio=1.0615 (max=None) verdict=unchecked
+  Metal1: step=1340.6616 um^2  cumulative=1346.606 um^2  antenna_ratio=240.465357 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2460.654 um^2  antenna_ratio=439.4025 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2460.654 um^2  antenna_ratio=439.4025 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2460.654 um^2  antenna_ratio=439.4025 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2460.654 um^2  antenna_ratio=439.4025 (max=None) verdict=unchecked
+
+gate8 (VDD_LOGIC): gate_area=28.0 um^2 antenna_verdict=unchecked
+  poly2: step=28.6888 um^2  cumulative=28.6888 um^2  antenna_ratio=1.0246 (max=None) verdict=unchecked
+  Metal1: step=590.5386 um^2  cumulative=619.2274 um^2  antenna_ratio=22.115264 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=1733.2754 um^2  antenna_ratio=61.902693 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=1733.2754 um^2  antenna_ratio=61.902693 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=1733.2754 um^2  antenna_ratio=61.902693 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=1733.2754 um^2  antenna_ratio=61.902693 (max=None) verdict=unchecked
+
+gate9 (GND_DRV,VDD_DRV,x3_ndiv,x3_nref,x3_uvlo_ok): gate_area=42.0 um^2 antenna_verdict=unchecked
+  poly2: step=9150.5064 um^2  cumulative=9150.5064 um^2  antenna_ratio=217.8692 (max=None) verdict=unchecked
+  Metal1: step=9278.571 um^2  cumulative=18429.0774 um^2  antenna_ratio=438.787557 (max=None) verdict=unchecked
+  Metal2: step=5573.12 um^2  cumulative=24002.1974 um^2  antenna_ratio=571.48089 (max=None) verdict=unchecked
+  Metal3: step=182.4876 um^2  cumulative=24184.685 um^2  antenna_ratio=575.825833 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=24184.685 um^2  antenna_ratio=575.825833 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=24184.685 um^2  antenna_ratio=575.825833 (max=None) verdict=unchecked
+
+gate10 (IN): gate_area=9.8 um^2 antenna_verdict=unchecked
+  poly2: step=10.8332 um^2  cumulative=10.8332 um^2  antenna_ratio=1.105429 (max=None) verdict=unchecked
+  Metal1: step=564.8598 um^2  cumulative=575.693 um^2  antenna_ratio=58.744184 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=1689.741 um^2  antenna_ratio=172.422551 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=1689.741 um^2  antenna_ratio=172.422551 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=1689.741 um^2  antenna_ratio=172.422551 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=1689.741 um^2  antenna_ratio=172.422551 (max=None) verdict=unchecked
+
+gate11 (x2_n3): gate_area=263.0 um^2 antenna_verdict=unchecked
+  poly2: step=313.5408 um^2  cumulative=313.5408 um^2  antenna_ratio=1.19217 (max=None) verdict=unchecked
+  Metal1: step=1433.1702 um^2  cumulative=1746.711 um^2  antenna_ratio=6.641487 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=2860.759 um^2  antenna_ratio=10.877411 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=2860.759 um^2  antenna_ratio=10.877411 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=2860.759 um^2  antenna_ratio=10.877411 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=2860.759 um^2  antenna_ratio=10.877411 (max=None) verdict=unchecked
+
+gate12 (x2_n4): gate_area=1056.0 um^2 antenna_verdict=unchecked
+  poly2: step=1260.054 um^2  cumulative=1260.054 um^2  antenna_ratio=1.193233 (max=None) verdict=unchecked
+  Metal1: step=1518.9684 um^2  cumulative=2779.0224 um^2  antenna_ratio=2.63165 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=3893.0704 um^2  antenna_ratio=3.68662 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=3893.0704 um^2  antenna_ratio=3.68662 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=3893.0704 um^2  antenna_ratio=3.68662 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=3893.0704 um^2  antenna_ratio=3.68662 (max=None) verdict=unchecked
+
+gate13 (x2_n5): gate_area=4290.0 um^2 antenna_verdict=unchecked
+  poly2: step=5120.2152 um^2  cumulative=5120.2152 um^2  antenna_ratio=1.193523 (max=None) verdict=unchecked
+  Metal1: step=1932.039 um^2  cumulative=7052.2542 um^2  antenna_ratio=1.643882 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=8166.3022 um^2  antenna_ratio=1.903567 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=8166.3022 um^2  antenna_ratio=1.903567 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=8166.3022 um^2  antenna_ratio=1.903567 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=8166.3022 um^2  antenna_ratio=1.903567 (max=None) verdict=unchecked
+
+gate14 (x3_lockout): gate_area=5618.0 um^2 antenna_verdict=unchecked
+  poly2: step=6678.0324 um^2  cumulative=6678.0324 um^2  antenna_ratio=1.188685 (max=None) verdict=unchecked
+  Metal1: step=1603.7559 um^2  cumulative=8281.7883 um^2  antenna_ratio=1.474152 (max=None) verdict=unchecked
+  Metal2: step=1114.048 um^2  cumulative=9395.8363 um^2  antenna_ratio=1.672452 (max=None) verdict=unchecked
+  Metal3: step=0.0 um^2  cumulative=9395.8363 um^2  antenna_ratio=1.672452 (max=None) verdict=unchecked
+  Metal4: step=0.0 um^2  cumulative=9395.8363 um^2  antenna_ratio=1.672452 (max=None) verdict=unchecked
+  Metal5: step=0.0 um^2  cumulative=9395.8363 um^2  antenna_ratio=1.672452 (max=None) verdict=unchecked
+
+erc_status: violations
+erc_findings: 1
+  [erc.supply_short] GND_DRV: declared nets 'GND_DRV' and 'VDD_DRV' are electrically the same net (shorted together)

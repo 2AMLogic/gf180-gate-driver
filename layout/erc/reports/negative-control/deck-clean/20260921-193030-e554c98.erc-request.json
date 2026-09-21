@@ -1,0 +1,11 @@
+{
+  "arm": "deck-clean",
+  "layout": {
+    "file": "layout/gate_driver_core.gds",
+    "deck": "gf180mcu"
+  },
+  "spec": {
+    "file": "layout/erc-supply-spec.json",
+    "perturbation": null
+  }
+}
