@@ -195,3 +195,47 @@ jobs:
           bash .loom/hooks/tests/test-guard-sql-ddl-jq-prose.sh
           bash .loom/hooks/tests/test-guard-force-push-literal-masking.sh
           bash .loom/hooks/tests/test-guard-readonly-fastpath-pipe.sh
+
+  signoff:
+    name: Signoff manifest freshness (klt signoff)
+    # The graded gap-to-T1 verdict's own freshness gate (issue #239). The
+    # committed block manifest + tier report under verification/signoff/
+    # are this block's verdict of record; this job re-anchors every
+    # citation's pinned content_hash to the live tree and re-runs the
+    # grading, so a manifest citing an artifact that has since changed
+    # fails here instead of rotting (issue #239's acceptance criteria).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install klt (signoff-only, --no-deps)
+        # `klt signoff --manifest` reads committed JSON envelopes and
+        # parses the tiers doc bundled inside the klayout-tools wheel; it
+        # never imports the klayout module and needs no PDK, so --no-deps
+        # keeps this PDK-free runner light. The PyPI 0.5.0 wheel is NOT
+        # usable here: it was built from the v0.5.0 tag and predates both
+        # the 2026-09-17 eleventh tiers item (klayout-tools #2025) and the
+        # report's source_doc_content_hash schema (#2191), so its render
+        # can never match the committed 11-item tier report. This pin is
+        # the exact source commit the report was graded with -- moving it
+        # is a deliberate PR that also refreshes verification/signoff/
+        # (the fresh render is diffed against the committed report below),
+        # never a silent grading change; when a PyPI release carrying item
+        # 11 lands, replace both install lines with that pinned release.
+        # jsonschema is installed because klt's CLI entry imports it
+        # eagerly (klt kb validate; observed as a CI failure on the first
+        # run of this job), while klayout itself stays unnecessary.
+        run: |
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@2b1e55e51bb803c082e8857da44687f3e37ebfc0"
+          pip install 'jsonschema>=4.0'
+
+      - name: Re-grade the committed block manifest
+        # Exit 3 from the re-run means "rendered successfully with honestly
+        # unmet items" -- tiers below T1 are this block's real state, not a
+        # CI failure (see check_tier_report.py's header). Only a stale pin,
+        # a changed artifact, or a drifted report fails.
+        run: python3 verification/signoff/check_tier_report.py
