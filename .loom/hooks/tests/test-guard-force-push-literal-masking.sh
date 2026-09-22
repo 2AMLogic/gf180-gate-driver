@@ -43,10 +43,24 @@
 #     "--force-with-lease" -- which contain "-f" but never "-f " -- don't
 #     spuriously widen the gate).
 #
+#   - (issue #244, post-#134 residual) adds a FOURTH recognition to
+#     strip_literal_text(): a quoted word in a `for <var> in <words...>`
+#     word-list position, provided the loop variable is not used anywhere
+#     later in the command in an executing shape (unquoted `$var`, an
+#     eval/exec/interpreter argument, or piped into an interpreter). Both
+#     post-#134 denials in guard-decisions.log carried the trigger phrase
+#     only as inert loop-iterator data (a dedup-title loop and a
+#     telemetry-review loop), matching none of the flag-gated shapes above.
+#     A matching `for <var> ` gate arms strip_literal_text() for loop
+#     commands, which contain none of the flag substrings either.
+#
 # The genuinely dangerous case -- a REAL force-push invocation, quoted or
 # not, bare or `bash -c`-wrapped or smuggled via `$(...)` inside a `-f`
 # value -- must remain a hard DENY; only the string-literal-only case is
-# newly allowed.
+# newly allowed. A quoted for-list word whose variable IS executed later
+# (`for cmd in "<phrase>"; do $cmd; done`, `do eval "$cmd"`) stays DENIED
+# too -- the word-list position is only inert when the value never reaches
+# a command position.
 #
 # This suite is split into two parts:
 #
@@ -226,6 +240,73 @@ else
     else
         fail "(8b) mask_catastrophic_positional_args(): jq --null-input filter argument was incorrectly masked: $OUT8B"
     fi
+
+    # --- (9) strip_literal_text(): for-loop word-list position (issue #244,
+    # the reported dedup-loop shape): a double-quoted word in a
+    # `for <var> in <words...>` list, with the loop variable used only as
+    # inert data in the loop body -> masked. Phrase sits as the LAST of
+    # three words so multi-word continuation (whitespace-only U segments
+    # between quoted words) is exercised too.
+    CMD9="for p in \"sql-ddl\" \"worktree-write-confinement\" \"${FP_MAIN}\"; do ./.loom/scripts/check-duplicate.sh \"Guard decision: \$p\"; done"
+    OUT9=$(strip_literal_text "$CMD9")
+    if ! echo "$OUT9" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(9) strip_literal_text(): for-loop word-list phrase (last of 3 words) masked"
+    else
+        fail "(9) strip_literal_text(): for-loop word-list phrase NOT masked: $OUT9"
+    fi
+    if [[ ${#OUT9} -eq ${#CMD9} ]]; then
+        pass "(9b) masked for-loop output preserves byte length (offset-stability invariant)"
+    else
+        fail "(9b) masked for-loop output length changed: in=${#CMD9} out=${#OUT9}"
+    fi
+
+    # --- (10) the second reported shape (telemetry-review loop): phrase as
+    # the FIRST (single) list word, loop variable reused inside a
+    # `'...\"'\"$p\"'\"...'` single/double-quote concatenation -- \$p must
+    # only ever appear inside Q segments, never unquoted.
+    CMD10="for p in \"${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c 'select(.pattern==\""
+    CMD10+="'\"\$p\"'"
+    CMD10+="\")'"
+    CMD10+=" .loom/logs/guard-decisions.log | tail -2; done"
+    OUT10=$(strip_literal_text "$CMD10")
+    if ! echo "$OUT10" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(10) strip_literal_text(): telemetry-loop phrase (first word, quote-dance body) masked"
+    else
+        fail "(10) strip_literal_text(): telemetry-loop phrase NOT masked: $OUT10"
+    fi
+
+    # --- (11) safety floor: a for-list word whose variable is EXECUTED
+    # unquoted in the loop body must stay UNMASKED -- the executing shape
+    # merely resembles the newly-allowed quoting shape.
+    CMD11="for cmd in \"${FP_MAIN}\"; do \$cmd; done"
+    OUT11=$(strip_literal_text "$CMD11")
+    if echo "$OUT11" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(11) strip_literal_text(): for-list phrase with unquoted \$cmd body left UNMASKED (floor preserved)"
+    else
+        fail "(11) strip_literal_text(): for-list phrase incorrectly masked despite \$cmd execution: $OUT11"
+    fi
+
+    # --- (12) safety floor, eval form: `eval \"\$cmd\"` in the body is an
+    # executing use of the loop variable even though \$cmd sits in a Q
+    # segment -- must stay UNMASKED.
+    CMD12="for cmd in \"${FP_MAIN}\"; do eval \"\$cmd\"; done"
+    OUT12=$(strip_literal_text "$CMD12")
+    if echo "$OUT12" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(12) strip_literal_text(): for-list phrase with eval \"\$cmd\" body left UNMASKED (floor preserved)"
+    else
+        fail "(12) strip_literal_text(): for-list phrase incorrectly masked despite eval: $OUT12"
+    fi
+
+    # --- (13) narrowing-only: masking the inert for-list word must not
+    # blind the scan to a real (bare) invocation chained later in the SAME
+    # command.
+    CMD13="for p in \"${FP_MAIN}\"; do echo \"\$p\"; done && ${FP_MAIN}"
+    OUT13=$(strip_literal_text "$CMD13")
+    if echo "$OUT13" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(13) strip_literal_text(): narrowing-only -- real invocation chained after a loop stays visible"
+    else
+        fail "(13) strip_literal_text(): real chained invocation was incorrectly masked: $OUT13"
+    fi
 fi
 
 # =============================================================================
@@ -359,6 +440,46 @@ assert_deny "(k) jq -n -r filter manufacturing a force-push phrase via \$(...) -
 result=$(run_hook "jq -n -r '\"${FP_MAIN}\"' | sh")
 assert_deny "(l) jq -n -r filter manufacturing a force-push phrase piped to sh -> still deny" "$result" \
     "dangerous pattern"
+
+# --- (m) issue #244 repro 1 (dedup-title loop): the trigger phrase rides
+# only as a quoted for-loop word-list element; the loop body passes \$p to
+# check-duplicate.sh as a TITLE argument (inert data) -> ALLOW (was DENY).
+result=$(run_hook "for p in \"sql-ddl\" \"worktree-write-confinement\" \"${FP_MAIN}\"; do ./.loom/scripts/check-duplicate.sh \"Guard decision: \$p\"; done")
+assert_allow "(m) dedup-check loop quoting the phrase as iterator data -> allow" "$result"
+
+# --- (n) issue #244 repro 2 (telemetry-review loop): same word-list shape;
+# the body echoes \$p and feeds it to a jq filter via the standard
+# single/double-quote concatenation -> ALLOW (was DENY).
+EV2="for p in \"${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c 'select(.pattern==\""
+EV2+="'\"\$p\"'"
+EV2+="\")'"
+EV2+=" .loom/logs/guard-decisions.log | tail -2; done"
+result=$(run_hook "$EV2")
+assert_allow "(n) telemetry-review loop quoting the phrase as iterator data -> allow" "$result"
+
+# --- (o) issue #244 safety floor: same quoting shape but the body EXECUTES
+# the variable unquoted -- a real smuggled invocation -> still DENY.
+result=$(run_hook "for cmd in \"${FP_MAIN}\"; do \$cmd; done")
+assert_deny "(o) for-list phrase executed via unquoted \$cmd -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (p) issue #244 safety floor, eval form: the variable sits in a Q
+# segment but eval executes its value -> still DENY.
+result=$(run_hook "for cmd in \"${FP_MAIN}\"; do eval \"\$cmd\"; done")
+assert_deny "(p) for-list phrase executed via eval \"\$cmd\" -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (q) issue #244 narrowing-only: the inert loop word is masked but a
+# real bare invocation chained later in the same command stays visible ->
+# still DENY.
+result=$(run_hook "for p in \"${FP_MAIN}\"; do echo \"\$p\"; done && ${FP_MAIN}")
+assert_deny "(q) real bare force-push chained after a loop -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (r) issue #244 edge: single-word list, single-quoted spelling (inert
+# unconditionally, #5783) and an inert body -> ALLOW.
+result=$(run_hook "for p in '${FP_MAIN}'; do echo \"saw: \$p\"; done")
+assert_allow "(r) single-quoted single-word for-list phrase with echo body -> allow" "$result"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
