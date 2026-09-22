@@ -3031,6 +3031,26 @@ resolve_stash_cwd() {
 # invocation, is untouched by this addition and still denies — same
 # `$(`/backtick floor as the flags above.
 #
+# Issue #244 (post-#134 residual): a FOURTH recognition — a quoted word in a
+# `for <var> in <words...>` WORD-LIST position. Both post-#134 denials in
+# guard-decisions.log carried the trigger phrase only as a quoted loop
+# iterator value (a dedup-title loop over check-duplicate.sh and a jq
+# telemetry-review loop over this guard's own decision log), matching none of
+# the three flag-adjacency shapes above — in a word list the phrase sits
+# several tokens before any flag or command anchor, bound to the loop
+# variable. A word-list element is inert DATA unless the loop variable later
+# reaches a command position, so the recognition is guarded by a
+# var-use gate (for_var_executed_later() in the awk below): the word is
+# redacted ONLY when `$<var>` appears NOWHERE later in the command in an
+# executing shape — never unquoted (word splitting makes command position
+# indistinguishable), never as an eval/exec argument, never fed to an
+# interpreter (`sh`/`bash -c ...`), and never piped into one. `for cmd in
+# "<phrase>"; do $cmd; done` and `... do eval "$cmd"; done` therefore stay
+# fully visible and still hard-deny; only the provably-inert quoting shape
+# is newly masked. The existing `$(`/backtick and single-quote floors apply
+# to this shape unchanged (a `"$(<phrase>)"` list word is a live
+# substitution and is never redacted).
+#
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
 #     is never redacted and its payload stays caught by the raw scan.
@@ -3361,6 +3381,36 @@ strip_literal_text() {
         }
         if (cur != "") { nseg++; segtype[nseg] = "U"; segtxt[nseg] = cur }
     }
+    # Issue #244: does the for-loop variable `v` reach a COMMAND position
+    # anywhere in the segments from `from` onward? A word-list element is
+    # inert data only while its value never gets executed, so every check
+    # here fails CLOSED (a match means "do not redact" — the status-quo
+    # deny — so a false positive costs nothing but a false negative would
+    # newly allow a real invocation):
+    #   (a) an UNQUOTED `$v`/`${v}` — in a "U" segment word splitting makes
+    #       command position statically indistinguishable, so any unquoted
+    #       occurrence counts as executing;
+    #   (b) a quoted `$v` handed to eval/exec, or to an interpreter word
+    #       (`sh`/`bash`/... optionally with `-c`) as its payload — the
+    #       interpreter names require a separator boundary and trailing
+    #       whitespace/quote so substrings of ordinary words (`.sh "..."`,
+    #       `push ...`, `evaluate ...`) never match;
+    #   (c) a `$v` piped into an interpreter (`echo "$v" | sh`).
+    # The name-boundary tail `([^A-Za-z0-9_]|$)` keeps `$v` from matching a
+    # longer variable like `$varname`/`$v2`.
+    function for_var_executed_later(from, v,   i, rest, upat) {
+        if (v == "") return 1
+        upat = "(\\$" v "([^A-Za-z0-9_]|$)|\\$\\{" v "\\})"
+        for (i = from; i <= nseg; i++) {
+            if (segtype[i] == "U" && segtxt[i] ~ upat) return 1
+        }
+        rest = ""
+        for (i = from; i <= nseg; i++) rest = rest segtxt[i]
+        if (rest ~ "(^|[ \t\n;|&])(eval|exec)[ \t]*[\"'"'"']?[ \t]*" upat) return 1
+        if (rest ~ "(^|[ \t\n;|&])(sh|bash|dash|zsh|ksh|fish)[ \t]+(-c[ \t]*)?[\"'"'"']?[ \t]*" upat) return 1
+        if (rest ~ upat "[\"'"'"']?[ \t]*\\|[ \t]*(sh|bash|dash|zsh|ksh|fish)([^A-Za-z0-9_-]|$)") return 1
+        return 0
+    }
     BEGIN {
         SQ = sprintf("%c", 39)   # single quote
         DQ = sprintf("%c", 34)   # double quote
@@ -3398,6 +3448,23 @@ strip_literal_text() {
         # for why this alternative is needed.
         GH_API_RE_BOL = "(^|[ \t\n])(-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
         GH_API_RE_MID = "[ \t\n](-f|-F|--raw-field|--field)[ \t]+[A-Za-z_][A-Za-z0-9_]*=$"
+        #
+        # Fourth alternative (issue #244): a quoted word in a `for <var> in
+        # <words...>` word-list position. The opener regexes match a "U"
+        # segment TAIL ending in `for <var> in` — same boundary discipline as
+        # the flag regexes above (BOL allows the absolute start of segment 1;
+        # MID requires a separator boundary so `"x"for p in ` — where `for` is
+        # the tail of the concatenated word `xfor`, not the reserved word —
+        # never matches; `;`/`&`/`|`/`(` join `&` in the boundary class so
+        # `echo hi;for p in `, `a&&for p in ` and `(for p in ` are all
+        # recognized). FOR_WS_ONLY is the inter-word continuation test: in
+        # bash a word-list element is separated from the previous one by IFS
+        # whitespace ONLY — any other byte (`;`, `do`, an unquoted token)
+        # ends the list. See the issue-#244 paragraph in the header comment
+        # above for the var-use safety gate that rides with this shape.
+        FOR_IN_RE_BOL = "(^|[ \t\n;(&|])for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]*$"
+        FOR_IN_RE_MID = "[ \t\n;(&|]for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]*$"
+        FOR_WS_ONLY = "^[ \t\n]+$"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -3422,8 +3489,32 @@ strip_literal_text() {
         s = mask_flag_cat_heredocs(buf)
         segment_quotes(s)
         out = ""
+        # Issue #244 for-loop word-list state, walked forward alongside the
+        # redaction loop: in_for_list is armed when a "U" segment tail ends in
+        # `for <var> in`, survives across whitespace-only "U" segments (the
+        # bash inter-word separator) and consecutive quoted words, and is
+        # dropped by any other "U" content (`;`, `do`, an unquoted token —
+        # all end the word list). A "Q" segment seen while armed is a
+        # word-list element candidate, subject to the var-use gate below.
+        in_for_list = 0
+        for_var = ""
         for (k = 1; k <= nseg; k++) {
-            if (segtype[k] != "Q") { out = out segtxt[k]; continue }
+            if (segtype[k] != "Q") {
+                if (segtype[k] == "U") {
+                    if ((k == 1 && segtxt[k] ~ FOR_IN_RE_BOL) || (k > 1 && segtxt[k] ~ FOR_IN_RE_MID)) {
+                        match(segtxt[k], /for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]*$/)
+                        for_var = substr(segtxt[k], RSTART, RLENGTH)
+                        sub(/^for[ \t]+/, "", for_var)
+                        sub(/[ \t]+in[ \t\n]*$/, "", for_var)
+                        in_for_list = 1
+                    } else if (in_for_list && segtxt[k] ~ FOR_WS_ONLY) {
+                        # whitespace-only inter-word gap — list continues
+                    } else {
+                        in_for_list = 0
+                    }
+                }
+                out = out segtxt[k]; continue
+            }
             # A "Q" segment is only a redaction candidate when the segment
             # immediately before it is "U" and that segment'"'"'s own TAIL --
             # not merely some earlier occurrence anywhere in the buffer --
@@ -3436,7 +3527,15 @@ strip_literal_text() {
                     if (segtxt[k - 1] ~ FLAG_RE_MID || segtxt[k - 1] ~ JQ_RE_MID || segtxt[k - 1] ~ GH_API_RE_MID) flagged = 1
                 }
             }
-            if (!flagged) { out = out segtxt[k]; continue }
+            # Issue #244: a quoted word in an open `for <var> in` word list is
+            # an independent redaction trigger — but only when the loop
+            # variable provably never reaches a command position later in the
+            # command (for_var_executed_later fails closed to "keep it
+            # visible" on any doubt, so the executing shapes stay denied).
+            for_word = 0
+            if (in_for_list && for_var_executed_later(k + 1, for_var)) for_word = 0
+            else if (in_for_list) for_word = 1
+            if (!flagged && !for_word) { out = out segtxt[k]; continue }
             qchar = segqchar[k]
             inner = substr(segtxt[k], 2, length(segtxt[k]) - 2)   # between the quotes
             # Redact ONLY provably inert text (no command substitution / backtick)
@@ -4008,13 +4107,22 @@ fi
 # below (~3800) or the COMMAND_ASK_SCAN gate (~3935) -- out of scope for this
 # fix, which targets only the catastrophic ALWAYS_BLOCK_PATTERNS force-push
 # false denial.
+# Issue #244: the for-loop word-list shape (see strip_literal_text()'s
+# header) carries none of the flag substrings above, so loop commands never
+# reached the strip at all. The regex keys on the reserved-word sequence
+# `for <name> ` at a command boundary — ordinary words containing "for"
+# (`--force`, `before`) have no boundary+space+identifier shape and do not
+# spuriously arm the strip. A gate false positive only costs one awk run;
+# a gate false negative falls back to the unmasked (deny) status quo, so
+# the imprecision is safe in both directions.
 if [[ "$COMMAND" == *"--body"* || "$COMMAND" == *"--message"* || \
       "$COMMAND" == *"--title"* || "$COMMAND" == *"--notes"* || \
       "$COMMAND" == *"--comment"* || "$COMMAND" == *"-m"* || \
       "$COMMAND" == *"--search"* || "$COMMAND" == *"--arg"* || \
       "$COMMAND" == *"--jq"* || \
       "$COMMAND" == *"-f "* || "$COMMAND" == *"-F "* || \
-      "$COMMAND" == *"--raw-field"* || "$COMMAND" == *"--field"* ]]; then
+      "$COMMAND" == *"--raw-field"* || "$COMMAND" == *"--field"* || \
+      "$COMMAND" =~ (^|[[:space:];;&|])for[[:space:]][A-Za-z_] ]]; then
     COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
 fi
 
