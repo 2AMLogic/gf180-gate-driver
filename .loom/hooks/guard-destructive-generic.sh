@@ -3788,11 +3788,39 @@ mask_ask_echo_args() {
 # so a future tuning of one masking pass can never silently change another's
 # behavior, per the "never couple the two guards'/tiers' masking" convention
 # documented in mask_ask_positional_args()'s header comment above.
+#
+# Issue #247 (post-#246 residual): the close scan below models
+# backslash-escaped quotes in DOUBLE-quoted spans — a `\` consumes itself
+# AND the next byte (mirroring segment_quotes()'s identical #112 idiom), so
+# only a genuinely unescaped `"` closes a DQ span. Without this, a jq filter
+# written with an inner escaped-quote variable splice
+# (`jq -c "select(.pattern == \"$p\")"`) closed its span at the FIRST `\"`,
+# consuming the escaped quote byte as the delimiter; the X'd output then
+# left the filter tail (`$p\")" ...`) sitting in the buffer as BARE
+# unquoted text. This pass runs BEFORE strip_literal_text() in the
+# COMMAND_NO_LITERAL_TEXT pipeline, so that corrupted buffer reached
+# strip_literal_text()'s segment_quotes() with shifted quote pairing: the
+# loop variable landed in an "U" segment, for_var_executed_later()
+# correctly failed closed on it, and the inert `for <var> in` word-list
+# phrase stayed visible to ALWAYS_BLOCK_PATTERNS — the exact
+# 2026-09-22T01:17:47Z read-only telemetry-review denial issue #247 tracks
+# (recovered from guard-decisions.log: the command was otherwise
+# byte-identical to #244/PR #246's already-passing single-quote-concat
+# shape). Escaped quotes are inert by construction in bash — `\"` inside
+# double quotes is a literal quote byte, never a substitution — so
+# recognizing them cannot hide a live invocation; the dollar-paren /
+# backtick floor below still refuses to mask any span carrying a real
+# `$(...)` or `` ` `` opener, and jq -n/--null-input keeps its #137
+# carve-out. Single-quoted spans need no equivalent: bash performs no
+# backslash escaping inside single quotes, so the next `'` byte IS the
+# close (the '\'' close/reopen idiom is two independent spans, each closed
+# exactly right by the plain scan).
 mask_catastrophic_positional_args() {
     printf '%s' "$1" | awk '
     BEGIN {
         SQ = sprintf("%c", 39)
         DQ = sprintf("%c", 34)
+        BS = sprintf("%c", 92)
         # Command-name allowlist: known non-executing search commands whose
         # positional pattern arguments are inert search text, never live
         # shell syntax. Unlike mask_ask_positional_args() above, grep/egrep/
@@ -3851,6 +3879,13 @@ mask_catastrophic_positional_args() {
                 if (qc != DQ && qc != SQ) break
                 endpos = 0
                 for (i = 2; i <= length(rest); i++) {
+                    # Issue #247: inside a DOUBLE-quoted span a backslash
+                    # consumes itself AND the next byte (the #112 idiom
+                    # segment_quotes() already models), so an escaped \" is
+                    # span CONTENT, never the close. Without this the scan
+                    # closed early on the first \", corrupting quote pairing
+                    # for every downstream pass (see the function header).
+                    if (qc == DQ && substr(rest, i, 1) == BS) { i++; continue }
                     if (substr(rest, i, 1) == qc) { endpos = i; break }
                 }
                 if (endpos == 0) break

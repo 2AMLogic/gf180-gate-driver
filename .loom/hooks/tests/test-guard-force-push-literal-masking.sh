@@ -54,6 +54,18 @@
 #     A matching `for <var> ` gate arms strip_literal_text() for loop
 #     commands, which contain none of the flag substrings either.
 #
+#   - (issue #247, post-#246 residual) makes mask_catastrophic_positional_
+#     args()'s quoted-span close scan model backslash-escaped quotes in
+#     DOUBLE-quoted spans (mirroring segment_quotes()'s own BS+next-byte
+#     skip). A jq filter written with an inner escaped-quote variable
+#     splice (`jq -c "select(.pattern == \"$p\")"`) previously closed the
+#     span at the first `\"`, consuming the escaped quote byte as the
+#     delimiter; the corrupted buffer then left $p sitting in an UNQUOTED
+#     segment for the downstream strip_literal_text() pass, whose
+#     for_var_executed_later() gate correctly failed closed, keeping the
+#     inert for-list phrase visible to ALWAYS_BLOCK_PATTERNS. The exact
+#     2026-09-22T01:17:47Z telemetry-review denial this issue tracks.
+#
 # The genuinely dangerous case -- a REAL force-push invocation, quoted or
 # not, bare or `bash -c`-wrapped or smuggled via `$(...)` inside a `-f`
 # value -- must remain a hard DENY; only the string-literal-only case is
@@ -307,6 +319,40 @@ else
     else
         fail "(13) strip_literal_text(): real chained invocation was incorrectly masked: $OUT13"
     fi
+
+    # --- (14) issue #247: mask_catastrophic_positional_args() must model
+    # backslash-escaped quotes when closing a DOUBLE-quoted span. A jq
+    # filter with an inner escaped-quote variable splice
+    # (`jq -c "select(.pattern == \"$p\")"`) previously closed at the first
+    # `\"`, consuming the escaped quote byte as the delimiter -- leaving the
+    # filter tail as bare unquoted text for the downstream
+    # strip_literal_text() pass, whose for_var_executed_later() gate then
+    # (correctly, given its input) kept the for-list phrase visible. The
+    # whole filter is one inert jq-language span and must mask as ONE span.
+    CMD14="for p in \"${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c \"select(.pattern == \\\"\$p\\\")\" .loom/logs/guard-decisions.log | tail -2; done"
+    OUT14=$(mask_catastrophic_positional_args "$CMD14")
+    if [[ "$OUT14" =~ jq\ -c\ \"X+\"\ .loom/logs ]]; then
+        pass "(14) mask_catastrophic_positional_args(): escaped-quote DQ jq filter masked as ONE span"
+    else
+        fail "(14) mask_catastrophic_positional_args(): escaped-quote DQ filter not masked whole: $OUT14"
+    fi
+    if [[ ${#OUT14} -eq ${#CMD14} ]]; then
+        pass "(14b) masked escaped-quote DQ filter preserves byte length (offset-stability invariant)"
+    else
+        fail "(14b) masked DQ-filter output length changed: in=${#CMD14} out=${#OUT14}"
+    fi
+
+    # --- (15) safety floor: a DQ span carrying a LIVE $(...) command
+    # substitution is still never masked, escaped quotes or not -- the
+    # #112/#137 dollar-paren floor rides unchanged on top of the #247
+    # escaped-quote span fix.
+    CMD15="jq -c \"select(.x == \\\"\$(echo hi)\\\")\" f.json"
+    OUT15=$(mask_catastrophic_positional_args "$CMD15")
+    if echo "$OUT15" | grep -qF '$(echo hi)'; then
+        pass "(15) mask_catastrophic_positional_args(): \$(...) inside escaped-quote DQ filter left UNMASKED (floor preserved)"
+    else
+        fail "(15) mask_catastrophic_positional_args(): live \$(...) inside DQ filter was incorrectly masked: $OUT15"
+    fi
 fi
 
 # =============================================================================
@@ -480,6 +526,35 @@ assert_deny "(q) real bare force-push chained after a loop -> still deny" "$resu
 # unconditionally, #5783) and an inert body -> ALLOW.
 result=$(run_hook "for p in '${FP_MAIN}'; do echo \"saw: \$p\"; done")
 assert_allow "(r) single-quoted single-word for-list phrase with echo body -> allow" "$result"
+
+# --- (s) issue #247 repro (the 2026-09-22T01:17:47Z telemetry-review
+# command, recovered from guard-decisions.log): six-word for-list including
+# the phrase, loop body feeding $p to a DOUBLE-quoted jq filter via escaped
+# quotes -> ALLOW. Pre-#247, mask_catastrophic_positional_args() closed the
+# filter span at the first \" and corrupted quote pairing downstream, so
+# the inert for-list word stayed visible to ALWAYS_BLOCK_PATTERNS.
+EV3="for p in \"sql-ddl\" \"worktree-write-confinement-unresolved-var\" \"catastrophic:${FP_MAIN}\" "
+EV3+="\"worktree-write-confinement\" \"stash-scope:create-redirect\" \"gh-api-rawfield-body-literal-at\"; "
+EV3+="do echo \"=== \$p ===\"; jq -c \"select(.pattern == \\\"\$p\\\") | {ts: .timestamp, "
+EV3+="cmd: (.command // .cmd // .redacted_command)[0:180]}\" .loom/logs/guard-decisions.log "
+EV3+="2>/dev/null | tail -2; done"
+result=$(run_hook "$EV3")
+assert_allow "(s) issue #247 telemetry loop, DQ jq filter with escaped quotes -> allow" "$result"
+
+# --- (t) same shape with the leading `cd <repo> && ` compound the live
+# command carried -> ALLOW (pins the for-in boundary class's admission of
+# the &&-joined prefix alongside the new span fix).
+EV4="cd /tmp/repo-x && for p in \"catastrophic:${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c \"select(.pattern == \\\"\$p\\\")\" .loom/logs/guard-decisions.log | tail -2; done"
+result=$(run_hook "$EV4")
+assert_allow "(t) issue #247 shape with cd && compound prefix -> allow" "$result"
+
+# --- (u) issue #247 narrowing-only: the new escaped-quote span masking
+# must not blind the scan to a real bare invocation chained after the
+# loop -> still DENY.
+EV5="for p in \"catastrophic:${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c \"select(.pattern == \\\"\$p\\\")\" .loom/logs/guard-decisions.log | tail -2; done && ${FP_MAIN}"
+result=$(run_hook "$EV5")
+assert_deny "(u) real bare force-push chained after a DQ-filter loop -> still deny" "$result" \
+    "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
