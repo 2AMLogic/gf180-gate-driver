@@ -31,7 +31,8 @@
   // Never auto-merge. Agents review, humans merge.
   "automerge": false,
 
-  // Create PRs as drafts — consistent with AGENTS.md PR policy
+  // Create PRs as drafts — an explicit ready-for-review step before
+  // human merge review
   "draftPR": true,
 
   // --- Schedule ---
@@ -82,9 +83,9 @@
       "matchUpdateTypes": ["major"]
     },
 
-    // Group all GitHub Actions SHA updates into one PR
-    // AGENTS.md mandates SHA pinning with inline version comments (# vX.Y.Z)
-    // Renovate preserves these comments natively when updating digests
+    // Group all non-major GitHub Actions updates into one PR.
+    // Workflows pin by tag today (e.g. actions/checkout@v7); the "digest"
+    // match also covers them if digest pinning is adopted later.
     {
       "groupName": "github-actions",
       "matchManagers": ["github-actions"],
