@@ -4719,7 +4719,9 @@ extract_rm_targets() {
 # `worktree-write-confinement-unresolved-var` deny — 8 of the 10 denials under
 # that tag in this repo's guard-decisions telemetry through 2026-08-17, none of
 # them a real confinement violation. (The other two bind `$(mktemp)` with no
-# `-d`, a FILE, which deliberately keeps denying — see mktempd_parent().)
+# `-d`, a FILE -- since #248 a DIRECT write to such a binding resolves to a
+# file stand-in under the same parent rules, while `$VAR/sub` and every
+# chained alias keep the fail-closed deny; see mktempf_parent().)
 #
 # The runtime value of a `mktemp -d` really IS unknowable ahead of time (a fresh
 # random suffix), so this does NOT resolve the variable to the path the write
@@ -4959,6 +4961,15 @@ extract_write_targets() {
         # assignment this single-pass resolver does not follow) stays
         # unresolved rather than being guessed.
         if (vv == "" || substr(vv, 1, 1) == "$") return tok
+        # A `mktemp`-FILE stand-in (#248) resolves ONLY a DIRECT `$VAR`
+        # reference. A file has no children, so `$VAR/sub` keeps the raw
+        # token -- the #4921 unresolved deny -- exactly as it did before the
+        # binding was recognized at all. The equality check makes a stale
+        # entry harmless: if the name was re-assigned, varmap either holds a
+        # different literal (store_assign already poisoned it to AMBIG, an
+        # "$"-leading value refused above) or the very same stand-in, so this
+        # guard only ever fires on the value it recorded.
+        if (rest != "" && (vname in file_standins) && vv == file_standins[vname]) return tok
         # `rest` was computed against `inner`, which already has the
         # trailing quote (if any) stripped off, so the resolved value comes
         # back unquoted -- identical shape to the unquoted-input case below.
@@ -5018,7 +5029,10 @@ extract_write_targets() {
         # mktemp -d stand-in. Every other chained value keeps the raw,
         # deliberately-unresolved treatment byte for byte, so no existing
         # verdict moves: this widens resolution exclusively for a root the
-        # command itself minted moments earlier.
+        # command itself minted moments earlier. (The #248 bare-`mktemp` FILE
+        # stand-in is deliberately NOT followed here: a file has no children,
+        # so a chained `$G` alias of a file binding keeps the fail-closed
+        # unresolved deny rather than inheriting the direct-write exception.)
         if (substr(vval, 1, 1) == "$") {
             rv = resolve_var(vval)
             if (rv != vval && is_mktempd_path(rv)) vval = rv
@@ -5034,9 +5048,12 @@ extract_write_targets() {
     # The recognized argument set is deliberately small; every shape outside it
     # can put the directory somewhere this guard protects or somewhere no
     # static scan can predict:
-    #   -d / --directory      required (a `mktemp` with no -d makes a FILE, and
-    #                         a later `"$VAR/sub"` write is then a different,
-    #                         still-unpredictable operation)
+    #   -d / --directory      required HERE (this recognizer resolves a
+    #                         SANDBOX DIRECTORY binding; the bare-`mktemp`
+    #                         FILE shape -- no -d -- is recognized by the
+    #                         mktempf_parent() sibling, #248, which resolves
+    #                         only DIRECT `$VAR` writes and leaves `$VAR/sub`
+    #                         fail-closed, since a file has no children)
     #   -q / --quiet          harmless, no effect on the location
     #   -p DIR, --tmpdir=DIR  parent is DIR -- accepted only as an ABSOLUTE
     #                         literal, and still judged (an in-repo DIR denies);
@@ -5117,10 +5134,105 @@ extract_write_targets() {
         if (tmpdir_assigned) return ""
         return deftmpdir
     }
+    # mktempf_parent() -- the FILE twin of mktempd_parent() (#248). A bare
+    # `mktemp` with NO -d creates a FILE (tmp.XXXXXXXXXX) rather than a
+    # sandbox directory, and the telemetry in this repo shows the sanctioned
+    # headless flows legitimately write DIRECTLY to that file (a heredoc
+    # body-file for the issue-filing path, an awk scratch file). Returns the
+    # PARENT directory that file would be created in, under the same
+    # parent-resolution rules mktempd_parent() applies (default $TMPDIR//tmp,
+    # an absolute explicit `-p DIR`/`--tmpdir=DIR`, or the dirname of an
+    # absolute TEMPLATE), so the stand-in is judged by the ordinary
+    # containment test exactly like the -d case -- a TMPDIR pointing inside
+    # the checkout still denies, with no special case. "" = not a recognized
+    # shape (keep the fail-closed deny). Differences from the twin, all
+    # load-bearing:
+    #   - every -d spelling (a directory, not a file) is REFUSED here, so the
+    #     two recognizers partition the mktemp argument space and the existing
+    #     #144 verdicts are untouched;
+    #   - a BARE `mktemp` with no arguments at all is recognized (nt == 1 is
+    #     the canonical FILE form), where the twin needs >= 2 words because
+    #     `-d` must appear;
+    #   - the binding it records resolves ONLY a DIRECT `$VAR` write target
+    #     (see the file_standins guard inside resolve_var()) -- `$VAR/sub`
+    #     stays unresolved, because a file has no children.
+    # Everything else mirrors mktempd_parent() argument for argument: -q
+    # harmless, a relative/`$`-carrying parent or template refused via
+    # mktempd_literal_abs(), `-u`/`-t`/unknown flags refused, a second
+    # template refused, TEMPLATE + -p together refused (the template is
+    # relative to DIR, a location this simple reading would get wrong), a
+    # BARE `--tmpdir` refused (its argument is optional, so the next word is
+    # the TEMPLATE, not the parent), and the DEFAULT-parent shape disabled
+    # outright when the command assigns TMPDIR anywhere (tmpdir_assigned).
+    function mktempf_parent(cmd,   nt, t, i, w, parent, tmpl, npos) {
+        sub(/^[ \t]+/, "", cmd)
+        sub(/[ \t]+$/, "", cmd)
+        if (cmd == "") return ""
+        nt = split(cmd, t, /[ \t]+/)
+        if (t[1] != "mktemp" && t[1] !~ /^\/[^ \t]*\/mktemp$/) return ""
+        parent = ""
+        tmpl = ""
+        npos = 0
+        for (i = 2; i <= nt; i++) {
+            w = t[i]
+            if (w == "--directory") return ""
+            if (w == "--quiet") continue
+            if (w ~ /^-[dq]+$/) {
+                if (index(w, "d") > 0) return ""
+                continue
+            }
+            # `-p DIR` takes its argument as a separate word. A BARE
+            # `--tmpdir` deliberately is NOT accepted here: its argument is
+            # optional, so the word after it is the TEMPLATE, not the parent --
+            # reading it as a parent would be simply wrong. It falls through to
+            # the unknown-flag refusal below.
+            if (w == "-p") {
+                i++
+                if (i > nt || parent != "") return ""
+                parent = t[i]
+                continue
+            }
+            if (w ~ /^--tmpdir=/) {
+                if (parent != "") return ""
+                parent = substr(w, 10)
+                continue
+            }
+            if (substr(w, 1, 1) == "-") return ""
+            npos++
+            if (npos > 1) return ""
+            tmpl = w
+        }
+        # A TEMPLATE is interpreted relative to -p DIR, so the two together
+        # describe a location this simple reading would get wrong.
+        if (parent != "" && tmpl != "") return ""
+        if (tmpl != "") {
+            tmpl = mktempd_literal_abs(tmpl)
+            if (tmpl == "") return ""
+            parent = tmpl
+            sub(/\/[^\/]*$/, "", parent)
+            if (parent == "") parent = "/"
+            return parent
+        }
+        if (parent != "") return mktempd_literal_abs(parent)
+        # No explicit parent: $TMPDIR (else /tmp) -- refused when the command
+        # assigns TMPDIR itself, exactly as in mktempd_parent().
+        if (tmpdir_assigned) return ""
+        return deftmpdir
+    }
+    # The FILE stand-in twin of mktempd_standin(): a fixed stand-in FILE under
+    # the parent (never the random name a real `mktemp` would mint), judged by
+    # the ordinary containment test. Recorded in file_standins[] by
+    # mktempd_assign_len() so resolve_var() can enforce the DIRECT-only rule.
+    function mktempf_standin(parent) {
+        if (parent == "/") return MKTEMPF_LEAF
+        return parent MKTEMPF_LEAF
+    }
     # An mktemp path ARGUMENT is usable only when it is an absolute literal:
     # a relative one is joined against a cwd this scan is not tracking for the
     # substituted command, and one carrying an unexpanded `$`/backtick is the
     # very kind of unknown this guard fails closed on. Returns "" otherwise.
+    # Shared by both the -d (mktempd_parent) and FILE (mktempf_parent, #248)
+    # recognizers.
     function mktempd_literal_abs(w,   c1, c2, wl) {
         wl = length(w)
         if (wl >= 2) {
@@ -5148,7 +5260,14 @@ extract_write_targets() {
     # begin with `$`, is what resolve_var() then happily substituted into a
     # phantom `"$(mktemp/hosts` target. Matching the whole command substitution
     # here is what makes the shape recognizable at all.
-    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, parent) {
+    #
+    # Since #248 the same recognizer also binds the bare-`mktemp` FILE shape
+    # (`NAME=$(mktemp)`, no -d) via mktempf_parent(): the value recorded is a
+    # synthetic stand-in FILE, and the name is additionally entered into
+    # file_standins[] so resolve_var() resolves only DIRECT `$NAME` writes
+    # (`$NAME/sub` stays the fail-closed unresolved deny -- a file has no
+    # children).
+    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, parent, fval) {
         if (!match(seg, /^[A-Za-z_][A-Za-z0-9_]*=/)) return 0
         vname = substr(seg, 1, RLENGTH - 1)
         val = substr(seg, RLENGTH + 1)
@@ -5178,8 +5297,6 @@ extract_write_targets() {
         # (`X=$(mktemp -d)/sub`, `X=$(mktemp -d)$SUFFIX`) is a different value
         # than the sandbox root and is left unrecognized.
         if (tail != "" && tail !~ /^[ \t]/) return 0
-        parent = mktempd_parent(inner)
-        if (parent == "") return 0
         # SAME-SEGMENT REASSIGNMENT IS UNRESOLVABLE. A name re-assigned in a
         # LATER segment is already poisoned to the AMBIG sentinel by
         # store_assign(), but a quoted command substitution is one shape
@@ -5190,7 +5307,20 @@ extract_write_targets() {
         # back onto the generic (truncating) scan, i.e. exactly the fail-closed
         # deny it gets today.
         if (tail ~ ("(^|[^A-Za-z0-9_])" vname "=")) return 0
-        store_assign(vname, mktempd_standin(parent))
+        parent = mktempd_parent(inner)
+        if (parent != "") {
+            store_assign(vname, mktempd_standin(parent))
+            return length(seg) - length(tail)
+        }
+        # Not a `mktemp -d` sandbox: try the bare-`mktemp` FILE shape (#248).
+        # Every -d spelling was already consumed (or refused) by
+        # mktempd_parent above, so the two recognizers partition the argument
+        # space; a "" here is the ordinary unrecognized shape.
+        parent = mktempf_parent(inner)
+        if (parent == "") return 0
+        fval = mktempf_standin(parent)
+        file_standins[vname] = fval
+        store_assign(vname, fval)
         return length(seg) - length(tail)
     }
     # The stand-in path itself: a fixed child of the parent. Never the path the
@@ -5227,6 +5357,13 @@ extract_write_targets() {
         # safe to follow. `deftmpdir` (the default parent, from the shell
         # layer) arrives via -v.
         MKTEMPD_LEAF = "/.loom-guard-mktemp-d-sandbox"
+        # The FILE stand-in leaf (#248): a bare `mktemp` (no -d)
+        # binding resolves a DIRECT `$VAR` write to parent + this leaf, judged
+        # by the ordinary containment test like the -d stand-in. Tracked
+        # per-name in file_standins[] (not by string shape) so a literal
+        # assignment that merely happens to end in the same bytes never
+        # inherits the direct-only rule.
+        MKTEMPF_LEAF = "/.loom-guard-mktemp-f-file"
         curcwd = startcwd
     }
     # Slurp the whole (possibly multi-line) command into ONE buffer,

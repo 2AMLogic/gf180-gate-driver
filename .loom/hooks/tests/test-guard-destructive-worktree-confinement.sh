@@ -43,13 +43,24 @@
 # catastrophic -unresolved-var tier seven times in this repo's guard telemetry
 # (2026-08-15..17), because record_assign() stored the value TRUNCATED at the
 # space inside the substitution. Cases (h)-(w) below cover the flip to ALLOW
-# and, more importantly, every neighbouring shape that must keep denying:
-# `mktemp` without -d, a repo-relative template, an explicit `-p` parent,
-# `-u`, a reassigned/ambiguous binding, a concatenated value, a bare
-# `$(mktemp -d)` target, a TMPDIR pointing inside the checkout, a command that
-# sets TMPDIR itself (so the parent the scan can see is not the parent
-# `mktemp` would actually use), an assignment-shaped substring appearing only
-# as prose, and a `../` climb back out of the sandbox into the checkout.
+# and, more importantly, every neighbouring shape that must keep denying: a
+# repo-relative template, an explicit `-p` parent, `-u`, a reassigned/ambiguous
+# binding, a concatenated value, a bare `$(mktemp -d)` target, a TMPDIR
+# pointing inside the checkout, a command that sets TMPDIR itself (so the
+# parent the scan can see is not the parent `mktemp` would actually use), an
+# assignment-shaped substring appearing only as prose, and a `../` climb back
+# out of the sandbox into the checkout.
+#
+# Issue #248 (bare `mktemp` FILE bindings) extends the same suite again: a
+# same-command `F=$(mktemp)` (no -d) creates a FILE, and a DIRECT write to
+# `$F` now resolves to a synthetic file stand-in under the same parent rules
+# the #144 sandbox uses (this repo's guard telemetry shows the FILE shape --
+# mktemp'd body files for the sanctioned issue-filing path, awk scratch
+# writes -- recurring since 2026-08-17 while the -d fix deliberately skipped
+# it). Cases (l)-(l12) cover the flip to ALLOW for direct writes and the
+# fail-closed floor around it: `$F/sub` (a file has no children), a relative
+# `-p` parent, `-u`, a TMPDIR pointing inside the checkout, a command that
+# sets TMPDIR itself, and an absolute template inside the checkout.
 #
 # The hook under test is the canonical source at .loom/hooks/ (this repo
 # ships no defaults/ tree and no .claude/skills/repo/hooks/ canonical Repo
@@ -302,12 +313,100 @@ WT="$TMPROOT/.loom/worktrees/issue-99"
 cp /etc/hosts "$WT/f"')
 assert_allow "(k) chained \$WT under a \$(mktemp -d) sandbox -> allow" "$result"
 
-# --- (l) NEGATIVE: `mktemp` with no -d creates a FILE, not a sandbox
-# directory -> still DENY unresolved.
+# --- (l) gf180-gate-driver#248: a bare `mktemp` (no -d) creates a FILE, and
+# a DIRECT write to `$F` now resolves to a synthetic FILE stand-in under the
+# same parent rules the #144 `mktemp -d` sandbox uses -> ALLOW. Before #248
+# the binding was unrecognized outright (mktempd_parent() requires -d), so
+# every `$F` write denied at the worktree-write-confinement-unresolved-var
+# tier -- the exact shape of this issue's telemetry (a heredoc body-file
+# write, an awk scratch write) stalling the sanctioned headless issue-filing
+# path. This case was `assert_deny` before the behavior change.
+result=$(run_hook 'F=$(mktemp)
+cp /etc/hosts "$F"')
+assert_allow "(l) \$(mktemp) direct write to the file stand-in -> allow (#248)" "$result"
+
+# --- (l2) The FILE twin's fail-closed floor: a `mktemp`-created file has no
+# children, so `$F/sub` keeps the raw token and the #4921 unresolved deny.
+# This preserves the ORIGINAL (l) command's verdict (it wrote to
+# `"$F/hosts"`) now that the binding itself is recognized.
 result=$(run_hook 'F=$(mktemp)
 cp /etc/hosts "$F/hosts"')
-assert_deny "(l) \$(mktemp) without -d (file, not directory) -> still deny (unresolved)" "$result" \
+assert_deny "(l2) \$(mktemp) file stand-in, \$F/sub child path -> still deny (unresolved)" "$result" \
     "unexpanded shell variable"
+
+# --- (l3) unquoted direct write, same shape -> ALLOW.
+result=$(run_hook 'F=$(mktemp)
+echo hi > $F')
+assert_allow "(l3) unquoted \$(mktemp) direct write -> allow" "$result"
+
+# --- (l4) backtick spelling -> ALLOW.
+result=$(run_hook 'F=`mktemp`
+cp /etc/hosts "$F"')
+assert_allow "(l4) backticked \`mktemp\` file stand-in, direct write -> allow" "$result"
+
+# --- (l5) the issue's first evidence shape: a quoted binding + a heredoc
+# body-file write (the sanctioned create-issue.sh body-file idiom) -> ALLOW.
+# The heredoc body itself is an inert `cat` sink (masked); the live
+# redirection target `"$BODY_FILE"` resolves to the stand-in.
+result=$(run_hook 'BODY_FILE="$(mktemp)"
+cat > "$BODY_FILE" <<'"'"'EOF'"'"'
+drafted issue body (inert heredoc sink body)
+EOF')
+assert_allow "(l5) heredoc body-file write into \$(mktemp) file -> allow (#248 evidence 1)" "$result"
+
+# --- (l6) the issue's second evidence shape: a quoted binding + an awk
+# read-only-inspection scratch write -> ALLOW.
+result=$(run_hook 'FN_FILE="$(mktemp)"
+awk "{print}" /etc/hosts > "$FN_FILE"')
+assert_allow "(l6) awk scratch write into \$(mktemp) file -> allow (#248 evidence 2)" "$result"
+
+# --- (l7) NEGATIVE: a RELATIVE explicit parent is joined against a cwd this
+# scan is not tracking for the substituted command -> still DENY unresolved
+# (the FILE twin of (n)).
+result=$(run_hook 'F=$(mktemp -p .)
+cp /etc/hosts "$F"')
+assert_deny "(l7) mktemp -p . (relative parent, no -d) -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (l8) NEGATIVE, the FILE twin of (t): with TMPDIR pointing INSIDE the
+# main checkout, a real `mktemp` creates its file there. The stand-in is a
+# judged path in that same parent, so the ordinary literal containment test
+# catches it -> DENY with the ordinary confinement tag, no special case.
+result=$(run_hook_tmpdir "$TMPROOT/intmp" 'F="$(mktemp)"
+cp /etc/hosts "$F"')
+assert_deny "(l8) TMPDIR inside the main checkout, bare mktemp -> deny (stand-in lands in checkout)" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (l9) NEGATIVE, the FILE twin of (u): a command that sets TMPDIR itself
+# would be judged against the wrong parent -> the default-parent FILE shape
+# is disabled outright -> still DENY unresolved.
+result=$(run_hook "TMPDIR=$TMPROOT/intmp F=\$(mktemp)
+cp /etc/hosts \"\$F\"")
+assert_deny "(l9) command sets TMPDIR as an assignment prefix -> deny (default parent untrusted)" "$result" \
+    "unexpanded shell variable"
+
+# --- (l10) POSITIVE, the FILE twin of (u3): `mktemp -p` ignores TMPDIR
+# entirely, so an explicit absolute out-of-repo parent stays resolvable even
+# when the command does set TMPDIR.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+F=\$(mktemp -p /var/tmp)
+cp /etc/hosts \"\$F\"")
+assert_allow "(l10) explicit -p file parent unaffected by a TMPDIR assignment -> allow" "$result"
+
+# --- (l11) NEGATIVE, the FILE twin of (o): `-u` only PRINTS a name, creating
+# nothing -> still DENY.
+result=$(run_hook 'F=$(mktemp -u)
+cp /etc/hosts "$F"')
+assert_deny "(l11) mktemp -u (dry run, nothing created) -> still deny (unresolved)" "$result" \
+    "unexpanded shell variable"
+
+# --- (l12) NEGATIVE, the FILE twin of (n4): an absolute TEMPLATE inside the
+# main checkout names its own parent, so the stand-in is judged as the literal
+# path it is -> DENY with the ordinary confinement tag.
+result=$(run_hook "F=\$(mktemp $TMPROOT/gc-XXXX)
+cp /etc/hosts \"\$F\"")
+assert_deny "(l12) mktemp with a template inside the main checkout -> deny" "$result" \
+    "resolves to the main repository checkout"
 
 # --- (m) NEGATIVE: a repo-relative template really can land inside the
 # checkout -> still DENY unresolved.
