@@ -337,6 +337,59 @@ assert_decision \
     "$WT" \
     "ask"
 
+# --- Escaped-quote close-scan regression (gf180-gate-driver#249) ------------
+# mask_ask_positional_args() / mask_ask_echo_args() share the escaped-quote
+# close-scan defect the catastrophic tier's #247/#250 fix removed: a `\"`
+# inside a DOUBLE-quoted argument closed the masked span early, leaving the
+# argument tail bare and visible to the ask-tier scan (for an UNGATED
+# ASK_PATTERNS entry like `git checkout .`, whose boundary class admits a
+# mid-quote leading space, that leaked tail is directly reachable). Both
+# functions now model the backslash escape; every inert case below must
+# allow, while a REAL invocation -- chained bare or live via \$(...) --
+# keeps asking exactly as before.
+
+assert_decision \
+    "check-duplicate.sh TITLE with an escaped-quote pair before an ungated ask phrase no longer asks" \
+    './.loom/scripts/check-duplicate.sh "title with \"q\" git checkout . tail"' \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "check-duplicate.sh TITLE with an escaped-quote pair around the git-clean phrase no longer asks" \
+    './.loom/scripts/check-duplicate.sh "title with \"quoted git clean -fd\" word"' \
+    "$WT" \
+    "allow"
+
+assert_decision \
+    "echo prose with an escaped-quote pair around the git-clean phrase no longer asks" \
+    'echo "=== \"git clean -fd\" as prose ==="' \
+    "$WT" \
+    "allow"
+
+
+assert_decision \
+    "escaped-quote echo mention does not hide a REAL invocation on a later line (narrows, never widens)" \
+    "$(printf 'echo "mentions \"git clean -fd\" as prose"\ngit clean -fd .')" \
+    "$WT" \
+    "ask"
+
+assert_decision \
+    "live \$(git clean -fd .) inside an escaped-quote DQ echo argument still asks (floor)" \
+    'echo "run \"$(git clean -fd .)\" now"' \
+    "$WT" \
+    "ask"
+
+# The interpreter-fed pipe carve-out (origspan) with escaped quotes behaves
+# exactly like the no-escaped-quotes shape already does: the span is left
+# unmasked, and the scoped git-clean check does not fire on the mid-line
+# quoted phrase -- allow either way. Pinning it guards against the #249 fix
+# accidentally WIDENING the mask over the carve-out's origspan output.
+assert_decision \
+    "interpreter-fed echo pipe with escaped quotes matches the plain pipe shape (allow, carve-out intact)" \
+    'echo "git clean \"-fd\" ." | bash' \
+    "$WT" \
+    "allow"
+
 # --- Command-substitution re-scan guard (gf180-gate-driver#90) -------------
 # extract_git_clean_fd_targets()'s whitespace tokenizer cannot resolve a LIVE
 # invocation sitting anywhere inside a `$(...)`/backtick substitution that is

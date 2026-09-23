@@ -3616,11 +3616,29 @@ strip_literal_text() {
 # is not a quoted string (a bare filename, `&&`, `|`, etc.), leaving anything
 # after that boundary — including a real ask-triggering invocation chained
 # onto the same line — fully visible.
+#
+# Issue #249 (ask-tier twin of #247): the close scan below models
+# backslash-escaped quotes in DOUBLE-quoted spans — a `\` consumes itself
+# AND the next byte (the same #112 idiom segment_quotes() and the
+# catastrophic tier's #247 fix use), so only a genuinely unescaped `"` closes
+# a DQ span. Without this, a check-duplicate.sh TITLE carrying an inner
+# escaped-quote pair (`check-duplicate.sh "title with an embedded \"quoted\"
+# word"`) closed its span at the FIRST `\"`, consuming the escaped quote byte
+# as the delimiter and leaving the title tail sitting in the buffer as BARE
+# unquoted text — directly reachable by every ASK_PATTERNS entry (e.g. the
+# ungated `git checkout .` shape, whose mid-quote leading space matches, an
+# accepted limitation of the anchor class). Escaped quotes are inert by
+# construction in bash — `\"` inside double quotes is a literal quote byte,
+# never a substitution — so recognizing them cannot hide a live invocation;
+# the dollar-paren / backtick floor below still refuses to mask any span
+# carrying a real `$(...)` or `` ` `` opener. Single-quoted spans need no
+# equivalent: bash performs no backslash escaping inside single quotes.
 mask_ask_positional_args() {
     printf '%s' "$1" | awk '
     BEGIN {
         SQ = sprintf("%c", 39)
         DQ = sprintf("%c", 34)
+        BS = sprintf("%c", 92)
         # Command-name allowlist: known non-executing commands/scripts whose
         # positional string arguments are search/dedup text, never live shell
         # syntax. grep/egrep/fgrep/rg are deliberately NOT here — see the
@@ -3654,6 +3672,14 @@ mask_ask_positional_args() {
                 if (qc != DQ && qc != SQ) break
                 endpos = 0
                 for (i = 2; i <= length(rest); i++) {
+                    # Issue #249: inside a DOUBLE-quoted span a backslash
+                    # consumes itself AND the next byte (the #112 idiom
+                    # segment_quotes() and the catastrophic #247 fix
+                    # already model), so an escaped \" is span CONTENT,
+                    # never the close. Without this the scan closed early on
+                    # the first \", corrupting quote pairing for every
+                    # downstream pass.
+                    if (qc == DQ && substr(rest, i, 1) == BS) { i++; continue }
                     if (substr(rest, i, 1) == qc) { endpos = i; break }
                 }
                 if (endpos == 0) break
@@ -3706,11 +3732,26 @@ mask_ask_positional_args() {
 # carrying `$(`/backtick is left unmasked regardless (real command
 # substitution stays visible); a single-quoted span is always eligible
 # (real single quotes give bash zero expansion).
+#
+# Issue #249 (echo twin of the ask-tier #247 fix): the close scan below
+# models backslash-escaped quotes in DOUBLE-quoted spans — a `\` consumes
+# itself AND the next byte, so only a genuinely unescaped `"` closes a DQ
+# span. Without this, an echo argument carrying an inner escaped-quote pair
+# (`echo "...\"...\""`) closed its span at the FIRST `\"`, leaving the
+# argument tail as BARE unquoted text reachable by every ASK_PATTERNS entry,
+# AND destroying the `git clean ...` head of the span so the interpreter-fed
+# pipe carve-out's origspan never engaged (a false ALLOW on `echo "git clean
+# \"-fd\" ." | bash`-shaped text). The fix touches only the shared close-scan
+# loop both accumulators (spanout/origspan) are built from, so the pipe
+# carve-out picks it up unchanged. Same floor as everywhere else: `$(`/backtick
+# spans are never masked; single-quoted spans need no equivalent (bash
+# performs no backslash escaping inside single quotes).
 mask_ask_echo_args() {
     printf '%s' "$1" | awk '
     BEGIN {
         SQ = sprintf("%c", 39)
         DQ = sprintf("%c", 34)
+        BS = sprintf("%c", 92)
         anchor = "(^|[ \t\n;&|`(])echo[ \t]+"
         buf = ""
     }
@@ -3729,6 +3770,15 @@ mask_ask_echo_args() {
                 if (qc != DQ && qc != SQ) break
                 endpos = 0
                 for (i = 2; i <= length(rest); i++) {
+                    # Issue #249: inside a DOUBLE-quoted span a backslash
+                    # consumes itself AND the next byte (the #112 idiom
+                    # segment_quotes() and the catastrophic #247 fix
+                    # already model), so an escaped \" is span CONTENT,
+                    # never the close. Without this the scan closed early on
+                    # the first \", corrupting quote pairing for every
+                    # downstream pass and starving the pipe carve-out
+                    # origspan below.
+                    if (qc == DQ && substr(rest, i, 1) == BS) { i++; continue }
                     if (substr(rest, i, 1) == qc) { endpos = i; break }
                 }
                 if (endpos == 0) break
