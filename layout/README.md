@@ -19,6 +19,11 @@ layout/
                                     ground_rail_isolation check (#132)
   build/                            generator scratch (gitignored)
   common/report_id.py               shared <record-id> minting for the run scripts
+  common/power_array_folded.py      folded, cross-row-tied high-m power-array
+                                    generator (#254), used by future power-stage
+                                    growth -- see "Folded power-array generator"
+                                    below
+  common/test_power_array_folded.py unit tests for the above (PDK-free CI)
   drc/                              klt drc runner + committed reports (#105)
   lvs/                              klt extract/lvs runner, reference netlist,
                                     extracted DUT netlists, committed reports (#105)
@@ -890,6 +895,93 @@ extraction (issue #105's original item-3 acceptance criterion, most recently
 deferred pending #166's own geometry), not a tapeout signoff and not a
 re-litigation of `spec/gate-driver.md` §5's ratified exceptions — that
 re-litigation is #163's scope.
+
+## Folded power-array generator (`common/power_array_folded.py`, #254)
+
+Every device in the committed `gate_driver_core` netlist is `nf=1` and drawn
+as a single-row `mos_array` strip (widest today: `MPD`, `uvlo`'s `m=800`
+pulldown, ~900 µm wide — see "[Floorplan](#floorplan)" above). A future,
+wider power stage will need to **fold** a very-high-`m` device across
+multiple physical rows so its single-row strip does not dominate the block's
+long axis — but folding is not just placement: the folded rows' own G/S/D
+buses have to tie into **one shared net each**, or the "folded" device
+extracts as `rows` separate smaller devices instead of one. No generator in
+this catalog drew that before issue #254, so `common/power_array_folded.py`
+is genuinely new infrastructure — it has no caller in this block yet (every
+netlist device is still `nf=1`), and is committed ahead of that first
+caller so the next power-stage device does not have to re-derive the scheme.
+
+**Correcting a false impossibility claim.** A single-layer (Metal1-only)
+scheme was attempted upstream of this issue and recorded as evidence that
+*"cross-row ties need a second routing layer"* (tracked as friction **F-018**
+in `2AMLogic/gf180-drone-fc`) — an impossibility claim from one failed
+scheme (vertical risers at a fixed X, which cross every other net's own bus
+band in an unmirrored farther row), not a proof. It shipped arrays with
+**untied rows** and honest per-row `G<r>`/`S<r>`/`D<r>` labels, which passed
+every geometric assertion that existed (finger count, bounding box) because
+nothing checked electrical connectivity across the fold. **F-023** is the
+correction: mirroring alternate rows in Y (`klt gen-compose`'s
+`orientation: "mirror_y"`) brings adjacent rows' gate pads to face each
+other directly across the inter-row gap — `mos_array` always reports the
+gate pad on a row's *top* edge, and a Y-mirror flips that to the *bottom*
+edge, with nothing else drawn in the gap between two adjacent rows — so one
+plain metal box ties them with no via (`gate_contact: true` is required for
+exactly this: it puts the gate pad on the same metal role as source/drain).
+Source and drain need no such trick: `mos_array` always reports them on a
+row's left/right edges, which a Y-mirror does not move, so a straight run in
+a channel outside the block's own left/right edges connects both rows'
+source (resp. drain) pads without ever crossing the other row's own
+interior.
+
+**Verified against a real `klt` install + resolved gf180mcu PDK, not merely
+argued**: a two-row, `fingers=4`-per-row fold (`m=8` total) extracts as eight
+transistors sharing exactly one `(s, g, d)` net triple (up to the
+source/drain swap a "parallel" folded device's alternating orientation
+produces) — one folded `m=8` device, not two `m=4` devices. A negative
+control that skips the tie and gives each row its own honest per-row label
+(`G0`/`S0`/`D0`, `G1`/`S1`/`D1` — the exact shape F-018's own arrays shipped
+in) extracts as two disjoint triples instead, reproducing the regression
+`fold_connectivity_verdict` (below) exists to catch.
+
+**Cost and limit.** The scheme costs one dedicated trunk channel (default
+`2 * trunk_margin_um` = 2.0 µm total, split as one margin on each side)
+beyond the folded block's own left/right edges, plus `gap_um` (default 4.0
+µm, matching F-023's own measured cost) of clear vertical space between the
+two rows. **The scheme is two rows only** — `power_array_folded.fold_rows`
+**raises** for `rows > 2` rather than silently drawing `rows` disjoint
+devices (a third row has no gap that is simultaneously adjacent to two other
+rows' own gaps, so its own gate pad cannot be tied the same way without
+either a notch-routed same-layer scheme or a real second routing layer with
+vias — neither implemented here). This is a stated limit of *this
+generator*, not a re-assertion that no same-layer `rows > 2` scheme can
+exist — see the module's own docstring for the full argument, including the
+"transferable lesson" the issue draws from F-018 itself: an impossibility
+claim needs a proof, or an explicit hedge that it is one attempted scheme,
+not an exhaustive one.
+
+**Its own connectivity check** — `power_array_folded.fold_connectivity_verdict`
+— is a pure function (a `klt extract`-shaped dict in, a check record out),
+mirroring `check_gate_driver_core.py`'s own `ground_rail_isolation_verdict`/
+`mim_stack_verdict`: it asserts the extracted finger count and that every
+finger shares one gate net and one unordered source/drain net pair, so an
+untied (or partially-tied) fold fails loudly instead of passing every
+geometric assertion the way F-018's own arrays did. Its failing directions
+are pinned in `common/test_power_array_folded.py` against synthetic
+extraction facts shaped exactly like the real untied fixture described
+above.
+
+```bash
+python3 layout/common/power_array_folded.py \
+    --w-um 4.0 --l-um 0.6 --fingers 8 --rows 2 --flavor nfet \
+    --out-dir /tmp/fold_demo
+# needs klt + a resolvable gf180mcu PDK (same requirement as
+# gen_gate_driver_core.py); generates the fold, then runs the connectivity
+# check and prints PASS/FAIL. Open /tmp/fold_demo/power_array_folded.gds in
+# klayout/klt render to see the mirrored gate buses meet across the
+# inter-row gap with nothing else drawn there.
+
+python3 layout/common/test_power_array_folded.py     # PDK-free unit tests
+```
 
 ## Known gaps
 
