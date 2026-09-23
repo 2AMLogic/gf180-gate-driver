@@ -135,9 +135,12 @@ trap 'rm -f "$FN_FILE"' EXIT
 {
     awk '/^strip_literal_text\(\) \{/{f=1} f{print; if ($0 == "}" && f == 1) exit}' "$SRC_HOOK"
     awk '/^mask_catastrophic_positional_args\(\) \{/{f=1} f{print; if ($0 == "}" && f == 1) exit}' "$SRC_HOOK"
+    awk '/^mask_ask_positional_args\(\) \{/{f=1} f{print; if ($0 == "}" && f == 1) exit}' "$SRC_HOOK"
+    awk '/^mask_ask_echo_args\(\) \{/{f=1} f{print; if ($0 == "}" && f == 1) exit}' "$SRC_HOOK"
 } > "$FN_FILE"
-if ! grep -q "^strip_literal_text" "$FN_FILE" || ! grep -q "^mask_catastrophic_positional_args" "$FN_FILE"; then
-    fail "extract strip_literal_text()/mask_catastrophic_positional_args() from $SRC_HOOK (function not found)"
+if ! grep -q "^strip_literal_text" "$FN_FILE" || ! grep -q "^mask_catastrophic_positional_args" "$FN_FILE" || \
+   ! grep -q "^mask_ask_positional_args" "$FN_FILE" || ! grep -q "^mask_ask_echo_args" "$FN_FILE"; then
+    fail "extract strip_literal_text()/mask_*_positional|echo_args() from $SRC_HOOK (function not found)"
 else
     # shellcheck source=/dev/null
     source "$FN_FILE"
@@ -352,6 +355,77 @@ else
         pass "(15) mask_catastrophic_positional_args(): \$(...) inside escaped-quote DQ filter left UNMASKED (floor preserved)"
     else
         fail "(15) mask_catastrophic_positional_args(): live \$(...) inside DQ filter was incorrectly masked: $OUT15"
+    fi
+
+    # --- (16) issue #249: mask_ask_positional_args() must model
+    # backslash-escaped quotes when closing a DOUBLE-quoted span, mirroring
+    # the #247 catastrophic-tier fix. A check-duplicate.sh TITLE argument
+    # with an inner escaped-quote pair previously closed at the first `\"`,
+    # consuming the escaped quote byte as the delimiter and leaving the
+    # title tail (where the inert phrase rides) as bare unquoted text for
+    # the ASK_PATTERNS scan. The whole title is one inert string span and
+    # must mask as ONE span.
+    CMD16="./.loom/scripts/check-duplicate.sh \"Guard decision: \\\"${FP_MAIN}\\\" case\""
+    OUT16=$(mask_ask_positional_args "$CMD16")
+    if [[ "$OUT16" =~ check-duplicate\.sh\ \"X+\"$ ]]; then
+        pass "(16) mask_ask_positional_args(): escaped-quote DQ title masked as ONE span"
+    else
+        fail "(16) mask_ask_positional_args(): escaped-quote DQ title not masked whole: $OUT16"
+    fi
+    if [[ ${#OUT16} -eq ${#CMD16} ]]; then
+        pass "(16b) masked escaped-quote DQ title preserves byte length (offset-stability invariant)"
+    else
+        fail "(16b) masked DQ-title output length changed: in=${#CMD16} out=${#OUT16}"
+    fi
+
+    # --- (17) safety floor: a DQ span carrying a LIVE $(...) command
+    # substitution is still never masked, escaped quotes or not -- the
+    # dollar-paren floor rides unchanged on top of the #249 ask-tier
+    # escaped-quote span fix.
+    CMD17="./.loom/scripts/check-duplicate.sh \"Guard decision: \\\"\$(echo hi)\\\" case\""
+    OUT17=$(mask_ask_positional_args "$CMD17")
+    if echo "$OUT17" | grep -qF '$(echo hi)'; then
+        pass "(17) mask_ask_positional_args(): \$(...) inside escaped-quote DQ title left UNMASKED (floor preserved)"
+    else
+        fail "(17) mask_ask_positional_args(): live \$(...) inside DQ title was incorrectly masked: $OUT17"
+    fi
+
+    # --- (18) issue #249, echo twin: mask_ask_echo_args() carries the same
+    # escaped-quote close-scan defect. An echo argument with an inner
+    # escaped-quote pair must mask as ONE span (both the spanout and the
+    # origspan accumulators are built from the same endpos scan, so one fix
+    # covers both).
+    CMD18="echo \"=== saw \\\"${FP_MAIN}\\\" ===\""
+    OUT18=$(mask_ask_echo_args "$CMD18")
+    if [[ "$OUT18" =~ ^echo\ \"X+\"$ ]]; then
+        pass "(18) mask_ask_echo_args(): escaped-quote DQ echo argument masked as ONE span"
+    else
+        fail "(18) mask_ask_echo_args(): escaped-quote DQ echo argument not masked whole: $OUT18"
+    fi
+    if [[ ${#OUT18} -eq ${#CMD18} ]]; then
+        pass "(18b) masked escaped-quote DQ echo argument preserves byte length (offset-stability invariant)"
+    else
+        fail "(18b) masked DQ-echo output length changed: in=${#CMD18} out=${#OUT18}"
+    fi
+
+    # --- (19) safety floor: a live $(...) inside an escaped-quote DQ echo
+    # argument stays visible (never masked), and the interpreter-fed pipe
+    # carve-out keeps the ORIGINAL (unmasked) span through origspan --
+    # `echo "...\"...\"..." | bash` must leave the whole argument readable
+    # by the ASK_PATTERNS scan exactly as before the #249 fix.
+    CMD19="echo \"run \\\"\$(echo hi)\\\" now\""
+    OUT19=$(mask_ask_echo_args "$CMD19")
+    if echo "$OUT19" | grep -qF '$(echo hi)'; then
+        pass "(19) mask_ask_echo_args(): \$(...) inside escaped-quote DQ echo argument left UNMASKED (floor preserved)"
+    else
+        fail "(19) mask_ask_echo_args(): live \$(...) inside DQ echo argument was incorrectly masked: $OUT19"
+    fi
+    CMD19B="echo \"saw \\\"${FP_MAIN}\\\" live\" | bash"
+    OUT19B=$(mask_ask_echo_args "$CMD19B")
+    if echo "$OUT19B" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(19b) mask_ask_echo_args(): interpreter-fed pipe carve-out keeps escaped-quote span UNMASKED (origspan preserved)"
+    else
+        fail "(19b) mask_ask_echo_args(): interpreter-fed pipe lost the original escaped-quote span: $OUT19B"
     fi
 fi
 
