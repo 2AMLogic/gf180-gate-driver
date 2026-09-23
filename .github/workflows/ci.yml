@@ -13,6 +13,7 @@ name: CI
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
+# | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
 # Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
@@ -123,6 +124,16 @@ jobs:
         # is the only check of that interpretation that is *independent* of it:
         # check_gate_driver_core.py imports the same parser it audits against.
         run: python3 layout/test_gen_gate_driver_core.py
+
+      - name: Folded power-array generator unit tests
+        # layout/common/test_power_array_folded.py pins power_array_folded.py
+        # (issue #254): the rows=1/rows=2-only fold split (AC2's rows>2
+        # refusal), the mirror_y cross-row tie geometry (pinned against a
+        # real klt gen mos_array response, hand-computed), and the AC3
+        # connectivity verdict against synthetic klt extract facts -- pure
+        # stdlib arithmetic, no klt, no PDK, no GDS, so it belongs on this
+        # same PDK-free runner.
+        run: python3 layout/common/test_power_array_folded.py
 
       - name: LVS reference-netlist unit tests
         # layout/lvs/test_make_reference.py pins the structural facts (PMOS
