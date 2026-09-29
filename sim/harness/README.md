@@ -414,6 +414,52 @@ results = run_samples(tb, pdk, [(mc_point(point, mc), mc)], workdir, jobs=8)
 `sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` is the first campaign
 built on this, and the reference for the shape of one.
 
+### The campaign layer: `harness/campaign.py`
+
+`montecarlo.py` + `runner.run_samples` are the *deck* half; the *campaign*
+half -- the ratified run shape and the evidence artefacts it produces -- is
+`harness/campaign.py`, shared by every mismatch campaign (issue #258):
+
+```python
+from harness import campaign
+
+class PointOutcome(campaign.PointOutcome):     # add only what is yours
+    def reference_delta(self, name): ...
+
+outcome = campaign.run_point_campaign(
+    tb, pdk, point, index, n_samples, workdir, jobs, progress,
+    base_seed=BASE_SEED, outcome_cls=PointOutcome,
+)
+campaign.write_sample_csv(corners_dir, record, outcome, list(tb.measure))
+campaign.write_log(
+    corners_dir, record, outcome.point.corner_id,
+    campaign.baseline_log_header(
+        pdk, tb, outcome.point, record, stamp, ngspice,
+        source_experiment=SOURCE_EXPERIMENT,
+    ),
+    outcome.baseline.output,
+)
+```
+
+- `run_point_campaign(...)` runs one PVT point's three-leg negative control
+  (a plain `mc=None` baseline plus two `sw_stat_mismatch = 0` controls at
+  seeds `s` and `s + CONTROL_SEED_OFFSET`) and its `n_samples` derived-seed
+  draws, calling `progress` once per run. `index` is the point's position in
+  the campaign's **full** grid, because every recorded seed derives from it --
+  a `--smoke` subset selects from the full grid rather than renumbering it.
+- `PointOutcome` carries one point's baseline/controls/draws and the
+  accessors a record's tables need (`ok`, `values`, `control_value`, `worst`,
+  `controls_agree`, `control_matches_baseline`). Subclass it for the
+  claim-specific reductions; pass the subclass as `outcome_cls`.
+- `write_sample_csv` / `write_log` / `baseline_log_header` / `log_header`
+  write the committed artefacts, and `fmt` / `mv` / `point_sigma_summary`
+  format the record tables. These emit **append-only evidence**, so their
+  literal output is pinned by `sim/test_harness_campaign.py`.
+
+What stays in a campaign script: which measurement is under claim, which
+committed record its control is checked against, and the record's own
+narrative (`build_record_body`).
+
 ## smoke-mv-inverter
 
 `sim/smoke-mv-inverter/` is the harness acceptance test, not a circuit

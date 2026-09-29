@@ -12,6 +12,7 @@ name: CI
 # | testbench manifests load (`--list`)           | python3      | `test` (here)  |
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
+# | `sim/test_harness_campaign.py`                | python3      | `test` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
@@ -116,6 +117,19 @@ jobs:
         # Testbench/Pdk/PvtPoint inputs -- no ngspice, no PDK -- so it belongs
         # on this PDK-free runner.
         run: python3 sim/test_harness_runner.py
+
+      - name: Mismatch-campaign harness unit tests
+        # sim/test_harness_campaign.py pins the shared Monte Carlo campaign
+        # layer the three mismatch campaigns now call instead of each
+        # carrying its own copy (issue #258): the ratified leg structure
+        # (1 plain baseline + 2 differently-seeded zero-sigma controls + N
+        # derived-seed draws, decision record 0017) and the *literal bytes*
+        # of the evidence artefacts -- the corner-log provenance banner and
+        # the LF-terminated samples CSV. Those land in the append-only
+        # sim/ tree, where a silent reformatting would read as new evidence
+        # rather than as a refactor. Stubs runner.run_point/run_samples, so
+        # no ngspice and no PDK -- it belongs on this PDK-free runner.
+        run: python3 sim/test_harness_campaign.py
 
       - name: Layout generator unit tests
         # layout/test_gen_gate_driver_core.py pins how the generator reads a

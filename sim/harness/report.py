@@ -768,15 +768,27 @@ def device_log_header(
     )
 
 
-def write_device_corner_log(
+def write_corner_log(
     corners_dir: Path, record: str, cid: str, header: str, log: str
 ) -> Path:
-    """Write ``corners/<record-id>/<corner-id>.log`` -- raw ngspice output."""
+    """Write ``corners/<record-id>/<corner-id>.log`` -- raw ngspice output.
+
+    Flavour-agnostic: the device testbenches and the Monte Carlo campaigns
+    (:mod:`harness.campaign`) differ in what their ``header`` banner says,
+    not in where the log lands.
+    """
     out_dir = corners_dir / record
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{cid}.log"
     path.write_text(header + log, encoding="utf-8")
     return path
+
+
+def write_device_corner_log(
+    corners_dir: Path, record: str, cid: str, header: str, log: str
+) -> Path:
+    """Device-testbench spelling of :func:`write_corner_log`."""
+    return write_corner_log(corners_dir, record, cid, header, log)
 
 
 def write_device_netlist_snapshot(snapshot_dir: Path, record: str, deck: Path) -> Path:

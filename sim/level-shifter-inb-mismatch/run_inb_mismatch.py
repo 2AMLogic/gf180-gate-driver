@@ -6,7 +6,8 @@ Follow-up to issue #204 (`sim/gate-driver-indrv-mismatch/`), which delivered
 this repo's first Monte Carlo / local-mismatch evidence but scoped
 deliberately to `spec/gate-driver.md` §5's **Exception 3** (`IN_DRV`) only.
 This script applies the same harness (`sim/harness/montecarlo.py`,
-`runner.compose_deck(..., mc=...)`, `runner.run_samples`) and the same
+`runner.compose_deck(..., mc=...)`, `runner.run_samples`, and the shared
+campaign driver + evidence writers in `sim/harness/campaign.py`) and the same
 ratified convention (decision record 0017: `sw_stat_global = 0`, derived
 seeds, a three-leg deterministic negative control, non-converged draws
 disclosed rather than dropped) to **Exception 1**: the level shifter's
@@ -43,7 +44,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import csv
 import re
 import statistics
 import sys
@@ -54,6 +54,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
@@ -96,7 +97,9 @@ BASE_SEED = 20260304
 
 DEFAULT_SAMPLES = 200
 
-CONTROL_SEED_OFFSET = 5_000_000
+#: Record-table formatters, shared with every other mismatch campaign.
+_fmt = campaign.fmt
+_mv = campaign.mv
 
 #: Un-prefixed `meas tran mq6 ...` line ngspice prints for free (no `print`
 #: statement needed) -- used only to cross-reference this campaign's control
@@ -146,45 +149,9 @@ def _confirm_inb_alias(measurements: dict[str, float]) -> bool:
 # --------------------------------------------------------------------------
 
 
-class PointOutcome:
-    def __init__(self, point, baseline, controls, samples):
-        self.point = point
-        self.baseline = baseline
-        self.controls = controls
-        self.samples = samples
-
-    @property
-    def corner_id(self) -> str:
-        return self.point.corner_id
-
-    @property
-    def ok(self) -> list:
-        return [(mc, r) for mc, r in self.samples if r.status == "ok"]
-
-    def values(self, name: str) -> list[float]:
-        return [r.measurements[name] for _, r in self.ok if name in r.measurements]
-
-    def control_value(self, name: str) -> float | None:
-        return self.controls[0][1].measurements.get(name)
-
-    def baseline_value(self, name: str) -> float | None:
-        return self.baseline.measurements.get(name)
-
-    @staticmethod
-    def _identical(a: dict, b: dict) -> bool:
-        if not a or set(a) != set(b):
-            return False
-        return all(a[k] == b[k] for k in a)
-
-    @property
-    def controls_agree(self) -> bool:
-        if len(self.controls) < 2:
-            return False
-        return self._identical(self.controls[0][1].measurements, self.controls[1][1].measurements)
-
-    @property
-    def control_matches_baseline(self) -> bool:
-        return self._identical(self.controls[0][1].measurements, self.baseline.measurements)
+class PointOutcome(campaign.PointOutcome):
+    """This campaign's `PointOutcome`: the shared accessors plus a comparison
+    against `REFERENCE_RECORD`'s own committed raw `mq6` value."""
 
     def reference_delta(self) -> float | None:
         """Control minus the reference record's own raw `mq6` at this corner."""
@@ -194,149 +161,16 @@ class PointOutcome:
             return None
         return value - reference
 
-    def worst(self, name: str):
-        candidates = [(mc, r) for mc, r in self.ok if name in r.measurements]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda pair: pair[1].measurements[name])
-
-
-def run_point_campaign(tb, pdk, point, index, n_samples, workdir, jobs, progress):
-    baseline = harness_runner.run_point(
-        tb, pdk, point, workdir / "baseline", keep_output=True
-    )
-    progress(baseline)
-
-    control_seed = mc_mod.sample_seed(BASE_SEED, index, mc_mod.CONTROL_SAMPLE)
-    controls = [
-        mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=control_seed),
-        mc_mod.MismatchSample(
-            sample=mc_mod.CONTROL_SAMPLE, seed=control_seed + CONTROL_SEED_OFFSET
-        ),
-    ]
-    draws = [
-        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(BASE_SEED, index, s))
-        for s in range(1, n_samples + 1)
-    ]
-
-    control_results = []
-    for control in controls:
-        result = harness_runner.run_point(
-            tb,
-            pdk,
-            mc_mod.mc_point(point, control),
-            workdir / f"ctrl-seed{control.seed}",
-            mc=control,
-            keep_output=True,
-        )
-        control_results.append((control, result))
-        progress(result)
-
-    pairs = [(mc_mod.mc_point(point, draw), draw) for draw in draws]
-    results = harness_runner.run_samples(
-        tb, pdk, pairs, workdir, jobs=jobs, on_result=progress
-    )
-    return PointOutcome(point, baseline, control_results, list(zip(draws, results)))
-
-
-# --------------------------------------------------------------------------
-# Evidence artefacts
-# --------------------------------------------------------------------------
-
-
-def write_sample_csv(corners_dir: Path, record: str, outcome: PointOutcome, names) -> Path:
-    out_dir = corners_dir / record
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"samples-{outcome.corner_id}.csv"
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["sample", "seed", "sw_stat_mismatch", "status", *names])
-        writer.writerow(
-            ["baseline", "", "unset (plain harness deck)", outcome.baseline.status]
-            + [outcome.baseline.measurements.get(n, "") for n in names]
-        )
-        for mc, result in outcome.controls:
-            writer.writerow(
-                [mc.sample, mc.seed, int(mc.enabled), result.status]
-                + [result.measurements.get(n, "") for n in names]
-            )
-        for mc, result in outcome.samples:
-            writer.writerow(
-                [mc.sample, mc.seed, int(mc.enabled), result.status]
-                + [result.measurements.get(n, "") for n in names]
-            )
-    return path
-
-
-def write_log(corners_dir: Path, record: str, corner_id: str, header: str, text: str) -> Path:
-    out_dir = corners_dir / record
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{corner_id}.log"
-    path.write_text(header + text, encoding="utf-8")
-    return path
-
-
-def baseline_log_header(pdk, tb, point, record, stamp, ngspice) -> str:
-    return (
-        "* ====================================================================\n"
-        f"* record-id : {record}\n"
-        f"* testbench : sim/{SOURCE_EXPERIMENT}/testbench/{tb.netlist.name}\n"
-        f"* dut       : {tb.dut_path} ({tb.dut_provenance_class})\n"
-        f"* corner    : {point.corner_id}\n"
-        "* mismatch  : none -- plain harness deck (runner.compose_deck(mc=None)),\n"
-        "*             byte-identical to what sim/run_corners.py generates.\n"
-        f"* pdk       : {pdk.variant} ({pdk.path})\n"
-        f"* ngspice   : {ngspice}\n"
-        f"* run (UTC) : {stamp:%Y-%m-%dT%H:%M:%SZ}\n"
-        "* ====================================================================\n"
-    )
-
-
-def log_header(pdk, tb, mc, point, record, stamp, ngspice) -> str:
-    return (
-        "* ====================================================================\n"
-        f"* record-id : {record}\n"
-        f"* testbench : sim/{SOURCE_EXPERIMENT}/testbench/{tb.netlist.name}\n"
-        f"* dut       : {tb.dut_path} ({tb.dut_provenance_class})\n"
-        f"* corner    : {point.corner_id}\n"
-        f"* mismatch  : sw_stat_mismatch={1 if mc.enabled else 0} "
-        f"(sample {mc.sample}), sw_stat_global=0\n"
-        f"* seed      : {mc.seed}\n"
-        f"* pdk       : {pdk.variant} ({pdk.path})\n"
-        f"* ngspice   : {ngspice}\n"
-        f"* run (UTC) : {stamp:%Y-%m-%dT%H:%M:%SZ}\n"
-        "* ====================================================================\n"
-    )
-
 
 # --------------------------------------------------------------------------
 # Record
 # --------------------------------------------------------------------------
 
 
-def _fmt(value, digits: int = 6) -> str:
-    if value is None:
-        return "n/a"
-    if isinstance(value, float):
-        if value != 0 and (abs(value) < 1e-3 or abs(value) >= 1e5):
-            return f"{value:.{digits}e}"
-        return f"{value:.{digits}g}"
-    return str(value)
-
-
-def _mv(value: float | None) -> str:
-    return "n/a" if value is None else f"{value * 1e3:+.3f}"
-
-
 def _point_sigma_summary(outcomes) -> str:
-    sigmas = []
-    for outcome in outcomes:
-        values = outcome.values(CLAIM_MEASUREMENT)
-        if len(values) > 1:
-            sigmas.append(statistics.stdev(values))
-    if not sigmas:
-        return "n/a"
-    return f"{min(sigmas) * 1e6:.0f}–{max(sigmas) * 1e6:.0f} µV"
+    return campaign.point_sigma_summary(
+        outcomes, lambda outcome: outcome.values(CLAIM_MEASUREMENT)
+    )
 
 
 def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args):
@@ -724,7 +558,11 @@ def main(argv=None) -> int:
         if index not in selected:
             continue
         outcomes.append(
-            run_point_campaign(tb, pdk, point, index, n_samples, workdir, args.jobs, progress)
+            campaign.run_point_campaign(
+                tb, pdk, point, index, n_samples, workdir, args.jobs, progress,
+                base_seed=BASE_SEED,
+                outcome_cls=PointOutcome,
+            )
         )
     wall = time.monotonic() - wall_start
 
@@ -756,32 +594,41 @@ def main(argv=None) -> int:
     corners_dir = HERE / harness_report.CORNERS_DIR
     names = list(tb.measure)
     for outcome in outcomes:
-        write_sample_csv(corners_dir, record, outcome, names)
-        write_log(
+        campaign.write_sample_csv(corners_dir, record, outcome, names)
+        campaign.write_log(
             corners_dir,
             record,
             outcome.point.corner_id,
-            baseline_log_header(pdk, tb, outcome.point, record, stamp, ngspice),
+            campaign.baseline_log_header(
+                pdk, tb, outcome.point, record, stamp, ngspice,
+                source_experiment=SOURCE_EXPERIMENT,
+            ),
             outcome.baseline.output,
         )
         for mc, result in outcome.controls[:1]:
             mc_pt = mc_mod.mc_point(outcome.point, mc)
-            write_log(
+            campaign.write_log(
                 corners_dir,
                 record,
                 mc_pt.corner_id,
-                log_header(pdk, tb, mc, mc_pt, record, stamp, ngspice),
+                campaign.log_header(
+                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
+                    source_experiment=SOURCE_EXPERIMENT,
+                ),
                 result.output,
             )
         worst = outcome.worst(CLAIM_MEASUREMENT)
         if worst is not None:
             mc, result = worst
             mc_pt = mc_mod.mc_point(outcome.point, mc)
-            write_log(
+            campaign.write_log(
                 corners_dir,
                 record,
                 mc_pt.corner_id,
-                log_header(pdk, tb, mc, mc_pt, record, stamp, ngspice),
+                campaign.log_header(
+                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
+                    source_experiment=SOURCE_EXPERIMENT,
+                ),
                 result.output,
             )
 
