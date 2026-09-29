@@ -153,9 +153,6 @@ class PointOutcome(campaign.PointOutcome):
     def control_worst(self) -> tuple[str, float] | None:
         return worst_taper(self.controls[0][1].measurements)
 
-    def baseline_worst(self) -> tuple[str, float] | None:
-        return worst_taper(self.baseline.measurements)
-
     def reference_delta(self, name: str) -> float | None:
         reference = reference_measurements(self.corner_id).get(name)
         value = self.control_value(name)
