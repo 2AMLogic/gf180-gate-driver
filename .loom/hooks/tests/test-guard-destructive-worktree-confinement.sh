@@ -62,6 +62,39 @@
 # `-p` parent, `-u`, a TMPDIR pointing inside the checkout, a command that
 # sets TMPDIR itself, and an absolute template inside the checkout.
 #
+# Issue #272 (first post-#252 recurrence of the -unresolved-var pattern in this
+# repo's telemetry, 2026-09-29) extends the suite once more, with TWO
+# independent false-deny routes that the same logged command hit at once:
+#
+#   1. A `;`-TERMINATED assignment word. qsplit() does not segment after a
+#      quoted command substitution, so the one-line scratch-sandbox idiom
+#      `T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT` reached
+#      mktempd_assign_len() as ONE segment; its word-end rule refused the
+#      `;`-led tail and the word fell back to the generic whitespace-bounded
+#      scan, which stored the TRUNCATED `$(mktemp` -- the exact #144 signature
+#      by a new syntactic route. Moving the trap to its own line allowed.
+#   2. CARRIED-OVER QUOTE STATE. heredoc-opener detection judges one PHYSICAL
+#      line at a time, so a heredoc whose opener line begins with the closing
+#      quote of a multi-line double-quoted string (`python3 -c "<newline>
+#      ...<newline>"; cat > f <<'EOF'`) was read as interpreter-fed via the
+#      #5226 empty-command-word fail-closed tail -- leaving an inert `cat`
+#      sink's body VISIBLE to the confinement scan. The identical heredoc with
+#      nothing in front of it masked normally.
+#
+# Cases (aa0)-(aa12b) cover both flips to ALLOW plus every fail-closed floor
+# that must survive them: same-segment reassignment, `$(mktemp -d)/sub`
+# concatenation, a self-set TMPDIR, an interpreter-fed (`bash <<EOF`,
+# `cat <<EOF | bash`) body after the same multi-line-string prefix, a
+# genuinely unresolvable `$VAR`, a real `cp` into the main checkout after the
+# one-line binding, and the #248 FILE twin's DIRECT-only rule.
+#
+# (aa0)/(aa0b) assert the harness is ARMED. The -unresolved-var deny only
+# fires when _wt_isolation_in_play() finds a `.loom-managed` MARKER FILE at
+# depth 2 under `<repo>/.loom/worktrees` -- a temp tree with the directory but
+# no marker allows everything, silently turning that whole case class into
+# vacuous passes. The fixture below creates the marker; (aa0)/(aa0b) make the
+# dependency explicit so it cannot be dropped unnoticed.
+#
 # The hook under test is the canonical source at .loom/hooks/ (this repo
 # ships no defaults/ tree and no .claude/skills/repo/hooks/ canonical Repo
 # Skills guard -- see the file's own banner -- so this vendored copy is the
@@ -652,6 +685,166 @@ assert_deny "(z) genuine write into the real main checkout -> still deny (no reg
 # managed worktree ($WT, under TMPROOT) must still allow exactly as before.
 result=$(run_hook "cp /tmp/f.txt \"$WT/design/z2.sch\"")
 assert_allow "(z2) genuine write into a real managed worktree -> still allow (no regression from #175 fix)" "$result"
+
+echo "--- one-line ';'-terminated mktemp assignments + carried-over quote state (#272) ---"
+
+# ARMED-HARNESS PRECONDITION. The worktree-write-confinement-unresolved-var
+# deny only ARMS when _wt_isolation_in_play() finds a managed worktree, i.e. a
+# `.loom-managed` marker file at depth 2 under `<repo>/.loom/worktrees`. A temp
+# tree with the DIRECTORY but no marker file silently allows every case below,
+# turning each of them into a vacuous pass. $WT/.loom-managed is created by the
+# fixture near the top of this file; these two checks make that dependency
+# explicit and fail loudly if it is ever dropped, rather than letting the whole
+# #272 block quietly stop testing anything.
+if [[ -f "$WT/.loom-managed" ]]; then
+    pass "(aa0) harness is ARMED: .loom-managed marker present at depth 2 under .loom/worktrees"
+else
+    fail "(aa0) harness is NOT armed: $WT/.loom-managed missing -- every unresolved-var case below is vacuous"
+fi
+result=$(run_hook 'cp /tmp/f.txt "$AA0_NEVER_ASSIGNED/evil.txt"')
+assert_deny "(aa0b) harness is ARMED: an unresolvable \$VAR target really does deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (aa1) THE #272 REPRO (defect 1). qsplit() does not segment after a quoted
+# command substitution, so `T="$(mktemp -d)"; trap ... EXIT` reaches
+# mktempd_assign_len() as ONE segment. Its word-end rule refused the `;`-led
+# tail, the word fell through to the generic whitespace-bounded assignment
+# scan, and the value stored for T was the TRUNCATED `$(mktemp` -- so the later
+# `"$T/..."` target phantom-substituted to `$(mktemp/...` and denied at the
+# -unresolved-var tier. Every write here is inside the throwaway sandbox ->
+# ALLOW.
+result=$(run_hook 'T="$(mktemp -d)"; trap '"'"'rm -rf "$T"'"'"' EXIT
+cp /tmp/src.sh "$T/.loom/hooks/guard-destructive-generic.sh"')
+assert_allow "(aa1) one-line \$(mktemp -d) + ;-trap, two-operand cp into the sandbox -> allow" "$result"
+
+# --- (aa2) NO REGRESSION: the same idiom with the trap on its OWN line was
+# already allowed before #272 and must stay allowed.
+result=$(run_hook 'T="$(mktemp -d)"
+trap '"'"'rm -rf "$T"'"'"' EXIT
+cp /tmp/src.sh "$T/.loom/hooks/guard-destructive-generic.sh"')
+assert_allow "(aa2) own-line trap, same sandbox write -> allow (baseline, no regression)" "$result"
+
+# --- (aa3) FAIL-CLOSED FLOOR: a same-SEGMENT reassignment is unresolvable.
+# Accepting a `;` tail must not weaken the #4914 refusal -- the reassignment
+# check still runs over the FULL remaining tail, before any separator is
+# consumed, so this stays DENY.
+result=$(run_hook 'T="$(mktemp -d)"; T=/elsewhere
+cp /tmp/f.txt "$T/x.sh"')
+assert_deny "(aa3) one-line \$(mktemp -d) then same-line reassignment -> still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (aa4) FAIL-CLOSED FLOOR: concatenation onto the substitution is a
+# different value than the sandbox root and stays unrecognized, `;` tail or not.
+result=$(run_hook 'X="$(mktemp -d)/sub"; trap '"'"'rm -rf "$X"'"'"' EXIT
+cp /tmp/f.txt "$X/x.sh"')
+assert_deny "(aa4) \$(mktemp -d)/sub concatenation with a ;-tail -> still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (aa5) FAIL-CLOSED FLOOR: when the command sets TMPDIR itself, the parent
+# this scan can see is not the parent `mktemp` would really use, so the
+# DEFAULT-parent shape is refused outright -- unchanged by the `;` tail.
+result=$(run_hook "export TMPDIR=$TMPROOT/intmp
+T=\$(mktemp -d); trap 'rm -rf \"\$T\"' EXIT
+cp /etc/hosts \"\$T/hosts\"")
+assert_deny "(aa5) command sets TMPDIR itself + ;-tail -> still deny" "$result"
+
+# --- (aa6) THE #272 REPRO (defect 2). heredoc-opener detection judges one
+# PHYSICAL line at a time. With a multi-line double-quoted string open from an
+# earlier line, the opener line began with that string's CLOSING quote --
+# _interp_opener() read the lone `"` as a whole command segment, reduced it to
+# an EMPTY command word, and by its #5226 fail-closed tail reported the opener
+# as interpreter-fed. The body of an ordinary inert `cat > file` sink therefore
+# stayed VISIBLE to the confinement scan. The same heredoc WITHOUT the
+# multi-line string in front masked normally -- the tell that this was a false
+# deny. Body is inert data -> ALLOW.
+result=$(run_hook "python3 -c \"
+import sys
+print(sys.version)
+\"; cat > /tmp/aa6.sh <<'HDOC'
+echo hi > $TMPROOT/evil.txt
+HDOC")
+assert_allow "(aa6) heredoc sink preceded by a multi-line double-quoted string -> allow (body masked)" "$result"
+
+# --- (aa6b) SAME, but the multi-line string is SINGLE-quoted.
+result=$(run_hook "python3 -c '
+import sys
+print(sys.version)
+'; cat > /tmp/aa6b.sh <<'HDOC'
+echo hi > $TMPROOT/evil.txt
+HDOC")
+assert_allow "(aa6b) heredoc sink preceded by a multi-line single-quoted string -> allow (body masked)" "$result"
+
+# --- (aa6c) BASELINE: heredoc as the very first line, nothing in front.
+result=$(run_hook "cat > /tmp/aa6c.sh <<'HDOC'
+echo hi > $TMPROOT/evil.txt
+HDOC")
+assert_allow "(aa6c) heredoc sink as the very first line -> allow (baseline, no regression)" "$result"
+
+# --- (aa7) NO MASKING REGRESSION, the security hinge for (aa6): once the
+# carried-over quoted prefix is out of the way, an opener line whose REAL
+# command word is a SHELL is still interpreter-fed, so its body stays VISIBLE
+# and a write into the main checkout inside it still DENIES (#5351).
+result=$(run_hook "python3 -c \"
+import sys
+print(sys.version)
+\"; bash <<'HDOC'
+echo hi > $TMPROOT/evil.txt
+HDOC")
+assert_deny "(aa7) interpreter-fed heredoc after a multi-line DQ string -> still deny (body stays visible)" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (aa7b) SAME for the piped spelling.
+result=$(run_hook "python3 -c \"
+import sys
+print(sys.version)
+\"; cat <<'HDOC' | bash
+echo hi > $TMPROOT/evil.txt
+HDOC")
+assert_deny "(aa7b) cat <<EOF | bash after a multi-line DQ string -> still deny" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (aa8) FAIL-CLOSED FLOOR: a genuinely unresolvable \$VAR target is still
+# denied even when a recognized one-line mktemp binding sits in front of it.
+result=$(run_hook 'T="$(mktemp -d)"; trap '"'"'rm -rf "$T"'"'"' EXIT
+cp /tmp/f.txt "$AA8_NEVER_ASSIGNED/evil.txt"')
+assert_deny "(aa8) unresolvable \$VAR target alongside a valid one-line binding -> still deny" "$result" \
+    "unexpanded shell variable"
+
+# --- (aa9) SECURITY HINGE for consuming the `;` separator. The separator run
+# is consumed along with the assignment word precisely so the next COMMAND WORD
+# lands at the head of the leftover segment. Leaving a bare `;` token in front
+# of `cp` would hide this real write from the write-idiom scan -- a confinement
+# bypass, not a false positive. Target is the main checkout -> must DENY.
+result=$(run_hook "T=\"\$(mktemp -d)\"; cp /tmp/f.txt $TMPROOT/evil.txt")
+assert_deny "(aa9) real cp into the main checkout after a one-line binding -> still deny" "$result" \
+    "resolves to the main repository checkout"
+
+# --- (aa10) EDGE CASE: two mktemp assignments on ONE line. Consuming the `;`
+# lets the caller's assignment loop see the SECOND binding too, so both
+# sandboxes resolve.
+result=$(run_hook 'A="$(mktemp -d)"; B="$(mktemp -d)"
+cp /tmp/f.txt "$A/x.sh"
+cp /tmp/f.txt "$B/y.sh"')
+assert_allow "(aa10) two \$(mktemp -d) assignments on one line, writes into both -> allow" "$result"
+
+# --- (aa11) EDGE CASE: \$T referenced ONLY inside the trap, never as a write
+# target. Nothing to resolve, nothing to deny.
+result=$(run_hook 'T="$(mktemp -d)"; trap '"'"'rm -rf "$T"'"'"' EXIT
+echo hi')
+assert_allow "(aa11) \$T used only inside the trap, never a write target -> allow" "$result"
+
+# --- (aa12) The #248 FILE twin reached through the same `;` tail: a DIRECT
+# write to \$F resolves to the file stand-in -> ALLOW ...
+result=$(run_hook 'F="$(mktemp)"; trap '"'"'rm -f "$F"'"'"' EXIT
+cp /etc/hosts "$F"')
+assert_allow "(aa12) one-line bare \$(mktemp) FILE binding, direct write -> allow (#248 twin)" "$result"
+
+# --- (aa12b) ... while `$F/sub` keeps the DIRECT-only fail-closed floor (a
+# file has no children), `;` tail or not.
+result=$(run_hook 'F="$(mktemp)"; trap '"'"'rm -f "$F"'"'"' EXIT
+cp /etc/hosts "$F/sub"')
+assert_deny "(aa12b) one-line bare \$(mktemp) FILE binding, \$F/sub write -> still deny" "$result" \
+    "unexpanded shell variable"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed
 # consumer repo, not the Loom source repo), so there is nothing to diff
