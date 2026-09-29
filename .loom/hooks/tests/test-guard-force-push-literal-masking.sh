@@ -427,6 +427,65 @@ else
     else
         fail "(19b) mask_ask_echo_args(): interpreter-fed pipe lost the original escaped-quote span: $OUT19B"
     fi
+
+    # --- (20) issue #260: assignment-position recognition. A quoted value in
+    # a `NAME=<quoted value>` position -- the 2026-09-22T19:32:46Z fixture
+    # shape (`FP="catastrophic:<phrase>"` feeding a guard regression repro) --
+    # is masked, with the SAME fail-closed var-use gate as the #244 word-list
+    # shape and byte-length preservation.
+    CMD20="FP=\"catastrophic:${FP_MAIN}\"; echo repro ready"
+    OUT20=$(strip_literal_text "$CMD20")
+    if ! echo "$OUT20" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(20) strip_literal_text(): assignment-value phrase (FP=\"...\") masked"
+    else
+        fail "(20) strip_literal_text(): assignment-value phrase NOT masked: $OUT20"
+    fi
+    if [[ ${#OUT20} -eq ${#CMD20} ]]; then
+        pass "(20b) masked assignment output preserves byte length (offset-stability invariant)"
+    else
+        fail "(20b) masked assignment output length changed: in=${#CMD20} out=${#OUT20}"
+    fi
+
+    # --- (21) issue #260 floor: an assigned value whose variable is EXECUTED
+    # later (unquoted \$FP) must stay UNMASKED.
+    CMD21="FP=\"${FP_MAIN}\"; \$FP"
+    OUT21=$(strip_literal_text "$CMD21")
+    if echo "$OUT21" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(21) strip_literal_text(): assignment phrase with unquoted \$FP use left UNMASKED (floor preserved)"
+    else
+        fail "(21) strip_literal_text(): assignment phrase incorrectly masked despite \$FP execution: $OUT21"
+    fi
+
+    # --- (22) issue #260 floor: bash -c "\$FP" is an executing use of the
+    # assigned variable -> UNMASKED.
+    CMD22="FP=\"${FP_MAIN}\"; bash -c \"\$FP\""
+    OUT22=$(strip_literal_text "$CMD22")
+    if echo "$OUT22" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(22) strip_literal_text(): assignment phrase with bash -c \"\$FP\" left UNMASKED (floor preserved)"
+    else
+        fail "(22) strip_literal_text(): assignment phrase incorrectly masked despite bash -c use: $OUT22"
+    fi
+
+    # --- (23) issue #260 arming boundary: `NAME= "value"` (trailing space
+    # after the =) is an EMPTY assignment followed by a quoted COMMAND WORD
+    # -- a real invocation shape that must never arm -> UNMASKED.
+    CMD23="FP= \"${FP_MAIN}\""
+    OUT23=$(strip_literal_text "$CMD23")
+    if echo "$OUT23" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(23) strip_literal_text(): NAME= <quoted command word> (space after =) left UNMASKED (floor preserved)"
+    else
+        fail "(23) strip_literal_text(): quoted command word after empty assignment was incorrectly masked: $OUT23"
+    fi
+
+    # --- (24) issue #260 floor: a live \$(...) inside an assignment value is
+    # never redacted (the dollar-paren floor rides unchanged).
+    CMD24="FP=\"\$(${FP_MAIN})\""
+    OUT24=$(strip_literal_text "$CMD24")
+    if echo "$OUT24" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(24) strip_literal_text(): live \$(...) inside assignment value left UNMASKED (floor preserved)"
+    else
+        fail "(24) strip_literal_text(): live \$(...) inside assignment value was incorrectly masked: $OUT24"
+    fi
 fi
 
 # =============================================================================
@@ -628,6 +687,72 @@ assert_allow "(t) issue #247 shape with cd && compound prefix -> allow" "$result
 EV5="for p in \"catastrophic:${FP_MAIN}\"; do echo \"=== \$p ===\"; jq -c \"select(.pattern == \\\"\$p\\\")\" .loom/logs/guard-decisions.log | tail -2; done && ${FP_MAIN}"
 result=$(run_hook "$EV5")
 assert_deny "(u) real bare force-push chained after a DQ-filter loop -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (v) issue #260 repro (the 2026-09-22T19:32:46Z guard-regression
+# fixture command, recovered from guard-decisions.log): the phrase rides
+# ONLY as the assignment literal FP="catastrophic:<phrase>" while every
+# later use of ${FP} is quoted inside strings handed to the sandboxed
+# fixture harness -> ALLOW (was DENY).
+EV6="WT=/repo/.loom/worktrees/issue-247
+TMPROOT=\$(mktemp -d)
+git init -q \"\$TMPROOT\"
+cp \"\$WT/.loom/hooks/guard-destructive-generic.sh\" \"\$TMPROOT/.loom/hooks/\"
+run_hook() { o=\$(cd \"\$TMPROOT\" && bash \"\$1\" 2>/dev/null); printf '%s' \"\$o\"; }
+FP=\"catastrophic:${FP_MAIN}\"
+echo \"== V1: exact live repro ==\"
+run_hook \"cd /repo && for p in \\\"sql-ddl\\\" \\\"worktree-write-confinement-unresolved-var\\\" \\\"\${FP}\\\"; do echo \\\"=== \\\$p ===\\\"; jq -c \\\"select(.pattern == \\\\\\\$p\\\\\\\")\\\" .loom/logs/guard-decisions.log 2>/dev/null | tail -2; done\"
+rm -rf \"\$TMPROOT\""
+result=$(run_hook "$EV6")
+assert_allow "(v) issue #260 fixture-construction command with FP=\"...\" assignment literal -> allow" "$result"
+
+# --- (w) issue #260: a bare assignment plus a quoted (inert) use -> ALLOW.
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; echo \"recorded: \$FP\"")
+assert_allow "(w) assignment literal with only a quoted inert later use -> allow" "$result"
+
+# --- (x) issue #260: an export-prefix assignment alone -> ALLOW.
+result=$(run_hook "export FP=\"catastrophic:${FP_MAIN}\"")
+assert_allow "(x) export-prefix assignment literal alone -> allow" "$result"
+
+# --- (y) issue #260 floor: unquoted \$FP use after the assignment -> DENY.
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; \$FP")
+assert_deny "(y) assignment phrase executed via unquoted \$FP -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (z) issue #260 floor: bash -c "\$FP" after the assignment -> DENY.
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; bash -c \"\$FP\"")
+assert_deny "(z) assignment phrase executed via bash -c \"\$FP\" -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (aa) issue #260 floor: eval "\$FP" after the assignment -> DENY.
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; eval \"\$FP\"")
+assert_deny "(aa) assignment phrase executed via eval \"\$FP\" -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (ab) issue #260 floor: a here-string FEEDS the interpreter its stdin,
+# so bash <<< "\$FP" executes the value even though it sits in a Q segment
+# -> DENY (the var-use gate fails closed on the newly-modeled shape).
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; bash <<< \"\$FP\"")
+assert_deny "(ab) assignment phrase executed via bash <<< \"\$FP\" -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (ac) issue #260 floor: NAME= "value" (space after =) arms nothing --
+# the quoted word is a real COMMAND position -> DENY.
+result=$(run_hook "FP= \"${FP_MAIN}\"")
+assert_deny "(ac) quoted command word after an empty NAME= assignment -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (ad) issue #260 narrowing-only: masking the inert assignment literal
+# must not blind the scan to a real bare invocation chained later in the
+# SAME command -> DENY.
+result=$(run_hook "FP=\"catastrophic:${FP_MAIN}\"; echo ready && ${FP_MAIN}")
+assert_deny "(ad) real bare force-push chained after an inert assignment -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (ae) issue #260 floor: a live \$(...) inside the assignment value
+# stays visible -> DENY.
+result=$(run_hook "FP=\"\$(catastrophic:${FP_MAIN})\"")
+assert_deny "(ae) assignment value carrying a live \$(...) substitution -> still deny" "$result" \
     "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed

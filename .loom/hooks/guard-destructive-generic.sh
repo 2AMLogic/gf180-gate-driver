@@ -3051,6 +3051,28 @@ resolve_stash_cwd() {
 # to this shape unchanged (a `"$(<phrase>)"` list word is a live
 # substitution and is never redacted).
 #
+# Issue #260 (post-#244 residual): a FIFTH recognition — a quoted value in a
+# `NAME=<quoted value>` variable-assignment position. The 2026-09-22T19:32:46Z
+# telemetry-review fixture command (recovered from guard-decisions.log)
+# carried the trigger phrase ONLY as `FP="catastrophic:git push --force
+# origin main"` — an assignment literal feeding the guard's own regression
+# repro — with every later use of `$FP` quoted and inert; no flag-adjacency,
+# `--arg`, `-f NAME=`, or word-list shape matched, so the phrase stayed
+# visible to ALWAYS_BLOCK_PATTERNS and the fixture-construction command
+# hard-denied. The recognition is guarded by the SAME fail-closed var-use
+# gate as the word-list shape (for_var_executed_later(), below): the value is
+# redacted ONLY when `$<NAME>` appears NOWHERE later in the command in an
+# executing shape — never unquoted, never an eval/exec/interpreter payload,
+# never piped into an interpreter, and (new with this fix) never fed to one
+# via a here-string/here-doc (`bash <<< "$FP"` executes its input, so the
+# gate now fails closed on that shape too). `FP="<phrase>"; bash -c "$FP"`,
+# `...; $FP`, and `...; eval "$FP"` therefore all stay fully visible and
+# hard-deny. Arming additionally requires the assignment's `=` to be the
+# LAST byte of its unquoted segment: a segment ending `NAME= ` (trailing
+# whitespace, e.g. `FP= "git push --force origin main"`) is an EMPTY
+# assignment followed by a quoted COMMAND WORD — a real invocation shape —
+# and never arms, so that command still denies.
+#
 # Safety floor preserved two ways:
 #   - `-c` is deliberately NOT a text-carrying flag, so `bash -c '<payload>'`
 #     is never redacted and its payload stays caught by the raw scan.
@@ -3409,6 +3431,13 @@ strip_literal_text() {
         if (rest ~ "(^|[ \t\n;|&])(eval|exec)[ \t]*[\"'"'"']?[ \t]*" upat) return 1
         if (rest ~ "(^|[ \t\n;|&])(sh|bash|dash|zsh|ksh|fish)[ \t]+(-c[ \t]*)?[\"'"'"']?[ \t]*" upat) return 1
         if (rest ~ upat "[\"'"'"']?[ \t]*\\|[ \t]*(sh|bash|dash|zsh|ksh|fish)([^A-Za-z0-9_-]|$)") return 1
+        # Issue #260: a here-string/here-doc FEEDS the interpreter its stdin,
+        # so `bash <<< "$v"` executes the value just as `bash -c "$v"` does.
+        # `<<+` covers `<<<` (here-string) and longer runs; the optional
+        # `-` covers `<<-`; the optional `-flag` run covers `sh -e <<< "$v"`.
+        # Fails closed like every check above — it can only make MORE shapes
+        # count as executing, never fewer.
+        if (rest ~ "(^|[ \t\n;|&])(sh|bash|dash|zsh|ksh|fish)([^A-Za-z0-9_-]|$)[ \t]*(-[A-Za-z]+[ \t]+)*<<+-?[ \t\n]*[\"'"'"']?[ \t]*" upat) return 1
         return 0
     }
     BEGIN {
@@ -3465,6 +3494,18 @@ strip_literal_text() {
         FOR_IN_RE_BOL = "(^|[ \t\n;(&|])for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]*$"
         FOR_IN_RE_MID = "[ \t\n;(&|]for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]*$"
         FOR_WS_ONLY = "^[ \t\n]+$"
+        #
+        # Fifth alternative (issue #260): a quoted value in a `NAME=` variable-
+        # assignment position. The boundary/tail discipline matches the shapes
+        # above; the deliberate ABSENCE of trailing whitespace in the tail is
+        # load-bearing — `NAME= "value"` (space after `=`) is an empty
+        # assignment followed by a quoted COMMAND WORD, a real invocation
+        # shape, and must never arm. The candidate "Q" segment is still gated
+        # by for_var_executed_later() on the assigned name (see the END-block
+        # comment at the assignment check), so `FP="<phrase>"; bash -c "$FP"`
+        # stays fully visible.
+        ASSIGN_RE_BOL = "(^|[ \t\n;(&|])[A-Za-z_][A-Za-z0-9_]*=$"
+        ASSIGN_RE_MID = "[ \t\n;(&|][A-Za-z_][A-Za-z0-9_]*=$"
         buf = ""
     }
     # MULTI-LINE REDACTION (#3898): slurp the whole (possibly multi-line) command
@@ -3535,7 +3576,28 @@ strip_literal_text() {
             for_word = 0
             if (in_for_list && for_var_executed_later(k + 1, for_var)) for_word = 0
             else if (in_for_list) for_word = 1
-            if (!flagged && !for_word) { out = out segtxt[k]; continue }
+            # Issue #260: a quoted value in a `NAME=` assignment position is a
+            # redaction trigger under the SAME fail-closed var-use gate, with
+            # the assigned name in place of the loop variable. Arming requires
+            # the preceding "U" segment to END exactly at `=` (no trailing
+            # whitespace — see the ASSIGN_RE comment above for why), and the
+            # value must itself pass the shared `$(`/backtick floors below, so
+            # `FP="$(<phrase>)"` is never redacted. An assigned name that IS
+            # executed later (`$FP` unquoted, eval/exec/interpreter payload,
+            # piped or here-string fed to an interpreter) keeps the value
+            # visible and the command denying.
+            assign_word = 0
+            if (k > 1 && segtype[k - 1] == "U") {
+                assign_tail = ((k - 1 == 1) && segtxt[k - 1] ~ ASSIGN_RE_BOL) || \
+                              ((k - 1 > 1) && segtxt[k - 1] ~ ASSIGN_RE_MID)
+                if (assign_tail) {
+                    match(segtxt[k - 1], /[A-Za-z_][A-Za-z0-9_]*=$/)
+                    assign_var = substr(segtxt[k - 1], RSTART, RLENGTH - 1)
+                    if (for_var_executed_later(k + 1, assign_var)) assign_word = 0
+                    else assign_word = 1
+                }
+            }
+            if (!flagged && !for_word && !assign_word) { out = out segtxt[k]; continue }
             qchar = segqchar[k]
             inner = substr(segtxt[k], 2, length(segtxt[k]) - 2)   # between the quotes
             # Redact ONLY provably inert text (no command substitution / backtick)
@@ -4208,6 +4270,17 @@ if [[ "$COMMAND" == *"--body"* || "$COMMAND" == *"--message"* || \
       "$COMMAND" == *"-f "* || "$COMMAND" == *"-F "* || \
       "$COMMAND" == *"--raw-field"* || "$COMMAND" == *"--field"* || \
       "$COMMAND" =~ (^|[[:space:];;&|])for[[:space:]][A-Za-z_] ]]; then
+    COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
+fi
+# Issue #260: a `NAME=` assignment arm too — the fixture-construction shape
+# this fix targets carries none of the flag substrings above and may carry no
+# for-loop either (`FP="<phrase>"; echo done`). Same doctrine as the for-loop
+# arm: a gate false positive only costs one awk run; a gate false negative
+# falls back to the unmasked (deny) status quo, so the imprecision is safe in
+# both directions. The arming regex is deliberately name-shape-only — the
+# assignment recognition inside strip_literal_text() supplies the strict
+# tail-anchored `NAME=` + var-use-gate semantics.
+if [[ "$COMMAND" =~ (^|[[:space:];;&|])[A-Za-z_][A-Za-z0-9_]*= ]]; then
     COMMAND_NO_LITERAL_TEXT=$(strip_literal_text "$COMMAND_NO_LITERAL_TEXT")
 fi
 

@@ -2034,6 +2034,31 @@ them. Nothing left the denial floor, and the two promotions did not join it.
 Full table and the rule that produced it: "Ask-Tier Composition (#7795)" near
 the top of this document.
 
+**Seventh refinement pass (issue #260, telemetry dated 2026-09-21/22, landed 2026-09-29):** the
+catastrophic force-push literal masking gained a **fifth recognition shape** in
+`strip_literal_text()`: a quoted value in a `NAME=<quoted value>`
+**variable-assignment position**. The trigger was the Auditor's per-trigger
+review of `guard-decisions.log` (issue #260): the 2026-09-22T19:32:46Z denial
+was a guard-regression **fixture-construction** command whose only occurrence
+of the phrase was the assignment literal `FP="catastrophic:git push --force
+origin main"` feeding a sandboxed repro of the already-fixed #244/#247
+telemetry-loop shapes (those earlier denials had resolved once their fixes
+landed; only the assignment shape was still live). The recognition is gated by
+the SAME fail-closed var-use analysis as the #244 word-list shape
+(`for_var_executed_later()` on the assigned name): the value is redacted only
+when `$NAME` appears nowhere later in an executing shape — unquoted, as an
+eval/exec/interpreter payload, piped into an interpreter, or (modeled new with
+this pass) **fed to one via a here-string/here-doc** (`bash <<< "$FP"`
+executes its stdin, so the gate now fails closed there too). Two boundary
+rules keep real invocations denying: the arming tail must end **exactly** at
+`=` (a segment ending `NAME= ` — trailing space — is an empty assignment
+followed by a quoted **command word**, and never arms), and the shared
+`$(`/backtick floors apply unchanged, so `FP="$(<phrase>)"` stays visible.
+`FP="<phrase>"; bash -c "$FP"`, `...; $FP`, `...; eval "$FP"`, and a bare
+invocation chained after an inert assignment all still hard-deny. No new
+`LOOM_GUARD_*` env var or `guards.*` key was introduced; the Ungated Denial
+Floor is untouched.
+
 ### When a Legitimate Operation Is Pattern-Blocked
 
 When a guard blocks (or asks about) an operation you believe is legitimate, the sanctioned recourse depends on the session:
