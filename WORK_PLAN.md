@@ -10,7 +10,7 @@ each update; do not hand-edit that region.
 
 Judge-approved PRs stuck under a `loom:operator` merge-risk hold — implementation work is done, only a human merge decision is missing.
 
-_None._
+- **#264**: ci: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
 
 ## Operator Priority
 
@@ -22,7 +22,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-_None._
+- **#260**: Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes
 
 ## In Progress
 
@@ -40,17 +40,19 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#264**: ci: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
 - **#256**: T1 item 11: declare ties[] (both N-well rail classes + substrate) in the klt erc supply spec so erc.missing_tie is computed (bronze grant paused on this) *(curated)*
+- **#257**: CI: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step *(curated)*
+- **#260**: Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes *(curated)*
 
 ## Proposed (Architect / Hermit)
 
-- **#258**: Consolidate duplicated mismatch-campaign boilerplate into sim/harness *(hermit)*
+_None._
 
 ## Epics
 
@@ -60,13 +62,13 @@ _None._
 
 | Tier | Count |
 |------|-------|
-| Operator merge-risk holds | 0 |
+| Operator merge-risk holds | 1 |
 | Operator priority | 0 |
-| Ready (`loom:issue`) | 0 |
+| Ready (`loom:issue`) | 1 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 0 |
-| Curated | 1 |
-| Architect / Hermit proposals | 1 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 3 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
