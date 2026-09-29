@@ -22,7 +22,7 @@ _None._
 
 Human-approved issues ready for implementation (`loom:issue`).
 
-- **#260**: Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes
+_None._
 
 ## In Progress
 
@@ -48,7 +48,7 @@ Issues carrying `loom:curated`.
 
 - **#256**: T1 item 11: declare ties[] (both N-well rail classes + substrate) in the klt erc supply spec so erc.missing_tie is computed (bronze grant paused on this) *(curated)*
 - **#257**: CI: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step *(curated)*
-- **#260**: Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes *(curated)*
+- **#282**: 5 of 16 .loom/hooks/tests/ suites fail at setup: they cp from a defaults/ tree this consumer repo does not ship *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -64,7 +64,7 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 1 |
 | Operator priority | 0 |
-| Ready (`loom:issue`) | 1 |
+| Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 1 |

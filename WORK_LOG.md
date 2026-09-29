@@ -5,6 +5,15 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-09-29
 
+- **Issue #279** (closed): Auditor: guard self-tests and repro sessions pollute guard-decisions.log, drowning real telemetry
+- **PR #281**: feat(guard): LOOM_GUARD_LOG_SUPPRESS to keep test/repro fixtures out of guard-decisions.log (#279)
+- **Issue #276** (closed): Finish the #258 campaign extraction: fold run_ronw_mismatch.py's private campaign layer into harness/campaign.py
+- **PR #280**: refactor(sim): fold ronw's campaign layer into harness/campaign.py
+- **Issue #272** (closed): Guard telemetry: unresolved-var deny on scratch write inside a heredoc body (first post-#252 recurrence, 2026-09-29)
+- **PR #275**: fix(guard): two false-deny routes in worktree-write-confinement (#272)
+- **Issue #263** (closed): Guard telemetry: keep-flagged confirmation — uncommitted-loss ASK family (git checkout . / git clean -fd)
+- **Issue #262** (closed): Guard telemetry: stash-scope:create-redirect on worktree-internal hygiene stash (low volume)
+- **Issue #261** (closed): Guard telemetry: worktree-write-confinement-unresolved-var false-positive class (5 blocks, Sep 21-23)
 - **Issue #260** (closed): Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes
 - **PR #273**: fix(guard): mask assignment-literal force-push phrases in fixture commands
 - **Issue #266** (closed): sim: committed corner logs contain run-to-run nondeterministic ngspice `Reference value` lines
