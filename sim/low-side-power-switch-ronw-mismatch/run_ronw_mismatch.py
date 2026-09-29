@@ -34,7 +34,13 @@ functions directly (`import run_low_side_power_switch as base`) rather than
 `sim/harness/runner.run_samples`, which assumes a `tb.json`-loaded
 testbench. The Monte Carlo *deck* machinery itself
 (`sim/harness/montecarlo.py`) is still the shared, unit-tested harness
-module -- only the campaign shape (DC sweep, not transient) differs.
+module -- only the campaign shape (DC sweep, not transient) differs, and
+even that shape is now shared: `sim/harness/campaign.py`'s
+`run_device_point_campaign` (issue #276) carries the baseline/control/draw
+skeleton, the `PointOutcome` accessors and the CSV/log-write primitives the
+other three mismatch campaigns already got from issue #258 -- this script
+only supplies the "run one sample" callable and its own claim-specific
+narrative.
 
 Follows decision record 0017's ratified convention throughout:
 `sw_stat_global = 0`, derived seeds
@@ -52,14 +58,13 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import csv
 import re
 import statistics
 import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -68,11 +73,12 @@ SIM_DIR = HERE.parent
 sys.path.insert(0, str(SIM_DIR))
 sys.path.insert(0, str(SIM_DIR / "low-side-power-switch"))
 
+from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
-from harness.runner import ngspice_version  # noqa: E402
+from harness.runner import PointResult, ngspice_version  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
 
@@ -113,8 +119,26 @@ RATIFIED_WINDOW_OHMMM = {
 }
 
 BASE_SEED = 20260821
-CONTROL_SEED_OFFSET = 5_000_000
 DEFAULT_SAMPLES = 200
+
+
+# --------------------------------------------------------------------------
+# The campaign's point identity: the device-level (no supply rail) sibling of
+# `harness.corners.PvtPoint`. Only needs `.corner_id` for
+# `campaign.run_device_point_campaign`, and only needs a `.corner` field for
+# `montecarlo.mc_point` (which relabels it via `dataclasses.replace` and
+# never assumes it is specifically a `PvtPoint`).
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DevicePoint:
+    corner: harness_corners.Corner
+    temp_c: float
+
+    @property
+    def corner_id(self) -> str:
+        return harness_corners.device_corner_id(self.corner.name, self.temp_c)
 
 
 # --------------------------------------------------------------------------
@@ -137,14 +161,18 @@ def _corner_shim(pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None) -
     return "\n".join(lines) + "\n"
 
 
-def _run_sample(pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None) -> tuple[str, str]:
-    """Run one (corner, temp, sample) point. Returns (status, log-or-message).
+def _run_sample(
+    pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None
+) -> tuple[str, str, dict[str, float]]:
+    """Run one (corner, temp, sample) point.
 
-    Unlike sim/low-side-power-switch/run_low_side_power_switch.py's
-    `_run_corner` (which raises on a bad run -- appropriate for a 15-point
-    corner matrix where every point must succeed), a Monte Carlo campaign of
-    thousands of draws must tolerate a non-converged draw and disclose it
-    rather than abort the whole campaign (decision record 0017's convention).
+    Returns ``(status, raw ngspice text, flattened measurements)`` --
+    measurements is ``{}`` unless ``status == "ok"``. Unlike
+    sim/low-side-power-switch/run_low_side_power_switch.py's `_run_corner`
+    (which raises on a bad run -- appropriate for a 15-point corner matrix
+    where every point must succeed), a Monte Carlo campaign of thousands of
+    draws must tolerate a non-converged draw and disclose it rather than
+    abort the whole campaign (decision record 0017's convention).
     """
     with tempfile.TemporaryDirectory(prefix="ronw-mismatch-") as tmp:
         work = Path(tmp)
@@ -168,14 +196,33 @@ def _run_sample(pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None) ->
         )
     log = proc.stdout + proc.stderr
     if proc.returncode != 0:
-        return "error", f"ngspice exited {proc.returncode}\n{log}"
+        return "error", f"ngspice exited {proc.returncode}\n{log}", {}
     if re.search(r"^\s*(Error|ERROR|fatal)", log, re.MULTILINE):
-        return "error", log
+        return "error", log, {}
     try:
-        base.extract(log)
+        flat = flatten(base.extract(log))
     except Exception as exc:  # noqa: BLE001 -- disclose, don't crash the campaign
-        return "error", f"extraction failed: {exc}\n{log}"
-    return "ok", log
+        return "error", f"extraction failed: {exc}\n{log}", {}
+    return "ok", log, flat
+
+
+def _make_run_sample(pdk, point: DevicePoint):
+    """The "run one sample" callable `campaign.run_device_point_campaign`
+    parameterizes over: `mc=None` for the plain baseline leg, otherwise `mc`
+    selects a zero-sigma control or a mismatch draw."""
+
+    def run_sample(mc: mc_mod.MismatchSample | None) -> PointResult:
+        sample_point = point if mc is None else mc_mod.mc_point(point, mc)
+        status, log, flat = _run_sample(pdk, point.corner, point.temp_c, mc)
+        return PointResult(
+            point=sample_point,
+            status=status,
+            measurements=flat,
+            message="" if status == "ok" else log,
+            output=log,
+        )
+
+    return run_sample
 
 
 # --------------------------------------------------------------------------
@@ -205,12 +252,6 @@ FLATTEN_NAMES = [f"ronw_{dev}_{vgs:g}" for dev in base.DEVICE_ORDER for _s, vgs 
 ]
 
 
-def _identical(a: dict, b: dict) -> bool:
-    if not a or set(a) != set(b):
-        return False
-    return all(a[k] == b[k] for k in a)
-
-
 def reference_flat(corner_id: str) -> dict[str, float]:
     """The committed corner-matrix record's own numbers at `corner_id`,
     re-parsed from its raw log at run time (not hardcoded)."""
@@ -234,129 +275,34 @@ def reference_flat(corner_id: str) -> dict[str, float]:
 # --------------------------------------------------------------------------
 
 
-class PointOutcome:
-    def __init__(self, index: int, corner, temp_c: float, corner_id: str):
-        self.index = index
-        self.corner = corner
-        self.temp_c = temp_c
-        self.corner_id = corner_id
-        self.baseline_status = "error"
-        self.baseline_log = ""
-        self.baseline_flat: dict[str, float] = {}
-        self.control_a: tuple[mc_mod.MismatchSample, str, str, dict] | None = None
-        self.control_b: tuple[mc_mod.MismatchSample, str, str, dict] | None = None
-        self.draws: list[tuple[mc_mod.MismatchSample, str, str, dict]] = []
-
-    @property
-    def controls_agree(self) -> bool:
-        if self.control_a is None or self.control_b is None:
-            return False
-        if self.control_a[1] != "ok" or self.control_b[1] != "ok":
-            return False
-        return _identical(self.control_a[3], self.control_b[3])
-
-    @property
-    def control_matches_baseline(self) -> bool:
-        if self.baseline_status != "ok" or self.control_a is None or self.control_a[1] != "ok":
-            return False
-        return _identical(self.control_a[3], self.baseline_flat)
-
-    def control_value(self, name: str) -> float | None:
-        if self.control_a is None or self.control_a[1] != "ok":
-            return None
-        return self.control_a[3].get(name)
+class PointOutcome(campaign.PointOutcome):
+    """This campaign's `PointOutcome`: the shared accessors
+    (`controls_agree`, `control_matches_baseline`, `control_value`,
+    `values`, `worst`) plus a comparison against `REFERENCE_RECORD`'s own
+    committed numbers."""
 
     def reference_delta(self, name: str) -> float | None:
+        """Control minus the committed corner-matrix record's own number.
+
+        `None` when there is no reference log for this point (e.g. a
+        `--smoke` run at a corner the reference never visited).
+        """
         ref = reference_flat(self.corner_id).get(name)
         value = self.control_value(name)
         if ref is None or value is None:
             return None
         return value - ref
 
-    def ok_draws(self) -> list[tuple[mc_mod.MismatchSample, dict]]:
-        return [(mc, flat) for mc, status, _log, flat in self.draws if status == "ok"]
-
-    def values(self, name: str) -> list[float]:
-        return [flat[name] for _mc, flat in self.ok_draws() if name in flat]
-
-    def worst(self, name: str):
-        candidates = [(mc, flat) for mc, flat in self.ok_draws() if name in flat]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda pair: pair[1][name])
-
-
-def run_point_campaign(pdk, index: int, corner, temp_c: float, n_samples: int, jobs: int, progress) -> PointOutcome:
-    corner_id = harness_corners.device_corner_id(corner.name, temp_c)
-    outcome = PointOutcome(index, corner, temp_c, corner_id)
-
-    status, log = _run_sample(pdk, corner, temp_c, None)
-    outcome.baseline_status = status
-    outcome.baseline_log = log
-    if status == "ok":
-        outcome.baseline_flat = flatten(base.extract(log))
-    progress()
-
-    control_seed = mc_mod.sample_seed(BASE_SEED, index, mc_mod.CONTROL_SAMPLE)
-    for slot, seed in (("control_a", control_seed), ("control_b", control_seed + CONTROL_SEED_OFFSET)):
-        mc = mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=seed)
-        status, log = _run_sample(pdk, corner, temp_c, mc)
-        flat = flatten(base.extract(log)) if status == "ok" else {}
-        setattr(outcome, slot, (mc, status, log, flat))
-        progress()
-
-    draws = [
-        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(BASE_SEED, index, s))
-        for s in range(1, n_samples + 1)
-    ]
-
-    def _do(mc):
-        status, log = _run_sample(pdk, corner, temp_c, mc)
-        flat = flatten(base.extract(log)) if status == "ok" else {}
-        progress()
-        return (mc, status, log, flat)
-
-    if jobs > 1:
-        with ThreadPoolExecutor(max_workers=jobs) as pool:
-            outcome.draws = list(pool.map(_do, draws))
-    else:
-        outcome.draws = [_do(mc) for mc in draws]
-
-    return outcome
-
 
 # --------------------------------------------------------------------------
 # Evidence artefacts
+#
+# The CSV sidecar (every draw's seed + measurements) is the shared
+# `campaign.write_sample_csv` -- see main(). Only the per-log provenance
+# banner below is genuinely this campaign's own: it has no `Testbench`/DUT
+# to name and no supply rail, unlike `campaign.baseline_log_header`/
+# `log_header`, which assume both.
 # --------------------------------------------------------------------------
-
-
-def write_sample_csv(corners_dir: Path, record: str, outcome: PointOutcome) -> Path:
-    out_dir = corners_dir / record
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"samples-{outcome.corner_id}.csv"
-    with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.writer(handle, lineterminator="\n")
-        writer.writerow(["sample", "seed", "sw_stat_mismatch", "status", *FLATTEN_NAMES])
-        writer.writerow(
-            ["baseline", "", "unset (plain deck)", outcome.baseline_status]
-            + [outcome.baseline_flat.get(n, "") for n in FLATTEN_NAMES]
-        )
-        for slot in (outcome.control_a, outcome.control_b):
-            if slot is None:
-                continue
-            mc, status, _log, flat = slot
-            writer.writerow(
-                [mc.sample, mc.seed, int(mc.enabled), status] + [flat.get(n, "") for n in FLATTEN_NAMES]
-            )
-        for mc, status, _log, flat in outcome.draws:
-            writer.writerow(
-                [mc.sample, mc.seed, int(mc.enabled), status] + [flat.get(n, "") for n in FLATTEN_NAMES]
-            )
-    return path
-
-
-def _mc_corner_id(corner_name: str, temp_c: float, mc: mc_mod.MismatchSample) -> str:
-    return harness_corners.device_corner_id(f"{corner_name}_{mc.token}", temp_c)
 
 
 def _header(record: str, stamp, pdk, ngspice, corner_id: str, extra: str) -> str:
@@ -378,49 +324,44 @@ def write_logs(corners_dir: Path, record: str, stamp, pdk, ngspice, outcome: Poi
     corners_dir_r = corners_dir / record
     corners_dir_r.mkdir(parents=True, exist_ok=True)
 
-    baseline_cid = harness_corners.device_corner_id(outcome.corner.name, outcome.temp_c)
-    (corners_dir_r / f"{baseline_cid}.log").write_text(
+    (corners_dir_r / f"{outcome.corner_id}.log").write_text(
         _header(
-            record, stamp, pdk, ngspice, baseline_cid,
+            record, stamp, pdk, ngspice, outcome.corner_id,
             "* mismatch  : none -- plain deck (sw_stat_mismatch=0 by the "
             "gf180mcu design.ngspice default). This is negative-control leg "
             "1: the zero-sigma control logged alongside it must match this "
             "run exactly.\n",
         )
-        + outcome.baseline_log,
+        + outcome.baseline.output,
         encoding="utf-8",
     )
 
-    if outcome.control_a is not None:
-        mc, _status, log, _flat = outcome.control_a
-        cid = _mc_corner_id(outcome.corner.name, outcome.temp_c, mc)
+    if outcome.controls:
+        mc, result = outcome.controls[0]
+        cid = mc_mod.mc_point(outcome.point, mc).corner_id
         (corners_dir_r / f"{cid}.log").write_text(
             _header(
                 record, stamp, pdk, ngspice, cid,
                 f"* mismatch  : sw_stat_mismatch=0 (sample {mc.sample}), "
                 f"sw_stat_global=0\n* seed      : {mc.seed}\n",
             )
-            + log,
+            + result.output,
             encoding="utf-8",
         )
 
     worst = outcome.worst(f"ronw_{PRIMARY_DEV}_{PRIMARY_VGS:g}")
     if worst is not None:
-        mc, _flat = worst
-        # Re-find the raw log text for this sample (draws stores it).
-        for draw_mc, status, log, _flat2 in outcome.draws:
-            if draw_mc is mc and status == "ok":
-                cid = _mc_corner_id(outcome.corner.name, outcome.temp_c, draw_mc)
-                (corners_dir_r / f"{cid}.log").write_text(
-                    _header(
-                        record, stamp, pdk, ngspice, cid,
-                        f"* mismatch  : sw_stat_mismatch=1 (sample {draw_mc.sample}), "
-                        f"sw_stat_global=0\n* seed      : {draw_mc.seed}\n",
-                    )
-                    + log,
-                    encoding="utf-8",
-                )
-                break
+        mc, result = worst
+        cid = mc_mod.mc_point(outcome.point, mc).corner_id
+        (corners_dir_r / f"{cid}.log").write_text(
+            _header(
+                record, stamp, pdk, ngspice, cid,
+                f"* mismatch  : sw_stat_mismatch=1 (sample {mc.sample}), "
+                f"sw_stat_global=0\n* seed      : {mc.seed}\n",
+            )
+            + result.output,
+            encoding="utf-8",
+        )
 
 
 # --------------------------------------------------------------------------
@@ -483,8 +424,8 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         f"baseline -- {len(outcomes) * (n_samples + 3)} ngspice runs, "
         f"{wall / 60:.1f} min wall."
     )
-    drawn = sum(len(o.draws) for o in outcomes)
-    converged = sum(len(o.ok_draws()) for o in outcomes)
+    drawn = sum(len(o.samples) for o in outcomes)
+    converged = sum(len(o.ok) for o in outcomes)
     dropped = drawn - converged
     dropped_note = (
         f" **{dropped} of {drawn} draws did not converge and "
@@ -594,7 +535,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     for outcome in outcomes:
         values = outcome.values(primary_name)
         control = outcome.control_value(primary_name)
-        used = f"{len(values)}/{len(outcome.draws)}"
+        used = f"{len(values)}/{len(outcome.samples)}"
         if not values or control is None:
             add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | |")
             continue
@@ -622,9 +563,9 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     # granularity.
     by_corner: dict[str, dict[float, float]] = {}
     for o in outcomes:
-        value = o.baseline_flat.get(primary_name)
+        value = o.baseline_value(primary_name)
         if value is not None:
-            by_corner.setdefault(o.corner.name, {})[o.temp_c] = value
+            by_corner.setdefault(o.point.corner.name, {})[o.point.temp_c] = value
     same_corner_gaps = [
         abs(temps[TEMPS[i + 1]] - temps[TEMPS[i]])
         for temps in by_corner.values()
@@ -637,10 +578,10 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     add("  ### Non-converged draws")
     add("")
     bad = [
-        (outcome, mc, log)
+        (outcome, mc, result)
         for outcome in outcomes
-        for mc, status, log, _flat in outcome.draws
-        if status != "ok"
+        for mc, result in outcome.samples
+        if result.status != "ok"
     ]
     if not bad:
         add(f"  None -- all {drawn} mismatch draws completed and every one is in the statistics above.")
@@ -655,8 +596,8 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         add("")
         add("  | PVT point | sample | seed | ngspice message |")
         add("  |---|---|---|---|")
-        for outcome, mc, log in bad:
-            message = " ".join(log.split())[:180]
+        for outcome, mc, result in bad:
+            message = " ".join(result.message.split())[:180]
             add(f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | `{message}` |")
         add("")
     add("")
@@ -936,7 +877,7 @@ def main(argv=None) -> int:
 
     done = 0
 
-    def progress():
+    def progress(_result):
         nonlocal done
         done += 1
         if done % 200 == 0 or done == total:
@@ -947,7 +888,15 @@ def main(argv=None) -> int:
     for index, (corner, temp) in enumerate(grid):
         if index not in selected:
             continue
-        outcomes.append(run_point_campaign(pdk, index, corner, temp, n_samples, args.jobs, progress))
+        point = DevicePoint(corner=corner, temp_c=temp)
+        outcomes.append(
+            campaign.run_device_point_campaign(
+                point, index, n_samples, args.jobs, progress,
+                _make_run_sample(pdk, point),
+                base_seed=BASE_SEED,
+                outcome_cls=PointOutcome,
+            )
+        )
     wall = time.monotonic() - wall_start
 
     print()
@@ -963,7 +912,7 @@ def main(argv=None) -> int:
 
     corners_dir = HERE / harness_report.CORNERS_DIR
     for outcome in outcomes:
-        write_sample_csv(corners_dir, record, outcome)
+        campaign.write_sample_csv(corners_dir, record, outcome, FLATTEN_NAMES)
         write_logs(corners_dir, record, stamp, pdk, ngspice, outcome)
 
     snapshot = harness_report.write_device_netlist_snapshot(HERE / "netlist-snapshots", record, DECK_PATH)
