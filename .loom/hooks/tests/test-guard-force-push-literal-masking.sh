@@ -486,6 +486,30 @@ else
     else
         fail "(24) strip_literal_text(): live \$(...) inside assignment value was incorrectly masked: $OUT24"
     fi
+
+    # --- (25) issue #260 list-context guard: a `NAME=` tail inside an open
+    # `for <var> in` word list is a LIST ELEMENT, not an assignment value.
+    # Arming the assignment trigger there would mask a word the LOOP variable
+    # may execute while the var-use gate checks the WRONG name — must stay
+    # UNMASKED.
+    CMD25="for cmd in x= \"${FP_MAIN}\"; do \$cmd; done"
+    OUT25=$(strip_literal_text "$CMD25")
+    if echo "$OUT25" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(25) strip_literal_text(): NAME= list word inside a for-list left UNMASKED (list-context guard)"
+    else
+        fail "(25) strip_literal_text(): for-list element incorrectly masked as assignment value: $OUT25"
+    fi
+
+    # --- (26) the list-context guard must not swallow assignments AFTER the
+    # for-statement has been terminated — the `;`-separated assignment later
+    # in the same segment still arms.
+    CMD26="for p in a b; do echo \"\$p\"; done; FP=\"${FP_MAIN}\"; echo ready"
+    OUT26=$(strip_literal_text "$CMD26")
+    if ! echo "$OUT26" | grep -qiE "$MAIN_PATTERN"; then
+        pass "(26) strip_literal_text(): assignment after a terminated for-statement still masked"
+    else
+        fail "(26) strip_literal_text(): assignment after terminated for-statement NOT masked: $OUT26"
+    fi
 fi
 
 # =============================================================================
@@ -753,6 +777,13 @@ assert_deny "(ad) real bare force-push chained after an inert assignment -> stil
 # stays visible -> DENY.
 result=$(run_hook "FP=\"\$(catastrophic:${FP_MAIN})\"")
 assert_deny "(ae) assignment value carrying a live \$(...) substitution -> still deny" "$result" \
+    "dangerous pattern"
+
+# --- (af) issue #260 list-context guard floor: a `NAME=` tail inside an
+# open for-list is a LIST ELEMENT the loop variable executes -> DENY
+# (arming the assignment trigger here would mask it under the wrong name).
+result=$(run_hook "for cmd in x= \"catastrophic:${FP_MAIN}\"; do \$cmd; done")
+assert_deny "(af) for-list element after a NAME= list word executed via \$cmd -> still deny" "$result" \
     "dangerous pattern"
 
 # --- defaults/ vs .loom/ sync: this repo ships no defaults/ tree (installed

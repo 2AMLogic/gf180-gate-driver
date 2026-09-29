@@ -3586,10 +3586,26 @@ strip_literal_text() {
             # executed later (`$FP` unquoted, eval/exec/interpreter payload,
             # piped or here-string fed to an interpreter) keeps the value
             # visible and the command denying.
+            #
+            # LIST-CONTEXT GUARD: a `NAME=` tail INSIDE an open `for <var> in`
+            # word list (`for cmd in x= "<phrase>"; do $cmd; done`) is a
+            # word-list ELEMENT, not an assignment — arming here would mask a
+            # list word the loop variable may later execute while the var-use
+            # gate looks up the WRONG name (`x`, not `cmd`). If the segment
+            # still carries an unterminated `for <var> in` opener (no `;`/`&`/
+            # `|`/paren between the opener and the tail), the trailing `NAME=`
+            # is a list word: skip the assignment trigger entirely and leave
+            # the candidate to the fail-closed handling of the for-list
+            # machinery itself (the #244 state machine already dropped the
+            # list on the bare `x=` token, so the status quo — visible,
+            # denied — stands).
             assign_word = 0
             if (k > 1 && segtype[k - 1] == "U") {
                 assign_tail = ((k - 1 == 1) && segtxt[k - 1] ~ ASSIGN_RE_BOL) || \
                               ((k - 1 > 1) && segtxt[k - 1] ~ ASSIGN_RE_MID)
+                if (assign_tail && match(segtxt[k - 1], /(^|[ \t\n;(&|])for[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]+in[ \t\n]/)) {
+                    if (substr(segtxt[k - 1], RSTART) !~ /[;&|()]/) assign_tail = 0
+                }
                 if (assign_tail) {
                     match(segtxt[k - 1], /[A-Za-z_][A-Za-z0-9_]*=$/)
                     assign_var = substr(segtxt[k - 1], RSTART, RLENGTH - 1)
