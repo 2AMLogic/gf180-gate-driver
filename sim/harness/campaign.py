@@ -24,7 +24,10 @@ layout `sim/README.md` ratifies has exactly one implementation.
 Nothing here composes or runs a deck itself -- that is still
 `runner.compose_deck` / `runner.run_point` / `runner.run_samples`, with
 `montecarlo.py` owning the sampling model. This module is the campaign layer
-above them.
+above them. `run_point_campaign` assumes that `Testbench`/`runner.run_point`
+execution layer; `run_device_point_campaign` is the identical skeleton for a
+campaign whose execution layer is a bare device-level deck instead (issue
+#276 -- see its own docstring).
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from __future__ import annotations
 import csv
 import statistics
 from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import montecarlo as mc_mod
@@ -180,6 +184,78 @@ def run_point_campaign(
         tb, pdk, pairs, workdir, jobs=jobs, on_result=progress
     )
     return outcome_cls(point, baseline, control_results, list(zip(draws, results)))
+
+
+def run_device_point_campaign(
+    point,
+    index: int,
+    n_samples: int,
+    jobs: int,
+    progress,
+    run_sample: Callable[[mc_mod.MismatchSample | None], harness_runner.PointResult],
+    *,
+    base_seed: int,
+    outcome_cls: type[PointOutcome] = PointOutcome,
+    control_seed_offset: int = CONTROL_SEED_OFFSET,
+) -> PointOutcome:
+    """The device-level counterpart of :func:`run_point_campaign`.
+
+    Same skeleton -- one plain baseline, two differently-seeded zero-sigma
+    controls, N derived-seed draws, `jobs`-wide parallel over the draws --
+    and the identical seed policy (`base_seed`, `index`,
+    `control_seed_offset`), but for a campaign whose sample-execution layer
+    is a bare DC-sweep-and-interpolate deck driven straight off this
+    package's library (`pdk.py`/`corners.py`/`montecarlo.py`) rather than a
+    `Testbench`-composed transient
+    (`sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py` is the
+    first such campaign, issue #276). That execution layer does not fit
+    `runner.run_point`/`run_samples` -- both assume a `tb.json`-loaded
+    `Testbench` -- so it is the one thing parameterized here: `run_sample(mc)`
+    runs exactly one ngspice invocation for `point` (`mc=None` selects the
+    plain baseline leg; otherwise `mc` selects a control or a mismatch draw)
+    and returns a `PointResult`. `point` itself only needs a `.corner_id` --
+    this function never reads any of its other fields -- so a `PvtPoint` and
+    a device-level equivalent (no supply rail) both work unchanged.
+    """
+    baseline = run_sample(None)
+    progress(baseline)
+
+    control_seed = mc_mod.sample_seed(base_seed, index, mc_mod.CONTROL_SAMPLE)
+    controls = [
+        mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=control_seed),
+        mc_mod.MismatchSample(
+            sample=mc_mod.CONTROL_SAMPLE, seed=control_seed + control_seed_offset
+        ),
+    ]
+    draws = [
+        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(base_seed, index, s))
+        for s in range(1, n_samples + 1)
+    ]
+
+    control_results = []
+    for control in controls:
+        # Same reasoning as run_point_campaign: one at a time, so a bad run
+        # cannot collide with the other's scratch state.
+        result = run_sample(control)
+        control_results.append((control, result))
+        progress(result)
+
+    def _do(mc: mc_mod.MismatchSample):
+        result = run_sample(mc)
+        progress(result)
+        return (mc, result)
+
+    if jobs > 1:
+        # ThreadPoolExecutor.map returns results in input order (not
+        # completion order), so the draw list stays index-aligned with its
+        # seeds regardless of how the threads actually interleave -- the same
+        # determinism guarantee run_samples gives the Testbench-based path.
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            sample_results = list(pool.map(_do, draws))
+    else:
+        sample_results = [_do(mc) for mc in draws]
+
+    return outcome_cls(point, baseline, control_results, sample_results)
 
 
 # --------------------------------------------------------------------------
@@ -345,6 +421,7 @@ __all__ = [
     "log_header",
     "mv",
     "point_sigma_summary",
+    "run_device_point_campaign",
     "run_point_campaign",
     "write_log",
     "write_sample_csv",

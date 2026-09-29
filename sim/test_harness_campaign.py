@@ -180,6 +180,74 @@ class RunPointCampaignTests(unittest.TestCase):
         self.assertIsInstance(outcome, Custom)
 
 
+class RunDevicePointCampaignTests(unittest.TestCase):
+    """The device-level driver (issue #276): the identical three-leg
+    negative-control + derived-seed draw skeleton as `RunPointCampaignTests`
+    above, but parameterized over a "run one sample" callable instead of
+    `runner.run_point`/`run_samples` -- the shape
+    `sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py` now
+    reuses instead of carrying its own copy."""
+
+    @staticmethod
+    def _stub_run_sample(mc):
+        """Deterministic in `mc` alone (no shared mutable state), so this is
+        safe to call concurrently from the `jobs > 1` thread-pool path."""
+        seed = 0 if mc is None else mc.seed
+        return _result(_POINT, 5.0 + seed * 1e-6)
+
+    def _run(self, index=3, n_samples=4, jobs=1, outcome_cls=campaign.PointOutcome):
+        seen = []
+        outcome = campaign.run_device_point_campaign(
+            _POINT, index, n_samples, jobs, seen.append, self._stub_run_sample,
+            base_seed=_BASE_SEED,
+            outcome_cls=outcome_cls,
+        )
+        return outcome, seen
+
+    def test_the_two_controls_carry_different_seeds(self):
+        # Two controls at the *same* seed would only show repeatability;
+        # decision record 0017 wants determinism, so the seeds must differ.
+        outcome, _seen = self._run(index=3)
+        seeds = [mc.seed for mc, _r in outcome.controls]
+        expected = sample_seed(_BASE_SEED, 3, CONTROL_SAMPLE)
+        self.assertEqual(seeds, [expected, expected + campaign.CONTROL_SEED_OFFSET])
+
+    def test_draw_seeds_are_derived_from_base_seed_and_point_index(self):
+        outcome, _seen = self._run(index=3, n_samples=4)
+        self.assertEqual([mc.sample for mc, _r in outcome.samples], [1, 2, 3, 4])
+        self.assertEqual(
+            [mc.seed for mc, _r in outcome.samples],
+            [sample_seed(_BASE_SEED, 3, s) for s in (1, 2, 3, 4)],
+        )
+
+    def test_baseline_is_run_with_mc_none(self):
+        outcome, _seen = self._run()
+        self.assertEqual(outcome.baseline.measurements["vout"], 5.0)
+
+    def test_progress_is_called_once_per_run(self):
+        _outcome, seen = self._run(n_samples=4)
+        self.assertEqual(len(seen), 3 + 4)
+
+    def test_outcome_cls_is_honored(self):
+        class Custom(campaign.PointOutcome):
+            pass
+
+        outcome, _seen = self._run(outcome_cls=Custom)
+        self.assertIsInstance(outcome, Custom)
+
+    def test_parallel_draws_preserve_input_order(self):
+        # ThreadPoolExecutor.map returns results in the order the iterable
+        # was given, not completion order -- a Monte Carlo record's seed
+        # table must stay deterministic regardless of jobs > 1 scheduling.
+        outcome, _seen = self._run(index=1, n_samples=6, jobs=3)
+        expected_seeds = [sample_seed(_BASE_SEED, 1, s) for s in range(1, 7)]
+        self.assertEqual([mc.seed for mc, _r in outcome.samples], expected_seeds)
+        self.assertEqual(
+            [round(r.measurements["vout"], 6) for _mc, r in outcome.samples],
+            [round(5.0 + seed * 1e-6, 6) for seed in expected_seeds],
+        )
+
+
 class PointOutcomeTests(unittest.TestCase):
     def test_non_converged_draws_are_excluded_from_ok(self):
         outcome = _outcome([5.1, 5.2, 5.3], statuses=["ok", "failed", "ok"])
