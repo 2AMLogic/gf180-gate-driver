@@ -434,13 +434,6 @@ def _fmt(value, digits: int = 4) -> str:
     return f"{value:.{digits}f}"
 
 
-def _fmt_mohmmm(value, digits: int = 2) -> str:
-    """Ohm.mm delta as a milli-Ohm.mm string, signed."""
-    if value is None:
-        return "n/a"
-    return f"{value * 1e3:+.{digits}f}"
-
-
 def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome], n_samples, wall, args):
     lines: list[str] = []
     add = lines.append
