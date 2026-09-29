@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test suite for defaults/hooks/methodology-inject.sh (issue #3758)
+# Test suite for .loom/hooks/methodology-inject.sh (issue #3758)
 #
-# Usage: ./defaults/hooks/tests/test-methodology-inject.sh
+# Usage: ./.loom/hooks/tests/test-methodology-inject.sh
 #
 # Covers the #3758 rework of the UserPromptSubmit methodology-injection hook:
 #   - opt-in gate: .loom/context/ absent -> silent exit 0, no output
@@ -12,8 +12,9 @@
 #   - role and topic injection are UNCHANGED (still fire every matching turn)
 #   - the hook never exits non-zero and never emits invalid JSON
 #
-# The hook under test is the canonical source at defaults/ (the version-
-# controlled source of truth), copied into an isolated temp git tree so the
+# The hook under test is the locally-vendored copy at .loom/hooks/ (this
+# installed consumer repo ships no defaults/ tree -- the vendored copy is the
+# deployed source of truth here), copied into an isolated temp git tree so the
 # hook's MAIN_ROOT resolves there (git-common-dir pins MAIN_ROOT to the temp
 # root, and .loom/logs/ markers are written there). Exit 0 = all pass, 1 = fail.
 
@@ -21,7 +22,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-SRC_HOOK="$REPO_ROOT/defaults/hooks/methodology-inject.sh"
+SRC_HOOK="$REPO_ROOT/.loom/hooks/methodology-inject.sh"
 
 PASS=0
 FAIL=0
@@ -292,12 +293,16 @@ else
     fail "methodology: fresh marker survives prune"
 fi
 
-# --- defaults/ vs .loom/ sync -----------------------------------------------
-DEPLOY_HOOK="$REPO_ROOT/.loom/hooks/methodology-inject.sh"
-if [[ -f "$DEPLOY_HOOK" ]] && diff -q "$SRC_HOOK" "$DEPLOY_HOOK" >/dev/null 2>&1; then
-    pass ".loom/ hook byte-identical to defaults/"
+# --- consumer-repo layout pin ------------------------------------------------
+# This repo ships no defaults/ tree (installed consumer repo, not the Loom
+# source repo), so a defaults/-vs-.loom/ byte-comparison is vacuous here --
+# SRC_HOOK already IS the deployed .loom/ copy. Confirm the layout expectation
+# instead; vendored-copy self-consistency is covered by the functional cases
+# above, which all exercise the .loom/hooks/ file directly.
+if [[ ! -d "$REPO_ROOT/defaults" ]]; then
+    pass "no defaults/ tree in this repo -- .loom/hooks/ vendored copy is the sole guard (as expected)"
 else
-    fail ".loom/ hook byte-identical to defaults/"
+    fail "unexpected defaults/ tree found -- re-check whether this suite should diff against it"
 fi
 
 echo "=== $PASS/$TOTAL passed ==="

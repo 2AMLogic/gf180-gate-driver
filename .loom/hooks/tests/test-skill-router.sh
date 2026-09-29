@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test suite for defaults/hooks/skill-router.sh (issue #3609)
+# Test suite for .loom/hooks/skill-router.sh (issue #3609)
 #
-# Usage: ./defaults/hooks/tests/test-skill-router.sh
+# Usage: ./.loom/hooks/tests/test-skill-router.sh
 #
 # Covers the #3609 rework of the UserPromptSubmit routing hook:
 #   - non-matching / short / slash prompts emit NO additionalContext
@@ -12,18 +12,19 @@
 #     with rjwalters/loom") no longer route
 #   - the hook never exits non-zero and never emits invalid JSON
 #
-# The hook + routing config under test are the canonical sources at
-# defaults/ (the version-controlled source of truth), copied into an isolated
-# temp tree so the hook's MAIN_ROOT resolves there (git-common-dir fails
-# outside a repo, so the BASH_SOURCE fallback locates our temp root).
-# Exit code 0 = all tests pass, 1 = failures detected.
+# The hook + routing config under test are the locally-vendored copies at
+# .loom/hooks/ and .loom/config/ (this installed consumer repo ships no
+# defaults/ tree -- the vendored copies are the deployed source of truth
+# here), copied into an isolated temp tree so the hook's MAIN_ROOT resolves
+# there (git-common-dir fails outside a repo, so the BASH_SOURCE fallback
+# locates our temp root). Exit code 0 = all tests pass, 1 = failures detected.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-SRC_HOOK="$REPO_ROOT/defaults/hooks/skill-router.sh"
-SRC_CONFIG="$REPO_ROOT/defaults/config/skill-routes.json"
+SRC_HOOK="$REPO_ROOT/.loom/hooks/skill-router.sh"
+SRC_CONFIG="$REPO_ROOT/.loom/config/skill-routes.json"
 
 PASS=0
 FAIL=0
@@ -277,29 +278,27 @@ else
 fi
 
 if grep -q "shepherd" "$SRC_CONFIG"; then
-    fail "dead shepherd route removed from defaults config"
+    fail "dead shepherd route removed from vendored config"
 else
-    pass "dead shepherd route removed from defaults config"
+    pass "dead shepherd route removed from vendored config"
 fi
 
 if grep -Eq '"/(shepherd|architect|judge|doctor|hermit|builder|curator|guide|auditor|loom)"' "$SRC_CONFIG"; then
-    fail "no un-namespaced /<role> agents in defaults config"
+    fail "no un-namespaced /<role> agents in vendored config"
 else
-    pass "all agents are namespaced /loom:<role> in defaults config"
+    pass "all agents are namespaced /loom:<role> in vendored config"
 fi
 
-# --- defaults/ vs .loom/ sync (both hook and config) ------------------------
-DEPLOY_HOOK="$REPO_ROOT/.loom/hooks/skill-router.sh"
-DEPLOY_CONFIG="$REPO_ROOT/.loom/config/skill-routes.json"
-if [[ -f "$DEPLOY_HOOK" ]] && diff -q "$SRC_HOOK" "$DEPLOY_HOOK" >/dev/null 2>&1; then
-    pass ".loom/ hook byte-identical to defaults/"
+# --- consumer-repo layout pin ------------------------------------------------
+# This repo ships no defaults/ tree (installed consumer repo, not the Loom
+# source repo), so the defaults/-vs-.loom/ byte-comparisons are vacuous here --
+# SRC_HOOK/SRC_CONFIG already ARE the deployed .loom/ copies. Confirm the
+# layout expectation instead; vendored-copy self-consistency is covered by the
+# functional cases above, which all exercise the .loom/ files directly.
+if [[ ! -d "$REPO_ROOT/defaults" ]]; then
+    pass "no defaults/ tree in this repo -- .loom/ vendored copies are the sole source (as expected)"
 else
-    fail ".loom/ hook byte-identical to defaults/"
-fi
-if [[ -f "$DEPLOY_CONFIG" ]] && diff -q "$SRC_CONFIG" "$DEPLOY_CONFIG" >/dev/null 2>&1; then
-    pass ".loom/ config byte-identical to defaults/"
-else
-    fail ".loom/ config byte-identical to defaults/"
+    fail "unexpected defaults/ tree found -- re-check whether this suite should diff against it"
 fi
 
 echo "=== $PASS/$TOTAL passed ==="

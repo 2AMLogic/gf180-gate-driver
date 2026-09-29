@@ -33,3 +33,27 @@ hooks/guard-destructive-generic.sh
 hooks/guard-destructive.sh
 hooks/guard-loom-workflow.sh
 hooks/guard-worktree-paths.sh
+#
+# WHY these 5 hook test suites are pinned (issue #282)
+# ---------------------------------------------------
+# Upstream's `defaults/hooks/tests/` sources each suite's hook under test from
+# `$REPO_ROOT/defaults/hooks/` — the correct layout for the Loom SOURCE repo,
+# which ships a defaults/ tree. This consumer repo does not, so those 5 suites
+# died at their setup `cp` and silently executed zero assertions (the other 11
+# suites already read `$REPO_ROOT/.loom/hooks/`). Issue #282 retargeted them to
+# `.loom/hooks/` and added an explicit `[[ ! -d defaults ]]` layout-pinning
+# assertion, mirroring the healthy-sibling pattern. Without this pin the next
+# `resync-installed.sh` would revert the suites to the defaults/-pathed
+# upstream text and they would fail at setup again.
+#
+# SCOPE: same as the hook pins above — blocks resync overwrite and installer
+# deletion; does not survive a full reinstall.
+#
+# Remove these entries ONLY once rjwalters/loom ships a layout-aware fix
+# (defaults/-pathed suites that fall back to `.loom/` in consumer repos) and
+# this repo has resynced to it.
+hooks/tests/test-guard-background-subagents.sh
+hooks/tests/test-guard-loom-workspace.sh
+hooks/tests/test-guard-worktree-paths.sh
+hooks/tests/test-methodology-inject.sh
+hooks/tests/test-skill-router.sh
