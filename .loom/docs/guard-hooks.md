@@ -1956,6 +1956,29 @@ LOOM_GUARD_DECISION_LOG=1 claude -p "/loom:builder" --dangerously-skip-permissio
 LOOM_GUARD_DECISION_LOG=0 <command>
 ```
 
+#### Keeping fixtures out of the log (`LOOM_GUARD_LOG_SUPPRESS`, #279)
+
+The log's value is that its `pattern` counts measure **real** autonomous-work friction. An Auditor review found the two largest counts in a live log were not friction at all but **fixtures**: ad hoc guard-debug repro sessions, run as real top-level Bash tool calls in the main checkout, whose command string happened to contain dangerous-looking fixture text (`for p in "catastrophic rm -rf pattern" …`, a `jq -n --arg cmd …` harness, SQL DDL probes). The **outer, live** `PreToolUse` hook fires on that whole string and records it — so every telemetry tick re-trips on the session that was investigating the guard, and a reviewer has to separate signal from noise by hand.
+
+Note what is *not* the source: the suites under `.loom/hooks/tests/*.sh` copy the hook into a fresh `$TMPROOT`, so their `DECISION_LOG` (derived from `SCRIPT_DIR` at runtime) already resolves inside that throwaway tree. Only the live/interactive surface needed a fix.
+
+Set `LOOM_GUARD_LOG_SUPPRESS=1` around such a session:
+
+```bash
+# A guard-debug repro whose fixture text would otherwise be recorded as friction
+LOOM_GUARD_LOG_SUPPRESS=1 bash ./my-guard-repro.sh
+```
+
+| Property | Behaviour |
+|---|---|
+| Scope | **Telemetry only.** Consulted from exactly one place — `log_guard_decision()` — which `deny()`/`ask()` call as their first statement, always `\|\| true`, and always *after* the verdict is already fixed. A suppressed run emits the **byte-identical** `permissionDecision` JSON and exit code; only the log line is skipped. There is no code path from the toggle back into the decision. |
+| Truthy values | `1` / `true` / `yes` / `on` (mirrors `LOOM_GUARD_DECISION_LOG`). Anything else — unset, empty, `0`/`false`/`no`/`off`, or an unrecognized value — means *not suppressed*, so a typo fails safe **toward** logging. |
+| Config key | **None, deliberately.** This is env-only: a committed `guards.*` value would silently blind the log for a whole repo, which is the failure mode the toggle exists to prevent. Suppression is scoped to the one invocation that opts into it. |
+| Relation to `guards.decisionLog` | **Orthogonal, additive.** It does not read, write, or cache that toggle's state — `guards.decisionLog` / `LOOM_GUARD_DECISION_LOG` resolve exactly as before. Suppress is a second, independent gate, checked first so a suppressed run does no config I/O. |
+| Schema impact | **None.** A suppressed decision produces *no line at all* — no `source`/provenance field is added — so the five documented fields remain the complete, unchanged contract for #3772's reader tooling. |
+
+Honoured identically by **both** writers (`guard-destructive-generic.sh` and `guard-loom-workflow.sh`), since they append to the same file; a toggle respected by only one would still leak fixture rows. Regression coverage, including a floor case asserting the dangerous set (force-push to `main`, `rm -rf /`, `git clean -fd`, `git checkout .`) resolves the same decision with and without the var: `.loom/hooks/tests/test-guard-decision-log-suppress.sh`.
+
 ### Autonomous Guard Defaults + Standing Per-Trigger Review Policy (#3898)
 
 A headless sweep runs under `--dangerously-skip-permissions`, where the guard `PreToolUse` hooks **fire** but an **ASK decision has no human to answer it — so it blocks**, functionally a silent deny. Every guard ASK therefore stalls autonomous work. To converge the guard toward *dangerous-only* without ever weakening a genuine safety rule, autonomous mode combines two guard defaults with a standing feedback loop.
