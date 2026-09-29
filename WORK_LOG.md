@@ -3,6 +3,15 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-09-29
+
+- **Issue #266** (closed): sim: committed corner logs contain run-to-run nondeterministic ngspice `Reference value` lines
+- **PR #270**: docs(sim): characterize ngspice Reference value corner-log nondeterminism
+- **Issue #268** (closed): Remove dead code: unused _fmt_mohmmm and baseline_worst helpers, unused sys import (~9 LOC)
+- **PR #269**: chore: remove dead code (_fmt_mohmmm, baseline_worst, unused sys import)
+- **Issue #258** (closed): Consolidate duplicated mismatch-campaign boilerplate into sim/harness
+- **PR #265**: refactor(sim): consolidate duplicated mismatch-campaign boilerplate into sim/harness
+
 ### 2026-09-23
 
 - **Issue #254** (closed): Reusable multi-row-folded power-array generator: single-layer cross-row ties do work (mirror + nest) — correcting the 'needs a second routing layer' conclusion
