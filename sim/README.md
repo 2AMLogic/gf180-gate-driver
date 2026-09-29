@@ -270,6 +270,29 @@ its own decision record — this section documents a comparability
 convention, not a re-opening of any bound (`spec/gate-driver.md` §5's
 Exceptions 1–3 are unchanged by this record).
 
+## Decision record: raw-log nondeterminism (`Reference value` progress-heartbeat lines)
+
+Issue #266: two same-machine, same-deck ngspice runs of
+`sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py --smoke` (corner
+`ss_125c_vlogic3p30v-vdrv6p00v`) produce raw `.log` files that differ
+byte-for-byte in lines of the form:
+
+```
+ Reference value :  1.44105e-07
+```
+
+with the numeric value differing by tens of percent run to run, while every
+`m_<name> = ...` line — the only thing the harness parses — and the
+resulting `records/<record-id>.md` are unaffected.
+
+| | |
+|---|---|
+| Reproduction | `sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py --smoke` run twice at `ss_125c_vlogic3p30v-vdrv6p00v` (ngspice-46, `gf180mcuD` @ open_pdks `c6d73a35f524070e85faff4a6a9eef49553ebc2b`): the two logs differ **only** in three ` Reference value :` lines; every `m_<name> = ...` line, the parsed `measurements` dict, and the record's "Deterministic negative control" / distribution tables are byte-identical between runs. |
+| What the underlying `.meas` result does | **Nothing — it is stable.** The four `trig`/`targ` measurements (`trise10_90`, `tfall10_90`, `tpdlh`, `tpdhl`, from `sim/gate-driver-core-drive/testbench/tb.json`'s `analyses`) each print their own `<name> = ... targ=... trig=...` line once, after the transient completes; those lines, and every `m_<name>` line derived from them, were confirmed byte-identical across both runs. |
+| Root cause | The `Reference value :` lines are **not** part of any `.meas` computation at all. ngspice's batch-mode transient writer (`src/frontend/outitf.c`, `OUTpData()`, both the `run->writeOut` and interactive branches) prints the current value of the analysis's reference vector — **simulation time**, for a `tran` analysis — to stdout every time `0.25` **CPU-clock seconds** (`clock()`, not simulation time) elapse while writing result points, purely as an interactive progress indicator (`ft_norefprint`/`cp_background` gate it off only in truly non-interactive contexts, which `ngspice -b` piped through `subprocess` does not trigger here). Because the gate is real CPU/wall time, not anything about the circuit, the exact simulation-time value captured at each `~250 ms` tick — and even how many ticks occur — depends on system load and scheduling, which is why the printed numbers (and occasionally the count) vary run to run on a shared host. This was traced directly against the installed `ngspice-46` source (`~/ngspice-build/ngspice-46/src/frontend/outitf.c:669,683,781,784`), not inferred. |
+| Confirms | `sim/gate-driver-core-drive`'s deck (`tran 0.1n 700n`, the full signal chain) takes ≈1 s of wall/CPU time per corner — long enough to cross one or more 250 ms ticks, hence 2-3 `Reference value` lines per log. `sim/output-stage-drive`'s deck (`tran 0.05n 160n`, driven by an ideal source, no level-shifter) completes in ≈0.2 s — under the first tick — so it **never** prints a `Reference value` line, confirming `sim/output-stage-taper-mismatch`'s absence of the pattern: it is not that its `.meas` statements are a different shape (they use the same `trig`/`targ` form as `gate-driver-core-drive`'s), it is that the underlying deck is fast enough to finish before the first heartbeat fires. |
+| Convention | `Reference value :` lines (and their count) are an **ngspice batch-mode progress heartbeat, gated on wall/CPU clock, not simulation content** — expect them to vary between any two runs of the same deck on a shared or loaded machine, and do not treat a difference confined to those lines as evidence of a changed result. A byte-diff of two `.log` files for reproduction purposes should therefore either exclude lines matching `^ Reference value :` or compare only the `m_<name> = ...` lines (which is exactly what `sim/harness/runner.py`'s `parse_measurements()`/`_MEAS_RE` already does — it never reads a `Reference value` line, so no recorded measurement has ever been affected by this). No suppression or normalization of the raw ngspice log is made at write time: the log is committed verbatim, as ngspice produced it, and this note is the reader-facing explanation for the one line class in it that is expected to be non-reproducible. |
+
 ## Append-only rule
 
 `records/*.md` files are never edited or deleted after creation. A re-run or

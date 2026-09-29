@@ -356,6 +356,15 @@ writes, under `sim/<experiment-slug>/`:
 | `netlist-snapshots/<record-id>.spice` | verbatim frozen copy of the testbench fragment, with its sha256 |
 | `corners/<record-id>/<corner-id>.log` | raw ngspice output, one file per PVT point |
 
+A re-run of the same deck on the same machine is **not** expected to
+reproduce a `.log` byte-for-byte: ngspice's batch-mode transient writer
+prints a wall/CPU-clock-gated ` Reference value :` progress line that is not
+part of any measurement, so its value (and count) legitimately varies run to
+run on a deck slow enough to cross that timer — see `sim/README.md`'s
+"Decision record: raw-log nondeterminism (`Reference value`
+progress-heartbeat lines)" (issue #266) before treating such a diff as a
+regression.
+
 Nothing is ever overwritten: the runner refuses to write over an existing
 record or snapshot, and mints a later record-id if one is somehow already
 taken. Corrections and re-runs get a new record-id and reference the prior one
