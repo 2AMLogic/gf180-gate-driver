@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Test suite for the `loom-daemon workspace` guard in
-# defaults/hooks/guard-loom-workflow.sh (issue #4326)
+# .loom/hooks/guard-loom-workflow.sh (issue #4326)
 #
-# Usage: ./defaults/hooks/tests/test-guard-loom-workspace.sh
+# Usage: ./.loom/hooks/tests/test-guard-loom-workspace.sh
 #
 # Covers the #4326 guard: `loom-daemon workspace add|remove|set-priority`
 # mutate the machine-level registry (normally the operator's real
@@ -25,15 +25,16 @@
 #   - contract: exit is always 0; ask output is well-formed JSON with
 #     permissionDecision == "ask"
 #
-# The hook under test is the canonical source at defaults/ (the version-
-# controlled source of truth), copied into an isolated temp git tree so the
+# The hook under test is the locally-vendored copy at .loom/hooks/ (this
+# installed consumer repo ships no defaults/ tree -- the vendored copy is the
+# deployed source of truth here), copied into an isolated temp git tree so the
 # hook's REPO_ROOT/HOOK_ERROR_LOG resolve there. Exit 0 = all pass, 1 = fail.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-SRC_HOOK="$REPO_ROOT/defaults/hooks/guard-loom-workflow.sh"
+SRC_HOOK="$REPO_ROOT/.loom/hooks/guard-loom-workflow.sh"
 
 PASS=0
 FAIL=0
@@ -53,7 +54,7 @@ chmod +x "$TMPROOT/.loom/hooks/guard-loom-workflow.sh"
 # resolver at the equivalent installed-layout path (mirrors
 # test-guard-worktree-paths.sh) so decision_log_enabled() exercises the real
 # tiered resolution rather than silently no-op'ing.
-cp "$REPO_ROOT/defaults/scripts/lib/config-resolver.sh" "$TMPROOT/.loom/scripts/lib/config-resolver.sh"
+cp "$REPO_ROOT/.loom/scripts/lib/config-resolver.sh" "$TMPROOT/.loom/scripts/lib/config-resolver.sh"
 HOOK="$TMPROOT/.loom/hooks/guard-loom-workflow.sh"
 
 pass() { PASS=$((PASS + 1)); TOTAL=$((TOTAL + 1)); printf "${GREEN}PASS${NC} %s\n" "$1"; }
@@ -203,12 +204,16 @@ else
 fi
 rm -rf "$NOJQ_DIR"
 
-# --- defaults/ vs .loom/ sync ------------------------------------------------
-DEPLOY_HOOK="$REPO_ROOT/.loom/hooks/guard-loom-workflow.sh"
-if [[ -f "$DEPLOY_HOOK" ]] && diff -q "$SRC_HOOK" "$DEPLOY_HOOK" >/dev/null 2>&1; then
-    pass ".loom/ hook byte-identical to defaults/"
+# --- consumer-repo layout pin ------------------------------------------------
+# This repo ships no defaults/ tree (installed consumer repo, not the Loom
+# source repo), so a defaults/-vs-.loom/ byte-comparison is vacuous here --
+# SRC_HOOK already IS the deployed .loom/ copy. Confirm the layout expectation
+# instead; vendored-copy self-consistency is covered by the functional cases
+# above, which all exercise the .loom/hooks/ file directly.
+if [[ ! -d "$REPO_ROOT/defaults" ]]; then
+    pass "no defaults/ tree in this repo -- .loom/hooks/ vendored copy is the sole guard (as expected)"
 else
-    fail ".loom/ hook byte-identical to defaults/"
+    fail "unexpected defaults/ tree found -- re-check whether this suite should diff against it"
 fi
 
 echo "=== $PASS/$TOTAL passed ==="

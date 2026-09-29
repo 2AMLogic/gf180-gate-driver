@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Test suite for defaults/hooks/guard-background-subagents.sh (issues #4257, #4389)
+# Test suite for .loom/hooks/guard-background-subagents.sh (issues #4257, #4389)
 #
-# Usage: ./defaults/hooks/tests/test-guard-background-subagents.sh
+# Usage: ./.loom/hooks/tests/test-guard-background-subagents.sh
 #
 # Covers the Stop-hook mechanical backstop for the #3822/#4257/#4389 hazard: an
 # orchestrator ending its turn in headless `claude -p` mode kills every
@@ -54,8 +54,9 @@
 #   - contract: block output is valid JSON with decision=="block" and a
 #     non-empty reason; exit code is always 0
 #
-# The hook under test is the canonical source at defaults/ (the version-
-# controlled source of truth), copied into an isolated temp git tree so the
+# The hook under test is the locally-vendored copy at .loom/hooks/ (this
+# installed consumer repo ships no defaults/ tree -- the vendored copy is the
+# deployed source of truth here), copied into an isolated temp git tree so the
 # hook's MAIN_ROOT (used only for the config-toggle lookup) resolves there.
 # Exit 0 = all pass, 1 = fail.
 
@@ -63,7 +64,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-SRC_HOOK="$REPO_ROOT/defaults/hooks/guard-background-subagents.sh"
+SRC_HOOK="$REPO_ROOT/.loom/hooks/guard-background-subagents.sh"
 
 PASS=0
 FAIL=0
@@ -794,6 +795,16 @@ else
     fail "jq absent -> allow (fail-open) (got exit=$code output=$out)"
 fi
 rm -rf "$NOJQ_DIR"
+
+# --- consumer-repo layout pin ------------------------------------------------
+# This repo ships no defaults/ tree (installed consumer repo, not the Loom
+# source repo), so .loom/hooks/ is the sole copy of the guard -- confirm that
+# expectation instead of silently skipping it.
+if [[ ! -d "$REPO_ROOT/defaults" ]]; then
+    pass "no defaults/ tree in this repo -- .loom/hooks/ vendored copy is the sole guard (as expected)"
+else
+    fail "unexpected defaults/ tree found -- re-check whether this suite should diff against it"
+fi
 
 echo "=== $PASS/$TOTAL passed ==="
 [[ "$FAIL" -eq 0 ]]
