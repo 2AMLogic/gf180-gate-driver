@@ -2206,6 +2206,97 @@ function unmask_ws(s) {
 #      folded in here.
 # =============================================================================
 _MASKHEREDOC_AWK='
+# ---------------------------------------------------------------------------
+# CARRIED-OVER QUOTE STATE ACROSS EMBEDDED NEWLINES (#272)
+#
+# Every mask_heredoc_bodies*() variant below judges ONE PHYSICAL LINE at a
+# time. When a double- (or single-) quoted string opened on an EARLIER line is
+# still open at the start of this one, the leading bytes of this line are the
+# TAIL of that string, not shell syntax -- and before #272 they were read as
+# shell anyway. The commonest real shape,
+#
+#     python3 -c "<newline> ...python... <newline>"; cat > f <<QUOTED_EOF
+#     <body>
+#     QUOTED_EOF
+#
+# left the opener line as `"; cat > f <<...`. _interp_opener() split that on
+# `;`, took the lone closing quote character as a whole command segment,
+# reduced it to an EMPTY command word, and -- by its deliberate fail-closed
+# tail (#5226: an unresolvable command word could be a shell) -- reported the
+# opener as INTERPRETER-FED. So the body of an ordinary inert `cat > file`
+# sink stayed VISIBLE to the write-confinement scan and every write idiom
+# inside it was judged as live code. The identical heredoc WITHOUT the
+# multi-line string in front masked normally, which is what made this a false
+# DENY rather than a policy (telemetry 2026-09-29, issue #272).
+#
+# heredoc_line_carry() walks the WHOLE buffer ONCE and fills carry[i] with the
+# number of LEADING bytes of line i that belong to such a carried-over quoted
+# span: 0 when the line starts outside every quote, the whole line length when
+# the span does not close on it, otherwise the offset of its closing quote.
+# _hd_visible_line() then blanks exactly those bytes to SPACES -- preserving
+# every byte OFFSET on the line, so heredoc_delim_at() /
+# heredoc_delim_literal_at() / heredoc_delim_quoted_at() keep working against
+# the same `p` the `<<` scan found, while the interpreter tests see only the
+# part of the line the outer shell itself parses as syntax.
+#
+# NARROW BY CONSTRUCTION. Only the carried-over PREFIX is blanked: quoting
+# that opens AND closes on the same line is untouched, so this is NOT the
+# structural fix for KNOWN LIMITATIONS #2 above (a `<<TOKEN` sitting inside a
+# single-line quoted string), which stays open. The interpreter-fed visibility
+# contract (#5351, gf180-gate-driver#68) is likewise untouched: once the
+# carried-over prefix is out of the way, an opener line whose REAL command word
+# is a shell (`"; bash <<EOF`) still reports interpreter-fed and its body still
+# stays visible to the confinement scan.
+function heredoc_line_carry(s, lines, nl, carry,   len, i, c, q, ln, col, esc, SQ, DQ) {
+    SQ = sprintf("%c", 39)    # single quote
+    DQ = sprintf("%c", 34)    # double quote
+    len = length(s)
+    q = ""
+    esc = 0
+    ln = 1
+    col = 0
+    carry[1] = 0
+    for (i = 1; i <= len; i++) {
+        c = substr(s, i, 1)
+        if (c == "\n") {
+            ln++
+            col = 0
+            # -1 is the "still inside a quoted span" sentinel, resolved to a
+            # concrete byte count below (either the closing-quote offset found
+            # while scanning this line, or the full line length).
+            carry[ln] = (q == "") ? 0 : -1
+            esc = 0
+            continue
+        }
+        col++
+        if (esc) { esc = 0; continue }
+        if (q == "") {
+            if (c == "\\") { esc = 1; continue }
+            if (c == SQ || c == DQ) q = c
+            continue
+        }
+        if (q == DQ) {
+            # Inside double quotes a backslash still escapes the next byte.
+            if (c == "\\") { esc = 1; continue }
+            if (c == DQ) { q = ""; if (carry[ln] == -1) carry[ln] = col }
+            continue
+        }
+        # Inside single quotes NOTHING is special but the closing quote.
+        if (c == SQ) { q = ""; if (carry[ln] == -1) carry[ln] = col }
+    }
+    for (i = 1; i <= nl; i++) {
+        if (carry[i] == -1) carry[i] = length(lines[i])
+        else carry[i] = carry[i] + 0
+    }
+}
+# Blank the first ncarry bytes of line to spaces, leaving its LENGTH and every
+# later byte offset unchanged. ncarry <= 0 returns the line untouched.
+function _hd_visible_line(line, ncarry,   n) {
+    if (ncarry <= 0) return line
+    n = length(line)
+    if (ncarry >= n) return sprintf("%" n "s", "")
+    return sprintf("%" ncarry "s", "") substr(line, ncarry + 1)
+}
 # Return the heredoc delimiter opened by the `<<` at byte offset p in line,
 # or "" when that `<<` is not a recognized heredoc opener.
 function heredoc_delim_at(line, p,   start, qc, c, wordend, d, SQ, DQ) {
@@ -2233,21 +2324,26 @@ function heredoc_delim_at(line, p,   start, qc, c, wordend, d, SQ, DQ) {
     if (qc == "" && d ~ /^[0-9]/) return ""
     return d
 }
-function mask_heredoc_bodies(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+function mask_heredoc_bodies(s,   out, lines, nl, i, j, line, vline, trimmed, body, delim, closeat, p, off, MASKC, carry) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
+    heredoc_line_carry(s, lines, nl, carry)
     for (i = 1; i <= nl; i++) {
         line = lines[i]
+        # Opener decisions are made against vline -- this line with any
+        # carried-over quoted-string prefix blanked to spaces (#272). Byte
+        # offsets are preserved, and lines[] itself is never modified here.
+        vline = _hd_visible_line(line, carry[i])
         off = 1
         # Consider every `<<` on this line, left to right, until one is
         # confirmed to open a CLOSED heredoc block.
         while (1) {
-            p = index(substr(line, off), "<<")
+            p = index(substr(vline, off), "<<")
             if (p == 0) break
             p = off + p - 1        # absolute offset of `<<` within line
             off = p + 2            # where the next candidate search resumes
-            delim = heredoc_delim_at(line, p)
+            delim = heredoc_delim_at(vline, p)
             if (delim == "") continue
             # PASS 1 -- locate the terminating delimiter line. A `<<-` opener
             # permits (and strips) leading tabs on the delimiter line; only
@@ -2445,19 +2541,21 @@ function is_shell_interpreter_opener(line) {
 # parses. Plain mask_heredoc_bodies() above is retained as the reference
 # primitive (identical minus the interpreter carve-out) but now has no
 # runtime caller.
-function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, vline, trimmed, body, delim, closeat, p, off, MASKC, carry) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
+    heredoc_line_carry(s, lines, nl, carry)
     for (i = 1; i <= nl; i++) {
         line = lines[i]
+        vline = _hd_visible_line(line, carry[i])   # #272
         off = 1
         while (1) {
-            p = index(substr(line, off), "<<")
+            p = index(substr(vline, off), "<<")
             if (p == 0) break
             p = off + p - 1
             off = p + 2
-            delim = heredoc_delim_at(line, p)
+            delim = heredoc_delim_at(vline, p)
             if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
@@ -2466,7 +2564,7 @@ function mask_heredoc_bodies_selective(s,   out, lines, nl, i, j, line, trimmed,
                 if (trimmed == delim) { closeat = j; break }
             }
             if (closeat == 0) continue
-            if (!is_interpreter_opener(line)) {
+            if (!is_interpreter_opener(vline)) {
                 for (j = i + 1; j < closeat; j++) {
                     body = lines[j]
                     gsub(/./, MASKC, body)
@@ -2554,19 +2652,21 @@ function heredoc_delim_literal_at(line, p,   start, c, d, SQ, DQ, literal, len, 
 # and extract_rm_targets() read, #5216) -- deliberately NOT reused for
 # COMMAND_HEREDOC_MASKED/COMMAND_GH_API_RAWFIELD_SCAN above, which keeps calling
 # mask_heredoc_bodies_selective() unchanged (out of scope for #58).
-function mask_heredoc_bodies_literal_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+function mask_heredoc_bodies_literal_only(s,   out, lines, nl, i, j, line, vline, trimmed, body, delim, closeat, p, off, MASKC, carry) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
+    heredoc_line_carry(s, lines, nl, carry)
     for (i = 1; i <= nl; i++) {
         line = lines[i]
+        vline = _hd_visible_line(line, carry[i])   # #272
         off = 1
         while (1) {
-            p = index(substr(line, off), "<<")
+            p = index(substr(vline, off), "<<")
             if (p == 0) break
             p = off + p - 1
             off = p + 2
-            delim = heredoc_delim_literal_at(line, p)
+            delim = heredoc_delim_literal_at(vline, p)
             if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
@@ -2575,7 +2675,7 @@ function mask_heredoc_bodies_literal_only(s,   out, lines, nl, i, j, line, trimm
                 if (trimmed == delim) { closeat = j; break }
             }
             if (closeat == 0) continue
-            if (!is_interpreter_opener(line)) {
+            if (!is_interpreter_opener(vline)) {
                 for (j = i + 1; j < closeat; j++) {
                     body = lines[j]
                     gsub(/./, MASKC, body)
@@ -2625,19 +2725,21 @@ function heredoc_delim_quoted_at(line, p,   start, c, SQ, DQ) {
 # nothing for the catastrophic-tier / write-confinement callers, which keep
 # calling the unquoted-delimiter-inclusive original unchanged; this variant
 # is used ONLY for the ASK-tier COMMAND_ASK_SCAN heredoc-masking step.
-function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC) {
+function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, line, vline, trimmed, body, delim, closeat, p, off, MASKC, carry) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
+    heredoc_line_carry(s, lines, nl, carry)
     for (i = 1; i <= nl; i++) {
         line = lines[i]
+        vline = _hd_visible_line(line, carry[i])   # #272
         off = 1
         while (1) {
-            p = index(substr(line, off), "<<")
+            p = index(substr(vline, off), "<<")
             if (p == 0) break
             p = off + p - 1
             off = p + 2
-            delim = heredoc_delim_at(line, p)
+            delim = heredoc_delim_at(vline, p)
             if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
@@ -2646,7 +2748,7 @@ function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, li
                 if (trimmed == delim) { closeat = j; break }
             }
             if (closeat == 0) continue
-            if (!is_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+            if (!is_interpreter_opener(vline) && heredoc_delim_quoted_at(vline, p)) {
                 for (j = i + 1; j < closeat; j++) {
                     body = lines[j]
                     gsub(/./, MASKC, body)
@@ -2698,19 +2800,21 @@ function mask_heredoc_bodies_selective_quoted_only(s,   out, lines, nl, i, j, li
 # Used ONLY by the extract_write_targets() write-confinement scan; the
 # catastrophic-tier caller keeps calling mask_heredoc_bodies_selective()
 # unchanged.
-function mask_heredoc_bodies_selective_shell_only(s,   out, lines, nl, i, j, line, trimmed, body, delim, closeat, p, off, MASKC, maskit) {
+function mask_heredoc_bodies_selective_shell_only(s,   out, lines, nl, i, j, line, vline, trimmed, body, delim, closeat, p, off, MASKC, maskit, carry) {
     MASKC = sprintf("%c", 23) # ETB -- placeholder for inert heredoc-body text
     nl = split(s, lines, "\n")
     if (nl == 0) return ""
+    heredoc_line_carry(s, lines, nl, carry)
     for (i = 1; i <= nl; i++) {
         line = lines[i]
+        vline = _hd_visible_line(line, carry[i])   # #272
         off = 1
         while (1) {
-            p = index(substr(line, off), "<<")
+            p = index(substr(vline, off), "<<")
             if (p == 0) break
             p = off + p - 1
             off = p + 2
-            delim = heredoc_delim_at(line, p)
+            delim = heredoc_delim_at(vline, p)
             if (delim == "") continue
             closeat = 0
             for (j = i + 1; j <= nl; j++) {
@@ -2720,11 +2824,11 @@ function mask_heredoc_bodies_selective_shell_only(s,   out, lines, nl, i, j, lin
             }
             if (closeat == 0) continue
             maskit = 0
-            if (!is_interpreter_opener(line)) {
+            if (!is_interpreter_opener(vline)) {
                 # Inert sink body (`cat <<EOF`, `--body "$(cat <<EOF ...)"`):
                 # masked exactly as before (#4914/#5000/#5181).
                 maskit = 1
-            } else if (!is_shell_interpreter_opener(line) && heredoc_delim_quoted_at(line, p)) {
+            } else if (!is_shell_interpreter_opener(vline) && heredoc_delim_quoted_at(vline, p)) {
                 # Non-shell interpreter + quoted delimiter: no shell layer
                 # ever parses this body (gf180-gate-driver#68).
                 maskit = 1
@@ -5406,7 +5510,34 @@ extract_write_targets() {
     # file_standins[] so resolve_var() resolves only DIRECT `$NAME` writes
     # (`$NAME/sub` stays the fail-closed unresolved deny -- a file has no
     # children).
-    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, parent, fval) {
+    #
+    # A `;`-TERMINATED ASSIGNMENT WORD (#272). qsplit() does not segment after
+    # a quoted command substitution, so the one-line scratch-sandbox idiom
+    #   T="$(mktemp -d)"; trap '"'"'rm -rf "$T"'"'"' EXIT
+    # arrives here as ONE segment with the `; trap ...` still attached. The
+    # word-end rule below therefore also accepts a tail that begins with `;`
+    # (a genuine word terminator in every shell) and, when it does, consumes
+    # the separator run along with the assignment word. Before #272 that tail
+    # was refused, the word fell through to the generic whitespace-bounded
+    # scan, and the value stored for T was the TRUNCATED `$(mktemp` -- which
+    # any later `"$T/..."` write target then phantom-substituted into
+    # `$(mktemp/...` and denied at the -unresolved-var tier. That is the exact
+    # #144 truncation signature reaching the same recognizer by a new
+    # syntactic route (first post-#252 recurrence, telemetry 2026-09-29).
+    #
+    # Consuming the `;` too is load-bearing in BOTH directions:
+    #   - it lets a SECOND assignment on the same line
+    #     (`A="$(mktemp -d)"; B="$(mktemp -d)"`) still be seen by the caller'"'"'s
+    #     assignment loop, and
+    #   - it keeps a real command after the separator
+    #     (`T="$(mktemp -d)"; cp /etc/hosts <main-checkout>/evil`) at the HEAD
+    #     of the leftover segment, where the write-idiom scan reads its command
+    #     word. Leaving a bare `;` token in front of `cp` would hide that write
+    #     from the scan entirely -- a confinement bypass, not a false positive.
+    # The same-segment reassignment refusal below still runs over the FULL
+    # remaining tail (before any separator is consumed), so
+    # `T="$(mktemp -d)"; T=/elsewhere` stays unrecognized and denied.
+    function mktempd_assign_len(seg,   vname, val, dq, cpos, inner, tail, rest, parent, fval) {
         if (!match(seg, /^[A-Za-z_][A-Za-z0-9_]*=/)) return 0
         vname = substr(seg, 1, RLENGTH - 1)
         val = substr(seg, RLENGTH + 1)
@@ -5434,8 +5565,9 @@ extract_write_targets() {
         }
         # The assignment WORD must end here. A concatenation
         # (`X=$(mktemp -d)/sub`, `X=$(mktemp -d)$SUFFIX`) is a different value
-        # than the sandbox root and is left unrecognized.
-        if (tail != "" && tail !~ /^[ \t]/) return 0
+        # than the sandbox root and is left unrecognized. Whitespace and `;`
+        # (#272, see the header note) are the only accepted terminators.
+        if (tail != "" && tail !~ /^[ \t;]/) return 0
         # SAME-SEGMENT REASSIGNMENT IS UNRESOLVABLE. A name re-assigned in a
         # LATER segment is already poisoned to the AMBIG sentinel by
         # store_assign(), but a quoted command substitution is one shape
@@ -5446,10 +5578,17 @@ extract_write_targets() {
         # back onto the generic (truncating) scan, i.e. exactly the fail-closed
         # deny it gets today.
         if (tail ~ ("(^|[^A-Za-z0-9_])" vname "=")) return 0
+        # `rest` is what the caller keeps: the tail with the `;` separator run
+        # (and the whitespace after it) consumed, so the next command word --
+        # or the next assignment -- is at the head of the leftover segment.
+        # For a whitespace-terminated word this is a no-op and the consumed
+        # length is byte-for-byte what it was before #272.
+        rest = tail
+        sub(/^;+[ \t]*/, "", rest)
         parent = mktempd_parent(inner)
         if (parent != "") {
             store_assign(vname, mktempd_standin(parent))
-            return length(seg) - length(tail)
+            return length(seg) - length(rest)
         }
         # Not a `mktemp -d` sandbox: try the bare-`mktemp` FILE shape (#248).
         # Every -d spelling was already consumed (or refused) by
@@ -5460,7 +5599,7 @@ extract_write_targets() {
         fval = mktempf_standin(parent)
         file_standins[vname] = fval
         store_assign(vname, fval)
-        return length(seg) - length(tail)
+        return length(seg) - length(rest)
     }
     # The stand-in path itself: a fixed child of the parent. Never the path the
     # write will really have (that suffix is random by design) -- only a path
