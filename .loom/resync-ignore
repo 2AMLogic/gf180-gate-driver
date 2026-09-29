@@ -57,3 +57,26 @@ hooks/tests/test-guard-loom-workspace.sh
 hooks/tests/test-guard-worktree-paths.sh
 hooks/tests/test-methodology-inject.sh
 hooks/tests/test-skill-router.sh
+#
+# WHY docs/guard-hooks.md is pinned (fleet-resync unblock, 2026-09-29)
+# --------------------------------------------------------------------
+# The reference doc for the pinned guard hooks above carries two repo-local
+# sections describing repo-local hook behaviour that upstream lacks:
+#   - 6257ef2 (#260): the seventh refinement pass, masking force-push phrases
+#     in a `NAME=<quoted value>` assignment position;
+#   - 6eb6f54 (#279): the `LOOM_GUARD_LOG_SUPPRESS` toggle (implemented in the
+#     pinned guard-destructive-generic.sh / guard-loom-workflow.sh).
+# Neither exists in rjwalters/loom's defaults/docs/guard-hooks.md, so every
+# `resync-installed.sh` run hit its local-fix guard ("would remove 37 line(s)
+# unique to the installed copy — needs --force"), exited non-zero, and the
+# scheduled fleet-resync FAILED on all four hosts, stranding every other
+# surface update.
+#
+# COST: this copy no longer receives upstream doc updates (e.g. the #9108
+# guard-mcp-tools.sh section). It documents the hooks that actually run here,
+# which are themselves pinned, so that is the accurate trade.
+#
+# Unpin once the equivalent fix lands in rjwalters/loom's defaults/ tree
+# (both #260's assignment-literal masking and #279's LOOM_GUARD_LOG_SUPPRESS
+# documented upstream), then let resync overwrite this file.
+docs/guard-hooks.md
