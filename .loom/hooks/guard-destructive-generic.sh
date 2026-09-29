@@ -100,12 +100,26 @@ log_hook_error() {
 # invoke it as `log_guard_decision ... || true` so it can never trip the ERR
 # trap.
 #
+# TEST/REPRO SUPPRESSION (issue #279): `LOOM_GUARD_LOG_SUPPRESS=1` makes this
+# function a no-op — nothing is appended to DECISION_LOG — while leaving the
+# deny/ask verdict, its JSON, and the exit code byte-for-byte unchanged. It is
+# a TELEMETRY-ONLY switch and is deliberately NOT part of the schema above: no
+# `source` field is written, so every line in the log stays exactly the five
+# documented fields and #3772's reader tooling sees no new key. See
+# decision_log_suppressed() below for the resolution rules (env-only, no config
+# key, no interaction with decision_log_enabled()).
+#
 # One-liner to summarize fires by pattern (AC — full tooling is #3772):
 #   jq -r '.pattern' .loom/logs/guard-decisions.log | sort | uniq -c | sort -rn
 # =============================================================================
 log_guard_decision() {
     # Args: <decision> <tier> <pattern-tag>. The command is read from the global
     # $COMMAND and redacted here. Returns 0 unconditionally.
+    #
+    # Suppression is checked FIRST — before the decision_log_enabled() config
+    # read — so a suppressed run does no config I/O at all and the two toggles
+    # stay orthogonal (suppress is not an "off" value for guards.decisionLog).
+    decision_log_suppressed && return 0
     decision_log_enabled || return 0
     local decision="$1" tier="$2" tag="${3:-$1}"
     local ts redacted line
@@ -1135,6 +1149,57 @@ decision_log_enabled() {
         _DECISION_LOG_CACHE="$enabled"
     fi
     [[ "$_DECISION_LOG_CACHE" == "true" ]]
+}
+
+# =============================================================================
+# Decision-log TEST/REPRO SUPPRESSION (issue #279) — telemetry only.
+#
+# Problem: the decision log's job is to measure real autonomous-work friction,
+# but the two largest pattern counts observed in a live log were FIXTURES — ad
+# hoc guard-debug repro sessions run as real top-level Bash tool calls in the
+# main checkout, whose command string happens to contain dangerous-looking
+# fixture text (`for p in "catastrophic rm -rf pattern" …`, a `jq -n --arg cmd
+# …` harness, a `DROP TAB``LE` probe). The OUTER, live PreToolUse hook fires on
+# that whole string and records it, so every telemetry review re-trips on the
+# session that was investigating the guard. (The formal suite under
+# .loom/hooks/tests/*.sh is NOT the source: it copies this hook into a fresh
+# $TMPROOT, so its DECISION_LOG — derived from SCRIPT_DIR — already resolves
+# inside that throwaway tree.)
+#
+# Fix: an explicit, opt-in context flag the human/agent driving such a session
+# sets around it.
+#
+#   LOOM_GUARD_LOG_SUPPRESS=1 <the repro command>
+#
+# Deliberate design constraints:
+#   * ENFORCEMENT IS UNTOUCHED. This is consulted from exactly one place —
+#     log_guard_decision() — which deny()/ask() call AFTER the verdict is
+#     already decided and always as `|| true`. A suppressed run produces the
+#     identical permissionDecision JSON and the identical exit code. It can
+#     never turn a DENY into an allow; there is no code path from here back
+#     into the decision.
+#   * ENV-ONLY, BY DESIGN. There is deliberately NO guards.* config key: a
+#     committed config value would silently blind the log for a whole repo,
+#     which is the failure mode this exists to prevent. Suppression must be
+#     scoped to the one invocation that opts into it.
+#   * ORTHOGONAL to decision_log_enabled(). It does not read, write, or cache
+#     that toggle's state — guards.decisionLog / LOOM_GUARD_DECISION_LOG keep
+#     resolving exactly as before. Suppress is a second, independent gate.
+#   * NOT CACHED. Unlike decision_log_enabled() there is no config read to
+#     amortize (one bash `case` on an env var, zero forks), and a per-process
+#     cache would buy nothing in a hook that exits after one decision.
+#
+# Truthy values mirror decision_log_enabled()'s LOOM_GUARD_DECISION_LOG
+# parsing (1/true/yes/on) so the two env vars read consistently. Anything
+# else — unset, empty, 0/false/no/off, or an unrecognized value — means NOT
+# suppressed, i.e. today's behaviour is the default and a typo fails safe
+# toward logging rather than toward silence.
+# =============================================================================
+decision_log_suppressed() {
+    case "${LOOM_GUARD_LOG_SUPPRESS:-}" in
+        1|true|yes|on) return 0 ;;
+        *)             return 1 ;;
+    esac
 }
 
 # =============================================================================

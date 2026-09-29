@@ -722,6 +722,11 @@ mask_command_positional_args() {
 #
 # Schema (STABLE — matches guard-destructive.sh):
 #   {"ts","decision":"deny","pattern":"<tag>","tier":"catastrophic","command":"<redacted>"}
+#
+# LOOM_GUARD_LOG_SUPPRESS=1 suppresses the write entirely for one invocation
+# (issue #279) — see decision_log_suppressed() below. It adds NO field to the
+# schema above; a suppressed decision produces no line at all, so the five
+# fields remain the complete, unchanged contract.
 # =============================================================================
 _DECISION_LOG_CACHE=""
 decision_log_enabled() {
@@ -744,6 +749,23 @@ decision_log_enabled() {
         _DECISION_LOG_CACHE="$enabled"
     fi
     [[ "$_DECISION_LOG_CACHE" == "true" ]]
+}
+
+# Test/repro suppression (issue #279) — kept byte-identical in semantics to
+# guard-destructive-generic.sh's decision_log_suppressed(). Both guards append
+# to the SAME .loom/logs/guard-decisions.log, so LOOM_GUARD_LOG_SUPPRESS must
+# mean the same thing to both; a toggle honoured by one writer and ignored by
+# the other would still leak fixture rows into the file it is meant to keep
+# clean. Telemetry only: consulted solely from log_guard_decision(), which
+# runs after the deny verdict is already fixed, so enforcement is unchanged.
+# Env-only (no guards.* key), not cached, truthy set mirrors
+# LOOM_GUARD_DECISION_LOG's. See that sibling function's comment block for the
+# full rationale.
+decision_log_suppressed() {
+    case "${LOOM_GUARD_LOG_SUPPRESS:-}" in
+        1|true|yes|on) return 0 ;;
+        *)             return 1 ;;
+    esac
 }
 
 # =============================================================================
@@ -791,6 +813,11 @@ workspace_registry_guard_enabled() {
 log_guard_decision() {
     # Args: <decision> <tier> <pattern-tag>. Command read from global $COMMAND
     # and redacted here. Returns 0 unconditionally.
+    #
+    # Suppression checked FIRST, before the decision_log_enabled() config read,
+    # so a suppressed run does no config I/O and the two toggles stay
+    # orthogonal (#279).
+    decision_log_suppressed && return 0
     decision_log_enabled || return 0
     local decision="$1" tier="$2" tag="${3:-$1}"
     local ts redacted line
