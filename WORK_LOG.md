@@ -3,6 +3,54 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-09-23
+
+- **Issue #254** (closed): Reusable multi-row-folded power-array generator: single-layer cross-row ties do work (mirror + nest) — correcting the 'needs a second routing layer' conclusion
+- **PR #255**: Add reusable folded, cross-row-tied power-array generator (#254)
+- **Issue #249** (closed): mask_ask_positional_args() shares the escaped-quote close-scan defect fixed for the catastrophic tier in #247
+- **PR #253**: fix: model escaped quotes in ask-tier positional and echo mask close scans
+- **Issue #248** (closed): Guard decision review: worktree-write-confinement-unresolved-var blocks the mktemp/heredoc issue-filing path
+- **PR #252**: fix: resolve direct writes to bare-mktemp file stand-ins in write confinement
+
+### 2026-09-22
+
+- **Issue #247** (closed): Guard decision review: force-push scan false-positives when trigger text is merely quoted (refine literal masking)
+- **PR #250**: fix: model escaped quotes in catastrophic positional-arg mask close scan
+- **Issue #244** (closed): Guard decision: force-push-to-main literal masking misses quoted for-loop string literals (post-#134 residual)
+- **PR #246**: fix(guard): mask quoted for-loop word-list literals in force-push scan
+
+### 2026-09-21
+
+- **Issue #242** (closed): layout/erc: add a negative control for the supply-island ERC verdict
+- **PR #243**: test(layout): add ERC supply-island negative control
+- **Issue #239** (closed): Commit a klt signoff block manifest so this block's T1 state is graded, not hand-read
+- **PR #240**: feat(signoff): grade this block's T1 state via a klt signoff manifest
+- **Issue #238** (closed): T1 item 11 (power delivery, structural): no klt erc supply spec or report in this repo
+- **PR #241**: feat(layout): add klt erc supply spec and item-11 ERC evidence
+
+### 2026-09-15
+
+- **Issue #237** (closed): Champion: Merge-Risk Hold Digest
+
+### 2026-09-10
+
+- **Issue #235** (closed): sim: post-layout re-verification of the level shifter's oxide-safety claims (spec §4 cascode clamp + §5 Exception 1 `inb` bound) against the extracted gate_driver_core DUT
+- **PR #236**: test: post-layout PVT re-verification of level-shifter oxide safety
+
+### 2026-09-09
+
+- **Issue #233** (closed): docs: refresh design/gate-driver-characterization.md to cite the 2026-08-26 complete-block post-layout (with UVLO) records
+- **PR #234**: docs: refresh gate-driver-characterization.md to cite 2026-08-26 complete-block post-layout (with UVLO) records
+- **Issue #22** (closed): Track the gap to T1 sim-validated / bronze (klayout-tools design-evidence tiers)
+
+### 2026-09-08
+
+- **Issue #232** (closed): Champion: Merge-Risk Hold Digest
+
+### 2026-09-02
+
+- **Issue #218** (closed): Champion: Merge-Risk Hold Digest
+
 ### 2026-08-17
 
 - **Issue #122** (closed): Guard decision: ask-tier git-clean-fd substring still fires on backtick-quoted example text inside a $(cat <<EOF …) --body heredoc
