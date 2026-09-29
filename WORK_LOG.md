@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-09-29
 
+- **Issue #260** (closed): Guard telemetry: force-push DENY fires on guard-regression test fixtures, not real pushes
+- **PR #273**: fix(guard): mask assignment-literal force-push phrases in fixture commands
 - **Issue #266** (closed): sim: committed corner logs contain run-to-run nondeterministic ngspice `Reference value` lines
 - **PR #270**: docs(sim): characterize ngspice Reference value corner-log nondeterminism
 - **Issue #268** (closed): Remove dead code: unused _fmt_mohmmm and baseline_worst helpers, unused sys import (~9 LOC)
