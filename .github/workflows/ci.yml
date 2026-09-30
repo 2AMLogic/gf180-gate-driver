@@ -215,6 +215,7 @@ jobs:
           bash .loom/hooks/tests/test-guard-git-clean-scope.sh
           bash .loom/hooks/tests/test-strip-literal-text-bsq.sh
           bash .loom/hooks/tests/test-guard-catastrophic-rm-heredoc.sh
+          bash .loom/hooks/tests/test-guard-catastrophic-body-prose.sh
           bash .loom/hooks/tests/test-guard-heredoc-interpreter-masking.sh
           bash .loom/hooks/tests/test-guard-destructive-sed-bsd-inplace.sh
           bash .loom/hooks/tests/test-guard-sql-ddl-jq-prose.sh
