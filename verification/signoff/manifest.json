@@ -13,6 +13,10 @@
     "8": {
       "file": "verification/signoff/gate-driver-characterization.generic.json",
       "content_hash": "sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9"
-    }
+    },
+    "11": [
+      "layout/erc/reports/gate_driver_core/20261001-231815-1ac9445.erc.json",
+      "layout/lvs/reports/gate_driver_core/20260921-154640-86d17b3.lvs.json"
+    ]
   }
 }
