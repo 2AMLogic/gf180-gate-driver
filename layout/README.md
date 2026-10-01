@@ -743,15 +743,23 @@ future reader re-running it must know them:
   out, echoed in `provenance.devices` with `source: "deck"`. A klt build
   predating `--deck` (before klayout-tools#2217) exits 2 on this runner —
   that is a tool-version fact, not a layout failure.
-- **`erc.missing_tie` is not computed** — the spec ships without `ties[]`
-  per issue #238, an absence of evidence rather than evidence of absence
-  (and this block's split-rail well topology is not expressible in the
-  schema's one-net-per-tie form anyway; see the spec's `_comment` for the
-  full reasoning). The well-tie evidence standing in for it is the item-4
-  LVS closure: every one of the 1769 drawn transistors has a real, drawn,
+- **`erc.missing_tie` is computed — zero findings** — the spec declares
+  `ties[]` for every well/substrate class this block draws (issue #256):
+  the two split-rail Nwell classes selected apart by the Dualgate marker
+  (`well_requires`/`well_excludes`, klayout-tools#2339 — 1 island on
+  VDD_LOGIC, 14 on VDD_DRV), the seventeen LVPWELL patches on GND_DRV, and
+  the native substrate under the 3.3 V logic asserted with `well_layer:
+  null` + `well_boxes` (klayout-tools#2255). Every class grades `checked`
+  with none skipped, and the guard ring and resistor block are
+  deliberately outside the asserted regions — see the spec's `_comment`
+  for the full reasoning and the per-class counts. Declaring ties requires
+  a klt build at or after klayout-tools `2c1bd1b3` (isolated tie extraction
+  #2169). The well-tie evidence that predates the declaration (item-4 LVS
+  closure: every one of the 1769 drawn transistors has a real, drawn,
   contacted body tie to the schematic's own net, `klt lvs` reports zero
   `device.body_unverified` and a 2044/2044 device, 295/295 net, 25/25 pin
-  match — plus the drawn guard/substrate-tap rings (#183).
+  match, plus the drawn guard/substrate-tap rings #183) still stands beside
+  it.
 
 Re-running produces a new append-only report (never overwrites this one):
 

@@ -256,7 +256,7 @@ jobs:
         # eagerly (klt kb validate; observed as a CI failure on the first
         # run of this job), while klayout itself stays unnecessary.
         run: |
-          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@2b1e55e51bb803c082e8857da44687f3e37ebfc0"
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@21b0cc1d6883f46ba2c4e3a72cb8d2b1851fb141"
           pip install 'jsonschema>=4.0'
 
       - name: Re-grade the committed block manifest
