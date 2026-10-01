@@ -19,13 +19,13 @@ re-graded by a command, and CI re-grades it on every PR.
 | `gate-driver-characterization.generic.json` | T1 item 8's opt-in `generic` evidence envelope wrapping `design/gate-driver-characterization.md` (the one item that names no `klt` verb). Its `provenance.input.content_hash` pins that report, so editing the report without refreshing this envelope renders the item stale. |
 | `check_tier_report.py` | The freshness gate run by the `signoff` CI job (and `npm run signoff:check`): anchors every manifest pin to the live tree's sha256, re-runs the grading, and diffs the fresh render against the committed report. |
 
-## Current graded state: 3/11 met, tier `null` — the honest state
+## Current graded state: 4/11 met, tier `null` — the honest state
 
-Items **3 (DRC clean)**, **4 (LVS clean)** and **8 (characterization report)**
-grade `met`; everything else renders `unmet` with a per-item `reason` in
-`tier-report.json`. Near-all-`unmet` is a correct result, not a failure to
-grade (#239): an `unmet` row with a `reason` is exactly the machine-readable
-statement of the gap.
+Items **3 (DRC clean)**, **4 (LVS clean)**, **8 (characterization report)** and
+**11 (power delivery, structural)** grade `met`; everything else renders
+`unmet` with a per-item `reason` in `tier-report.json`. Near-all-`unmet` is a
+correct result, not a failure to grade (#239): an `unmet` row with a `reason`
+is exactly the machine-readable statement of the gap.
 
 Why the unmet rows say `no_evidence`:
 
@@ -41,8 +41,6 @@ Why the unmet rows say `no_evidence`:
   accepts **only** a `klt pex` report for an analog block; a clean DRC or a
   pre-layout sim renders `wrong_kind` by design. Converting a campaign to a
   `klt`-native envelope is a content decision each item's own issue tracks.
-- **11 (power delivery, structural)** — no `klt erc` supply spec or report
-  exists yet; tracked in **#238** (the row must exist even while `unmet`).
 
 ## Claimant-enforced disclosures (read before quoting a `met`)
 
@@ -81,6 +79,18 @@ responsibility for the two layout legs:
     not this verdict's.
 - Both layout legs pin the same committed GDS:
   `sha256:54f02626…` = `layout/gate_driver_core.gds`.
+- **Item 11 (power delivery, structural, `20261001-231815-1ac9445.erc.json`,
+  klt 0.6.0+g21b0cc1d6883)** — the one **compound** citation in the
+  manifest (a list, because no single artifact proves this item): the `erc`
+  envelope plus the item-4 LVS report above as the supply-continuity half.
+  The `erc_status: clean` verdict rests on the `ties[]` declaration #256
+  added to `layout/erc-supply-spec.json` — all four well/substrate classes
+  grade `checked` with none `skipped` and zero `erc.missing_tie` — and the
+  citation itself discloses which ties rested on the caller's word about
+  the well side: `ties_checked_by_well_assertion` names the
+  native-substrate tie (`well_layer: null` + `well_boxes`, the
+  klayout-tools#2255 form). Quote that list beside any `met` claim; the
+  item-4 disclosures above apply to the LVS half.
 
 ## Refresh procedure
 
@@ -114,6 +124,6 @@ its render can never match `tier-report.json`). `jsonschema` is required
 because `klt`'s CLI entry imports it eagerly:
 
 ```bash
-pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@2b1e55e51bb803c082e8857da44687f3e37ebfc0"
+pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@21b0cc1d6883f46ba2c4e3a72cb8d2b1851fb141"
 pip install 'jsonschema>=4.0'
 ```

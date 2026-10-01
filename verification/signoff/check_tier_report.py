@@ -64,6 +64,7 @@ INPUT_PATH_FIELDS = {
     "lvs": ("layout", "envelope_dir"),  # request-relative (run_lvs.py's request builder)
     "extract": ("file", "repo_root"),  # emitted with cwd = repo root (run_lvs.py step 2)
     "generic": ("source", "repo_root"),
+    "erc": ("file", "repo_root"),  # emitted with cwd = repo root (run_erc.py)
 }
 
 RENDER_EXIT_CODES = (0, 3)
@@ -80,7 +81,7 @@ def sha256_file(path: Path) -> str:
 def envelope_kind(envelope: dict) -> str | None:
     """Kind of a ``klt`` JSON envelope from its own discriminating shape.
 
-    The four shapes the manifest may cite today; mirrors
+    The five shapes the manifest may cite today; mirrors
     ``docs/cli/signoff.md``'s "Envelope validation" table, restricted to what
     ``INPUT_PATH_FIELDS`` can anchor.
     """
@@ -92,7 +93,24 @@ def envelope_kind(envelope: dict) -> str | None:
         return "lvs"
     if "device_count" in envelope:
         return "extract"
+    if "erc_findings" in envelope:
+        return "erc"
     return None
+
+
+def _citation_entries(item_id: str, entry: object) -> list[tuple[str, object]]:
+    """Normalize one ``evidence`` value to its per-citation entries.
+
+    A value is either a single citation object, or -- for the one compound
+    item no single artifact proves (T1 item 11, power delivery: an ``erc``
+    report plus the item-4 ``lvs`` report) -- a JSON list of them, exactly
+    as ``klt signoff``'s compound-evidence path resolves it. Each element
+    is anchored independently, with its list index in the failure label so
+    a multi-citation item names which half went stale.
+    """
+    if isinstance(entry, list):
+        return [(f"{item_id}[{i}]", sub) for i, sub in enumerate(entry)]
+    return [(item_id, entry)]
 
 
 def anchor_citations(manifest: dict) -> list[str]:
@@ -104,44 +122,45 @@ def anchor_citations(manifest: dict) -> list[str]:
     evidence = manifest.get("evidence")
     if not isinstance(evidence, dict):
         return [f"manifest has no evidence object: {MANIFEST}"]
-    for item_id, entry in sorted(evidence.items()):
-        if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
-            failures.append(f"item {item_id}: entry is not file-backed (object with 'file')")
-            continue
-        pin = entry.get("content_hash")
-        if not isinstance(pin, str):
-            failures.append(f"item {item_id}: citation pins no content_hash -- unpinned citations cannot be freshness-verified at all (#239)")
-            continue
-        envelope_path = REPO_ROOT / entry["file"]
-        try:
-            envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
-        except OSError as exc:
-            failures.append(f"item {item_id}: cannot read evidence envelope {entry['file']}: {exc}")
-            continue
-        kind = envelope_kind(envelope)
-        if kind not in INPUT_PATH_FIELDS:
-            failures.append(
-                f"item {item_id}: evidence {entry['file']} has no anchorable input path "
-                f"(kind={kind!r}) -- extend INPUT_PATH_FIELDS before citing it"
-            )
-            continue
-        field, base = INPUT_PATH_FIELDS[kind]
-        input_name = envelope.get(field)
-        if not isinstance(input_name, str) or not input_name:
-            failures.append(f"item {item_id}: {kind} envelope {entry['file']} names no input path in '{field}'")
-            continue
-        anchor_root = envelope_path.parent if base == "envelope_dir" else REPO_ROOT
-        artifact = (anchor_root / input_name).resolve()
-        if not artifact.is_file():
-            failures.append(f"item {item_id}: cited artifact does not exist: {artifact}")
-            continue
-        actual = sha256_file(artifact)
-        if actual != pin:
-            failures.append(
-                f"item {item_id}: stale citation -- manifest pins {pin} "
-                f"but the live artifact {artifact} is now {actual}; "
-                f"re-run the evidence and refresh the manifest + tier-report"
-            )
+    for item_id, raw_entry in sorted(evidence.items()):
+        for label, entry in _citation_entries(item_id, raw_entry):
+            if not isinstance(entry, dict) or not isinstance(entry.get("file"), str):
+                failures.append(f"item {label}: entry is not file-backed (object with 'file')")
+                continue
+            pin = entry.get("content_hash")
+            if not isinstance(pin, str):
+                failures.append(f"item {label}: citation pins no content_hash -- unpinned citations cannot be freshness-verified at all (#239)")
+                continue
+            envelope_path = REPO_ROOT / entry["file"]
+            try:
+                envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
+            except OSError as exc:
+                failures.append(f"item {label}: cannot read evidence envelope {entry['file']}: {exc}")
+                continue
+            kind = envelope_kind(envelope)
+            if kind not in INPUT_PATH_FIELDS:
+                failures.append(
+                    f"item {label}: evidence {entry['file']} has no anchorable input path "
+                    f"(kind={kind!r}) -- extend INPUT_PATH_FIELDS before citing it"
+                )
+                continue
+            field, base = INPUT_PATH_FIELDS[kind]
+            input_name = envelope.get(field)
+            if not isinstance(input_name, str) or not input_name:
+                failures.append(f"item {label}: {kind} envelope {entry['file']} names no input path in '{field}'")
+                continue
+            anchor_root = envelope_path.parent if base == "envelope_dir" else REPO_ROOT
+            artifact = (anchor_root / input_name).resolve()
+            if not artifact.is_file():
+                failures.append(f"item {label}: cited artifact does not exist: {artifact}")
+                continue
+            actual = sha256_file(artifact)
+            if actual != pin:
+                failures.append(
+                    f"item {label}: stale citation -- manifest pins {pin} "
+                    f"but the live artifact {artifact} is now {actual}; "
+                    f"re-run the evidence and refresh the manifest + tier-report"
+                )
     return failures
 
 
@@ -212,7 +231,11 @@ def main() -> int:
         return 1
 
     failures += anchor_citations(manifest)
-    print(f"pin anchor     : {len(manifest.get('evidence', {}))} pinned citation(s) checked")
+    citation_count = sum(
+        len(_citation_entries(item_id, entry))
+        for item_id, entry in manifest.get("evidence", {}).items()
+    )
+    print(f"pin anchor     : {citation_count} pinned citation(s) checked")
 
     exit_code, fresh, detail = render_fresh_report(args.klt)
     if fresh is None:
