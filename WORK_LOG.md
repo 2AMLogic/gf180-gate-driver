@@ -3,8 +3,27 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-03
+
+- **Issue #267** (closed): Guard telemetry: keep-flagged confirmation — force-op:protected / force-op:detached (2 single-occurrence ASKs, 2026-08-18)
+- **Issue #278** (closed): Auditor: worktree-write-confinement denies Champion census — gh-cached cache in /tmp/gh-cache is a routine scratch write
+- **Issue #277** (closed): Auditor: worktree-write-confinement-unresolved-var denies routine mktemp scratch-file writes (17 instances)
+
+### 2026-10-01
+
+- **Issue #256** (closed): T1 item 11: declare ties[] (both N-well rail classes + substrate) in the klt erc supply spec so erc.missing_tie is computed (bronze grant paused on this)
+- **PR #286**: feat(erc): declare all four well/substrate tie classes in the supply spec
+
+### 2026-09-30
+
+- **Issue #257** (closed): CI: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
+- **PR #264**: ci: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
+
 ### 2026-09-29
 
+- **PR #285**: chore(loom): pin docs/guard-hooks.md in resync-ignore to unblock fleet-resync
+- **Issue #282** (closed): 5 of 16 .loom/hooks/tests/ suites fail at setup: they cp from a defaults/ tree this consumer repo does not ship
+- **PR #284**: fix(tests): source the 5 defaults/-pathed hook suites from .loom/hooks/
 - **Issue #279** (closed): Auditor: guard self-tests and repro sessions pollute guard-decisions.log, drowning real telemetry
 - **PR #281**: feat(guard): LOOM_GUARD_LOG_SUPPRESS to keep test/repro fixtures out of guard-decisions.log (#279)
 - **Issue #276** (closed): Finish the #258 campaign extraction: fold run_ronw_mismatch.py's private campaign layer into harness/campaign.py

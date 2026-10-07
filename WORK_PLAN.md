@@ -10,7 +10,7 @@ each update; do not hand-edit that region.
 
 Judge-approved PRs stuck under a `loom:operator` merge-risk hold — implementation work is done, only a human merge decision is missing.
 
-- **#264**: ci: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
+_None._
 
 ## Operator Priority
 
@@ -40,15 +40,13 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#264**: ci: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step
+_None._
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-- **#256**: T1 item 11: declare ties[] (both N-well rail classes + substrate) in the klt erc supply spec so erc.missing_tie is computed (bronze grant paused on this) *(curated)*
-- **#257**: CI: wire test-guard-catastrophic-body-prose.sh into the Hook regression suites step *(curated)*
-- **#282**: 5 of 16 .loom/hooks/tests/ suites fail at setup: they cp from a defaults/ tree this consumer repo does not ship *(curated)*
+_None._
 
 ## Proposed (Architect / Hermit)
 
@@ -62,13 +60,13 @@ _None._
 
 | Tier | Count |
 |------|-------|
-| Operator merge-risk holds | 1 |
+| Operator merge-risk holds | 0 |
 | Operator priority | 0 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
-| Curated | 3 |
+| Approved PRs awaiting merge | 0 |
+| Curated | 0 |
 | Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
