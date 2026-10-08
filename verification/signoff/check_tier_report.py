@@ -19,6 +19,15 @@ the live tree instead, in two passes:
    ``tier-report.json``. Any drift -- an envelope edited, a pin changed, a
    klt release whose bundled tiers doc grades differently -- fails here.
 
+Artifact-bound generic envelopes (T1 items 1, 2, 9, 10; klayout-tools#2843)
+are anchored through their *declared* ``provenance.input.path`` -- a string
+resolved beside the envelope, or a ``{"path", "scope": "repo"}`` object
+resolved from the repo root -- never through ``source``. A malformed declared
+path is a failure, not a fallback. Only an envelope that declares no
+``provenance.input.path`` at all (item 8's legacy form) falls back to
+``source``. Inventory artifacts (``*.inventory.md``) additionally have every
+``path`` + ``sha256:`` pair they list re-hashed against the live tree.
+
 Exit code ``3`` from the re-run is *success*: ``klt signoff`` renders
 ``tier: null`` whenever at least one T1 item is honestly ``unmet``, which is
 this block's real state and the whole point of the manifest (#239: a
@@ -44,6 +53,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -113,7 +123,67 @@ def _citation_entries(item_id: str, entry: object) -> list[tuple[str, object]]:
     return [(item_id, entry)]
 
 
-def anchor_citations(manifest: dict) -> list[str]:
+INVENTORY_SUFFIX = ".inventory.md"
+# `path` followed (same table row, or the next few tokens) by `sha256:<hex>`.
+_LISTED_HASH = re.compile(r"`([\w./-]+)`[\s(|]*(?:sha256\s+)?`(sha256:[0-9a-f]{64})`")
+
+
+def resolve_declared_input(envelope: dict, envelope_path: Path, repo_root: Path) -> tuple[Path | None, str | None]:
+    """Resolve an explicit ``provenance.input.path`` binding.
+
+    Returns ``(artifact, None)`` on success, ``(None, error)`` when a path is
+    declared but unusable, and ``(None, None)`` when no path is declared at
+    all (the caller then applies the legacy ``source`` rule). Semantics follow
+    klayout-tools docs/cli/signoff.md: a string resolves beside the envelope;
+    an object must be ``{"path": <str>, "scope": "repo"}`` and resolves from
+    the repo root.
+    """
+    provenance = envelope.get("provenance")
+    input_block = provenance.get("input") if isinstance(provenance, dict) else None
+    if not isinstance(input_block, dict) or "path" not in input_block:
+        return None, None
+    declared = input_block["path"]
+    if isinstance(declared, str):
+        name, base = declared, envelope_path.parent
+    elif isinstance(declared, dict):
+        name = declared.get("path")
+        if declared.get("scope") != "repo":
+            return None, f"provenance.input.path object must carry scope 'repo', got {declared.get('scope')!r}"
+        base = repo_root
+    else:
+        return None, f"provenance.input.path must be a string or a {{path, scope}} object, got {type(declared).__name__}"
+    if not isinstance(name, str) or not name or Path(name).is_absolute():
+        return None, f"provenance.input.path names no usable relative path: {name!r}"
+    artifact = (base / name).resolve()
+    try:
+        artifact.relative_to(repo_root.resolve())
+    except ValueError:
+        return None, f"provenance.input.path resolves outside the repository: {artifact}"
+    return artifact, None
+
+
+def check_inventory_hashes(artifact: Path, repo_root: Path) -> list[str]:
+    """Every ``path`` + ``sha256:`` pair an inventory lists matches the live file."""
+    failures: list[str] = []
+    text = artifact.read_text(encoding="utf-8")
+    pairs = _LISTED_HASH.findall(text)
+    if not pairs:
+        return [f"inventory {artifact.name} lists no `path` + `sha256:` pairs to anchor"]
+    for rel, listed in pairs:
+        target = repo_root / rel
+        if not target.is_file():
+            failures.append(f"inventory {artifact.name}: listed file does not exist: {rel}")
+            continue
+        actual = sha256_file(target)
+        if actual != listed:
+            failures.append(
+                f"inventory {artifact.name}: stale listing for {rel} -- inventory says {listed} "
+                f"but the live file is {actual}; re-audit and refresh the inventory"
+            )
+    return failures
+
+
+def anchor_citations(manifest: dict, repo_root: Path = REPO_ROOT) -> list[str]:
     """Pass 1: every pinned citation names the live artifact it pins.
 
     Returns a list of human-readable failure messages (empty = pass).
@@ -131,10 +201,10 @@ def anchor_citations(manifest: dict) -> list[str]:
             if not isinstance(pin, str):
                 failures.append(f"item {label}: citation pins no content_hash -- unpinned citations cannot be freshness-verified at all (#239)")
                 continue
-            envelope_path = REPO_ROOT / entry["file"]
+            envelope_path = repo_root / entry["file"]
             try:
                 envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
                 failures.append(f"item {label}: cannot read evidence envelope {entry['file']}: {exc}")
                 continue
             kind = envelope_kind(envelope)
@@ -144,13 +214,29 @@ def anchor_citations(manifest: dict) -> list[str]:
                     f"(kind={kind!r}) -- extend INPUT_PATH_FIELDS before citing it"
                 )
                 continue
-            field, base = INPUT_PATH_FIELDS[kind]
-            input_name = envelope.get(field)
-            if not isinstance(input_name, str) or not input_name:
-                failures.append(f"item {label}: {kind} envelope {entry['file']} names no input path in '{field}'")
-                continue
-            anchor_root = envelope_path.parent if base == "envelope_dir" else REPO_ROOT
-            artifact = (anchor_root / input_name).resolve()
+            artifact = None
+            declared = None
+            if kind == "generic":
+                artifact, error = resolve_declared_input(envelope, envelope_path, repo_root)
+                if error:
+                    failures.append(f"item {label}: generic envelope {entry['file']}: {error}")
+                    continue
+                declared = artifact is not None
+            if declared:
+                if envelope.get("t1_item") != int(item_id) or isinstance(envelope.get("t1_item"), bool):
+                    failures.append(
+                        f"item {label}: envelope {entry['file']} declares t1_item "
+                        f"{envelope.get('t1_item')!r}, cited for item {item_id}"
+                    )
+                    continue
+            else:
+                field, base = INPUT_PATH_FIELDS[kind]
+                input_name = envelope.get(field)
+                if not isinstance(input_name, str) or not input_name:
+                    failures.append(f"item {label}: {kind} envelope {entry['file']} names no input path in '{field}'")
+                    continue
+                anchor_root = envelope_path.parent if base == "envelope_dir" else repo_root
+                artifact = (anchor_root / input_name).resolve()
             if not artifact.is_file():
                 failures.append(f"item {label}: cited artifact does not exist: {artifact}")
                 continue
@@ -161,6 +247,9 @@ def anchor_citations(manifest: dict) -> list[str]:
                     f"but the live artifact {artifact} is now {actual}; "
                     f"re-run the evidence and refresh the manifest + tier-report"
                 )
+                continue
+            if declared and artifact.name.endswith(INVENTORY_SUFFIX):
+                failures += [f"item {label}: {m}" for m in check_inventory_hashes(artifact, repo_root)]
     return failures
 
 

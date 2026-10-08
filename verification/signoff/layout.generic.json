@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "generic",
+  "status": "pass",
+  "t1_item": 2,
+  "summary": "T1 item 2 (layout): layout/gate_driver_core.gds, the same bytes the item 3, 4 and 11 citations pin. Attested on documented provenance (layout/gate_driver_core.provenance.json: layout, source netlist and generator sha256 values all match the live tree), NOT on reproducibility: re-running layout/gen_gate_driver_core.py with klt 0.6.0 (g21b0cc1d6883 and g3a75c3ae705b) on 2026-10-08 produced different bytes (sha256 cab0046f...), and the committed GDS records klt 0.3.0+gc27f7eccf49c on a dirty tree. The grader hashes the GDS only.",
+  "source": "layout/gate_driver_core.gds",
+  "provenance": {
+    "input": {
+      "path": {
+        "path": "layout/gate_driver_core.gds",
+        "scope": "repo"
+      },
+      "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f"
+    }
+  }
+}
