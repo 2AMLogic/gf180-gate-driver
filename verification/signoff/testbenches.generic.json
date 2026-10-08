@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "generic",
+  "status": "pass",
+  "t1_item": 9,
+  "summary": "T1 item 9 (testbenches shipped): inventory of every sim/ experiment with its testbench manifest and cold-start invocation, scoped as stated in the inventory; PDK variant pinned in sim/pdk.json, PDK revision recorded per record (open_pdks c6d73a35) not machine-pinned. One invocation was executed (primary post-layout testbench, tt/27C, 4 of 4 points PASS, --no-write); the rest were checked by file existence and harness --list only. The cited post-layout records state they were taken on a dirty tree. The grader hashes the inventory only and runs nothing.",
+  "source": "verification/signoff/testbenches.inventory.md",
+  "provenance": {
+    "input": {
+      "path": {
+        "path": "verification/signoff/testbenches.inventory.md",
+        "scope": "repo"
+      },
+      "content_hash": "sha256:6fb0f3eddb8bf1ced6df5a4776d9c212785a168de9d558e0320b1d89f93187da"
+    }
+  }
+}

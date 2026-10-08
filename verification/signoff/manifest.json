@@ -2,6 +2,14 @@
   "block": "gf180-gate-driver",
   "kind": "analog",
   "evidence": {
+    "1": {
+      "file": "verification/signoff/design-sources.generic.json",
+      "content_hash": "sha256:e04e0adee57e237fcafb064c9f2013939b250477c30e6e2fd57dc1c2fc62e6df"
+    },
+    "2": {
+      "file": "verification/signoff/layout.generic.json",
+      "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f"
+    },
     "3": {
       "file": "layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json",
       "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f"
@@ -13,6 +21,10 @@
     "8": {
       "file": "verification/signoff/gate-driver-characterization.generic.json",
       "content_hash": "sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9"
+    },
+    "9": {
+      "file": "verification/signoff/testbenches.generic.json",
+      "content_hash": "sha256:6fb0f3eddb8bf1ced6df5a4776d9c212785a168de9d558e0320b1d89f93187da"
     },
     "11": [
       {

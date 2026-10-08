@@ -247,7 +247,9 @@ jobs:
         # the 2026-09-17 eleventh tiers item (klayout-tools #2025) and the
         # report's source_doc_content_hash schema (#2191), so its render
         # can never match the committed 11-item tier report. This pin is
-        # the exact source commit the report was graded with -- moving it
+        # the exact source commit the report was graded with (klayout-tools
+        # merge 3a75c3ae, #2843: artifact-bound generic envelopes for T1
+        # items 1, 2, 9 and 10, issue #288) -- moving it
         # is a deliberate PR that also refreshes verification/signoff/
         # (the fresh render is diffed against the committed report below),
         # never a silent grading change; when a PyPI release carrying item
@@ -256,8 +258,14 @@ jobs:
         # eagerly (klt kb validate; observed as a CI failure on the first
         # run of this job), while klayout itself stays unnecessary.
         run: |
-          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@21b0cc1d6883f46ba2c4e3a72cb8d2b1851fb141"
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@3a75c3ae705b7ad3803625255de93bcd982e70c6"
           pip install 'jsonschema>=4.0'
+
+      - name: Checker regression tests
+        # Stdlib-only tests for check_tier_report.py's pin anchoring (issue
+        # #288): artifact-bound generic bindings, the legacy item-8 `source`
+        # rule, compound item 11, inventory listed hashes. No klt needed.
+        run: python3 verification/signoff/test_check_tier_report.py
 
       - name: Re-grade the committed block manifest
         # Exit 3 from the re-run means "rendered successfully with honestly

@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "kind": "generic",
+  "status": "pass",
+  "t1_item": 1,
+  "summary": "T1 item 1 (design sources): inventory of the 4 schematics, 4 symbols, xschemrc and 4 derived netlists with the design/README.md regeneration command. Audited 2026-10-08: all four cells re-netlisted with xschem 3.4.4 in a scratch export; device lines and instantiated .subckt lines match the committed netlists after joining continuations (not byte-identical: line wrapping and header blocks differ; commented **.subckt port order differs for 3 cells; output_stage.spice keeps a trailing .end). .sym files not regenerated. The grader hashes the inventory only and does not regenerate anything.",
+  "source": "verification/signoff/design-sources.inventory.md",
+  "provenance": {
+    "input": {
+      "path": {
+        "path": "verification/signoff/design-sources.inventory.md",
+        "scope": "repo"
+      },
+      "content_hash": "sha256:e04e0adee57e237fcafb064c9f2013939b250477c30e6e2fd57dc1c2fc62e6df"
+    }
+  }
+}
