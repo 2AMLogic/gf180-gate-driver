@@ -1,7 +1,7 @@
 # Testbench inventory (T1 item 9)
 
 Bound by `testbenches.generic.json` (T1 item 9). Audited 2026-10-08
-(issue #288) against commit `f72b363`. `klt signoff` hashes **this file's
+(issue #288) against `origin/main` at `545b066`. `klt signoff` hashes **this file's
 bytes**; it does not run simulations. `check_tier_report.py` checks the
 per-file sha256 values below against the live tree and the test suite checks
 that every path named here exists, so editing a listed `tb.json` or the

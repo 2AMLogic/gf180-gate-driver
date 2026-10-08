@@ -33,7 +33,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:cb7974a7128cf5fc5b7b485eba106d2eaa4e9bf3d426822a9060c404f4cf37e2",
+        "content_hash": "sha256:e04e0adee57e237fcafb064c9f2013939b250477c30e6e2fd57dc1c2fc62e6df",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -42,7 +42,7 @@
             "path": "verification/signoff/design-sources.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:cb7974a7128cf5fc5b7b485eba106d2eaa4e9bf3d426822a9060c404f4cf37e2",
+          "content_hash": "sha256:e04e0adee57e237fcafb064c9f2013939b250477c30e6e2fd57dc1c2fc62e6df",
           "input_verified": true,
           "summary": "T1 item 1 (design sources): inventory of the 4 schematics, 4 symbols, xschemrc and 4 derived netlists with the design/README.md regeneration command. Audited 2026-10-08: all four cells re-netlisted with xschem 3.4.4 in a scratch export; device lines and instantiated .subckt lines match the committed netlists after joining continuations (not byte-identical: line wrapping and header blocks differ; commented **.subckt port order differs for 3 cells; output_stage.spice keeps a trailing .end). .sym files not regenerated. The grader hashes the inventory only and does not regenerate anything.",
           "source": "verification/signoff/design-sources.inventory.md"
@@ -226,7 +226,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:10fe4df0c5310d37acc468c1f3534d88a60cf05361837d82ebdf5eb4ec301b97",
+        "content_hash": "sha256:6fb0f3eddb8bf1ced6df5a4776d9c212785a168de9d558e0320b1d89f93187da",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -235,7 +235,7 @@
             "path": "verification/signoff/testbenches.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:10fe4df0c5310d37acc468c1f3534d88a60cf05361837d82ebdf5eb4ec301b97",
+          "content_hash": "sha256:6fb0f3eddb8bf1ced6df5a4776d9c212785a168de9d558e0320b1d89f93187da",
           "input_verified": true,
           "summary": "T1 item 9 (testbenches shipped): inventory of every sim/ experiment with its testbench manifest and cold-start invocation, scoped as stated in the inventory; PDK variant pinned in sim/pdk.json, PDK revision recorded per record (open_pdks c6d73a35) not machine-pinned. One invocation was executed (primary post-layout testbench, tt/27C, 4 of 4 points PASS, --no-write); the rest were checked by file existence and harness --list only. The cited post-layout records state they were taken on a dirty tree. The grader hashes the inventory only and runs nothing.",
           "source": "verification/signoff/testbenches.inventory.md"

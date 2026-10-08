@@ -1,7 +1,7 @@
 # Design-source inventory (T1 item 1)
 
 Bound by `design-sources.generic.json` (T1 item 1). Audited 2026-10-08
-(issue #288) against commit `f72b363`. `klt signoff` hashes **this file's
+(issue #288) against `origin/main` at `545b066`. `klt signoff` hashes **this file's
 bytes**; it does not regenerate schematics and does not read the files
 listed below. The per-file sha256 values are checked against the live tree by
 `check_tier_report.py`, so editing a listed source without refreshing this
