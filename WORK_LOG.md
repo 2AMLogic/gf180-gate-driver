@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-08
+
+- **Issue #288** (closed): T1 items 1, 2, 9, 10: cite artifact-anchored evidence now that klt signoff can bind it (klayout-tools#2843)
+- **PR #290**: feat(signoff): bind T1 items 1, 2, 9 to audited artifacts; move grader pin (#288)
+
 ### 2026-10-03
 
 - **Issue #267** (closed): Guard telemetry: keep-flagged confirmation — force-op:protected / force-op:detached (2 single-occurrence ASKs, 2026-08-18)
