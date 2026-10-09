@@ -18,24 +18,25 @@ re-graded by a command, and CI re-grades it on every PR.
 | `tier-report.json` | The committed record of `klt signoff --manifest manifest.json --format json` — the graded item table. Regenerate after any evidence/manifest change; `check_tier_report.py` fails CI if it drifts from a fresh render. |
 | `gate-driver-characterization.generic.json` | T1 item 8's opt-in `generic` evidence envelope wrapping `design/gate-driver-characterization.md` (the one item that names no `klt` verb). Its `provenance.input.content_hash` pins that report, so editing the report without refreshing this envelope renders the item stale. |
 | `design-sources.generic.json`, `layout.generic.json`, `testbenches.generic.json` | The artifact-bound `generic` envelopes for T1 items **1**, **2** and **9** (klayout-tools#2843). Each declares `"t1_item": <n>` and names the audited artifact in `provenance.input.path` (`{"path", "scope": "repo"}`) with its `content_hash`; the manifest pins that same hash. |
+| `repo-hygiene.generic.json`, `repo-hygiene.inventory.md` | T1 item **10** (issue #289): the artifact-bound `generic` envelope (`"t1_item": 10`) and the audited inventory it binds to, which lists `README.md`, `LICENSE`, `spec/gate-driver.md`, `.github/workflows/ci.yml` and the reproduction documents with their sha256 values. The manifest pins the inventory's hash. |
 | `design-sources.inventory.md`, `testbenches.inventory.md` | The audited inventories items 1 and 9 bind to: every listed source/testbench with its sha256, the regeneration or cold-start command, and what the audit did and did not run. Read the "What was actually run" sections before quoting either `met`. |
 | `check_tier_report.py` | The freshness gate run by the `signoff` CI job (and `npm run signoff:check`): anchors every manifest pin to the live tree's sha256, re-runs the grading, and diffs the fresh render against the committed report. Explicit `provenance.input.path` bindings are resolved with the grader's own semantics (string beside the envelope, repo-scoped object from the repo root; a malformed declared path fails, never falls back to `source`), and every `path` + `sha256:` pair an inventory lists is re-hashed. |
 | `test_check_tier_report.py` | Stdlib regression tests for the checker (run by the `signoff` CI job): both path forms, malformed/missing/stale/wrong-item cases, `source` unable to redirect a binding, the legacy item-8 rule, compound item 11, inventory hashes. |
 
-## Current graded state: 7/11 met, tier `null` — the honest state
+## Current graded state: 8/11 met, tier `null` — the honest state
 
 Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
-clean)**, **8 (characterization report)**, **9 (testbenches shipped)** and
-**11 (power delivery, structural)** grade `met`; items **5, 6, 7 and 10**
-render `unmet` with a per-item `reason` in `tier-report.json`. Seven of eleven
-is not tier T1, and "met" on items 1, 2 and 9 means what the next section
-says, no more. An `unmet` row with a `reason` is the machine-readable
+clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
+(repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
+**5, 6 and 7** render `unmet` (`no_evidence`) with a per-item `reason` in
+`tier-report.json`. Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
-### Items 1, 2, 9: artifact-bound attestations (issue #288)
+### Items 1, 2, 9, 10: artifact-bound attestations (issues #288, #289)
 
 Since klayout-tools#2843 (merge `3a75c3ae`), `klt signoff` accepts a `generic`
-envelope for items 1, 2, 9 and 10 when it declares `t1_item`, names the audited
+envelope for items 1, 2, 9 and 10 (the last bound by #289) when it declares `t1_item`, names the audited
 artifact in `provenance.input.path` with its `content_hash`, the manifest pins
 the same hash, and the grader re-hashes the artifact
 (`citation.artifact_binding.input_verified: true`). **That binds bytes, not
@@ -64,14 +65,23 @@ turns `unmet` if they change. What each audit found:
   state they were taken on a dirty working tree. One invocation (the primary
   post-layout testbench, one process/temperature point set) was executed; the
   rest were checked by file existence and `run_corners.py --list`.
-- **Item 10 stays `unmet` (`no_evidence`) on purpose.** The item asks for a
-  README that states the block, its spec table and how to reproduce every
-  result. `README.md` has no reproduction instructions and no spec table (it
-  links `spec/gate-driver.md`), and its status line ("schematic capture
-  underway; full-schematic PVT corner simulation has not yet started") is
-  stale against the post-layout records. Binding CI or a checklist would
-  attest a hygiene item the audit does not support. The README fix is
-  tracked as #289.
+- **Item 10** (binds to `repo-hygiene.inventory.md`, issue #289) — the audit
+  found `README.md` now states the block, carries the section 3 target/stretch
+  table (hand-transcribed from `spec/gate-driver.md`, which stays
+  authoritative; targets, not measured results) and gives root-relative
+  reproduction instructions that separate validating committed evidence from
+  generating new evidence; `LICENSE` is Apache-2.0; `.github/workflows/ci.yml`
+  runs lint with evidence-record checks, the harness self-test and this
+  signoff gate. The audit **read** those files and **executed** only
+  `run_corners.py --check-env`/`--list`, `sim/check_records.py` and `npm run
+  lint`; it did not re-run any simulation, netlisting or layout flow, did not
+  observe CI run, and the README's "generate new evidence" commands were
+  taken from the linked project documents, not exercised. Editing the
+  README, license, spec, CI or a linked reproduction document without
+  re-auditing and refreshing the inventory, envelope, manifest and report
+  fails `check_tier_report.py`. Known gaps the README discloses: the layout
+  GDS regeneration limitation above, and `sim/README.md`'s facet table
+  omitting four on-disk experiments (`testbenches.inventory.md` is complete).
 
 Why the other unmet rows say `no_evidence`:
 
@@ -84,7 +94,7 @@ Why the other unmet rows say `no_evidence`:
 
 **Grading context.** `scope: "repo"` paths are resolved by the grader from the
 git repository root, so grading a copy of the tree that has no `.git`
-directory renders items 1, 2 and 9 `unmet`. CI's checkout has one.
+directory renders items 1, 2, 9 and 10 `unmet`. CI's checkout has one.
 
 ## Claimant-enforced disclosures (read before quoting a `met`)
 
