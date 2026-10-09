@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-09
+
+- **PR #292**: README: status refresh, spec table, reproduction steps; attest T1 item 10 (#289)
+- **Issue #289** (closed): README: add reproduction steps and refresh the stale status line (blocks T1 item 10)
+
 ### 2026-10-08
 
 - **Issue #288** (closed): T1 items 1, 2, 9, 10: cite artifact-anchored evidence now that klt signoff can bind it (klayout-tools#2843)
