@@ -26,6 +26,10 @@
       "file": "verification/signoff/testbenches.generic.json",
       "content_hash": "sha256:6fb0f3eddb8bf1ced6df5a4776d9c212785a168de9d558e0320b1d89f93187da"
     },
+    "10": {
+      "file": "verification/signoff/repo-hygiene.generic.json",
+      "content_hash": "sha256:2306afb7fdb6c6a54fef55f1419f53e0354448b0b2d5e9b08dc7a5ed0c7e1c90"
+    },
     "11": [
       {
         "file": "layout/erc/reports/gate_driver_core/20261001-231815-1ac9445.erc.json",
