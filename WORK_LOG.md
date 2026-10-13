@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-13
+
+- **PR #296**: chore(loom): drop onIdle [auditor] — follow the fleet idle-role setting
+
 ### 2026-10-09
 
 - **PR #292**: README: status refresh, spec table, reproduction steps; attest T1 item 10 (#289)
