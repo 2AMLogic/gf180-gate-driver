@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-15
+
+- **PR #299**: Bump Repo Skills 0.19.5 -> 0.24.1
+
 ### 2026-10-14
 
 - **Issue #251** (closed): README: embed the fleet burndown chart (one line)
