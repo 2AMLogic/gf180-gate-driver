@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-14
+
+- **Issue #251** (closed): README: embed the fleet burndown chart (one line)
+
 ### 2026-10-13
 
 - **PR #296**: chore(loom): drop onIdle [auditor] — follow the fleet idle-role setting
