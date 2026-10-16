@@ -116,6 +116,20 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 - **Issue #218** (closed): Champion: Merge-Risk Hold Digest
 
+### 2026-08-26
+
+- **Issue #226** (closed): UVLO addition causes an un-excepted nominal-rail ipeak_source_a miss at ss_-40c_vlogic2p97v-vdrv4p50v (spec §3)
+- **Issue #223** (closed): [Parent #219] 3A-4: docs/chipalooza/challenge-5-proposal.md for the gate driver
+- **Issue #222** (closed): [Parent #219] 3A-3: post-layout PVT re-verification of the complete gate-driver block
+- **Issue #221** (closed): [Parent #219] 3A-2: extend layout/ to the complete gate-driver block (add UVLO), DRC-clean + LVS-matched
+- **Issue #220** (closed): [Parent #219] 3A-1: UVLO sub-cell design + full-block schematic PVT verification
+- **Issue #219** (closed): [Epic #542] 3A — gf180-gate-driver maturation + Challenge #5 brief
+
+### 2026-08-21
+
+- **Issue #216** (closed): Add Monte Carlo local-mismatch evidence for spec/low-side-power-switch.md's Ron·W table
+- **Issue #211** (closed): Monte Carlo local-mismatch campaigns for spec/gate-driver.md Sec.5 Exceptions 1 and 2
+
 ### 2026-08-17
 
 - **Issue #122** (closed): Guard decision: ask-tier git-clean-fd substring still fires on backtick-quoted example text inside a $(cat <<EOF …) --body heredoc
