@@ -27,7 +27,6 @@ Usage:
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -44,6 +43,7 @@ from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
+from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- confirmed by
 # sim/harness/corners.py's module docstring to already bundle the thick-oxide
@@ -168,22 +168,7 @@ def _run_corner(deck: Path, pdk: harness_pdk.Pdk, section: str, temp_c: float) -
             + '\n.include "control.spice"\n.end\n',
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            ["ngspice", "-b", deck.name],
-            cwd=work,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    log = proc.stdout + proc.stderr
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"ngspice exited {proc.returncode} for {deck.name} "
-            f"[{section} @ {temp_c} C]\n{log}"
-        )
-    if re.search(r"^\s*(Error|ERROR|fatal)", log, re.MULTILINE):
-        raise RuntimeError(f"ngspice reported an error for {deck.name}:\n{log}")
-    return log
+        return _run_ngspice(work, deck.name, f"{section} @ {temp_c} C")
 
 
 # --------------------------------------------------------------------------
