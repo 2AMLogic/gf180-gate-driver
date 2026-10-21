@@ -5,6 +5,12 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-21
 
+- **PR #324**: refactor: share ngspice run and error-scan helper across sim scripts
+- **Issue #322** (closed): Share ngspice run/error-check tail of _run_corner across sim experiment scripts (follow-up to #313)
+- **PR #320**: refactor: share reference-log lookup and delta across mismatch campaigns
+- **Issue #315** (closed): Dedupe reference-log lookup and reference_delta across mismatch campaigns
+- **PR #319**: refactor: share per-outcome raw-log writer across mismatch runners
+- **Issue #318** (closed): Dedup per-outcome raw-log writer across three mismatch campaign runners
 - **PR #314**: refactor(sim): share corner_shim across experiment scripts
 - **Issue #313** (closed): Share _corner_shim/_run_corner across sim experiment scripts (follow-up to #309)
 - **PR #311**: refactor(sim): share build_points and claim sigma summary across mismatch campaigns
