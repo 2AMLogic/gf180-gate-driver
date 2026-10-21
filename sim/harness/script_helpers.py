@@ -8,6 +8,8 @@ not change.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 
 def fmt(value, digits: int = 4) -> str:
     if value is None:
@@ -47,3 +49,27 @@ def parse_dc_tables(log: str) -> list[tuple[list[str], list[list[float]]]]:
 def column(header: list[str], rows: list[list[float]], name: str) -> list[float]:
     idx = header.index(name)
     return [row[idx] for row in rows]
+
+
+def corner_shim(
+    pdk,
+    sections: Iterable[str],
+    temp_c: float,
+    *,
+    script: str,
+    extra_lines: Iterable[str] = (),
+) -> str:
+    """The per-corner-point ``corner.spice`` deck: PDK include, one ``.lib``
+    per model section, ``.temp``, then any caller-supplied ``extra_lines``
+    (e.g. ``.options`` or Monte Carlo ``deck_lines()``). ``script`` names the
+    caller in the header comment."""
+    lines = [
+        f"* Generated per corner point by {script} from",
+        "* $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand, "
+        "and do not commit.",
+        f'.include "{pdk.design_include}"',
+    ]
+    lines += [f'.lib "{pdk.model_lib}" {section}' for section in sections]
+    lines.append(f".temp {temp_c:g}")
+    lines.extend(extra_lines)
+    return "\n".join(lines) + "\n"

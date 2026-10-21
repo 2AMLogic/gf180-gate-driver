@@ -76,6 +76,7 @@ from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
+from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 
@@ -125,19 +126,6 @@ DR0008_N06_TYPICAL = {
 # --------------------------------------------------------------------------
 # Deck composition / ngspice execution
 # --------------------------------------------------------------------------
-
-
-def _corner_shim(pdk: harness_pdk.Pdk, corner: harness_corners.Corner, temp_c: float) -> str:
-    lines = [
-        "* Generated per corner point by run_low_side_power_switch.py from",
-        "* $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand, "
-        "and do not commit.",
-        f'.include "{pdk.design_include}"',
-    ]
-    for section in corner.sections:
-        lines.append(f'.lib "{pdk.model_lib}" {section}')
-    lines.append(f".temp {temp_c:g}")
-    return "\n".join(lines) + "\n"
 
 
 def _control_block() -> str:
@@ -190,7 +178,10 @@ def _run_corner(
         work = Path(tmp)
         local_deck = work / deck.name
         (work / "corner.spice").write_text(
-            _corner_shim(pdk, corner, temp_c), encoding="utf-8"
+            _corner_shim(
+                pdk, corner.sections, temp_c, script="run_low_side_power_switch.py"
+            ),
+            encoding="utf-8"
         )
         (work / "control.spice").write_text(_control_block(), encoding="utf-8")
         local_deck.write_text(

@@ -60,6 +60,7 @@ from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- same five
 # names sim/harness/corners.py's module docstring confirms already bundle
@@ -94,20 +95,6 @@ LOCKOUT_ABS_THRESHOLD_V = 1.5  # see module docstring: well below every
 # --------------------------------------------------------------------------
 # Deck composition
 # --------------------------------------------------------------------------
-
-
-def _corner_shim(pdk: harness_pdk.Pdk, section: str, temp_c: float) -> str:
-    return (
-        "* Generated per corner point by run_uvlo_trip.py from\n"
-        "* $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand, "
-        "and do not commit.\n"
-        f'.include "{pdk.design_include}"\n'
-        f'.lib "{pdk.model_lib}" {section}\n'
-        f".temp {temp_c:g}\n"
-        ".options reltol=1e-4\n"  # sim/README.md's harness-wide transient
-        # tolerance convention (issue #156) -- this script bypasses
-        # runner.compose_deck so it must apply the same default by hand.
-    )
 
 
 def _dut_fragment() -> str:
@@ -172,7 +159,16 @@ def _run_corner(body: str, pdk: harness_pdk.Pdk, section: str, temp_c: float, ta
         deck = work / f"{tag}.spice"
         deck.write_text(
             f"* uvlo-trip-verification -- {tag} deck\n"
-            + _corner_shim(pdk, section, temp_c)
+            + _corner_shim(
+                pdk,
+                [section],
+                temp_c,
+                script="run_uvlo_trip.py",
+                # sim/README.md's harness-wide transient tolerance convention
+                # (issue #156) -- this script bypasses runner.compose_deck so
+                # it must apply the same default by hand.
+                extra_lines=[".options reltol=1e-4"],
+            )
             + body
             + ".end\n",
             encoding="utf-8",

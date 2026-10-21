@@ -80,6 +80,7 @@ from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
 
@@ -147,21 +148,6 @@ class DevicePoint:
 # --------------------------------------------------------------------------
 
 
-def _corner_shim(pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None) -> str:
-    lines = [
-        "* Generated per (corner, temp, sample) point by run_ronw_mismatch.py",
-        "* from $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand,",
-        "* and do not commit.",
-        f'.include "{pdk.design_include}"',
-    ]
-    for section in corner.sections:
-        lines.append(f'.lib "{pdk.model_lib}" {section}')
-    lines.append(f".temp {temp_c:g}")
-    if mc is not None:
-        lines.extend(mc.deck_lines())
-    return "\n".join(lines) + "\n"
-
-
 def _run_sample(
     pdk, corner, temp_c: float, mc: mc_mod.MismatchSample | None
 ) -> tuple[str, str, dict[str, float]]:
@@ -179,7 +165,14 @@ def _run_sample(
         work = Path(tmp)
         local_deck = work / DECK_PATH.name
         (work / "corner.spice").write_text(
-            _corner_shim(pdk, corner, temp_c, mc), encoding="utf-8"
+            _corner_shim(
+                pdk,
+                corner.sections,
+                temp_c,
+                script="run_ronw_mismatch.py",
+                extra_lines=mc.deck_lines() if mc is not None else (),
+            ),
+            encoding="utf-8"
         )
         (work / "control.spice").write_text(base._control_block(), encoding="utf-8")
         local_deck.write_text(
