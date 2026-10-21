@@ -35,3 +35,29 @@ def test_parse_dc_tables_and_column():
     ]
     header, rows = tables[0]
     assert script_helpers.column(header, rows, "v(b)") == [2.0, 4.0]
+
+
+def test_build_points_matches_inline_grid():
+    from harness import corners
+
+    names = list(corners.CORNERS)[:2]
+    temps = (-40.0, 125.0)
+    supplies = {"vdd": 5.0}
+    expected = corners.build_grid(
+        [corners.CORNERS[n] for n in names], list(temps), [dict(supplies)]
+    )
+    got = script_helpers.build_points(names, temps, supplies)
+    assert got == expected
+    assert len(got) == len(names) * len(temps)
+
+
+def test_claim_sigma_summary_uses_named_measurement():
+    class Outcome:
+        def values(self, name):
+            assert name == "m"
+            return [1.0, 3.0]
+
+    from harness import campaign
+
+    expected = campaign.point_sigma_summary([Outcome()], lambda o: o.values("m"))
+    assert script_helpers.claim_sigma_summary([Outcome()], "m") == expected

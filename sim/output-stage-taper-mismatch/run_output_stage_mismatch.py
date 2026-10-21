@@ -59,6 +59,7 @@ from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness import runner as harness_runner  # noqa: E402
+from harness import script_helpers  # noqa: E402
 from harness import testbench as tb_mod  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
@@ -104,10 +105,7 @@ _mv = campaign.mv
 
 def build_points() -> list[harness_corners.PvtPoint]:
     """The campaign's PVT points, in the order `sample_seed` indexes."""
-    corner_list = [harness_corners.CORNERS[name] for name in PROCESS_CORNERS]
-    return harness_corners.build_grid(
-        corner_list, list(TEMPERATURES_C), [dict(STRETCH_SUPPLIES)]
-    )
+    return script_helpers.build_points(PROCESS_CORNERS, TEMPERATURES_C, STRETCH_SUPPLIES)
 
 
 def reference_measurements(corner_id: str) -> dict[str, float]:
