@@ -34,20 +34,19 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#315**: Dedupe reference-log lookup and reference_delta across mismatch campaigns
-- **#318**: Dedup per-outcome raw-log writer across three mismatch campaign runners
+_None._
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#320**: refactor: share reference-log lookup and delta across mismatch campaigns
+_None._
 
 ## Approved (Awaiting Merge)
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#319**: refactor: share per-outcome raw-log writer across mismatch runners
+_None._
 
 ## Proposed
 
@@ -57,7 +56,8 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#317**: Remove unused folded power-array generator (power_array_folded.py): no consumer in repo *(hermit)*
+- **#323**: Dedupe main() driver skeleton across four mismatch campaign scripts *(hermit)*
 
 ## Epics
 
@@ -71,10 +71,10 @@ _None._
 | Very important | 0 |
 | Important | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 2 |
-| PRs awaiting review | 1 |
-| Approved PRs awaiting merge | 1 |
+| In Progress (`loom:building`) | 0 |
+| PRs awaiting review | 0 |
+| Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 0 |
+| Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
