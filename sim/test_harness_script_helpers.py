@@ -86,3 +86,33 @@ def test_claim_sigma_summary_uses_named_measurement():
 
     expected = campaign.point_sigma_summary([Outcome()], lambda o: o.values("m"))
     assert script_helpers.claim_sigma_summary([Outcome()], "m") == expected
+
+
+def _stub_ngspice(tmp_path, monkeypatch, body: str) -> Path:
+    stub = tmp_path / "bin" / "ngspice"
+    stub.parent.mkdir()
+    stub.write_text("#!/bin/sh\n" + body)
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{stub.parent}:/usr/bin:/bin")
+    return tmp_path
+
+
+def test_run_ngspice_returns_combined_log(tmp_path, monkeypatch):
+    work = _stub_ngspice(tmp_path, monkeypatch, "echo out; echo err >&2\n")
+    assert script_helpers.run_ngspice(work, "d.spice", "typical @ 27 C") == "out\nerr\n"
+
+
+def test_run_ngspice_raises_on_nonzero_exit(tmp_path, monkeypatch):
+    import pytest
+
+    work = _stub_ngspice(tmp_path, monkeypatch, "echo boom; exit 3\n")
+    with pytest.raises(RuntimeError, match=r"exited 3 for d.spice \[ss @ 125 C\]"):
+        script_helpers.run_ngspice(work, "d.spice", "ss @ 125 C")
+
+
+def test_run_ngspice_raises_on_error_line(tmp_path, monkeypatch):
+    import pytest
+
+    work = _stub_ngspice(tmp_path, monkeypatch, "echo 'Error: no such model'\n")
+    with pytest.raises(RuntimeError, match=r"reported an error for d.spice \[tt\]"):
+        script_helpers.run_ngspice(work, "d.spice", "tt")

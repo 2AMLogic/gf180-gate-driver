@@ -8,6 +8,8 @@ not change.
 
 from __future__ import annotations
 
+import re
+import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -80,6 +82,34 @@ def corner_shim(
     lines.append(f".temp {temp_c:g}")
     lines.extend(extra_lines)
     return "\n".join(lines) + "\n"
+
+
+_NGSPICE_ERROR_RE = re.compile(r"^\s*(Error|ERROR|fatal)", re.MULTILINE)
+
+
+def run_ngspice(work: Path, deck_name: str, label: str) -> str:
+    """Run ``ngspice -b deck_name`` in `work` and return stdout+stderr.
+
+    Raises `RuntimeError` on a non-zero exit or an ``Error``/``ERROR``/``fatal``
+    line in the log; `label` (e.g. ``"typical @ 27 C"``) names the corner point
+    in the message."""
+    proc = subprocess.run(
+        ["ngspice", "-b", deck_name],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    log = proc.stdout + proc.stderr
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"ngspice exited {proc.returncode} for {deck_name} [{label}]\n{log}"
+        )
+    if _NGSPICE_ERROR_RE.search(log):
+        raise RuntimeError(
+            f"ngspice reported an error for {deck_name} [{label}]:\n{log}"
+        )
+    return log
 
 
 def build_points(

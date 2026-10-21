@@ -61,8 +61,6 @@ Usage:
 from __future__ import annotations
 
 import math
-import re
-import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -79,6 +77,7 @@ from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
+from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
 
 # The five MOS process corners, as full per-device-family section bundles
 # (see the module docstring for why this differs from sim/device-mv-fet).
@@ -190,22 +189,7 @@ def _run_corner(
             + '\n.include "control.spice"\n.end\n',
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            ["ngspice", "-b", deck.name],
-            cwd=work,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    log = proc.stdout + proc.stderr
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"ngspice exited {proc.returncode} for {deck.name} "
-            f"[{corner.name} @ {temp_c} C]\n{log}"
-        )
-    if re.search(r"^\s*(Error|ERROR|fatal)", log, re.MULTILINE):
-        raise RuntimeError(f"ngspice reported an error for {deck.name}:\n{log}")
-    return log
+        return _run_ngspice(work, deck.name, f"{corner.name} @ {temp_c} C")
 
 
 # --------------------------------------------------------------------------
