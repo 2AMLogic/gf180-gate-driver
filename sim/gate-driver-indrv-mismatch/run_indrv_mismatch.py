@@ -852,49 +852,14 @@ def main(argv=None) -> int:
         return 0
 
     corners_dir = HERE / harness_report.CORNERS_DIR
-    names = list(tb.measure)
     for outcome in outcomes:
-        campaign.write_sample_csv(corners_dir, record, outcome, names)
-        # Leg 1: the plain harness deck, under its plain corner-id.
-        campaign.write_log(
-            corners_dir,
-            record,
-            outcome.point.corner_id,
-            campaign.baseline_log_header(
-                pdk, tb, outcome.point, record, stamp, ngspice,
-                source_experiment=SOURCE_EXPERIMENT,
-                extra_note_lines=BASELINE_LOG_NOTE,
-            ),
-            outcome.baseline.output,
-        )
-        # Leg 2: the seed-A zero-sigma control (seed-B is byte-identical; the
-        # CSV sidecar carries both seeds' parsed measurements).
-        for mc, result in outcome.controls[:1]:
-            mc_pt = mc_mod.mc_point(outcome.point, mc)
-            campaign.write_log(
-                corners_dir,
-                record,
-                mc_pt.corner_id,
-                campaign.log_header(
-                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
-                    source_experiment=SOURCE_EXPERIMENT,
-                ),
-                result.output,
-            )
         worst = outcome.worst(CLAIM_MEASUREMENT)
-        if worst is not None:
-            mc, result = worst
-            mc_pt = mc_mod.mc_point(outcome.point, mc)
-            campaign.write_log(
-                corners_dir,
-                record,
-                mc_pt.corner_id,
-                campaign.log_header(
-                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
-                    source_experiment=SOURCE_EXPERIMENT,
-                ),
-                result.output,
-            )
+        campaign.write_outcome_logs(
+            corners_dir, record, outcome, pdk, tb, stamp, ngspice,
+            source_experiment=SOURCE_EXPERIMENT,
+            worst=worst,
+            baseline_note_lines=BASELINE_LOG_NOTE,
+        )
 
     snapshot = harness_report.write_netlist_snapshot(tb, HERE, record)
     path = harness_report.device_write_record(HERE / harness_report.RECORDS_DIR, record, body)

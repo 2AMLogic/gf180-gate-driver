@@ -372,6 +372,55 @@ def log_header(
     )
 
 
+def write_outcome_logs(
+    corners_dir: Path,
+    record: str,
+    outcome: PointOutcome,
+    pdk: Pdk,
+    tb: Testbench,
+    stamp,
+    ngspice: str,
+    *,
+    source_experiment: str,
+    worst: tuple[mc_mod.MismatchSample, harness_runner.PointResult] | None,
+    baseline_note_lines: Sequence[str] = (),
+) -> None:
+    """Write one PVT point's sample CSV and raw logs.
+
+    Writes the CSV sidecar, the plain-deck baseline log, the seed-A zero-sigma
+    control log (seed-B is byte-identical; the CSV carries both seeds), and the
+    log of `worst` -- the `(MismatchSample, result)` draw the campaign singles
+    out, or `None` for no such draw.
+    """
+    write_sample_csv(corners_dir, record, outcome, list(tb.measure))
+    write_log(
+        corners_dir,
+        record,
+        outcome.point.corner_id,
+        baseline_log_header(
+            pdk, tb, outcome.point, record, stamp, ngspice,
+            source_experiment=source_experiment,
+            extra_note_lines=baseline_note_lines,
+        ),
+        outcome.baseline.output,
+    )
+    draws = list(outcome.controls[:1])
+    if worst is not None:
+        draws.append(worst)
+    for mc, result in draws:
+        mc_pt = mc_mod.mc_point(outcome.point, mc)
+        write_log(
+            corners_dir,
+            record,
+            mc_pt.corner_id,
+            log_header(
+                pdk, tb, mc, mc_pt, record, stamp, ngspice,
+                source_experiment=source_experiment,
+            ),
+            result.output,
+        )
+
+
 # --------------------------------------------------------------------------
 # Record formatting
 # --------------------------------------------------------------------------
@@ -424,5 +473,6 @@ __all__ = [
     "run_device_point_campaign",
     "run_point_campaign",
     "write_log",
+    "write_outcome_logs",
     "write_sample_csv",
 ]
