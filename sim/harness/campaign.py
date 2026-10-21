@@ -32,15 +32,20 @@ campaign whose execution layer is a bare device-level deck instead (issue
 
 from __future__ import annotations
 
+import argparse
 import csv
 import statistics
+import time
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import montecarlo as mc_mod
+from . import pdk as harness_pdk
 from . import report
 from . import runner as harness_runner
+from . import testbench as tb_mod
 from .corners import PvtPoint
 from .pdk import Pdk
 from .testbench import Testbench
@@ -422,6 +427,173 @@ def write_outcome_logs(
 
 
 # --------------------------------------------------------------------------
+# Command-line driver
+# --------------------------------------------------------------------------
+
+
+def run_mismatch_main(
+    argv,
+    *,
+    description: str,
+    here: Path,
+    repo_root: Path,
+    sim_dir: Path,
+    source_experiment: str,
+    default_samples: int,
+    base_seed: int,
+    outcome_cls: type[PointOutcome],
+    build_points: Callable[[], Sequence[PvtPoint]],
+    build_record_body: Callable[..., tuple[str, str]],
+    smoke_corner_id: str,
+    progress_detail: Callable[[harness_runner.PointResult], str],
+    corner_width: int,
+    worst_sample: Callable[
+        [PointOutcome], tuple[mc_mod.MismatchSample, harness_runner.PointResult] | None
+    ],
+    baseline_note_lines: Sequence[str] = (),
+    testbench_note: str = "",
+    prepare_testbench: Callable[[Testbench], None] | None = None,
+    check_result: Callable[[harness_runner.PointResult], bool] | None = None,
+    check_failure_message: str = "",
+) -> int:
+    """The `main()` shared by the testbench-driven mismatch campaigns.
+
+    Parses `-n/-j/--smoke/--no-write`, loads the PDK/ngspice/testbench, runs the
+    campaign over the PVT grid, and writes the record, netlist snapshot and raw
+    logs. The per-campaign parts are hooks:
+
+    * `smoke_corner_id` -- the one grid point a `--smoke` run keeps.
+    * `progress_detail` / `corner_width` -- the trailing text and the corner
+      column width of a progress line.
+    * `worst_sample` -- the `(MismatchSample, result)` draw whose raw log is
+      written for each point, or `None`.
+    * `prepare_testbench` -- an in-memory edit of the loaded testbench.
+    * `check_result` -- called on every converged result; if it ever returns
+      false the run prints `check_failure_message` and exits 2 unrecorded.
+
+    The full grid is always built, because `sample_seed`'s point_index -- and
+    therefore every recorded seed -- is the point's position in *this* order. A
+    `--smoke` run selects a subset of it without renumbering.
+    """
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument(
+        "-n", "--samples", type=int, default=default_samples,
+        help=f"Monte Carlo draws per PVT point (default {default_samples})",
+    )
+    parser.add_argument("-j", "--jobs", type=int, default=8, help="parallel ngspice runs")
+    parser.add_argument(
+        "--smoke", action="store_true",
+        help="3 draws at the binding corner only -- pipeline debugging, not evidence",
+    )
+    parser.add_argument(
+        "--no-write", action="store_true", help="run but record nothing (debugging)"
+    )
+    args = parser.parse_args(argv)
+
+    pdk = harness_pdk.find_pdk()
+    ngspice = harness_runner.ngspice_version()
+    tb = tb_mod.load(sim_dir / source_experiment)
+    if prepare_testbench is not None:
+        prepare_testbench(tb)
+
+    grid = build_points()
+    n_samples = args.samples
+    selected = set(range(len(grid)))
+    if args.smoke:
+        n_samples = 3
+        selected = {i for i, p in enumerate(grid) if p.corner_id == smoke_corner_id}
+    points = [p for i, p in enumerate(grid) if i in selected]
+
+    git = report.git_provenance(repo_root)
+    record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
+    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    workdir = sim_dir / ".work" / here.name / record
+    total = len(points) * (n_samples + 3)  # + baseline + 2 zero-sigma controls
+
+    print(f"experiment : {here.name}")
+    print(f"testbench  : sim/{source_experiment} (reused verbatim{testbench_note})")
+    print(f"dut        : {tb.dut_path}  sha256 {tb.dut_sha256[:12]}")
+    print(f"pdk        : {pdk.variant} @ {pdk.version}")
+    print(f"ngspice    : {ngspice}")
+    print(
+        f"points     : {len(points)} PVT x ({n_samples} draws + 1 baseline "
+        f"+ 2 controls) = {total} runs"
+    )
+    print(f"base seed  : {base_seed}  (stride {mc_mod.SEED_STRIDE})")
+    print(f"record id  : {record}")
+    print()
+
+    done = 0
+    check_ok = True
+
+    def progress(result):
+        nonlocal done, check_ok
+        done += 1
+        if check_result is not None and result.status == "ok" and not check_result(result):
+            check_ok = False
+        if result.status != "ok" or done % 25 == 0 or done == total:
+            detail = progress_detail(result)
+            print(
+                f"[{done:>5}/{total}] {result.status:<6} "
+                f"{result.point.corner_id:<{corner_width}} {detail}"
+            )
+
+    wall_start = time.monotonic()
+    outcomes = []
+    for index, point in enumerate(grid):
+        if index not in selected:
+            continue
+        outcomes.append(
+            run_point_campaign(
+                tb, pdk, point, index, n_samples, workdir, args.jobs, progress,
+                base_seed=base_seed,
+                outcome_cls=outcome_cls,
+            )
+        )
+    wall = time.monotonic() - wall_start
+
+    if not check_ok:
+        print(check_failure_message)
+        return 2
+
+    failed = sum(
+        1
+        for outcome in outcomes
+        for result in [outcome.baseline] + [r for _, r in outcome.samples + outcome.controls]
+        if result.status != "ok"
+    )
+    print()
+    print(f"completed {total - failed}/{total} runs in {wall / 60:.1f} min")
+
+    body, verdict = build_record_body(
+        record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args
+    )
+
+    if args.no_write:
+        print()
+        print(body)
+        print("evidence  : not recorded (--no-write)")
+        return 0
+
+    corners_dir = here / report.CORNERS_DIR
+    for outcome in outcomes:
+        write_outcome_logs(
+            corners_dir, record, outcome, pdk, tb, stamp, ngspice,
+            source_experiment=source_experiment,
+            worst=worst_sample(outcome),
+            baseline_note_lines=baseline_note_lines,
+        )
+
+    snapshot = report.write_netlist_snapshot(tb, here, record)
+    path = report.device_write_record(here / report.RECORDS_DIR, record, body)
+    print(f"record    : {path}")
+    print(f"snapshot  : {snapshot}")
+    print(f"raw logs  : {corners_dir / record}")
+    print(f"status    : {verdict}")
+    return 0 if verdict == "PASS" else 1
+
+
+# --------------------------------------------------------------------------
 # Record formatting
 # --------------------------------------------------------------------------
 
@@ -471,6 +643,7 @@ __all__ = [
     "mv",
     "point_sigma_summary",
     "run_device_point_campaign",
+    "run_mismatch_main",
     "run_point_campaign",
     "write_log",
     "write_outcome_logs",
