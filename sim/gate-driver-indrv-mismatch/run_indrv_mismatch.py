@@ -133,16 +133,8 @@ def reference_measurements(corner_id: str) -> dict[str, float]:
     Returns `{}` when the reference record has no log for this point (e.g. a
     `--smoke` run at a corner the reference never visited).
     """
-    log = (
-        SIM_DIR
-        / SOURCE_EXPERIMENT
-        / harness_report.CORNERS_DIR
-        / REFERENCE_RECORD
-        / f"{corner_id}.log"
-    )
-    if not log.is_file():
-        return {}
-    return harness_runner.parse_measurements(log.read_text())
+    log = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
+    return harness_runner.parse_measurements(log.read_text()) if log else {}
 
 
 # --------------------------------------------------------------------------
@@ -162,11 +154,9 @@ class PointOutcome(campaign.PointOutcome):
         narrative; the delta is reported so the size of that residue is on
         the record rather than assumed.
         """
-        reference = reference_measurements(self.corner_id).get(name)
-        value = self.control_value(name)
-        if reference is None or value is None:
-            return None
-        return value - reference
+        return script_helpers.delta_vs_reference(
+            self.control_value(name), reference_measurements(self.corner_id).get(name)
+        )
 
 
 # --------------------------------------------------------------------------

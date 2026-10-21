@@ -81,6 +81,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
+from harness import script_helpers  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
 
@@ -249,14 +250,8 @@ FLATTEN_NAMES = [f"ronw_{dev}_{vgs:g}" for dev in base.DEVICE_ORDER for _s, vgs 
 def reference_flat(corner_id: str) -> dict[str, float]:
     """The committed corner-matrix record's own numbers at `corner_id`,
     re-parsed from its raw log at run time (not hardcoded)."""
-    log_path = (
-        SIM_DIR
-        / SOURCE_EXPERIMENT
-        / harness_report.CORNERS_DIR
-        / REFERENCE_RECORD
-        / f"{corner_id}.log"
-    )
-    if not log_path.is_file():
+    log_path = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
+    if log_path is None:
         return {}
     try:
         return flatten(base.extract(log_path.read_text(encoding="utf-8")))
@@ -281,11 +276,9 @@ class PointOutcome(campaign.PointOutcome):
         `None` when there is no reference log for this point (e.g. a
         `--smoke` run at a corner the reference never visited).
         """
-        ref = reference_flat(self.corner_id).get(name)
-        value = self.control_value(name)
-        if ref is None or value is None:
-            return None
-        return value - ref
+        return script_helpers.delta_vs_reference(
+            self.control_value(name), reference_flat(self.corner_id).get(name)
+        )
 
 
 # --------------------------------------------------------------------------
