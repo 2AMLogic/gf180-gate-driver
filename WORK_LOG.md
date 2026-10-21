@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-21
 
+- **PR #326**: refactor: hoist mismatch campaign main() into campaign.run_mismatch_main
+- **Issue #323** (closed): Dedupe main() driver skeleton across four mismatch campaign scripts
 - **PR #324**: refactor: share ngspice run and error-scan helper across sim scripts
 - **Issue #322** (closed): Share ngspice run/error-check tail of _run_corner across sim experiment scripts (follow-up to #313)
 - **PR #320**: refactor: share reference-log lookup and delta across mismatch campaigns
