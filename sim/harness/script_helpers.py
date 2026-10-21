@@ -8,6 +8,9 @@ not change.
 
 from __future__ import annotations
 
+from . import campaign
+from . import corners as harness_corners
+
 
 def fmt(value, digits: int = 4) -> str:
     if value is None:
@@ -47,3 +50,20 @@ def parse_dc_tables(log: str) -> list[tuple[list[str], list[list[float]]]]:
 def column(header: list[str], rows: list[list[float]], name: str) -> list[float]:
     idx = header.index(name)
     return [row[idx] for row in rows]
+
+
+def build_points(
+    process_corners, temperatures_c, supplies: dict
+) -> list[harness_corners.PvtPoint]:
+    """A mismatch campaign's PVT points, in the order `sample_seed` indexes."""
+    corner_list = [harness_corners.CORNERS[name] for name in process_corners]
+    return harness_corners.build_grid(
+        corner_list, list(temperatures_c), [dict(supplies)]
+    )
+
+
+def claim_sigma_summary(outcomes, measurement: str) -> str:
+    """`campaign.point_sigma_summary` over one named claim measurement."""
+    return campaign.point_sigma_summary(
+        outcomes, lambda outcome: outcome.values(measurement)
+    )
