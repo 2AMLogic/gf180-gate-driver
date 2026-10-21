@@ -37,6 +37,31 @@ def test_parse_dc_tables_and_column():
     assert script_helpers.column(header, rows, "v(b)") == [2.0, 4.0]
 
 
+class _Pdk:
+    design_include = "/pdk/design.ngspice"
+    model_lib = "/pdk/sm141064.ngspice"
+
+
+def test_corner_shim_sections_temp_and_extra_lines():
+    deck = script_helpers.corner_shim(
+        _Pdk(),
+        ["typical", "cap_typical"],
+        27,
+        script="run_x.py",
+        extra_lines=[".options reltol=1e-4"],
+    )
+    assert deck.splitlines() == [
+        "* Generated per corner point by run_x.py from",
+        "* $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand, and do not commit.",
+        '.include "/pdk/design.ngspice"',
+        '.lib "/pdk/sm141064.ngspice" typical',
+        '.lib "/pdk/sm141064.ngspice" cap_typical',
+        ".temp 27",
+        ".options reltol=1e-4",
+    ]
+    assert deck.endswith("\n")
+
+
 def test_build_points_matches_inline_grid():
     from harness import corners
 

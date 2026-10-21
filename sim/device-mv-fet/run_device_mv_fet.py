@@ -41,6 +41,7 @@ from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
+from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 
@@ -104,17 +105,6 @@ DEVICE_ORDER = ["n06", "p06", "n05", "p05", "n33", "p33"]
 # --------------------------------------------------------------------------
 
 
-def _corner_shim(pdk: harness_pdk.Pdk, section: str, temp_c: float) -> str:
-    return (
-        "* Generated per corner point by run_device_mv_fet.py from\n"
-        "* $PDK_ROOT/$PDK (via sim/harness/pdk.py) -- do not edit by hand, "
-        "and do not commit.\n"
-        f'.include "{pdk.design_include}"\n'
-        f'.lib "{pdk.model_lib}" {section}\n'
-        f".temp {temp_c:g}\n"
-    )
-
-
 def _control_block() -> str:
     lines = [
         ".control",
@@ -168,7 +158,8 @@ def _run_corner(deck: Path, pdk: harness_pdk.Pdk, section: str, temp_c: float) -
         work = Path(tmp)
         local_deck = work / deck.name
         (work / "corner.spice").write_text(
-            _corner_shim(pdk, section, temp_c), encoding="utf-8"
+            _corner_shim(pdk, [section], temp_c, script="run_device_mv_fet.py"),
+            encoding="utf-8"
         )
         (work / "control.spice").write_text(_control_block(), encoding="utf-8")
         local_deck.write_text(
