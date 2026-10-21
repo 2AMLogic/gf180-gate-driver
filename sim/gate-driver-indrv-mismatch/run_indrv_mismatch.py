@@ -45,11 +45,8 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import statistics
 import sys
-import time
-from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -58,11 +55,8 @@ sys.path.insert(0, str(HERE.parent))
 from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
-from harness import pdk as harness_pdk  # noqa: E402
-from harness import report as harness_report  # noqa: E402
 from harness import runner as harness_runner  # noqa: E402
 from harness import script_helpers  # noqa: E402
-from harness import testbench as tb_mod  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
 SIM_DIR = REPO_ROOT / "sim"
@@ -743,121 +737,30 @@ def _point_sigma_summary(outcomes) -> str:
 # --------------------------------------------------------------------------
 
 
+def _progress_detail(result) -> str:
+    value = result.measurements.get(CLAIM_MEASUREMENT)
+    return _fmt(value, 10) if value is not None else result.message
+
+
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "-n", "--samples", type=int, default=DEFAULT_SAMPLES,
-        help=f"Monte Carlo draws per PVT point (default {DEFAULT_SAMPLES})",
+    return campaign.run_mismatch_main(
+        argv,
+        description=__doc__.splitlines()[0],
+        here=HERE,
+        repo_root=REPO_ROOT,
+        sim_dir=SIM_DIR,
+        source_experiment=SOURCE_EXPERIMENT,
+        default_samples=DEFAULT_SAMPLES,
+        base_seed=BASE_SEED,
+        outcome_cls=PointOutcome,
+        build_points=build_points,
+        build_record_body=build_record_body,
+        smoke_corner_id="ss_125c_vlogic3p30v-vdrv6p00v",
+        progress_detail=_progress_detail,
+        corner_width=45,
+        worst_sample=lambda outcome: outcome.worst(CLAIM_MEASUREMENT),
+        baseline_note_lines=BASELINE_LOG_NOTE,
     )
-    parser.add_argument("-j", "--jobs", type=int, default=8, help="parallel ngspice runs")
-    parser.add_argument(
-        "--smoke", action="store_true",
-        help="3 draws at the binding corner only -- pipeline debugging, not evidence",
-    )
-    parser.add_argument(
-        "--no-write", action="store_true", help="run but record nothing (debugging)"
-    )
-    args = parser.parse_args(argv)
-
-    pdk = harness_pdk.find_pdk()
-    ngspice = harness_runner.ngspice_version()
-    tb = tb_mod.load(SIM_DIR / SOURCE_EXPERIMENT)
-
-    # The full grid is always built, because `sample_seed`'s point_index -- and
-    # therefore every recorded seed -- is the point's position in *this* order.
-    # A --smoke run selects a subset of it without renumbering.
-    grid = build_points()
-    n_samples = args.samples
-    selected = set(range(len(grid)))
-    if args.smoke:
-        n_samples = 3
-        selected = {
-            i for i, p in enumerate(grid)
-            if p.corner_id == "ss_125c_vlogic3p30v-vdrv6p00v"
-        }
-    points = [p for i, p in enumerate(grid) if i in selected]
-
-    git = harness_report.git_provenance(REPO_ROOT)
-    record = harness_report.allocate_record_id(
-        REPO_ROOT, HERE / harness_report.RECORDS_DIR, git=git
-    )
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
-    workdir = SIM_DIR / ".work" / HERE.name / record
-    total = len(points) * (n_samples + 3)  # + baseline + 2 zero-sigma controls
-
-    print(f"experiment : {HERE.name}")
-    print(f"testbench  : sim/{SOURCE_EXPERIMENT} (reused verbatim)")
-    print(f"dut        : {tb.dut_path}  sha256 {tb.dut_sha256[:12]}")
-    print(f"pdk        : {pdk.variant} @ {pdk.version}")
-    print(f"ngspice    : {ngspice}")
-    print(
-        f"points     : {len(points)} PVT x ({n_samples} draws + 1 baseline "
-        f"+ 2 controls) = {total} runs"
-    )
-    print(f"base seed  : {BASE_SEED}  (stride {mc_mod.SEED_STRIDE})")
-    print(f"record id  : {record}")
-    print()
-
-    done = 0
-
-    def progress(result):
-        nonlocal done
-        done += 1
-        if result.status != "ok" or done % 25 == 0 or done == total:
-            value = result.measurements.get(CLAIM_MEASUREMENT)
-            detail = _fmt(value, 10) if value is not None else result.message
-            print(f"[{done:>5}/{total}] {result.status:<6} {result.point.corner_id:<45} {detail}")
-
-    wall_start = time.monotonic()
-    outcomes = []
-    for index, point in enumerate(grid):
-        if index not in selected:
-            continue
-        outcomes.append(
-            campaign.run_point_campaign(
-                tb, pdk, point, index, n_samples, workdir, args.jobs, progress,
-                base_seed=BASE_SEED,
-                outcome_cls=PointOutcome,
-            )
-        )
-    wall = time.monotonic() - wall_start
-
-    failed = sum(
-        1
-        for outcome in outcomes
-        for result in [outcome.baseline] + [r for _, r in outcome.samples + outcome.controls]
-        if result.status != "ok"
-    )
-    print()
-    print(f"completed {total - failed}/{total} runs in {wall / 60:.1f} min")
-
-    body, verdict = build_record_body(
-        record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args
-    )
-
-    if args.no_write:
-        print()
-        print(body)
-        print("evidence  : not recorded (--no-write)")
-        return 0
-
-    corners_dir = HERE / harness_report.CORNERS_DIR
-    for outcome in outcomes:
-        worst = outcome.worst(CLAIM_MEASUREMENT)
-        campaign.write_outcome_logs(
-            corners_dir, record, outcome, pdk, tb, stamp, ngspice,
-            source_experiment=SOURCE_EXPERIMENT,
-            worst=worst,
-            baseline_note_lines=BASELINE_LOG_NOTE,
-        )
-
-    snapshot = harness_report.write_netlist_snapshot(tb, HERE, record)
-    path = harness_report.device_write_record(HERE / harness_report.RECORDS_DIR, record, body)
-    print(f"record    : {path}")
-    print(f"snapshot  : {snapshot}")
-    print(f"raw logs  : {corners_dir / record}")
-    print(f"status    : {verdict}")
-    return 0 if verdict == "PASS" else 1
 
 
 if __name__ == "__main__":
