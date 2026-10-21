@@ -427,6 +427,32 @@ class EvidenceWriterTests(unittest.TestCase):
             self.assertEqual(path.parent.name, "20260102-030405-abcdef0")
             self.assertEqual(path.read_text(), "* header\nraw ngspice text\n")
 
+    def test_write_outcome_logs_writes_csv_baseline_control_and_worst(self):
+        outcome = _outcome([5.1, 5.2])
+        worst = outcome.worst("vout")
+        with tempfile.TemporaryDirectory() as tmp:
+            campaign.write_outcome_logs(
+                Path(tmp), "rec", outcome, _PDK, _TB, _STAMP, "ngspice-45",
+                source_experiment="fake-experiment", worst=worst,
+                baseline_note_lines=["extra note"],
+            )
+            files = sorted(p.name for p in (Path(tmp) / "rec").iterdir())
+            self.assertEqual(len(files), 4)
+            self.assertIn("samples-tt_27c_vdrv5p00v.csv", files)
+            base = (Path(tmp) / "rec" / "tt_27c_vdrv5p00v.log").read_text()
+            self.assertIn("*             extra note\n", base)
+            self.assertIn("plain harness deck", base)
+            logs = [f for f in files if f.endswith(".log") and f != "tt_27c_vdrv5p00v.log"]
+            self.assertEqual(len(logs), 2)
+
+    def test_write_outcome_logs_without_a_worst_draw_skips_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            campaign.write_outcome_logs(
+                Path(tmp), "rec", _outcome([5.1]), _PDK, _TB, _STAMP, "ngspice-45",
+                source_experiment="fake-experiment", worst=None,
+            )
+            self.assertEqual(len(list((Path(tmp) / "rec").iterdir())), 3)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

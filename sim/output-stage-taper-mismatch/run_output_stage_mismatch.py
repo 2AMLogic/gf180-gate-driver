@@ -633,46 +633,17 @@ def main(argv=None) -> int:
         return 0
 
     corners_dir = HERE / harness_report.CORNERS_DIR
-    names = list(tb.measure)
     for outcome in outcomes:
-        campaign.write_sample_csv(corners_dir, record, outcome, names)
-        campaign.write_log(
-            corners_dir,
-            record,
-            outcome.point.corner_id,
-            campaign.baseline_log_header(
-                pdk, tb, outcome.point, record, stamp, ngspice,
-                source_experiment=SOURCE_EXPERIMENT,
-            ),
-            outcome.baseline.output,
-        )
-        for mc, result in outcome.controls[:1]:
-            mc_pt = mc_mod.mc_point(outcome.point, mc)
-            campaign.write_log(
-                corners_dir,
-                record,
-                mc_pt.corner_id,
-                campaign.log_header(
-                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
-                    source_experiment=SOURCE_EXPERIMENT,
-                ),
-                result.output,
-            )
+        worst = None
         triples = outcome.worst_values()
         if triples:
             mc, _, _ = max(triples, key=lambda t: t[2])
-            result = next(r for m, r in outcome.samples if m is mc)
-            mc_pt = mc_mod.mc_point(outcome.point, mc)
-            campaign.write_log(
-                corners_dir,
-                record,
-                mc_pt.corner_id,
-                campaign.log_header(
-                    pdk, tb, mc, mc_pt, record, stamp, ngspice,
-                    source_experiment=SOURCE_EXPERIMENT,
-                ),
-                result.output,
-            )
+            worst = next((m, r) for m, r in outcome.samples if m is mc)
+        campaign.write_outcome_logs(
+            corners_dir, record, outcome, pdk, tb, stamp, ngspice,
+            source_experiment=SOURCE_EXPERIMENT,
+            worst=worst,
+        )
 
     snapshot = harness_report.write_netlist_snapshot(tb, HERE, record)
     path = harness_report.device_write_record(HERE / harness_report.RECORDS_DIR, record, body)
