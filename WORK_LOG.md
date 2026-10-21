@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-21
+
+- **PR #307**: Bump Repo Skills 0.24.3 -> 0.24.7
+
 ### 2026-10-16
 
 - **PR #303**: Bump Repo Skills 0.24.1 -> 0.24.3
