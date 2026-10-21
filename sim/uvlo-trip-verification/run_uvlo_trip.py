@@ -59,6 +59,7 @@ sys.path.insert(0, str(HERE.parent))
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
+from harness.script_helpers import fmt as _fmt  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- same five
 # names sim/harness/corners.py's module docstring confirms already bundle
@@ -327,12 +328,6 @@ def _under(value: float | None, limit: float) -> str:
     if value is None:
         return "ERROR (no crossing found)"
     return "PASS" if value <= limit else "FAIL"
-
-
-def _fmt(value, digits=4) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.{digits}f}"
 
 
 # --------------------------------------------------------------------------

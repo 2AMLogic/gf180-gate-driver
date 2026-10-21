@@ -1,0 +1,37 @@
+"""Pins the helpers shared by the standalone sim/*/run_*.py scripts."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from harness import script_helpers  # noqa: E402
+
+LOG = """\
+noise
+Index   v(a)   v(b)
+-----------------------
+0       1.0    2.0
+1       3.0    4.0
+Index   i(x)
+-----------------------
+0       5e-3
+"""
+
+
+def test_fmt_four_digits_and_none():
+    assert script_helpers.fmt(1.23456789) == "1.2346"
+    assert script_helpers.fmt(1.23456789, 6) == "1.234568"
+    assert script_helpers.fmt(None) == "n/a"
+
+
+def test_parse_dc_tables_and_column():
+    tables = script_helpers.parse_dc_tables(LOG)
+    assert tables == [
+        (["v(a)", "v(b)"], [[1.0, 2.0], [3.0, 4.0]]),
+        (["i(x)"], [[5e-3]]),
+    ]
+    header, rows = tables[0]
+    assert script_helpers.column(header, rows, "v(b)") == [2.0, 4.0]

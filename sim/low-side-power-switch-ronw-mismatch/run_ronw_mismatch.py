@@ -79,6 +79,7 @@ from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
+from harness.script_helpers import fmt as _fmt  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
 
@@ -367,12 +368,6 @@ def write_logs(corners_dir: Path, record: str, stamp, pdk, ngspice, outcome: Poi
 # --------------------------------------------------------------------------
 # Record rendering
 # --------------------------------------------------------------------------
-
-
-def _fmt(value, digits: int = 4) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.{digits}f}"
 
 
 def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome], n_samples, wall, args):

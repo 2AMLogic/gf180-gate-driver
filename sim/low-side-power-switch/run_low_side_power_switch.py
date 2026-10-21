@@ -75,6 +75,9 @@ from harness import corners as harness_corners  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
+from harness.script_helpers import column as _column  # noqa: E402
+from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 
 # The five MOS process corners, as full per-device-family section bundles
 # (see the module docstring for why this differs from sim/device-mv-fet).
@@ -219,40 +222,6 @@ def _run_corner(
 # --------------------------------------------------------------------------
 
 
-def _parse_dc_tables(log: str) -> list[tuple[list[str], list[list[float]]]]:
-    """Every ``Index <cols...>`` table in a control-block's printed output,
-    in the order the ``print`` commands that produced them were issued."""
-    lines = log.splitlines()
-    tables: list[tuple[list[str], list[list[float]]]] = []
-    i = 0
-    while i < len(lines):
-        if lines[i].strip().startswith("Index"):
-            header = lines[i].split()[1:]
-            rows: list[list[float]] = []
-            j = i + 2  # skip the header and the '---' rule line
-            while j < len(lines):
-                parts = lines[j].split()
-                if not parts or not parts[0].isdigit():
-                    break
-                try:
-                    values = [float(p) for p in parts[1:]]
-                except ValueError:
-                    break
-                if len(values) == len(header):
-                    rows.append(values)
-                j += 1
-            tables.append((header, rows))
-            i = j
-        else:
-            i += 1
-    return tables
-
-
-def _column(header: list[str], rows: list[list[float]], name: str) -> list[float]:
-    idx = header.index(name)
-    return [row[idx] for row in rows]
-
-
 def _interp_log_at(xs: list[float], ys: list[float], y_target: float) -> float | None:
     """First x where a monotonically increasing, exponential-ish ys crosses
     y_target, interpolated in log(y) so a diode's forward knee is not read
@@ -308,12 +277,6 @@ def extract(log: str) -> dict:
 # --------------------------------------------------------------------------
 # Record rendering
 # --------------------------------------------------------------------------
-
-
-def _fmt(value, digits=4) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.{digits}f}"
 
 
 def _grid(results: dict, getter) -> list[float]:
