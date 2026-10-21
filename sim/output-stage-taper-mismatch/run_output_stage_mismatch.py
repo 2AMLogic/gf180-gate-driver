@@ -110,16 +110,8 @@ def build_points() -> list[harness_corners.PvtPoint]:
 
 def reference_measurements(corner_id: str) -> dict[str, float]:
     """The corner-matrix record's own numbers at `corner_id`, from its raw log."""
-    log = (
-        SIM_DIR
-        / SOURCE_EXPERIMENT
-        / harness_report.CORNERS_DIR
-        / REFERENCE_RECORD
-        / f"{corner_id}.log"
-    )
-    if not log.is_file():
-        return {}
-    return harness_runner.parse_measurements(log.read_text())
+    log = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
+    return harness_runner.parse_measurements(log.read_text()) if log else {}
 
 
 def worst_taper(measurements: dict[str, float]) -> tuple[str, float] | None:
@@ -152,11 +144,9 @@ class PointOutcome(campaign.PointOutcome):
         return worst_taper(self.controls[0][1].measurements)
 
     def reference_delta(self, name: str) -> float | None:
-        reference = reference_measurements(self.corner_id).get(name)
-        value = self.control_value(name)
-        if reference is None or value is None:
-            return None
-        return value - reference
+        return script_helpers.delta_vs_reference(
+            self.control_value(name), reference_measurements(self.corner_id).get(name)
+        )
 
 
 # --------------------------------------------------------------------------

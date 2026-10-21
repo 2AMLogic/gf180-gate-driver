@@ -117,14 +117,8 @@ def build_points() -> list[harness_corners.PvtPoint]:
 
 def reference_mq6(corner_id: str) -> float | None:
     """`mq6`'s raw value from the reference record's own log at `corner_id`."""
-    log = (
-        SIM_DIR
-        / SOURCE_EXPERIMENT
-        / harness_report.CORNERS_DIR
-        / REFERENCE_RECORD
-        / f"{corner_id}.log"
-    )
-    if not log.is_file():
+    log = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
+    if log is None:
         return None
     match = _RAW_MQ6_RE.search(log.read_text())
     return float(match.group(1)) if match else None
@@ -153,11 +147,9 @@ class PointOutcome(campaign.PointOutcome):
 
     def reference_delta(self) -> float | None:
         """Control minus the reference record's own raw `mq6` at this corner."""
-        reference = reference_mq6(self.corner_id)
-        value = self.control_value(CLAIM_MEASUREMENT)
-        if reference is None or value is None:
-            return None
-        return value - reference
+        return script_helpers.delta_vs_reference(
+            self.control_value(CLAIM_MEASUREMENT), reference_mq6(self.corner_id)
+        )
 
 
 # --------------------------------------------------------------------------

@@ -9,9 +9,13 @@ not change.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from pathlib import Path
 
 from . import campaign
 from . import corners as harness_corners
+from . import report as harness_report
+
+SIM_DIR = Path(__file__).resolve().parent.parent
 
 
 def fmt(value, digits: int = 4) -> str:
@@ -93,3 +97,25 @@ def claim_sigma_summary(outcomes, measurement: str) -> str:
     return campaign.point_sigma_summary(
         outcomes, lambda outcome: outcome.values(measurement)
     )
+
+
+def reference_log_path(
+    source_experiment: str, reference_record: str, corner_id: str
+) -> Path | None:
+    """The reference record's raw log for `corner_id`, or `None` when it has
+    none (e.g. a `--smoke` run at a corner the reference never visited)."""
+    log = (
+        SIM_DIR
+        / source_experiment
+        / harness_report.CORNERS_DIR
+        / reference_record
+        / f"{corner_id}.log"
+    )
+    return log if log.is_file() else None
+
+
+def delta_vs_reference(value: float | None, reference: float | None) -> float | None:
+    """Control minus reference; `None` when either is missing."""
+    if reference is None or value is None:
+        return None
+    return value - reference
