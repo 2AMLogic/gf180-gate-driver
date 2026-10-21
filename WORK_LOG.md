@@ -5,6 +5,7 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-21
 
+- **PR #310**: refactor(sim): share fmt/parse_dc_tables/column across experiment scripts
 - **PR #307**: Bump Repo Skills 0.24.3 -> 0.24.7
 
 ### 2026-10-16

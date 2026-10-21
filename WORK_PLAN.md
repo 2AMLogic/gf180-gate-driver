@@ -34,13 +34,13 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#309**: Consolidate helpers copy-pasted across sim/*/run_*.py experiment scripts
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#311**: refactor(sim): share build_points and claim sigma summary across mismatch campaigns
 
 ## Approved (Awaiting Merge)
 
@@ -52,7 +52,7 @@ _None._
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#309**: Consolidate helpers copy-pasted across sim/*/run_*.py experiment scripts *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -70,10 +70,10 @@ _None._
 | Very important | 0 |
 | Important | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
-| PRs awaiting review | 0 |
+| In Progress (`loom:building`) | 1 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 0 |
+| Curated | 1 |
 | Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
