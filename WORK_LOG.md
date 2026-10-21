@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-21
 
+- **PR #311**: refactor(sim): share build_points and claim sigma summary across mismatch campaigns
+- **Issue #309** (closed): Consolidate helpers copy-pasted across sim/*/run_*.py experiment scripts
 - **PR #310**: refactor(sim): share fmt/parse_dc_tables/column across experiment scripts
 - **PR #307**: Bump Repo Skills 0.24.3 -> 0.24.7
 
