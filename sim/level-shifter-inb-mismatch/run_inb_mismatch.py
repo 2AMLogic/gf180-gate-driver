@@ -60,6 +60,7 @@ from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness import runner as harness_runner  # noqa: E402
+from harness import script_helpers  # noqa: E402
 from harness import testbench as tb_mod  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
@@ -111,10 +112,7 @@ _RAW_MQ6_RE = re.compile(r"^\s*mq6\s*=\s*([-+]?[0-9.]+(?:[eE][-+]?[0-9]+)?)", re
 
 def build_points() -> list[harness_corners.PvtPoint]:
     """The campaign's PVT points, in the order `sample_seed` indexes."""
-    corner_list = [harness_corners.CORNERS[name] for name in PROCESS_CORNERS]
-    return harness_corners.build_grid(
-        corner_list, list(TEMPERATURES_C), [dict(CLAIM_SUPPLIES)]
-    )
+    return script_helpers.build_points(PROCESS_CORNERS, TEMPERATURES_C, CLAIM_SUPPLIES)
 
 
 def reference_mq6(corner_id: str) -> float | None:
@@ -168,9 +166,7 @@ class PointOutcome(campaign.PointOutcome):
 
 
 def _point_sigma_summary(outcomes) -> str:
-    return campaign.point_sigma_summary(
-        outcomes, lambda outcome: outcome.values(CLAIM_MEASUREMENT)
-    )
+    return script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)
 
 
 def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args):

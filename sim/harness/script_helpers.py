@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from . import campaign
+from . import corners as harness_corners
+
 
 def fmt(value, digits: int = 4) -> str:
     if value is None:
@@ -73,3 +76,20 @@ def corner_shim(
     lines.append(f".temp {temp_c:g}")
     lines.extend(extra_lines)
     return "\n".join(lines) + "\n"
+
+
+def build_points(
+    process_corners, temperatures_c, supplies: dict
+) -> list[harness_corners.PvtPoint]:
+    """A mismatch campaign's PVT points, in the order `sample_seed` indexes."""
+    corner_list = [harness_corners.CORNERS[name] for name in process_corners]
+    return harness_corners.build_grid(
+        corner_list, list(temperatures_c), [dict(supplies)]
+    )
+
+
+def claim_sigma_summary(outcomes, measurement: str) -> str:
+    """`campaign.point_sigma_summary` over one named claim measurement."""
+    return campaign.point_sigma_summary(
+        outcomes, lambda outcome: outcome.values(measurement)
+    )
