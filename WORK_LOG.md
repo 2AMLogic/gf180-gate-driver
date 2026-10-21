@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-21
 
+- **PR #314**: refactor(sim): share corner_shim across experiment scripts
+- **Issue #313** (closed): Share _corner_shim/_run_corner across sim experiment scripts (follow-up to #309)
 - **PR #311**: refactor(sim): share build_points and claim sigma summary across mismatch campaigns
 - **Issue #309** (closed): Consolidate helpers copy-pasted across sim/*/run_*.py experiment scripts
 - **PR #310**: refactor(sim): share fmt/parse_dc_tables/column across experiment scripts
