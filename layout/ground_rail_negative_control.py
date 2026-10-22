@@ -54,12 +54,13 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 
+import klt_env  # noqa: E402  (path set above)
 from check_gate_driver_core import (  # noqa: E402  (path set above)
     ground_rail_isolation_verdict,
     routed_metal_components,
@@ -127,14 +128,7 @@ def _verdict(name: str, shapes: list[dict]) -> dict:
 
 
 def main() -> int:
-    if shutil.which("klt") is None:
-        print(
-            "error: 'klt' not found on PATH. Install with:\n"
-            "  uv tool install git+https://github.com/2AMLogic/klayout-tools\n"
-            "(see layout/README.md)",
-            file=sys.stderr,
-        )
-        return 1
+    klt_env.require_klt()
 
     try:
         isolated = _verdict("isolated", _ISOLATED_SHAPES)

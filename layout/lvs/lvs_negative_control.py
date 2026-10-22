@@ -35,7 +35,6 @@ import datetime as _dt
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +42,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import klt_env  # noqa: E402
 import report_id  # noqa: E402
 
 BUILD_DIR = REPO_ROOT / "layout" / "build"
@@ -60,14 +60,7 @@ DROPPED_DEVICE = "Mx2_XMN6_0"
 
 
 def main() -> int:
-    if shutil.which("klt") is None:
-        print(
-            "error: 'klt' not found on PATH. Install with:\n"
-            "  uv tool install git+https://github.com/2AMLogic/klayout-tools\n"
-            "(see layout/README.md)",
-            file=sys.stderr,
-        )
-        return 1
+    klt_env.require_klt()
     if not REFERENCE.exists():
         print(
             f"error: {REFERENCE} does not exist -- run "
