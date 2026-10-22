@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:0038a21e5872f5dc4da68e232523397c8fec8c0e1e62bdff0b44435a2fb39daa` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
-| `layout/README.md` | `sha256:a5989d94e1db804b4b085a3d84ace18bf254d784c3bb252dcbf79db9fb661d14` |
+| `layout/README.md` | `sha256:4f44164ad8454d1e82cc0f7069193994146dfd35da5dd9fb5540f0708bddd3b3` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings

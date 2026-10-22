@@ -20,10 +20,12 @@ layout/
   build/                            generator scratch (gitignored)
   common/report_id.py               shared <record-id> minting for the run scripts
   common/power_array_folded.py      folded, cross-row-tied high-m power-array
-                                    generator (#254), used by future power-stage
-                                    growth -- see "Folded power-array generator"
-                                    below
-  common/test_power_array_folded.py unit tests for the above (PDK-free CI)
+                                    generator (#254). Kept on purpose for future
+                                    power-stage growth; nothing in this block
+                                    imports it yet -- see "Folded power-array
+                                    generator" below
+  common/test_power_array_folded.py unit tests for the above (PDK-free CI;
+                                    keeps the kept-on-purpose module tested)
   drc/                              klt drc runner + committed reports (#105)
   lvs/                              klt extract/lvs runner, reference netlist,
                                     extracted DUT netlists, committed reports (#105)
@@ -916,8 +918,10 @@ buses have to tie into **one shared net each**, or the "folded" device
 extracts as `rows` separate smaller devices instead of one. No generator in
 this catalog drew that before issue #254, so `common/power_array_folded.py`
 is genuinely new infrastructure — it has no caller in this block yet (every
-netlist device is still `nf=1`), and is committed ahead of that first
-caller so the next power-stage device does not have to re-derive the scheme.
+netlist device is still `nf=1`). **That is deliberate:** the module is kept
+on purpose, with its unit tests and CI step, for future power-stage growth,
+so the next power-stage device does not have to re-derive the scheme. Do not
+remove it as dead code (operator ruling on #317, 2026-10-22: keep).
 
 **Correcting a false impossibility claim.** A single-layer (Metal1-only)
 scheme was attempted upstream of this issue and recorded as evidence that
