@@ -57,7 +57,6 @@ _None._
 ## Proposed (Architect / Hermit)
 
 - **#317**: Remove unused folded power-array generator (power_array_folded.py): no consumer in repo *(hermit)*
-- **#323**: Dedupe main() driver skeleton across four mismatch campaign scripts *(hermit)*
 
 ## Epics
 
@@ -75,6 +74,6 @@ _None._
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 2 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
