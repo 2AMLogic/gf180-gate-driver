@@ -3,6 +3,13 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-22
+
+- **PR #331**: refactor(layout): share one klt-not-found guard across layout scripts
+- **Issue #330** (closed): Consolidate 8 drifted copies of the klt-not-found guard in layout/ scripts
+- **PR #329**: docs: state power_array_folded is kept on purpose for future power-stage growth
+- **Issue #317** (closed): Remove unused folded power-array generator (power_array_folded.py): no consumer in repo
+
 ### 2026-10-21
 
 - **PR #326**: refactor: hoist mismatch campaign main() into campaign.run_mismatch_main

@@ -56,7 +56,7 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-- **#317**: Remove unused folded power-array generator (power_array_folded.py): no consumer in repo *(hermit)*
+_None._
 
 ## Epics
 
@@ -74,6 +74,6 @@ _None._
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 1 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
