@@ -32,12 +32,15 @@ tool/PDK prerequisite is missing) -- a 1 invalidates the sibling
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
+
+import klt_env  # noqa: E402
+
 BUILD_DIR = REPO_ROOT / "layout" / "build"
 FIXTURE_GDS = BUILD_DIR / "drc-negative-control.gds"
 RUN_DRC = REPO_ROOT / "layout" / "drc" / "run_drc.py"
@@ -55,14 +58,7 @@ EXPECTED_RULE = "metal1.space.1"
 
 
 def main() -> int:
-    if shutil.which("klt") is None:
-        print(
-            "error: 'klt' not found on PATH. Install with:\n"
-            "  uv tool install git+https://github.com/2AMLogic/klayout-tools\n"
-            "(see layout/README.md)",
-            file=sys.stderr,
-        )
-        return 1
+    klt_env.require_klt()
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     draw = subprocess.run(

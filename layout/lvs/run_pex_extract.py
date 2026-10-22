@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +31,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import klt_env  # noqa: E402
 import report_id  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -45,20 +45,9 @@ def main() -> int:
     parser.add_argument("--top", default=None, help="top cell (default: the GDS stem)")
     args = parser.parse_args()
 
-    klt = shutil.which("klt")
-    if klt is None:
-        print(
-            "error: 'klt' not found on PATH. Install with:\n"
-            "  uv tool install git+https://github.com/2AMLogic/klayout-tools\n"
-            "(see layout/README.md)",
-            file=sys.stderr,
-        )
-        return 1
+    klt = klt_env.require_klt()
 
-    gds_path = args.gds if args.gds.is_absolute() else (Path.cwd() / args.gds).resolve()
-    if not gds_path.exists():
-        print(f"error: {gds_path} does not exist", file=sys.stderr)
-        return 1
+    gds_path = klt_env.resolve_existing(args.gds)
 
     block = args.block or gds_path.stem
     top = args.top or gds_path.stem

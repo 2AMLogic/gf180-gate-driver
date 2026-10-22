@@ -16,8 +16,8 @@ Ported from ``2AMLogic/gf180-bandgap``'s ``layout/drc/run_drc.py`` (CLAUDE.md:
 "Harness bootstrap: copy the sim-harness pattern from 2AMLogic/gf180-bandgap
 rather than reinventing it").
 
-Requires ``klt`` on ``PATH`` -- see ``layout/README.md`` for install
-instructions (no PyPI release yet -- install from the klayout-tools git repo).
+Requires ``klt`` on ``PATH`` -- see ``layout/README.md`` for the pinned
+install.
 
 Usage (from the repo root):
 
@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -40,6 +39,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import klt_env  # noqa: E402
 import report_id  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -55,22 +55,9 @@ def main() -> int:
     parser.add_argument("--deck", default="gf180mcu", help="DRC deck (default: gf180mcu)")
     args = parser.parse_args()
 
-    klt = shutil.which("klt")
-    if klt is None:
-        print(
-            "error: 'klt' not found on PATH. Install with:\n"
-            "  uv tool install git+https://github.com/2AMLogic/klayout-tools\n"
-            "(no PyPI release yet -- see layout/README.md)",
-            file=sys.stderr,
-        )
-        return 1
+    klt = klt_env.require_klt()
 
-    gds_path = args.gds
-    if not gds_path.is_absolute():
-        gds_path = (Path.cwd() / gds_path).resolve()
-    if not gds_path.exists():
-        print(f"error: {gds_path} does not exist", file=sys.stderr)
-        return 1
+    gds_path = klt_env.resolve_existing(args.gds)
 
     fixture = args.fixture or gds_path.stem
     reports_dir = REPORTS_ROOT / fixture
