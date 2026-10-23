@@ -49,7 +49,8 @@ This decision is implemented in [`sim/harness/corners.py`](harness/corners.py)
 
 ## Directory / naming convention
 
-Each testbench topic gets its own experiment directory:
+Each testbench topic gets its own experiment directory (this is the **legacy**
+committed-bytes layout; new runs are manifest-backed, see "Stored evidence"):
 
 ```
 sim/
@@ -292,6 +293,42 @@ resulting `records/<record-id>.md` are unaffected.
 | Root cause | The `Reference value :` lines are **not** part of any `.meas` computation at all. ngspice's batch-mode transient writer (`src/frontend/outitf.c`, `OUTpData()`, both the `run->writeOut` and interactive branches) prints the current value of the analysis's reference vector — **simulation time**, for a `tran` analysis — to stdout every time `0.25` **CPU-clock seconds** (`clock()`, not simulation time) elapse while writing result points, purely as an interactive progress indicator (`ft_norefprint`/`cp_background` gate it off only in truly non-interactive contexts, which `ngspice -b` piped through `subprocess` does not trigger here). Because the gate is real CPU/wall time, not anything about the circuit, the exact simulation-time value captured at each `~250 ms` tick — and even how many ticks occur — depends on system load and scheduling, which is why the printed numbers (and occasionally the count) vary run to run on a shared host. This was traced directly against the installed `ngspice-46` source (`~/ngspice-build/ngspice-46/src/frontend/outitf.c:669,683,781,784`), not inferred. |
 | Confirms | `sim/gate-driver-core-drive`'s deck (`tran 0.1n 700n`, the full signal chain) takes ≈1 s of wall/CPU time per corner — long enough to cross one or more 250 ms ticks, hence 2-3 `Reference value` lines per log. `sim/output-stage-drive`'s deck (`tran 0.05n 160n`, driven by an ideal source, no level-shifter) completes in ≈0.2 s — under the first tick — so it **never** prints a `Reference value` line, confirming `sim/output-stage-taper-mismatch`'s absence of the pattern: it is not that its `.meas` statements are a different shape (they use the same `trig`/`targ` form as `gate-driver-core-drive`'s), it is that the underlying deck is fast enough to finish before the first heartbeat fires. |
 | Convention | `Reference value :` lines (and their count) are an **ngspice batch-mode progress heartbeat, gated on wall/CPU clock, not simulation content** — expect them to vary between any two runs of the same deck on a shared or loaded machine, and do not treat a difference confined to those lines as evidence of a changed result. A byte-diff of two `.log` files for reproduction purposes should therefore either exclude lines matching `^ Reference value :` or compare only the `m_<name> = ...` lines (which is exactly what `sim/harness/runner.py`'s `parse_measurements()`/`_MEAS_RE` already does — it never reads a `Reference value` line, so no recorded measurement has ever been affected by this). No suppression or normalization of the raw ngspice log is made at write time: the log is committed verbatim, as ngspice produced it, and this note is the reader-facing explanation for the one line class in it that is expected to be non-reproducible. |
+
+## Stored evidence (manifest-backed records)
+
+Issue #333. New runs no longer commit raw output. The harness (`run_corners.py`,
+the mismatch campaigns, and the `sim/*/run_*.py` bench scripts) stages the
+netlist snapshot, per-corner logs and sample sidecars in git-ignored scratch
+(`sim/.work/evidence/<experiment-slug>/<record-id>/`, laid out as the tree above)
+and stores them with `klt artifact put`. Git gains exactly two files per run:
+
+```
+manifests/artifacts/<experiment-slug>-<record-id>.manifest.json   # sha256 + artifact:<key> uri + name per object
+sim/<experiment-slug>/records/<record-id>.md                      # summary, plus a "Stored evidence" table
+```
+
+Each manifest `name` is the path the bytes would have had under `sim/` (for
+example `sim/<slug>/corners/<record-id>/<corner-id>.log`). Fetch one with
+`klt artifact get <manifest>#<name> -o <out>`; check them all with
+`klt artifact verify <manifest>` (needs `$KLT_ARTIFACT_BROKER`).
+
+- **Fail closed.** With `$KLT_ARTIFACT_BROKER` unset, `klt` lacking `artifact
+  put` or older than klayout-tools `7e3561f`, or the broker unreachable, the
+  run exits 10 before simulating (or, if the put itself fails, commits nothing
+  and keeps the staged bytes in scratch). There is no flag or fallback that
+  commits the bytes instead. `--no-write` still runs without recording.
+- **Lint.** `sim/check_records.py` treats a record as manifest-backed when its
+  manifest exists: the snapshot and at least one `.log` must be among the
+  manifest `name`s, and the head-record log-count rule counts manifest entries.
+  CI (`scripts/check_artifact_manifests.py check`) validates the manifest schema,
+  accepts only `artifact:` uris, and fails if a stored object's bytes are also
+  committed. CI cannot reach the broker, so it does not hash-verify.
+- **Legacy layout.** Records created before this change keep their committed
+  `netlist-snapshots/` and `corners/` bytes, still lint as before, and are not
+  moved or rewritten (append-only). The layout in the tree above is the
+  *legacy* layout; new records use the manifest-backed layout.
+- Zero-byte logs cannot be stored; they are listed in the "Stored evidence"
+  table with the empty-input digest.
 
 ## Append-only rule
 

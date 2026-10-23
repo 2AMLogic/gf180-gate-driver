@@ -11,6 +11,8 @@ __pycache__/
 sim/build/
 # sim/harness scratch: generated ngspice decks, disposable (sim/harness/README.md)
 sim/.work/
+# ... which includes sim/.work/evidence/<bench>/<run-id>/, where a run's raw
+# outputs are staged before `klt artifact put` (sim/README.md, "Stored evidence")
 # machine-local PDK override (sim/harness/pdk.py); never committed
 sim/pdk.local.json
 # synthesis / P&R scratch

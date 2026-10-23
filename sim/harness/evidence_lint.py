@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import json
 import os
 import re
 import subprocess
@@ -70,6 +71,8 @@ CORNERS_DIR = "corners"
 
 RECORD_SUFFIX = ".md"
 SNAPSHOT_SUFFIX = ".spice"
+MANIFEST_DIR = "manifests/artifacts"
+MANIFEST_SUFFIX = ".manifest.json"
 LOG_SUFFIX = ".log"
 
 #: The nine fields of the summary record format, in ``sim/README.md`` order.
@@ -492,12 +495,53 @@ def _check_supersedes(
     return problems
 
 
+def merge_manifest_evidence(root: Path, experiment: Experiment) -> list:
+    """Fold manifest-backed runs into ``experiment``'s snapshot/log listings.
+
+    A run stored through the artifact store (``sim/harness/evidence_store.py``)
+    commits only ``records/<record-id>.md`` plus
+    ``manifests/artifacts/<slug>-<record-id>.manifest.json``; the snapshot and
+    per-corner logs are the manifest's ``name`` entries. Where that manifest
+    exists, its names stand in for the files on disk, so the same checks apply
+    (snapshot present, at least one parseable ``.log``, head-record log count).
+    Legacy records with committed bytes have no manifest and lint as before.
+    Returns problems for an unreadable manifest.
+    """
+    problems: list = []
+    prefix = f"sim/{experiment.slug}/"
+    for record_id in sorted(experiment.records):
+        mpath = f"{MANIFEST_DIR}/{experiment.slug}-{record_id}{MANIFEST_SUFFIX}"
+        full = root / mpath
+        if not full.is_file():
+            continue
+        try:
+            entries = json.loads(full.read_text(encoding="utf-8"))["entries"]
+            names = [e["name"] for e in entries]
+            if not all(isinstance(n, str) for n in names):
+                raise TypeError("entry name is not a string")
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            problems.append(Problem(mpath, f"unreadable manifest: {exc}"))
+            continue
+        for name in names:
+            if not name.startswith(prefix):
+                continue
+            rest = name[len(prefix):]
+            if rest == f"{SNAPSHOT_DIR}/{record_id}{SNAPSHOT_SUFFIX}":
+                experiment.snapshots.setdefault(record_id, name)
+            elif rest.startswith(f"{CORNERS_DIR}/{record_id}/"):
+                leaf = rest[len(f"{CORNERS_DIR}/{record_id}/"):]
+                if leaf and "/" not in leaf:
+                    experiment.corner_files.setdefault(record_id, []).append(leaf)
+    return problems
+
+
 def check_experiments(root: Path, experiments: dict) -> list:
     """Every problem across every experiment, in a stable order."""
     problems: list = []
     for slug in sorted(experiments):
         experiment = experiments[slug]
         problems += experiment.strays
+        problems += merge_manifest_evidence(root, experiment)
         superseded_ids = _superseded_record_ids(root, experiment)
         for record_id in sorted(experiment.records):
             problems += check_record(root, experiment, record_id, superseded_ids)

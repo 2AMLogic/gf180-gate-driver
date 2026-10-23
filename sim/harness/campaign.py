@@ -41,6 +41,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import evidence_store
 from . import montecarlo as mc_mod
 from . import pdk as harness_pdk
 from . import report
@@ -504,6 +505,8 @@ def run_mismatch_main(
         selected = {i for i, p in enumerate(grid) if p.corner_id == smoke_corner_id}
     points = [p for i, p in enumerate(grid) if i in selected]
 
+    if not args.no_write:
+        evidence_store.preflight_or_exit(repo_root)
     git = report.git_provenance(repo_root)
     record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
     stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
@@ -575,7 +578,8 @@ def run_mismatch_main(
         print("evidence  : not recorded (--no-write)")
         return 0
 
-    corners_dir = here / report.CORNERS_DIR
+    stage = evidence_store.stage_dir(repo_root, here.name, record)
+    corners_dir = stage / report.CORNERS_DIR
     for outcome in outcomes:
         write_outcome_logs(
             corners_dir, record, outcome, pdk, tb, stamp, ngspice,
@@ -584,11 +588,15 @@ def run_mismatch_main(
             baseline_note_lines=baseline_note_lines,
         )
 
-    snapshot = report.write_netlist_snapshot(tb, here, record)
-    path = report.device_write_record(here / report.RECORDS_DIR, record, body)
+    report.write_netlist_snapshot(tb, here, record, out_dir=stage / report.SNAPSHOT_DIR)
+    path = here / report.RECORDS_DIR / f"{record}.md"
+    manifest = evidence_store.commit_run_or_exit(
+        stage, repo_root=repo_root, bench=here.name, rid=record,
+        record_text=body, record_path=path,
+    )
     print(f"record    : {path}")
-    print(f"snapshot  : {snapshot}")
-    print(f"raw logs  : {corners_dir / record}")
+    print(f"manifest  : {manifest}")
+    print(f"staged    : {stage}")
     print(f"status    : {verdict}")
     return 0 if verdict == "PASS" else 1
 

@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import HARNESS_VERSION, corners as corners_mod, report, runner, testbench as tb_mod
+from . import HARNESS_VERSION, corners as corners_mod, evidence_store, report, runner, testbench as tb_mod
 from .pdk import PdkNotFound, find_pdk
 from .runner import NgspiceMissing
 
@@ -261,7 +261,14 @@ def run(args: argparse.Namespace) -> int:
     git = report.git_provenance(REPO_ROOT)
     record_id = report.allocate_record_id(REPO_ROOT, records_dir, started, git=git)
     workdir = WORK_DIR / tb.experiment / record_id
-    log_dir = None if args.no_write else experiment_dir / report.CORNERS_DIR / record_id
+    stage = None
+    log_dir = None
+    if not args.no_write:
+        # Raw outputs go to the artifact store, not git: stage them in
+        # git-ignored scratch and commit only the manifest + record.
+        evidence_store.preflight_or_exit(REPO_ROOT)
+        stage = evidence_store.stage_dir(REPO_ROOT, experiment_dir.name, record_id)
+        log_dir = stage / report.CORNERS_DIR / record_id
 
     if not args.quiet:
         print(f"experiment: {tb.experiment}"
@@ -353,12 +360,30 @@ def run(args: argparse.Namespace) -> int:
         )
 
     if not args.no_write:
-        snapshot = report.write_netlist_snapshot(tb, experiment_dir, record_id)
-        record_path = report.write_record(record, experiment_dir)
+        report.write_netlist_snapshot(
+            tb, experiment_dir, record_id, out_dir=stage / report.SNAPSHOT_DIR
+        )
+        record_path = records_dir / f"{record_id}.md"
+        try:
+            manifest = evidence_store.commit_run(
+                stage,
+                repo_root=REPO_ROOT,
+                bench=experiment_dir.name,
+                rid=record_id,
+                record_text=report.render_record(record, experiment_dir.name),
+                record_path=record_path,
+            )
+        except evidence_store.StoreError as exc:
+            print(
+                f"EVIDENCE NOT STORED -- nothing committed (fail closed): {exc}\n"
+                f"staged bytes kept in {stage}",
+                file=sys.stderr,
+            )
+            return evidence_store.EXIT_NOT_STORED
         print()
         print(f"record    : {record_path}")
-        print(f"snapshot  : {snapshot}")
-        print(f"raw logs  : {log_dir}")
+        print(f"manifest  : {manifest}")
+        print(f"staged    : {stage}")
     else:
         print()
         print("evidence  : not recorded (--no-write)")
