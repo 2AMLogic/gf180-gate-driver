@@ -41,8 +41,10 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
+from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
+from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
 from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- confirmed by
@@ -187,18 +189,6 @@ def _parse_scalars(log: str) -> dict[str, float]:
     return found
 
 
-def _interp_at(xs: list[float], ys: list[float], y_target: float) -> float | None:
-    """First x where the monotonically increasing ys crosses y_target."""
-    for i in range(1, len(ys)):
-        if ys[i - 1] < y_target <= ys[i]:
-            x0, x1 = xs[i - 1], xs[i]
-            y0, y1 = ys[i - 1], ys[i]
-            if y1 == y0:
-                return x0
-            return x0 + (x1 - x0) * (y_target - y0) / (y1 - y0)
-    return None
-
-
 def extract(log: str) -> dict:
     tables = _parse_dc_tables(log)
     vt_header, vt_rows = tables[0]
@@ -213,7 +203,7 @@ def extract(log: str) -> dict:
         vgs = [f * spec["vmax"] for f in vfrac]
         idv = [sign * v for v in _column(vt_header, vt_rows, f"id_vt_{suf}")]
         icrit = VT_ICRIT_DENSITY * (spec["w"] / spec["l"])
-        vt = _interp_at(vgs, idv, icrit)
+        vt = _first_crossing(vgs, idv, icrit)
         out["vt"][suf] = sign * vt if vt is not None else None
 
         out["idsat_a"][suf] = scalars[f"idsat_{suf}"]
@@ -241,17 +231,6 @@ def extract(log: str) -> dict:
 # --------------------------------------------------------------------------
 # Record rendering
 # --------------------------------------------------------------------------
-
-
-def _pass_fail(value: float | None, lo: float | None, hi: float | None) -> str:
-    if value is None:
-        return "ERROR (no crossing found)"
-    ok = True
-    if lo is not None and value < lo:
-        ok = False
-    if hi is not None and value > hi:
-        ok = False
-    return "PASS" if ok else "FAIL"
 
 
 def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
@@ -364,7 +343,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         vals = [v for v in vals if v is not None]
         typ_val = results[("typical", 27.0)]["vt"][suf]
         lo_sim, hi_sim = (min(vals), max(vals)) if vals else (None, None)
-        verdict = _pass_fail(typ_val, lo, hi)
+        verdict = _range_verdict(typ_val, lo, hi)
         verdicts[suf]["vt"] = verdict
         add(
             f"| `{suf}` | `{spec['model']}` | {spec['w']:g}/{spec['l']:g} | "
@@ -392,7 +371,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         ]
         typ_val = results[("typical", 27.0)]["idsat_a"][suf] * 1e6 / spec["w"]
         lo_sim, hi_sim = min(vals), max(vals)
-        verdict = _pass_fail(typ_val, lo, hi)
+        verdict = _range_verdict(typ_val, lo, hi)
         verdicts[suf]["idsat"] = verdict
         add(
             f"| `{suf}` | {_fmt(lo, 1)} / {_fmt(typ, 1)} / {_fmt(hi, 1)} | "
@@ -419,7 +398,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
             results[(s, t)]["ioff_a"][suf] * 1e12 / spec["w"] for s in SECTIONS for t in TEMPS
         ]
         lo_sim, hi_sim = min(vals_all), max(vals_all)
-        verdict = _pass_fail(val_27, lo, hi)
+        verdict = _range_verdict(val_27, lo, hi)
         verdicts[suf]["ioff"] = verdict
         add(
             f"| `{suf}` | {_fmt(lo, 2)} / {_fmt(typ, 2)} / {_fmt(hi, 2)} | "

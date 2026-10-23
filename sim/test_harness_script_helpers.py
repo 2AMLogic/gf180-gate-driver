@@ -116,3 +116,48 @@ def test_run_ngspice_raises_on_error_line(tmp_path, monkeypatch):
     work = _stub_ngspice(tmp_path, monkeypatch, "echo 'Error: no such model'\n")
     with pytest.raises(RuntimeError, match=r"reported an error for d.spice \[tt\]"):
         script_helpers.run_ngspice(work, "d.spice", "tt")
+
+
+def test_first_crossing_rising_interpolates():
+    assert script_helpers.first_crossing([0, 1, 2], [0.0, 1.0, 3.0], 2.0) == 1.5
+
+
+def test_first_crossing_falling_interpolates():
+    assert script_helpers.first_crossing([0, 1, 2], [3.0, 1.0, 0.0], 2.0, rising=False) == 0.5
+
+
+def test_first_crossing_direction_must_match():
+    assert script_helpers.first_crossing([0, 1, 2], [3.0, 1.0, 0.0], 2.0) is None
+    assert script_helpers.first_crossing([0, 1, 2], [0.0, 1.0, 3.0], 2.0, rising=False) is None
+
+
+def test_first_crossing_skips_flat_segment_and_takes_first_crossing():
+    xs, ys = [0, 1, 2, 3, 4], [1.0, 1.0, 1.0, 5.0, 0.0]
+    assert script_helpers.first_crossing(xs, ys, 3.0) == 2.5
+
+
+def test_first_crossing_threshold_on_sample_and_none_when_absent():
+    assert script_helpers.first_crossing([0, 1], [0.0, 2.0], 2.0) == 1.0
+    assert script_helpers.first_crossing([0, 1], [0.0, 2.0], 5.0) is None
+    assert script_helpers.first_crossing([], [], 1.0) is None
+
+
+def test_first_crossing_log_interpolates_in_log_y():
+    # Geometric midpoint of 1e-6..1e-4 is 1e-5, halfway in x.
+    got = script_helpers.first_crossing([0.0, 1.0], [1e-6, 1e-4], 1e-5, log=True)
+    assert abs(got - 0.5) < 1e-12
+    assert script_helpers.first_crossing([0.0, 1.0], [1e-6, 1e-4], 1e-5) != got
+
+
+def test_first_crossing_log_nonpositive_bracket_returns_left_x():
+    assert script_helpers.first_crossing([2.0, 3.0], [0.0, 1.0], 0.5, log=True) == 2.0
+
+
+def test_range_verdict():
+    rv = script_helpers.range_verdict
+    assert rv(None, 0, 1) == "ERROR (no crossing found)"
+    assert rv(0.5, 0, 1) == "PASS"
+    assert rv(0, 0, 1) == "PASS" and rv(1, 0, 1) == "PASS"
+    assert rv(-0.1, 0, 1) == "FAIL" and rv(1.1, 0, 1) == "FAIL"
+    assert rv(5, None, 5) == "PASS" and rv(6, None, 5) == "FAIL"
+    assert rv(-1, 0, None) == "FAIL"
