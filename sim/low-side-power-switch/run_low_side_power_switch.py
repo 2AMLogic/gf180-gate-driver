@@ -60,7 +60,6 @@ Usage:
 
 from __future__ import annotations
 
-import math
 import sys
 import tempfile
 from datetime import datetime, timezone
@@ -75,6 +74,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
+from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
@@ -197,21 +197,6 @@ def _run_corner(
 # --------------------------------------------------------------------------
 
 
-def _interp_log_at(xs: list[float], ys: list[float], y_target: float) -> float | None:
-    """First x where a monotonically increasing, exponential-ish ys crosses
-    y_target, interpolated in log(y) so a diode's forward knee is not read
-    with a straight-line secant across a decade."""
-    for i in range(1, len(ys)):
-        y0, y1 = ys[i - 1], ys[i]
-        if y0 < y_target <= y1:
-            x0, x1 = xs[i - 1], xs[i]
-            if y0 <= 0 or y1 <= y0:
-                return x0
-            frac = (math.log(y_target) - math.log(y0)) / (math.log(y1) - math.log(y0))
-            return x0 + (x1 - x0) * frac
-    return None
-
-
 def extract(log: str) -> dict:
     """Per-corner results: Ron.W per device per Vgs, and diode Vf per current."""
     tables = _parse_dc_tables(log)
@@ -245,7 +230,7 @@ def extract(log: str) -> dict:
     vfwd = [f * FB_SPAN_V for f in vfrac]
     ifwd = _column(header, rows, "ifb")
     for target in FB_CURRENTS_A:
-        out["fb_vf_v"][target] = _interp_log_at(vfwd, ifwd, target)
+        out["fb_vf_v"][target] = _first_crossing(vfwd, ifwd, target, log=True)
     return out
 
 

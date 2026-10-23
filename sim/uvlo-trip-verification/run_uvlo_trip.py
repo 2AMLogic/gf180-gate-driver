@@ -57,9 +57,11 @@ sys.path.insert(0, str(HERE.parent))
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
+from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
+from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
 from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- same five
@@ -191,19 +193,6 @@ def _merged_series(log: str) -> dict[tuple[str, ...], list[list[float]]]:
     return series
 
 
-def _find_cross(xs: list[float], ys: list[float], thresh: float, rising: bool) -> float | None:
-    for i in range(1, len(ys)):
-        if rising and ys[i - 1] < thresh <= ys[i]:
-            x0, x1 = xs[i - 1], xs[i]
-            y0, y1 = ys[i - 1], ys[i]
-            return x0 if y1 == y0 else x0 + (x1 - x0) * (thresh - y0) / (y1 - y0)
-        if not rising and ys[i - 1] > thresh >= ys[i]:
-            x0, x1 = xs[i - 1], xs[i]
-            y0, y1 = ys[i - 1], ys[i]
-            return x0 if y1 == y0 else x0 + (x1 - x0) * (thresh - y0) / (y1 - y0)
-    return None
-
-
 def _interp(xs: list[float], ys: list[float], x: float | None) -> float | None:
     if x is None:
         return None
@@ -232,10 +221,10 @@ def extract_hysteresis(log: str) -> dict:
 
     # Rising half: lockout starts HIGH (locked out) and falls through the
     # absolute threshold as VDD_DRV climbs past the RISING trip point.
-    t_rise = _find_cross(time_up, lock_up, LOCKOUT_ABS_THRESHOLD_V, rising=False)
+    t_rise = _first_crossing(time_up, lock_up, LOCKOUT_ABS_THRESHOLD_V, rising=False)
     # Falling half: lockout starts LOW (released) and rises back through the
     # threshold as VDD_DRV drops past the FALLING trip point.
-    t_fall = _find_cross(time_dn, lock_dn, LOCKOUT_ABS_THRESHOLD_V, rising=True)
+    t_fall = _first_crossing(time_dn, lock_dn, LOCKOUT_ABS_THRESHOLD_V, rising=True)
 
     v_rise = _interp(time1, vdd, t_rise)
     v_fall = _interp(time1, vdd, t_fall)
@@ -252,7 +241,7 @@ def extract_response(log: str, falling_v: float | None) -> dict:
     vdd = [r[1] for r in t]
     outv = [r[3] for r in t]
 
-    t_vdrv_cross = _find_cross(time, vdd, falling_v, rising=False)
+    t_vdrv_cross = _first_crossing(time, vdd, falling_v, rising=False)
     if t_vdrv_cross is None:
         return {
             "response_s": None,
@@ -261,7 +250,7 @@ def extract_response(log: str, falling_v: float | None) -> dict:
         }
     # Only look for the OUT crossing after the VDD_DRV edge.
     idx0 = next(i for i, tt in enumerate(time) if tt >= t_vdrv_cross)
-    t_out_cross = _find_cross(time[idx0:], outv[idx0:], OUT_LOW_PROXY_V, rising=False)
+    t_out_cross = _first_crossing(time[idx0:], outv[idx0:], OUT_LOW_PROXY_V, rising=False)
     if t_out_cross is None:
         return {"response_s": None, "note": "OUT never reached the low proxy level in this deck's window"}
     return {"response_s": t_out_cross - t_vdrv_cross, "note": ""}
@@ -270,18 +259,6 @@ def extract_response(log: str, falling_v: float | None) -> dict:
 # --------------------------------------------------------------------------
 # Pass/fail
 # --------------------------------------------------------------------------
-
-
-def _in_range(value: float | None, lo: float, hi: float) -> str:
-    if value is None:
-        return "ERROR (no crossing found)"
-    return "PASS" if lo <= value <= hi else "FAIL"
-
-
-def _under(value: float | None, limit: float) -> str:
-    if value is None:
-        return "ERROR (no crossing found)"
-    return "PASS" if value <= limit else "FAIL"
 
 
 # --------------------------------------------------------------------------
@@ -396,9 +373,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
             resp = r["response"]
             fv, rv, hy = hv["falling_v"], hv["rising_v"], hv["hysteresis_v"]
             rs = resp["response_s"]
-            v_f = _in_range(fv, *FALLING_RANGE)
-            v_r = _in_range(rv, *RISING_RANGE)
-            v_t = _under(rs, RESPONSE_MAX_S)
+            v_f = _range_verdict(fv, *FALLING_RANGE)
+            v_r = _range_verdict(rv, *RISING_RANGE)
+            v_t = _range_verdict(rs, None, RESPONSE_MAX_S)
             overall = "PASS" if "PASS" == v_f == v_r == v_t else "FAIL"
             verdicts[(section, temp)] = {
                 "falling": v_f,

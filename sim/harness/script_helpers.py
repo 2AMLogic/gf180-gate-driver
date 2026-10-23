@@ -8,6 +8,7 @@ not change.
 
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 from collections.abc import Iterable
@@ -58,6 +59,44 @@ def parse_dc_tables(log: str) -> list[tuple[list[str], list[list[float]]]]:
 def column(header: list[str], rows: list[list[float]], name: str) -> list[float]:
     idx = header.index(name)
     return [row[idx] for row in rows]
+
+
+def first_crossing(
+    xs: list[float],
+    ys: list[float],
+    thresh: float,
+    *,
+    rising: bool = True,
+    log: bool = False,
+) -> float | None:
+    """First x where `ys` crosses `thresh`, linearly interpolated between the
+    bracketing samples; `None` when it never does. `rising` selects an upward
+    (``y0 < thresh <= y1``) or downward (``y0 > thresh >= y1``) crossing.
+    `log` interpolates in log(y) (rising only) so an exponential knee is not
+    read with a straight-line secant across a decade; a non-positive or flat
+    bracket falls back to the segment's left x."""
+    for i in range(1, len(ys)):
+        y0, y1 = ys[i - 1], ys[i]
+        if not (y0 < thresh <= y1 if rising else y0 > thresh >= y1):
+            continue
+        x0, x1 = xs[i - 1], xs[i]
+        if log:
+            if y0 <= 0 or y1 <= y0:
+                return x0
+            frac = (math.log(thresh) - math.log(y0)) / (math.log(y1) - math.log(y0))
+            return x0 + (x1 - x0) * frac
+        return x0 if y1 == y0 else x0 + (x1 - x0) * (thresh - y0) / (y1 - y0)
+    return None
+
+
+def range_verdict(value: float | None, lo: float | None, hi: float | None) -> str:
+    """``PASS``/``FAIL`` for `value` inside the inclusive [lo, hi] (either
+    bound may be `None`); ``ERROR (no crossing found)`` when `value` is `None`."""
+    if value is None:
+        return "ERROR (no crossing found)"
+    if (lo is not None and value < lo) or (hi is not None and value > hi):
+        return "FAIL"
+    return "PASS"
 
 
 def corner_shim(
