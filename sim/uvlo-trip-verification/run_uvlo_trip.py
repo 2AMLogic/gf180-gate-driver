@@ -59,6 +59,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
+from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- same five
@@ -180,41 +181,13 @@ def _run_corner(body: str, pdk: harness_pdk.Pdk, section: str, temp_c: float, ta
 # --------------------------------------------------------------------------
 
 
-def _parse_tables(log: str) -> list[tuple[tuple[str, ...], list[list[float]]]]:
-    """Every ``Index <cols...>`` table in a control-block's printed output."""
-    lines = log.splitlines()
-    tables: list[tuple[tuple[str, ...], list[list[float]]]] = []
-    i = 0
-    while i < len(lines):
-        if lines[i].strip().startswith("Index"):
-            header = tuple(lines[i].split()[1:])
-            rows: list[list[float]] = []
-            j = i + 2  # skip header + '---' rule
-            while j < len(lines):
-                parts = lines[j].split()
-                if not parts or not parts[0].isdigit():
-                    break
-                try:
-                    values = [float(p) for p in parts[1:]]
-                except ValueError:
-                    break
-                if len(values) == len(header):
-                    rows.append(values)
-                j += 1
-            tables.append((header, rows))
-            i = j
-        else:
-            i += 1
-    return tables
-
-
 def _merged_series(log: str) -> dict[tuple[str, ...], list[list[float]]]:
     """Merge same-header table chunks (ngspice re-prints the header every
     ``height`` rows in batch-mode ASCII output) into one continuous series
     per distinct header."""
     series: dict[tuple[str, ...], list[list[float]]] = {}
-    for header, rows in _parse_tables(log):
-        series.setdefault(header, []).extend(rows)
+    for header, rows in _parse_dc_tables(log):
+        series.setdefault(tuple(header), []).extend(rows)
     return series
 
 
