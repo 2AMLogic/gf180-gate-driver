@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:2590d37185e6af715de854de3b26201ab70889c1bab9e9d93d19936ce4dcdb6a` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:0c9dae96eb1a968c8a31f00172f7ca6c774e49023c58d02c5cb5a346dc80c873` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e2cf0688f44c1d123a13dbed4b3ef9e46e76c828ed3373ad7a832636fd479d97` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -28,7 +28,7 @@ re-audit of the links):
 | document | sha256 |
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
-| `sim/README.md` | `sha256:0038a21e5872f5dc4da68e232523397c8fec8c0e1e62bdff0b44435a2fb39daa` |
+| `sim/README.md` | `sha256:80967abe117347d181575ff00b177e8a203aec5475a66bdd38842cc260097b7d` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
 | `layout/README.md` | `sha256:4f44164ad8454d1e82cc0f7069193994146dfd35da5dd9fb5540f0708bddd3b3` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
@@ -84,5 +84,26 @@ re-audit of the links):
   post-layout records (not edited by this issue); cited post-layout records
   state they were taken on a dirty working tree; the audit host has
   ngspice-42 while the primary record states ngspice-46.
+
+## Re-audit for issue #333 (2026-10-23)
+
+Two listed files changed on the issue #333 branch (`feature/issue-333`, on top
+of `origin/main` at `9ed9ed8`) and were re-read against the findings above;
+their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `Stored-evidence
+  manifests` step to `lint` (`scripts/check_artifact_manifests.py check`) and
+  an `Evidence-store and manifest-check unit tests` step to `test`. `lint`
+  (with the evidence-record check), the harness self-test and the `signoff`
+  job are unchanged, so the CI finding still holds. CI was read, not observed
+  to pass here.
+- `sim/README.md` (**read** the diff): adds the "Stored evidence" section and
+  marks the existing directory layout as the legacy one. The facet-table
+  omission disclosed above is unchanged. The root `README.md`'s reproduction
+  commands were not re-read or edited for this change, so they do not yet
+  describe the manifest-backed layout.
+
+The other listed files are unchanged. No simulation, netlisting or layout flow
+was run for this re-audit.
 
 Artifact binding verifies the bytes listed here, not the truth of this audit.
