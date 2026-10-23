@@ -3,6 +3,15 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-23
+
+- **PR #341**: refactor(sim): share first_crossing and range_verdict across experiment scripts
+- **Issue #340** (closed): Consolidate duplicated crossing/interpolation helpers across sim experiment scripts
+- **PR #338**: fix(sim): make inb alias check compare vinb_max_v to raw mq6
+- **Issue #337** (closed): Fix _confirm_inb_alias: docstring promises an alias-equality check, body only checks key presence
+- **PR #339**: refactor(sim): reuse harness parse_dc_tables in run_uvlo_trip
+- **Issue #336** (closed): Remove duplicate _parse_tables in run_uvlo_trip.py: copy of script_helpers.parse_dc_tables
+
 ### 2026-10-22
 
 - **PR #331**: refactor(layout): share one klt-not-found guard across layout scripts
