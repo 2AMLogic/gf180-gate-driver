@@ -43,6 +43,7 @@ Usage:
 
 from __future__ import annotations
 
+import math
 import re
 import statistics
 import sys
@@ -118,16 +119,20 @@ def reference_mq6(corner_id: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def _confirm_inb_alias(measurements: dict[str, float]) -> bool:
+def _confirm_inb_alias(result: harness_runner.PointResult) -> bool:
     """Does `vinb_max_v` (our alias) equal `mq6` in this same run's output?
 
     `mq6` is printed automatically by ngspice (a `meas` statement result);
-    `vinb_max_v` is the `let m_vinb_max_v = mq6` line this script adds. They
-    read the same underlying ngspice vector, so any run where they diverge
-    would mean the alias broke -- checked, not assumed, on every converged
-    result (see `main`).
+    `vinb_max_v` is the `let m_vinb_max_v = mq6` line this script adds. Both
+    are read back from the run's own raw log and compared, so a run where the
+    alias is missing, `mq6` is unreadable, or the two diverge fails -- checked,
+    not assumed, on every converged result (see `main`).
     """
-    return CLAIM_MEASUREMENT in measurements  # presence check; equality is by construction (same expr)
+    alias = result.measurements.get(CLAIM_MEASUREMENT)
+    match = _RAW_MQ6_RE.search(result.output)
+    if alias is None or match is None:
+        return False
+    return math.isclose(alias, float(match.group(1)), rel_tol=1e-6, abs_tol=1e-12)
 
 
 # --------------------------------------------------------------------------
@@ -497,11 +502,11 @@ def main(argv=None) -> int:
         worst_sample=lambda outcome: outcome.worst(CLAIM_MEASUREMENT),
         testbench_note=f" + {CLAIM_MEASUREMENT} alias",
         prepare_testbench=_alias_claim_measurement,
-        check_result=lambda result: _confirm_inb_alias(result.measurements),
+        check_result=_confirm_inb_alias,
         check_failure_message=(
-            f"ERROR: {CLAIM_MEASUREMENT} was missing from at least one "
-            "converged run's measurements -- the mq6 alias did not take "
-            "effect; aborting without writing a record."
+            f"ERROR: {CLAIM_MEASUREMENT} was missing, or did not equal the raw "
+            "mq6 in the same run's log, for at least one converged run -- the "
+            "mq6 alias did not hold; aborting without writing a record."
         ),
     )
 
