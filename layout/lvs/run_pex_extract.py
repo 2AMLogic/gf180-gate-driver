@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import report_id  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -60,23 +60,19 @@ def main() -> int:
     gds_rel = gds_path.relative_to(REPO_ROOT)
     scratch_spice = reports_dir / f"{record_id}.pex-extract.spice"
 
-    proc = subprocess.run(
-        [
-            "klt", "extract", str(gds_rel),
-            "--deck", args.deck,
-            "--top", top,
-            "--parasitics",
-            "--format", "json",
-            "-o", str(scratch_spice),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        print(proc.stdout, proc.stderr, file=sys.stderr)
-        print(f"error: klt extract --parasitics failed (exit {proc.returncode})", file=sys.stderr)
+    try:
+        proc = klt_report.run_klt(
+            REPO_ROOT,
+            [
+                klt, "extract", str(gds_rel),
+                "--deck", args.deck,
+                "--top", top,
+                "--parasitics",
+                "--format", "json",
+                "-o", str(scratch_spice),
+            ],
+        )
+    except klt_report.KltRunError:
         return 1
 
     json_path = reports_dir / f"{record_id}.pex-extract.json"

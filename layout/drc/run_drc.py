@@ -31,8 +31,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -40,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import report_id  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -70,35 +69,22 @@ def main() -> int:
     # field is reproducible regardless of invocation cwd.
     gds_rel = gds_path.relative_to(REPO_ROOT)
 
-    json_proc = subprocess.run(
-        [klt, "drc", str(gds_rel), "--deck", args.deck, "--format", "json"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    text_proc = subprocess.run(
-        [klt, "drc", str(gds_rel), "--deck", args.deck, "--format", "text"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
     # exit 0 (clean) and exit 3 (violations found) are both successful runs
     # per klt drc's documented exit-code contract; only exit 1/2 are errors.
-    if json_proc.returncode not in (0, 3):
-        print(json_proc.stdout, file=sys.stdout)
-        print(json_proc.stderr, file=sys.stderr)
-        print(f"error: klt drc failed (exit {json_proc.returncode})", file=sys.stderr)
+    try:
+        payload = klt_report.run_klt_report(
+            REPO_ROOT,
+            [klt, "drc", str(gds_rel), "--deck", args.deck],
+            ok_codes=(0, 3),
+            reports_dir=reports_dir,
+            record_id=record_id,
+            suffix="drc",
+        )
+    except klt_report.KltRunError:
         return 1
 
     json_path = reports_dir / f"{record_id}.drc.json"
     text_path = reports_dir / f"{record_id}.drc.txt"
-    json_path.write_text(json_proc.stdout)
-    text_path.write_text(text_proc.stdout)
-
-    payload = json.loads(json_proc.stdout)
     print(f"record id      : {record_id}")
     print(f"fixture        : {fixture}")
     print(f"status         : {payload['status']}")

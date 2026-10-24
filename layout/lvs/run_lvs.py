@@ -41,6 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import report_id  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -119,22 +120,18 @@ def main() -> int:
     extracted = reports_dir / f"{record_id}.extracted.spice"
 
     # 2. Extract.
-    extract_proc = subprocess.run(
-        [
-            klt, "extract", str(gds_rel),
-            "--deck", args.deck,
-            "--top", top,
-            "--format", "json",
-            "-o", str(extracted),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if extract_proc.returncode != 0:
-        print(extract_proc.stdout, extract_proc.stderr, file=sys.stderr)
-        print(f"error: klt extract failed (exit {extract_proc.returncode})", file=sys.stderr)
+    try:
+        extract_proc = klt_report.run_klt(
+            REPO_ROOT,
+            [
+                klt, "extract", str(gds_rel),
+                "--deck", args.deck,
+                "--top", top,
+                "--format", "json",
+                "-o", str(extracted),
+            ],
+        )
+    except klt_report.KltRunError:
         return 1
     (reports_dir / f"{record_id}.extract.json").write_text(extract_proc.stdout)
 
@@ -150,33 +147,20 @@ def main() -> int:
     request_path.write_text(json.dumps(request, indent=2) + "\n")
     request_arg = str(request_path.relative_to(REPO_ROOT))
 
-    lvs_json = subprocess.run(
-        [klt, "lvs", request_arg, "--format", "json"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
     # exit 0 (match) and exit 3 (mismatch) are both successful runs.
-    if lvs_json.returncode not in (0, 3):
-        print(
-            f"{lvs_json.stdout}{lvs_json.stderr}\n"
-            f"error: klt lvs failed (exit {lvs_json.returncode})",
-            file=sys.stderr,
+    try:
+        lvs_payload = klt_report.run_klt_report(
+            REPO_ROOT,
+            [klt, "lvs", request_arg],
+            ok_codes=(0, 3),
+            reports_dir=reports_dir,
+            record_id=record_id,
+            suffix="lvs",
         )
+    except klt_report.KltRunError:
         return 1
-    lvs_text = subprocess.run(
-        [klt, "lvs", request_arg, "--format", "text"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    (reports_dir / f"{record_id}.lvs.json").write_text(lvs_json.stdout)
-    (reports_dir / f"{record_id}.lvs.txt").write_text(lvs_text.stdout)
 
     extract_payload = json.loads(extract_proc.stdout)
-    lvs_payload = json.loads(lvs_json.stdout)
     print(f"record id        : {record_id}")
     print(f"block            : {block}")
     print(f"extracted devices: {extract_payload['device_count']} {extract_payload['device_counts']}")
