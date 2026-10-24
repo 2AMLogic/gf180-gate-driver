@@ -3,7 +3,9 @@
 
 Runs ``klt erc <gds> <spec> --deck gf180mcu`` (both ``--format json`` and
 ``--format text``) and writes the output under
-``layout/erc/reports/<fixture>/<record-id>.erc.{json,txt}``.
+``layout/erc/reports/<fixture>/<record-id>.erc.json``; the text twin goes to the
+artifact store (``layout/common/signoff_store.py``, issue #348) and only its
+manifest is committed. Fails closed if it cannot be stored.
 
 ``<record-id>`` is ``<YYYYMMDD>-<HHMMSS>-<short-git-sha>``, matching the
 convention ``sim/README.md`` documents for ``sim/`` evidence (shared
@@ -38,7 +40,6 @@ Usage (from the repo root):
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import sys
 from pathlib import Path
 
@@ -47,7 +48,7 @@ sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
-import report_id  # noqa: E402
+import signoff_store  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
 DEFAULT_SPEC = REPO_ROOT / "layout" / "erc-supply-spec.json"
@@ -74,6 +75,7 @@ def main() -> int:
     args = parser.parse_args()
 
     klt = klt_env.require_klt(args.klt)
+    signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)
 
@@ -81,10 +83,8 @@ def main() -> int:
 
     fixture = args.fixture or gds_path.stem
     reports_dir = REPORTS_ROOT / fixture
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    when = _dt.datetime.now(_dt.timezone.utc)
-    record_id = report_id.record_id(reports_dir, when, report_id.short_sha(REPO_ROOT))
+    bench = f"layout-erc-{fixture}"
+    record_id = signoff_store.new_record_id(REPO_ROOT, bench, reports_dir)
 
     # Relative paths from the repo root, so the committed report's "file"
     # and "spec" fields are reproducible regardless of invocation cwd.
@@ -95,19 +95,27 @@ def main() -> int:
     # all successful runs per klt erc's documented exit-code contract; only
     # exit 1/2 are errors.
     try:
-        payload = klt_report.run_klt_report(
+        report = klt_report.run_klt_report(
             REPO_ROOT,
             [klt, "erc", str(gds_rel), str(spec_rel), "--deck", args.deck],
             ok_codes=(0, 3, 4),
-            reports_dir=reports_dir,
-            record_id=record_id,
-            suffix="erc",
         )
     except klt_report.KltRunError:
         return 1
 
+    # The text twin is stored; the json envelope is what the tier report cites
+    # from the tree, so it is committed -- but only after the store succeeded.
+    stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
+    (stage / f"{record_id}.erc.txt").write_text(report.text)
+    manifest = signoff_store.store_or_exit(
+        stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
+        name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
+    )
+    reports_dir.mkdir(parents=True, exist_ok=True)
     json_path = reports_dir / f"{record_id}.erc.json"
-    text_path = reports_dir / f"{record_id}.erc.txt"
+    json_path.write_text(report.json)
+
+    payload = report.payload
     print(f"record id        : {record_id}")
     print(f"fixture          : {fixture}")
     print(f"klt              : {payload['provenance']['klt_version']}")
@@ -115,7 +123,7 @@ def main() -> int:
     print(f"status (antenna) : {payload['status']}")
     print(f"erc_finding_count : {payload['erc_finding_count']}")
     print(f"report (json)    : {json_path.relative_to(REPO_ROOT)}")
-    print(f"report (text)    : {text_path.relative_to(REPO_ROOT)}")
+    print(f"manifest         : {manifest.relative_to(REPO_ROOT)}")
     return 0
 
 

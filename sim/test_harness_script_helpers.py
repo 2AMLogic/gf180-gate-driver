@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from harness import corners as harness_corners  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
 LOG = """\
@@ -161,3 +162,31 @@ def test_range_verdict():
     assert rv(-0.1, 0, 1) == "FAIL" and rv(1.1, 0, 1) == "FAIL"
     assert rv(5, None, 5) == "PASS" and rv(6, None, 5) == "FAIL"
     assert rv(-1, 0, None) == "FAIL"
+
+
+def test_ronw_mismatch_run_sample_discloses_ngspice_error(tmp_path, monkeypatch):
+    """A non-converged Monte Carlo draw is reported as ``"error"`` (with the
+    shared runner's message), not raised -- the campaign must not abort."""
+    import importlib.util
+
+    _stub_ngspice(tmp_path, monkeypatch, "echo 'Error: timestep too small'\n")
+
+    sim_dir = Path(__file__).resolve().parent
+    monkeypatch.syspath_prepend(str(sim_dir / "low-side-power-switch"))
+    spec = importlib.util.spec_from_file_location(
+        "run_ronw_mismatch",
+        sim_dir / "low-side-power-switch-ronw-mismatch" / "run_ronw_mismatch.py",
+    )
+    ronw = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, spec.name, ronw)
+    spec.loader.exec_module(ronw)
+
+    class _Pdk:
+        design_include = "design.ngspice"
+        model_lib = "sm141064.ngspice"
+
+    corner = harness_corners.CORNERS["tt"]
+    status, log, flat = ronw._run_sample(_Pdk(), corner, 27.0, None)
+    assert status == "error"
+    assert "reported an error for" in log and "tt @ 27.0 C" in log
+    assert flat == {}

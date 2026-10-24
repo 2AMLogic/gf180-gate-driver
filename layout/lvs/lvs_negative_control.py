@@ -17,8 +17,9 @@ stating "one fewer than whatever the schematic has" as the design changes.
 
 The perturbed reference is written under ``layout/build/`` (git-ignored
 generator scratch, ``layout/README.md``); the **report** is committed under
-``layout/lvs/reports/negative-control/``, under the same append-only rule as
-the block's own reports.
+``layout/lvs/reports/negative-control/`` -- logically; the bytes are stored in
+the artifact store (``layout/common/signoff_store.py``, issue #348) and git keeps
+a ``manifests/artifacts/layout-lvs-negative-control-*`` manifest.
 
 Usage (from the repo root)::
 
@@ -31,7 +32,6 @@ sibling ``status: match`` report until explained.
 
 from __future__ import annotations
 
-import datetime as _dt
 import json
 import os
 import re
@@ -43,7 +43,7 @@ sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
-import report_id  # noqa: E402
+import signoff_store  # noqa: E402
 
 BUILD_DIR = REPO_ROOT / "layout" / "build"
 REFERENCE = REPO_ROOT / "layout" / "lvs" / "gate_driver_core.ref.spice"
@@ -61,6 +61,7 @@ DROPPED_DEVICE = "Mx2_XMN6_0"
 
 def main() -> int:
     klt = klt_env.require_klt()
+    signoff_store.preflight_or_exit(REPO_ROOT)
     if not REFERENCE.exists():
         print(
             f"error: {REFERENCE} does not exist -- run "
@@ -70,7 +71,6 @@ def main() -> int:
         return 1
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
     kept, dropped, total = [], 0, 0
     for line in REFERENCE.read_text().splitlines():
@@ -96,42 +96,44 @@ def main() -> int:
         return 1
     PERTURBED.write_text("\n".join(kept) + "\n")
 
-    record_id = report_id.record_id(
-        REPORTS_DIR, _dt.datetime.now(_dt.timezone.utc), report_id.short_sha(REPO_ROOT)
-    )
+    bench = "layout-lvs-negative-control"
+    record_id = signoff_store.new_record_id(REPO_ROOT, bench, REPORTS_DIR)
+    stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
     request = {
         "layout": {
-            "file": os.path.relpath(GDS, REPORTS_DIR),
+            "file": os.path.relpath(GDS, stage),
             "deck": DECK,
             "top": TOP,
         },
         "reference": {
-            "netlist": os.path.relpath(PERTURBED, REPORTS_DIR),
+            "netlist": os.path.relpath(PERTURBED, stage),
             "top": TOP,
         },
     }
-    request_path = REPORTS_DIR / f"{record_id}.lvs-request.json"
+    request_path = stage / f"{record_id}.lvs-request.json"
     request_path.write_text(json.dumps(request, indent=2) + "\n")
     request_arg = str(request_path.relative_to(REPO_ROOT))
 
     # exit 0 (match) and exit 3 (mismatch) are both successful runs.
     try:
-        payload = klt_report.run_klt_report(
-            REPO_ROOT,
-            [klt, "lvs", request_arg],
-            ok_codes=(0, 3),
-            reports_dir=REPORTS_DIR,
-            record_id=record_id,
-            suffix="lvs",
+        report = klt_report.run_klt_report(
+            REPO_ROOT, [klt, "lvs", request_arg], ok_codes=(0, 3)
         )
     except klt_report.KltRunError:
         return 1
+    (stage / f"{record_id}.lvs.json").write_text(report.json)
+    (stage / f"{record_id}.lvs.txt").write_text(report.text)
+    manifest = signoff_store.store_or_exit(
+        stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
+        name_prefix=str(REPORTS_DIR.relative_to(REPO_ROOT)),
+    )
 
+    payload = report.payload
     print(f"record id      : {record_id}")
     print(f"dropped device : {DROPPED_DEVICE} (1 of {total + 1} reference cards)")
     print(f"status         : {payload['status']}")
     print(f"mismatch_count : {payload['mismatch_count']}")
-    print(f"report (json)  : {(REPORTS_DIR / f'{record_id}.lvs.json').relative_to(REPO_ROOT)}")
+    print(f"manifest       : {manifest.relative_to(REPO_ROOT)}")
 
     failures = []
     if payload["status"] != "mismatch":

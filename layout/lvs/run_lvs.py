@@ -8,7 +8,11 @@ The LVS half of the flow ``layout/drc/run_drc.py`` starts. Given a GDS it:
 2. runs ``klt extract --deck gf180mcu`` and keeps the extracted netlist;
 3. runs ``klt lvs`` against the reference (engine: ``klayout``, the only
    comparator this deck ships that needs no external binary);
-4. writes all artefacts under ``layout/lvs/reports/<block>/<record-id>.*``.
+4. commits ``layout/lvs/reports/<block>/<record-id>.lvs.json`` (the envelope
+   the tier report cites) and stores everything else the run wrote -- the
+   extracted netlist, ``extract.json``, the request record, the text twin --
+   in the artifact store (``layout/common/signoff_store.py``, issue #348);
+   git keeps the manifest. Fails closed if the store is unavailable.
 
 ``<record-id>`` is ``<YYYYMMDD>-<HHMMSS>-<short-git-sha>``, the same
 convention ``sim/README.md`` documents for ``sim/`` evidence and
@@ -30,7 +34,6 @@ Usage (from the repo root)::
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import os
 import subprocess
@@ -42,7 +45,7 @@ sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
-import report_id  # noqa: E402
+import signoff_store  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
 REFERENCE = Path(__file__).resolve().parent / "gate_driver_core.ref.spice"
@@ -91,13 +94,14 @@ def main() -> int:
     args = build_parser().parse_args()
 
     klt = klt_env.require_klt()
+    signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)
 
     block = args.block or gds_path.stem
     top = args.top or gds_path.stem
     reports_dir = REPORTS_ROOT / block
-    reports_dir.mkdir(parents=True, exist_ok=True)
+    bench = f"layout-lvs-{block}"
 
     # 1. Regenerate the reference so it can never be stale relative to the
     #    schematic netlist or the layout generator's own device parsing.
@@ -113,11 +117,10 @@ def main() -> int:
         print("error: could not regenerate the reference netlist", file=sys.stderr)
         return 1
 
-    record_id = report_id.record_id(
-        reports_dir, _dt.datetime.now(_dt.timezone.utc), report_id.short_sha(REPO_ROOT)
-    )
+    record_id = signoff_store.new_record_id(REPO_ROOT, bench, reports_dir)
+    stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
     gds_rel = gds_path.relative_to(REPO_ROOT)
-    extracted = reports_dir / f"{record_id}.extracted.spice"
+    extracted = stage / f"{record_id}.extracted.spice"
 
     # 2. Extract.
     try:
@@ -133,34 +136,38 @@ def main() -> int:
         )
     except klt_report.KltRunError:
         return 1
-    (reports_dir / f"{record_id}.extract.json").write_text(extract_proc.stdout)
+    (stage / f"{record_id}.extract.json").write_text(extract_proc.stdout)
 
     # 3. Compare.
     request = _build_request(
         gds_path=gds_path,
-        reports_dir=reports_dir,
+        reports_dir=stage,
         reference=args.reference,
         deck=args.deck,
         top=top,
     )
-    request_path = reports_dir / f"{record_id}.lvs-request.json"
+    request_path = stage / f"{record_id}.lvs-request.json"
     request_path.write_text(json.dumps(request, indent=2) + "\n")
     request_arg = str(request_path.relative_to(REPO_ROOT))
 
     # exit 0 (match) and exit 3 (mismatch) are both successful runs.
     try:
-        lvs_payload = klt_report.run_klt_report(
-            REPO_ROOT,
-            [klt, "lvs", request_arg],
-            ok_codes=(0, 3),
-            reports_dir=reports_dir,
-            record_id=record_id,
-            suffix="lvs",
+        lvs = klt_report.run_klt_report(
+            REPO_ROOT, [klt, "lvs", request_arg], ok_codes=(0, 3)
         )
     except klt_report.KltRunError:
         return 1
+    (stage / f"{record_id}.lvs.txt").write_text(lvs.text)
+    manifest = signoff_store.store_or_exit(
+        stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
+        name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
+    )
+    # Committed only after the store succeeded (check_tier_report.py reads it).
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / f"{record_id}.lvs.json").write_text(lvs.json)
 
     extract_payload = json.loads(extract_proc.stdout)
+    lvs_payload = lvs.payload
     print(f"record id        : {record_id}")
     print(f"block            : {block}")
     print(f"extracted devices: {extract_payload['device_count']} {extract_payload['device_counts']}")
@@ -170,6 +177,7 @@ def main() -> int:
           f"{lvs_payload['counts']['devices']['reference']}")
     print(f"nets matched     : {lvs_payload['counts']['nets']['matched']} / "
           f"{lvs_payload['counts']['nets']['reference']}")
+    print(f"manifest         : {manifest.relative_to(REPO_ROOT)}")
     print(f"report (json)    : {(reports_dir / f'{record_id}.lvs.json').relative_to(REPO_ROOT)}")
     return 0
 

@@ -7,6 +7,11 @@ names one object in the fleet artifact store by its sha256, with `size`,
 `uri`, and `name`, the path the bytes would have had under `sim/`. The
 format is klayout-tools' `docs/cli/artifact.md`.
 
+`layout/` signoff runs (issue #348) write manifests here too, named
+`layout-<tool>-<block>-<run-id>.manifest.json`, with `name`s under
+`layout/<tool>/reports/`; see `layout/README.md`, "Stored vs committed signoff
+outputs".
+
 Evidence bytes are private; these manifests are public (operator decision
 1.1, 2026-10-22). The run's Markdown summary is committed under `sim/<bench>/`.
 

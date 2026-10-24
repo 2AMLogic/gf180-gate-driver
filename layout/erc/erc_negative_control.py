@@ -43,10 +43,11 @@ The perturbed spec is written under ``layout/build/`` (git-ignored generator
 scratch, ``layout/README.md``) and is byte-reproducible from this script, so
 nothing binary needs committing. The **reports** (and one request record per
 arm, capturing that arm's inputs -- the ERC analogue of the LVS control's
-``*.lvs-request.json``) are committed under
-``layout/erc/reports/negative-control/<arm>/``, under the same append-only
-rule as the block's own reports, named by the shared
-``layout/common/report_id.py`` convention.
+``*.lvs-request.json``) are stored in the artifact store
+(``layout/common/signoff_store.py``, issue #348), named
+``layout/erc/reports/negative-control/<arm>/<record-id>.*``; git keeps one
+``manifests/artifacts/layout-erc-negative-control-<arm>-*`` manifest per arm.
+Fails closed if they cannot be stored.
 
 ``--deck`` requires a klayout-tools build that has it (klayout-tools#2217);
 this script accepts ``--klt <path>`` (mirroring ``run_erc.py``) so the
@@ -77,7 +78,6 @@ report until explained, which is the whole point.
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import subprocess
 import sys
@@ -88,7 +88,7 @@ sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
-import report_id  # noqa: E402
+import signoff_store  # noqa: E402
 
 BUILD_DIR = REPO_ROOT / "layout" / "build"
 REPORTS_ROOT = REPO_ROOT / "layout" / "erc" / "reports" / "negative-control"
@@ -127,10 +127,9 @@ def _grade_arm(
     return ``(record_id, payload)``. ``spec`` is the repo-relative spec the
     arm ran with; ``deck`` is the curated deck name or ``None``."""
     reports_dir = REPORTS_ROOT / arm
-    reports_dir.mkdir(parents=True, exist_ok=True)
-    record_id = report_id.record_id(
-        reports_dir, _dt.datetime.now(_dt.timezone.utc), report_id.short_sha(REPO_ROOT)
-    )
+    bench = f"layout-erc-negative-control-{arm}"
+    record_id = signoff_store.new_record_id(REPO_ROOT, bench, reports_dir)
+    stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
 
     request = {
         "arm": arm,
@@ -150,24 +149,25 @@ def _grade_arm(
             ),
         },
     }
-    request_path = reports_dir / f"{record_id}.erc-request.json"
+    request_path = stage / f"{record_id}.erc-request.json"
     request_path.write_text(json.dumps(request, indent=2) + "\n")
 
     argv = [klt, "erc", str(GDS.relative_to(REPO_ROOT)), str(spec)]
     if deck is not None:
         argv += ["--deck", deck]
     try:
-        payload = klt_report.run_klt_report(
-            REPO_ROOT,
-            argv,
-            ok_codes=_OK_EXITS,
-            reports_dir=reports_dir,
-            record_id=record_id,
-            suffix="erc",
-        )
+        report = klt_report.run_klt_report(REPO_ROOT, argv, ok_codes=_OK_EXITS)
     except klt_report.KltRunError:
+        print(f"error: klt erc failed on the '{arm}' arm", file=sys.stderr)
         raise ControlError(arm) from None
-    return record_id, payload
+
+    (stage / f"{record_id}.erc.json").write_text(report.json)
+    (stage / f"{record_id}.erc.txt").write_text(report.text)
+    signoff_store.store_or_exit(
+        stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
+        name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
+    )
+    return record_id, report.payload
 
 
 def main() -> int:
@@ -179,6 +179,7 @@ def main() -> int:
     args = parser.parse_args()
 
     klt = klt_env.require_klt(args.klt)
+    signoff_store.preflight_or_exit(REPO_ROOT)
 
     # Tool-version prerequisite: the deck arms need klt erc's --deck flag
     # (klayout-tools#2217). An installed klt that predates it fails at the

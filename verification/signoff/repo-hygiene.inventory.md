@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:2590d37185e6af715de854de3b26201ab70889c1bab9e9d93d19936ce4dcdb6a` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e2cf0688f44c1d123a13dbed4b3ef9e46e76c828ed3373ad7a832636fd479d97` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:2df6f0eba0eabddea91efbd723025dc79ddfea7c8d1bcfee7bda8bfcd1d62560` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:80967abe117347d181575ff00b177e8a203aec5475a66bdd38842cc260097b7d` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
-| `layout/README.md` | `sha256:4f44164ad8454d1e82cc0f7069193994146dfd35da5dd9fb5540f0708bddd3b3` |
+| `layout/README.md` | `sha256:15f8b6753a76db41debb3892b573cbfb6ec6ea74dd95ea2f8a78104dd346e665` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -102,6 +102,29 @@ their hashes are refreshed in the tables:
   omission disclosed above is unchanged. The root `README.md`'s reproduction
   commands were not re-read or edited for this change, so they do not yet
   describe the manifest-backed layout.
+
+The other listed files are unchanged. No simulation, netlisting or layout flow
+was run for this re-audit.
+
+## Re-audit for issue #348 (2026-10-24)
+
+Two listed files changed on the issue #348 branch (`feature/issue-348`) and
+were re-read against the findings above; their hashes are refreshed in the
+tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `Signoff-store unit
+  tests` step to `test` (`python3 layout/common/test_signoff_store.py`) and the
+  matching row in the header table. `lint`, the harness self-test and the
+  `signoff` job are unchanged, so the CI finding still holds. CI was read, not
+  observed to pass here.
+- `layout/README.md` (**read** the diff): adds the "Stored vs committed signoff
+  outputs (#348)" section under the verification flow. It documents which
+  layout outputs go to the artifact store and which stay in git; the
+  reproduction commands and the stale "Post-layout simulation" status row noted
+  above are unchanged. The root `README.md`'s reproduction commands were not
+  re-read or edited for this change, so they do not yet describe the
+  store-backed layout runners (which now exit `10` without
+  `KLT_ARTIFACT_BROKER`).
 
 The other listed files are unchanged. No simulation, netlisting or layout flow
 was run for this re-audit.
