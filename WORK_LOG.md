@@ -5,6 +5,20 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-24
 
+- **PR #364**: fix(layout): regenerate gate_driver_core DRC-clean under the 34-layer deck
+- **PR #363**: docs: scope the DRC-clean claim and triage 1513 violations under the current deck
+- **PR #361**: fix: count resistor cards in LVS negative-control device total
+- **PR #360**: verify: record live artifact-broker run of the layout signoff writers
+- **PR #357**: refactor: share klt report runner across layout check scripts
+- **PR #356**: refactor: reuse script_helpers.run_ngspice in ronw-mismatch runner
+- **PR #352**: feat(layout): store signoff report bytes in the artifact store, commit manifests
+- **Issue #362** (closed): layout: fix SAB, tap-implant and S/D-implant DRC violations in gate_driver_core (1513 under current deck)
+- **Issue #359** (closed): layout: lvs_negative_control.py asserts transistor-card count but klt reports total device count
+- **Issue #358** (closed): layout: gate_driver_core DRC reports 1513 violations under current klt/deck (committed baseline: clean)
+- **Issue #354** (closed): Dedupe klt report-runner skeleton across layout run_drc/run_erc/run_lvs/run_pex_extract
+- **Issue #353** (closed): Verify layout signoff store writers against a real artifact broker (follow-up to #352)
+- **Issue #349** (closed): Reuse script_helpers.run_ngspice in ronw-mismatch and share the corner-deck wrapper
+- **Issue #348** (closed): Route signoff outputs (LVS/PEX/DRC/ERC reports) through the artifact store
 - **PR #351**: sim: add first manifest-backed smoke-mv-inverter run with verified manifest
 - **PR #347**: refactor(sim): remove unused device_write_record helper
 - **Issue #346** (closed): Remove dead device_write_record helper in sim/harness/report.py
