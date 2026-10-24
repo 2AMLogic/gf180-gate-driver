@@ -53,11 +53,13 @@ turns `unmet` if they change. What each audit found:
 - **Item 2** (binds to `layout/gate_driver_core.gds`, the bytes items 3, 4 and
   11 already pin) — attested on **documented provenance**
   (`layout/gate_driver_core.provenance.json`: layout, source-netlist and
-  generator hashes match the live tree), **not on reproducibility**.
-  `layout/README.md` says the generator reproduces the GDS byte for byte;
-  re-running it on 2026-10-08 with klt 0.6.0 (both the old and the new pin)
-  produced different bytes, and the committed GDS records klt
-  `0.3.0+gc27f7eccf49c` on a dirty tree.
+  generator hashes match the live tree) and, since issue #362, on
+  **reproducibility**: re-running the generator with klt
+  `0.7.1.dev2599+geaf26f00df36` into a scratch directory reproduced the
+  committed bytes exactly (`cmp` identical, 2026-10-24). The previous GDS did
+  not reproduce under later klt builds (2026-10-08, klt 0.6.0) and recorded
+  klt `0.3.0+gc27f7eccf49c` on a dirty tree. The claim is tied to that klt
+  build: a different `klt gen` can change the cells (as 0.3.0 → 0.7.1 did).
 - **Item 9** (binds to `testbenches.inventory.md`) — every `sim/` experiment
   is listed with its manifest hash and cold-start invocation. `sim/pdk.json`
   pins the PDK *variant*; the *revision* (open_pdks `c6d73a35…`) is recorded
@@ -102,28 +104,33 @@ directory renders items 1, 2, 9 and 10 `unmet`. CI's checkout has one.
 asks for. These are the disclosures the checklist texts make the claimant's
 responsibility for the two layout legs:
 
-- **Item 3 (DRC, `20260826-044706-fdf17d9.drc.json`, klt 0.3.0, released deck
-  `79e71a1e…`)** — `status: clean`, 0 violations **within the deck's own
-  scope**, quoted from the envelope's `coverage` block:
+- **Item 3 (DRC, `20261024-090822-de97a29.drc.json`, klt
+  `0.7.1.dev2599+geaf26f00df36`, klayout 0.30.12, unreleased deck
+  `0eb6df1b…`, 34 layers)** — `status: clean`, 0 violations **within the
+  deck's own scope** (issue #362; the earlier 18-layer-deck `clean` report
+  `20260826-044706-fdf17d9` and #358's 1513-violation report stay in
+  `layout/drc/reports/` as append-only history), quoted from the envelope's
+  `coverage` block:
   - `deck_scope` (the DRM chapters the deck transcribes at all): 7.4 Nwell,
-    7.5 Comp, 7.7 Poly2, 7.12 Contact, 7.13 Metaln, 7.14 Vian, 7.15
-    MetalTop, 9.1 Bond Pad, 10.4.2 MIM Option B, 10.7 DRC_BJT Mark Layer.
+    7.5 Comp, 7.7 Poly2, 7.8 Nplus, 7.9 Pplus, 7.12 Contact, 7.13 Metaln, 7.14
+    Vian, 7.15 MetalTop, 9.1 Bond Pad, 10.4.2 MIM Option B, 10.7 DRC_BJT Mark
+    Layer, plus the ESD, GR, OFFGRID and SB (SAB) groups.
   - `layers_in_stream_without_rules` (drawn here, no rule in the deck):
-    `12/0`, `31/0`, `32/0`, `36/10`, `49/0`, `110/5`, `117/5`, `117/10`,
-    `204/0`.
-  - `rules_skipped` (carried by the deck, not evaluated this run):
-    `bjt.separation.comp.1`, `metaltop.space.1`, `metaltop.width.1`,
-    `pad.enclosing.metal5.1`.
-- **Item 4 (LVS, `20260921-154640-86d17b3.lvs.json`, refreshed for this
-  manifest under klt 0.5.0+g2b1e55e51bb8 with klayout 0.30.12 — the deck
-  revision bundled there, `95c2eb91…`, is unreleased, and
-  `provenance.klayout_version_mismatch: true` vs the expected 0.30.10; both
-  are recorded in the envelope)** — `status: match`, 2044/2044 devices,
-  295/295 nets, 25/25 pins, and:
-  - one **warning-only** mismatch (topology: "device class has no counterpart
-    on the other side, but no devices of this class were extracted either —
-    not a real topology mismatch") — the known finding documented in
-    `layout/README.md`;
+    `36/10`.
+  - `unmodeled_rules`: the `_MV` columns (`DF.6_MV`, `DV.*`, `NW.*_MV`,
+    `LPW.*_MV`, `PL.*_MV`, …) are not transcribed, so 3.3 V thresholds apply
+    to thick-oxide geometry: **this is not a medium-voltage DRC signoff.**
+  - `rules_skipped`: 27 rules the deck carries that have no applicable
+    geometry in this layout (`inapplicable`, reason `no_applicable_geometry`).
+- **Item 4 (LVS, `20261024-090826-de97a29.lvs.json`, same klt/klayout/deck
+  as item 3)** — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins,
+  and:
+  - three **warning-only** findings (two `device.geometry_not_compared`
+    notes for the capacitor and resistor classes, whose geometry parameters
+    KLayout compares as secondary, and one topology note: "device class has no
+    counterpart on the other side, but no devices of this class were extracted
+    either — not a real topology mismatch") — the same three as the pre-#362
+    run `20261024-075048-f4914d9`;
   - `body_verification.status: "verified"` — body ties were part of the
     compare, not assumed;
   - `power_connectivity.status: "unchecked"`, reason: the reference is
@@ -132,9 +139,10 @@ responsibility for the two layout legs:
     does not apply — a supply-islands claim is item 11's subject (#238),
     not this verdict's.
 - Both layout legs pin the same committed GDS:
-  `sha256:54f02626…` = `layout/gate_driver_core.gds`.
-- **Item 11 (power delivery, structural, `20261001-231815-1ac9445.erc.json`,
-  klt 0.6.0+g21b0cc1d6883 at citation time)** — the one **compound** citation in the
+  `sha256:15fa5b64…` = `layout/gate_driver_core.gds` (regenerated by issue
+  #362).
+- **Item 11 (power delivery, structural, `20261024-090832-de97a29.erc.json`,
+  klt 0.7.1.dev2599+geaf26f00df36)** — the one **compound** citation in the
   manifest (a list, because no single artifact proves this item): the `erc`
   envelope plus the item-4 LVS report above as the supply-continuity half.
   The `erc_status: clean` verdict rests on the `ties[]` declaration #256

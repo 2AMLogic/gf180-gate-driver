@@ -33,7 +33,7 @@ layout/
   erc/                              klt erc runner + committed reports (#238)
 ```
 
-## Status: LVS-match; DRC clean only under the retired 18-layer deck, 1513 violations under the current deck (#358)
+## Status: LVS-match; DRC-clean under the current 34-layer deck (#362, after #358's 1513 violations)
 
 The block now includes all three sub-cells the schematic instantiates —
 `level_shifter`, `output_stage`, and (issue #221) `uvlo` (UVLO comparator +
@@ -46,10 +46,10 @@ reference, including its bias-resistor network) — not just the first two.
 | Compensation capacitor drawn | **yes (#166)** — four `cap_mim_2f0_m4m5_noshield` plates in series, 5.0 × 5.0 µm each, on the process-fixed Metal4-FuseTop-Metal5 pair; extracted, LVS-matched, and its three interior nodes asserted floating ([below](#the-xccomp-mim-compensation-stack-166)) |
 | `uvlo` bias-resistor network drawn | **yes (#221)** — `Rref`/`R1`/`R2`/`Rfb`, each a `klt gen res_array` block of series `ppolyf_u` unit resistors sized to the schematic's own ohms value ([`resistor_array_params`](gen_gate_driver_core.py)); extracted and LVS-matched |
 | 3.3 V and 5 V/6 V devices in separate DNWELL regions | yes — verified geometrically (DRM 7.2) |
-| DRC | **not clean under the current deck (#358).** `status: violations`, 1513, klt `0.7.1.dev2599+geaf26f00df36`, deck hash `sha256:0eb6df1b…` (34 layers) — all 7 rules are real layout violations ([triage](drc/triage_sab_implant.md)). The earlier `status: clean`, 0 violations (klt 0.3.0, 18-layer deck, committed reports kept as history) predates the SAB, implant-enclosure and COMP-coverage rules and never checked them |
+| DRC | **clean under the current deck (#362).** `status: clean`, 0 violations, klt `0.7.1.dev2599+geaf26f00df36`, deck hash `sha256:0eb6df1b…` (34 layers), report [`20261024-090822-de97a29`](drc/reports/gate_driver_core/20261024-090822-de97a29.drc.json). This is the curated deck's verdict only: the `_MV` rule columns (`DF.6_MV`, `DV.*`, `NW.*_MV`, …) are `unmodeled_rules`, so it is **not** a medium-voltage signoff ([triage](drc/triage_sab_implant.md), [DRC](#drc-klt-drc)) |
 | LVS-clean | yes — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins, **1 warning-only finding below (unrelated to body ties)** |
 | Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 1769 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 664 PMOS, the deck's global substrate identity for the 1105 NMOS). `klt lvs`'s `device.body_unverified` finding is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for how the two grounds now compare — revised by issue #221) |
-| Post-layout simulation | **pending re-verification against this GDS (issue #222)** — the committed PVT-grid records under `sim/gate-driver-core-drive-postlayout/` were extracted from the pre-#221 (level_shifter + output_stage only) GDS; re-running them against the uvlo-extended extracted netlist is explicitly the next slice of #219, not this issue's scope. [Below](#post-layout-simulation) still describes that pre-#221 evidence as what it is |
+| Post-layout simulation | **pending re-verification against this GDS (issue #222)** — the committed PVT-grid records under `sim/gate-driver-core-drive-postlayout/` were extracted from the pre-#221 (level_shifter + output_stage only) GDS; re-running them against the uvlo-extended extracted netlist is explicitly the next slice of #219, not this issue's scope. Issue #362 regenerated the GDS under the current klt, whose `klt gen` cells differ in size and carry their own implants and body taps, so the extracted parasitics are no longer the pre-#221 ones either: that re-run is still pending, still owed to #222, and was **not** done by #362. [Below](#post-layout-simulation) still describes that pre-#221 evidence as what it is |
 
 The LVS verdict is real (it has a committed negative control, below), and the
 old DRC verdict was real *for the rules that deck shipped*, but neither is a
@@ -414,7 +414,7 @@ rather than replaying how it was made. Its output is committed as
 |---|---|
 | `devices` | `klt extract --deck gf180mcu`, then compare every extracted transistor against the flattened netlist: a device with `nf=N m=M` must appear as `N*M` transistors of width `W/N` and the same L, whose gate net and unordered source/drain pair match. Passing means 1769/1769 with no missing and no unexpected device (up from 959/959 pre-#221; resistors are audited by `klt lvs` against `lvs/make_reference.py` instead of by this check — see that script's own module docstring). |
 | `mim_stack` | The same extraction, read for the four `XCCOMP*` MiM capacitors (#166). Asserts the count, each device's *extracted* `c_width`/`c_length` against the schematic's, that walking from the schematic chain's first node traverses every capacitor exactly once and lands on its last node (a *parallel* stack has the identical device count and plate geometry — only the walk tells them apart), and that every interior node touches exactly two capacitor terminals, no transistor terminal and no top-level pin. That last ruling is the mechanical form of "`nccomp1`..`3` are floating" — see [below](#why-mim_stack-exists-166). |
-| `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. Asserts exactly 62 active regions inside (31 5 V/6 V devices + 31 of their own body-tie taps, up from 40/20 pre-#221's uvlo addition) and 12 outside (4 3.3 V devices + 4 of their own taps + 4 guard-ring strokes, unchanged). |
+| `dnwell_partition` | `klt components` with `DNWELL` declared *both* as a conductor and as the via joining it to `Comp`, so every active region a DNWELL polygon overlaps lands in the DNWELL's own component. It counts **gate-bearing** active (`Comp AND Poly`, one shape per finger, #362) so the verdict does not depend on how many body taps the generator and `klt gen mos_array` draw: asserts exactly 1765 gate regions inside (the fingers of the 31 5 V/6 V devices) and 4 outside (the 3.3 V devices'). |
 | `ground_rail_isolation` | `klt components` over the **routed metal only** — Metal1 (34/0) and Metal2 (36/0) as conductors, Via1 (35/0) as the sole bridge, net names from the Metal2 text layer (36/10). No deck, no device recognition, no substrate global. Asserts no component carries two distinct net names, every routed net resolves to exactly one component, and `GND_LOGIC`/`GND_DRV` land in different components — 25 nets, 25 components (up from 18/18 pre-#221's uvlo/resistor addition). See [why this check exists](#why-ground_rail_isolation-exists-132). |
 | `voltage_domain` | `klt layers --flattened` for the marker layers, plus the `voltage_domain_warnings` block `klt extract` returns — see the deck caveat below. |
 
@@ -610,19 +610,42 @@ mismatch means the deck build itself has moved, not that this layout changed.
 
 ### DRC (`klt drc`)
 
-**Current status (#358): not clean.** `python3 layout/drc/run_drc.py layout/gate_driver_core.gds`
+**Current status (#362): clean.** `python3 layout/drc/run_drc.py layout/gate_driver_core.gds`
 with klt `0.7.1.dev2599+geaf26f00df36`, `PDK=gf180mcuD`, deck `gf180mcu` hash
 `sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666`
-reports `status: violations`, 1513 violations on the unchanged GDS
-(`poly2.enclosing.sab.1` 542, `sab.separation.contact.1` 542, `sab.space.1` 246,
-`pplus.enclosing.comp.1` 68, `nplus.enclosing.comp.1` 60, `comp.coverage.1` 35,
-`pplus.enclosing.comp.far.1` 20; report
-`drc/reports/gate_driver_core/20261024-075045-f4914d9.drc.json`, committed with
-PR #360). [`drc/triage_sab_implant.md`](drc/triage_sab_implant.md) classifies every
-rule as a real layout violation (resistor SAB geometry; tap implants with zero
-COMP enclosure; no source/drain implants on any transistor). The deck was not
-relaxed. The layout fix is tracked in #362; until then the block is **not**
-DRC-clean.
+reports `status: clean`, 0 violations
+(`drc/reports/gate_driver_core/20261024-090822-de97a29.drc.json`; 23 layers
+checked, 27 rules skipped as inapplicable to this layout). The deck was not
+relaxed. It supersedes the #358 report
+(`drc/reports/gate_driver_core/20261024-075045-f4914d9.drc.json`, 1513
+violations on the previous GDS, kept as append-only evidence;
+[`drc/triage_sab_implant.md`](drc/triage_sab_implant.md) classifies every one
+as a real violation of that GDS).
+
+What changed to get here, all in `gen_gate_driver_core.py`:
+
+- **Regenerating with the current klt fixed most of it.** The 1513 violations
+  were measured on a GDS generated by klt 0.3.0. Current `klt gen` emits the
+  SAB geometry (Poly2 enclosure, contact spacing, row spacing) and the
+  source/drain implants itself (`drc_hints.sd_implant_present`), which cleared
+  the 542 + 542 + 246 SAB and 35 `comp.coverage.1` violations with no generator
+  change; the same klt also draws contacted body taps of its own at the
+  corners (and the middle of a wide cell) of every `mos_array` cell.
+- **Tap implants enclose their Comp** by `TAP_IMPLANT_ENCLOSURE_UM` (0.16 µm,
+  NP.3/PP.3): the per-device taps and the guard ring (`nplus`/`pplus`
+  `.enclosing.comp.1`, `pplus.enclosing.comp.far.1`). The implants still cover
+  Comp only where a tap is, so `klt extract`'s
+  `tap_nplus & active & nwell` / `tap_pplus & (active - nwell)` derivations
+  find the same body ties. `TAP_LEFT_OFFSET_UM` went 0.6 → 0.8 so the enlarged
+  tap implant clears the cell's own corner-tap implant by `pplus.space.1`.
+- **The cells' own tap pads are routed around** (`native_tap_pads`): a gate
+  route that would cross one now goes up on Metal2 for that strip
+  (`_gate_bar_hits_native_tap`); left on Metal1 it shorted the gate onto the
+  well/substrate tie and `klt extract` merged `x2_n3`/`VDD_DRV` and
+  `x2_n4`/`GND_DRV`/`x3_lockout`. nfet corner pads are strapped to the body net
+  (`_strap_native_taps`) so `klt erc`'s `substrate_gnd_logic` assertion still
+  finds no untied tap, and `_via_stack` bridges two landings on one rail that
+  sit closer than `metal1.space.1`.
 
 Historical report (superseded, kept as append-only evidence):
 [`layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json`](drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json)
@@ -667,9 +690,10 @@ A deck that returns `clean` for everything would fail that control.
 
 ### LVS (`klt extract` + `klt lvs`)
 
-Latest report: [`layout/lvs/reports/gate_driver_core/20260826-044712-fdf17d9.lvs.json`](lvs/reports/gate_driver_core/20260826-044712-fdf17d9.lvs.json)
-— engine **`klayout`** (klayout 0.30.11), `status: match`, against the
-issue #221-extended GDS (`level_shifter` + `output_stage` + `uvlo`, plus
+Latest report: [`layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json`](lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json)
+— engine **`klayout`**, `status: match` (same 3 warning-only findings as
+`20261024-075048-f4914d9`) against the #362-regenerated GDS; the table below
+is the issue #221-extended GDS (`level_shifter` + `output_stage` + `uvlo`, plus
 `uvlo`'s bias-resistor network):
 
 | | layout | reference | matched |
@@ -1061,8 +1085,8 @@ python3 layout/common/test_power_array_folded.py     # PDK-free unit tests
   ground-star cards without teaching several assertions that distinction.
   Left as a real, separate refactor (see the constant's own comment in that
   file), not folded into #201's netlist-regeneration scope.
-- **DRC is not clean under the current deck (#358): 1513 violations, all real
-  (see [DRC](#drc-klt-drc) above).** The old `clean` was within an 18-layer deck scope and, even so, not against the full DRM. The deck
+- **DRC `clean` is the curated deck's verdict, not a full-DRM or medium-voltage
+  signoff (#362; see [DRC](#drc-klt-drc) above).** The deck
   ships no rules for `DNWELL`/`LVPWELL`, and every rule but `DF.1a`/`DF.3a`
   still applies 3.3 V thresholds to thick-oxide geometry — see the coverage
   table above. DRM 7.2's well spacing/enclosure rules, and the guard ring's

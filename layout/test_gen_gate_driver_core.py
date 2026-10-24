@@ -78,7 +78,14 @@ from check_gate_driver_core import (  # noqa: E402  (path set above)
     routed_nets,
 )
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
+    L_METAL1,
+    L_NPLUS,
+    L_PPLUS,
+    LANDING_UM,
+    METAL1_SPACE_UM,
     NETLIST_PATH,
+    TAP_COMP_UM,
+    TAP_IMPLANT_ENCLOSURE_UM,
     Device,
     GenError,
     Interconnect,
@@ -807,6 +814,77 @@ class MimSeriesChainDrawTest(unittest.TestCase):
     def test_endpoint_without_a_rail_raises(self):
         with self.assertRaises(GenError):
             self._chain([self._cap("C1", "a", "b"), self._cap("C2", "b", "nowhere")])
+
+
+class TapImplantEnclosureTest(unittest.TestCase):
+    """Body-tie implants enclose their Comp pad (NP.3/PP.3, issue #362)."""
+
+    @staticmethod
+    def _tap_shapes(implant):
+        obj = Interconnect.__new__(Interconnect)
+        obj.shapes = []
+        obj._landings = {}
+        obj.left_rail_x = {"GND": -10.0}
+        Interconnect._tap(obj, 0.0, 0.0, implant, "GND")
+        return obj.shapes
+
+    def test_tap_implant_extends_past_comp_on_every_side(self):
+        for implant in (L_NPLUS, L_PPLUS):
+            shapes = self._tap_shapes(implant)
+            comp = next(s for s in shapes if s["layer"] == [22, 0])["rect_um"]
+            imp = next(s for s in shapes if s["layer"] == list(implant))["rect_um"]
+            self.assertAlmostEqual(comp[2] - comp[0], TAP_COMP_UM, places=4)
+            self.assertAlmostEqual(comp[0] - imp[0], TAP_IMPLANT_ENCLOSURE_UM, places=4)
+            self.assertAlmostEqual(comp[1] - imp[1], TAP_IMPLANT_ENCLOSURE_UM, places=4)
+            self.assertAlmostEqual(imp[2] - comp[2], TAP_IMPLANT_ENCLOSURE_UM, places=4)
+            self.assertAlmostEqual(imp[3] - comp[3], TAP_IMPLANT_ENCLOSURE_UM, places=4)
+
+    def test_enclosure_meets_the_deck_minimum(self):
+        self.assertGreaterEqual(TAP_IMPLANT_ENCLOSURE_UM, 0.16)
+
+
+class NativeTapRoutingTest(unittest.TestCase):
+    """The cell's own body-tap pads are never crossed or left too close (#362)."""
+
+    def _placement(self, pads):
+        return type("P", (), {"native_tap_pads": pads})()
+
+    def test_gate_bar_over_a_tap_pad_is_detected(self):
+        pad = (16.95, 13.11, 17.37, 13.53)
+        hit = Interconnect._gate_bar_hits_native_tap(self._placement([pad]), 17.16, 12.25, 15.0)
+        self.assertTrue(hit)
+
+    def test_gate_bar_clear_of_every_tap_pad_is_not_detected(self):
+        pads = [(-0.86, 13.11, -0.44, 13.53), (34.76, 13.11, 35.18, 13.53)]
+        hit = Interconnect._gate_bar_hits_native_tap(self._placement(pads), 17.16, 12.25, 15.0)
+        self.assertFalse(hit)
+
+    def test_gate_bar_ending_below_the_pad_is_not_detected(self):
+        pad = (16.95, 13.11, 17.37, 13.53)
+        hit = Interconnect._gate_bar_hits_native_tap(self._placement([pad]), 17.16, 5.0, 8.0)
+        self.assertFalse(hit)
+
+    def test_close_landings_on_one_rail_are_bridged(self):
+        obj = Interconnect.__new__(Interconnect)
+        obj.shapes = []
+        obj._landings = {}
+        Interconnect._via_stack(obj, 5.0, 10.0)
+        before = len(obj.shapes)
+        Interconnect._via_stack(obj, 5.0, 10.0 + LANDING_UM + METAL1_SPACE_UM / 2)
+        bridge = obj.shapes[before]
+        self.assertEqual(bridge["layer"], list(L_METAL1))
+        self.assertAlmostEqual(bridge["rect_um"][1], 10.0 + LANDING_UM / 2, places=4)
+        self.assertAlmostEqual(
+            bridge["rect_um"][3], 10.0 + LANDING_UM + METAL1_SPACE_UM / 2 - LANDING_UM / 2, places=4
+        )
+
+    def test_far_landings_on_one_rail_are_not_bridged(self):
+        obj = Interconnect.__new__(Interconnect)
+        obj.shapes = []
+        obj._landings = {}
+        Interconnect._via_stack(obj, 5.0, 10.0)
+        Interconnect._via_stack(obj, 5.0, 20.0)
+        self.assertEqual(len(obj.shapes), 4)  # two landings + two vias, no bridge
 
 
 class MimReferenceCapacitanceTest(unittest.TestCase):

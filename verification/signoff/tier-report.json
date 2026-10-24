@@ -64,7 +64,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+        "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -73,9 +73,9 @@
             "path": "layout/gate_driver_core.gds",
             "scope": "repo"
           },
-          "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+          "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
           "input_verified": true,
-          "summary": "T1 item 2 (layout): layout/gate_driver_core.gds, the same bytes the item 3, 4 and 11 citations pin. Attested on documented provenance (layout/gate_driver_core.provenance.json: layout, source netlist and generator sha256 values all match the live tree), NOT on reproducibility: re-running layout/gen_gate_driver_core.py with klt 0.6.0 (g21b0cc1d6883 and g3a75c3ae705b) on 2026-10-08 produced different bytes (sha256 cab0046f...), and the committed GDS records klt 0.3.0+gc27f7eccf49c on a dirty tree. The grader hashes the GDS only.",
+          "summary": "T1 item 2 (layout): layout/gate_driver_core.gds, the same bytes the item 3, 4 and 11 citations pin. Attested on documented provenance (layout/gate_driver_core.provenance.json: layout, source netlist and generator sha256 values all match the live tree) and, as of issue #362, on reproducibility: re-running layout/gen_gate_driver_core.py with klt 0.7.1.dev2599+geaf26f00df36 on 2026-10-24 into a scratch directory reproduced the committed bytes exactly (cmp: identical). The earlier GDS recorded klt 0.3.0+gc27f7eccf49c on a dirty tree and did not reproduce under later klt builds. The grader hashes the GDS only.",
           "source": "layout/gate_driver_core.gds"
         }
       }
@@ -91,30 +91,45 @@
       "reason": null,
       "graded_by_build": true,
       "citation": {
-        "file": "layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json",
+        "file": "layout/drc/reports/gate_driver_core/20261024-090822-de97a29.drc.json",
         "command": null,
         "kind": "drc",
         "check_status": "clean",
-        "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+        "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
         "input_verified": true,
         "exit_status": 0,
         "coverage": {
           "layers_in_stream_without_rules": [
-            "12/0",
-            "31/0",
-            "32/0",
-            "36/10",
-            "49/0",
-            "110/5",
-            "117/5",
-            "117/10",
-            "204/0"
+            "36/10"
           ],
           "rules_skipped": [
             "bjt.separation.comp.1",
+            "comp.separation.guard_ring_mk.1",
+            "diode_mk.ongrid.1",
+            "drc_bjt.ongrid.1",
+            "efuse_mk.ongrid.1",
+            "esd.area.1",
+            "esd.holes_area.1",
+            "esd.overlap.comp.1",
+            "esd.separation.nplus.1",
+            "esd.separation.pplus.1",
+            "esd.space.1",
+            "esd.width.1",
+            "metal1.separation.guard_ring_mk.1",
+            "metal2.separation.guard_ring_mk.1",
+            "metal3.separation.guard_ring_mk.1",
+            "metal4.separation.guard_ring_mk.1",
+            "metal5.separation.guard_ring_mk.1",
+            "metaltop.ongrid.1",
+            "metaltop.separation.guard_ring_mk.1",
             "metaltop.space.1",
             "metaltop.width.1",
-            "pad.enclosing.metal5.1"
+            "nwell.separation.guard_ring_mk.1",
+            "pad.enclosing.metal5.1",
+            "pad.ongrid.1",
+            "plfuse.ongrid.1",
+            "poly2.separation.guard_ring_mk.1",
+            "resistor.ongrid.1"
           ],
           "deck_scope": [
             "10.4.2 MIM Option B",
@@ -126,7 +141,13 @@
             "7.4 Nwell",
             "7.5 Comp",
             "7.7 Poly2",
-            "9.1 Bond Pad"
+            "7.8 Nplus",
+            "7.9 Pplus",
+            "9.1 Bond Pad",
+            "ESD",
+            "GR",
+            "OFFGRID",
+            "SB"
           ]
         }
       }
@@ -142,11 +163,11 @@
       "reason": null,
       "graded_by_build": true,
       "citation": {
-        "file": "layout/lvs/reports/gate_driver_core/20260921-154640-86d17b3.lvs.json",
+        "file": "layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json",
         "command": null,
         "kind": "lvs",
         "check_status": "match",
-        "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+        "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
         "input_verified": true,
         "exit_status": 0
       }
@@ -257,7 +278,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:eca9b24a2478d14c7f37c4a1b1fb81f4899012395b0fd969d30560cb1b420cdc",
+        "content_hash": "sha256:51bbd45520e9014e713b487069a0fa1146d3fd8d46573a1f7f5ee81faba555c7",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -266,7 +287,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:eca9b24a2478d14c7f37c4a1b1fb81f4899012395b0fd969d30560cb1b420cdc",
+          "content_hash": "sha256:51bbd45520e9014e713b487069a0fa1146d3fd8d46573a1f7f5ee81faba555c7",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"
@@ -286,29 +307,29 @@
       "reason": null,
       "graded_by_build": true,
       "citation": {
-        "file": "layout/erc/reports/gate_driver_core/20261001-231815-1ac9445.erc.json",
+        "file": "layout/erc/reports/gate_driver_core/20261024-090832-de97a29.erc.json",
         "command": null,
         "kind": "erc",
         "check_status": "not_checked",
-        "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+        "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
         "input_verified": true,
         "exit_status": 0,
         "parts": [
           {
-            "file": "layout/erc/reports/gate_driver_core/20261001-231815-1ac9445.erc.json",
+            "file": "layout/erc/reports/gate_driver_core/20261024-090832-de97a29.erc.json",
             "command": null,
             "kind": "erc",
             "check_status": "not_checked",
-            "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+            "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
             "input_verified": true,
             "exit_status": 0
           },
           {
-            "file": "layout/lvs/reports/gate_driver_core/20260921-154640-86d17b3.lvs.json",
+            "file": "layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json",
             "command": null,
             "kind": "lvs",
             "check_status": "match",
-            "content_hash": "sha256:54f0262665b6a38a25a1713c8ab99365ebb69128d4d0d7d7157ef42c9ee6287f",
+            "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
             "input_verified": true,
             "exit_status": 0
           }

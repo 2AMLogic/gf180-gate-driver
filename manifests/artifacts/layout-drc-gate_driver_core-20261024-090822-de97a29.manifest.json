@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "fcd1b054901d2dd5f5c2f5f3236581773d63becbcbf0d07ed402b2b4bf66d529",
+      "size": 298,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.7.1.dev2599+geaf26f00df36",
+        "loom.repo": "2AMLogic/gf180-gate-driver",
+        "commit": "de97a299b912bca443fdcb13476c81921784e11d"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-gate-driver/fc/fcd1b054901d2dd5f5c2f5f3236581773d63becbcbf0d07ed402b2b4bf66d529",
+      "name": "layout/drc/reports/gate_driver_core/20261024-090822-de97a29.drc.txt",
+      "media_type": "text/plain"
+    }
+  ]
+}

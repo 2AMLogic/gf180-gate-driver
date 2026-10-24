@@ -197,6 +197,36 @@ class LegacyAndCompound(unittest.TestCase):
         self.assertIn("item 11[1]", failures[0])
 
 
+class NativeEnvelopeRepoScopedInput(unittest.TestCase):
+    """klt 0.7 drc/erc/lvs envelopes name their input as ``{path, scope: repo}``."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.r = Repo(self._tmp.name)
+        self.r.write("layout/a.gds", b"GDS")
+        self.pin = sha(b"GDS")
+
+    def drc(self, file_field):
+        self.r.write("layout/drc/r.json", json.dumps({"violations": [], "file": file_field}))
+        return self.r.manifest(**{"3": {"file": "layout/drc/r.json", "content_hash": self.pin}})
+
+    def test_repo_scoped_object_input_anchors(self):
+        manifest = self.drc({"path": "layout/a.gds", "scope": "repo"})
+        self.assertEqual(self.r.anchor(manifest), [])
+
+    def test_repo_scoped_object_input_detects_a_stale_artifact(self):
+        manifest = self.drc({"path": "layout/a.gds", "scope": "repo"})
+        self.r.write("layout/a.gds", b"EDITED")
+        failures = self.r.anchor(manifest)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("stale citation", failures[0])
+
+    def test_external_scope_object_names_no_usable_input(self):
+        manifest = self.drc({"path": None, "scope": "external"})
+        self.assertTrue(any("names no input path" in f for f in self.r.anchor(manifest)))
+
+
 class InventoryListedHashes(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

@@ -232,10 +232,16 @@ def anchor_citations(manifest: dict, repo_root: Path = REPO_ROOT) -> list[str]:
             else:
                 field, base = INPUT_PATH_FIELDS[kind]
                 input_name = envelope.get(field)
+                anchor_root = envelope_path.parent if base == "envelope_dir" else repo_root
+                if isinstance(input_name, dict) and input_name.get("scope") == "repo":
+                    # klt 0.7 envelopes name a repo-scoped input as
+                    # {"path": ..., "scope": "repo"} (resolved from the repo
+                    # root, the same form provenance.input.path uses).
+                    input_name = input_name.get("path")
+                    anchor_root = repo_root
                 if not isinstance(input_name, str) or not input_name:
                     failures.append(f"item {label}: {kind} envelope {entry['file']} names no input path in '{field}'")
                     continue
-                anchor_root = envelope_path.parent if base == "envelope_dir" else repo_root
                 artifact = (anchor_root / input_name).resolve()
             if not artifact.is_file():
                 failures.append(f"item {label}: cited artifact does not exist: {artifact}")
