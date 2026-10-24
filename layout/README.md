@@ -536,6 +536,37 @@ python3 layout/drc/deck_negative_control.py
 python3 layout/lvs/lvs_negative_control.py
 ```
 
+### Stored vs committed signoff outputs (#348)
+
+Most of what a signoff run writes is never read back from git, so it goes to
+the fleet artifact store through `layout/common/signoff_store.py` (the
+`sim/harness/evidence_store.py` writer, `klt artifact put`) and git keeps one
+`manifests/artifacts/layout-<tool>-<block>-<record-id>.manifest.json`; each
+entry's `name` is the `layout/<tool>/reports/<block>/<record-id>.*` path the
+bytes would have had. Runners **fail closed**: with no broker, no `klt
+artifact`, or any failed put they exit `10` and commit nothing (they check
+before running `klt`, and write committed files only after the store
+succeeded). `KLT_ARTIFACT_BROKER` must be set, as for `sim/`.
+
+| output | where | why |
+|---|---|---|
+| `<id>.drc.json`, `<id>.lvs.json`, `<id>.erc.json` of a block run | **git** | `verification/signoff/check_tier_report.py` opens cited envelopes from the tree |
+| `layout/lvs/gate_driver_core.{extracted,extracted-rc,ref}.spice` | **git** | `.include`d by sim DUTs; not writer outputs |
+| the extraction JSONs a DUT header or CI step names (`ci.yml` re-derives DUT netlists from two) | **git** | inputs, committed deliberately (below) |
+| `*.drc.txt`, `*.lvs.txt`, `*.erc.txt`, `*.lvs-request.json`, `*.erc-request.json` | store | nothing reads them from git |
+| per-run `<id>.extracted.spice`, `<id>.extract.json`, `<id>.pex-extract.json` | store | uncited unless promoted |
+| all negative-control output (`deck-negative-control`, `negative-control/`) | store | evidence for the control's verdict only |
+
+Staged bytes remain under `layout/build/evidence/<bench>/<record-id>/`
+(git-ignored). Fetch a stored file with `klt artifact get <manifest>#<name>`.
+
+**Promoting an extraction.** When a DUT header or CI step starts to consume an
+extraction, copy the staged (or fetched) file to
+`layout/lvs/reports/<block>/<same name>`, commit it, and cite it from the
+consumer in the same PR. That commit is the decision; the runners never do it.
+Request records are written next to the staged files, so their relative paths
+point at the staging directory, not at `reports/`.
+
 ### Reproducibility: pin the `klt` install (#190)
 
 Every DRC/LVS report's `provenance.deck.content_hash` names the exact

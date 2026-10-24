@@ -17,8 +17,8 @@ illegal geometry survives to the checker.
 The fixture GDS is written under ``layout/build/`` (git-ignored generator
 scratch, ``layout/README.md``) and is byte-reproducible from this script, so
 nothing binary needs committing to reproduce the control. The **report** is
-committed, under ``layout/drc/reports/deck-negative-control/``, alongside the
-block's own reports and under the same append-only rule.
+stored (``--store-envelope``): bytes in the artifact store, a manifest
+under ``manifests/artifacts/layout-drc-deck-negative-control-*`` in git.
 
 Usage (from the repo root)::
 
@@ -80,7 +80,8 @@ def main() -> int:
         return 1
 
     drc = subprocess.run(
-        [sys.executable, str(RUN_DRC), str(FIXTURE_GDS), "--fixture", FIXTURE_NAME],
+        [sys.executable, str(RUN_DRC), str(FIXTURE_GDS), "--fixture", FIXTURE_NAME,
+         "--store-envelope"],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

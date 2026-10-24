@@ -3,7 +3,9 @@
 
 Runs ``klt drc <gds> --deck gf180mcu`` (both ``--format json`` and
 ``--format text``) and writes the output under
-``layout/drc/reports/<fixture>/<record-id>.drc.{json,txt}``.
+``layout/drc/reports/<fixture>/<record-id>.drc.json``; the text twin goes to the
+artifact store (``layout/common/signoff_store.py``, issue #348) and only its
+manifest is committed. Fails closed if it cannot be stored.
 
 ``<record-id>`` is ``<YYYYMMDD>-<HHMMSS>-<short-git-sha>``, matching the
 convention ``sim/README.md`` documents for ``sim/`` evidence. This script
@@ -30,7 +32,6 @@ Usage (from the repo root):
 from __future__ import annotations
 
 import argparse
-import datetime as _dt
 import json
 import subprocess
 import sys
@@ -40,7 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
-import report_id  # noqa: E402
+import signoff_store  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
 
@@ -53,18 +54,22 @@ def main() -> int:
         help="report subdirectory name (default: the GDS file's stem)",
     )
     parser.add_argument("--deck", default="gf180mcu", help="DRC deck (default: gf180mcu)")
+    parser.add_argument(
+        "--store-envelope",
+        action="store_true",
+        help="store the json envelope too instead of committing it (negative controls)",
+    )
     args = parser.parse_args()
 
     klt = klt_env.require_klt()
+    signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)
 
     fixture = args.fixture or gds_path.stem
     reports_dir = REPORTS_ROOT / fixture
-    reports_dir.mkdir(parents=True, exist_ok=True)
-
-    when = _dt.datetime.now(_dt.timezone.utc)
-    record_id = report_id.record_id(reports_dir, when, report_id.short_sha(REPO_ROOT))
+    bench = f"layout-drc-{fixture}"
+    record_id = signoff_store.new_record_id(REPO_ROOT, bench, reports_dir)
 
     # Relative path from the repo root, so the committed report's "file"
     # field is reproducible regardless of invocation cwd.
@@ -93,10 +98,20 @@ def main() -> int:
         print(f"error: klt drc failed (exit {json_proc.returncode})", file=sys.stderr)
         return 1
 
-    json_path = reports_dir / f"{record_id}.drc.json"
-    text_path = reports_dir / f"{record_id}.drc.txt"
-    json_path.write_text(json_proc.stdout)
-    text_path.write_text(text_proc.stdout)
+    # The text twin is stored. The json envelope is what the tier report cites
+    # from the tree, so it is committed -- but only after the store succeeded.
+    stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
+    (stage / f"{record_id}.drc.txt").write_text(text_proc.stdout)
+    json_path = (stage if args.store_envelope else reports_dir) / f"{record_id}.drc.json"
+    if args.store_envelope:
+        json_path.write_text(json_proc.stdout)
+    manifest = signoff_store.store_or_exit(
+        stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
+        name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
+    )
+    if not args.store_envelope:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json_proc.stdout)
 
     payload = json.loads(json_proc.stdout)
     print(f"record id      : {record_id}")
@@ -104,7 +119,7 @@ def main() -> int:
     print(f"status         : {payload['status']}")
     print(f"violation_count: {payload['violation_count']}")
     print(f"report (json)  : {json_path.relative_to(REPO_ROOT)}")
-    print(f"report (text)  : {text_path.relative_to(REPO_ROOT)}")
+    print(f"manifest       : {manifest.relative_to(REPO_ROOT)}")
     return 0
 
 

@@ -275,6 +275,18 @@ class Check(unittest.TestCase):
         self.assertEqual(rc, 0, err)
         self.assertIn("1 manifest(s), 1 entry", out)
 
+    def test_layout_signoff_name_passes_and_other_roots_fail(self):
+        name = "layout/lvs/reports/b/r1.lvs.txt"
+        self.add_manifest(entry(b"x", name=name))
+        self.commit()
+        rc, _, err = self.run_check()
+        self.assertEqual(rc, 0, err)
+        self.add_manifest(entry(b"y", name="spec/r1.txt"), name="c-r1.manifest.json")
+        self.commit()
+        rc, _, err = self.run_check()
+        self.assertEqual(rc, 1)
+        self.assertIn("canonical relative", err)
+
     def test_committed_blob_beside_manifest_fails(self):
         self.add_manifest(entry(b"x"))
         self.write("sim/b/records/r1.json", "x")  # the stored bytes, committed too
