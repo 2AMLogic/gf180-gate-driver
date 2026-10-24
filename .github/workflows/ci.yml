@@ -17,6 +17,7 @@ name: CI
 # | `scripts/check_artifact_manifests.py check`   | python3+git  | `lint` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
+# | `layout/common/test_signoff_store.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
 # Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
@@ -168,6 +169,12 @@ jobs:
         # stdlib arithmetic, no klt, no PDK, no GDS, so it belongs on this
         # same PDK-free runner.
         run: python3 layout/common/test_power_array_folded.py
+
+      - name: Signoff-store unit tests
+        # layout/common/test_signoff_store.py pins the fail-closed path of the
+        # layout/ signoff writers (issue #348): a failed put raises, installs no
+        # manifest and commits no bytes. `klt` is emulated; stdlib only.
+        run: python3 layout/common/test_signoff_store.py
 
       - name: LVS reference-netlist unit tests
         # layout/lvs/test_make_reference.py pins the structural facts (PMOS

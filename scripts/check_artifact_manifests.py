@@ -15,7 +15,7 @@ of that contract. Two subcommands:
     schema, an unknown or missing field, a ``uri`` that is not the logical
     ``artifact:<key>`` (an ``s3`` bucket uri or any other scheme is refused),
     a key that does not end in the entry's sha256, a ``name`` that is not a
-    canonical ``sim/...`` path, or a duplicate name. It also fails if any entry's ``name`` is a tracked
+    canonical ``sim/...`` or ``layout/...`` path, or a duplicate name. It also fails if any entry's ``name`` is a tracked
     path in ``REV``: the point of a manifest is that the bytes are *not*
     committed, so a blob beside its own manifest is the fallback this repo
     forbids. ``check`` never contacts the broker and says so: schema-valid
@@ -108,8 +108,13 @@ def repo_from_key(key: str) -> str | None:
     return parts[1].replace("__", "/")
 
 
+#: Logical roots a stored name may sit under: ``sim/`` evidence (#333) and
+#: ``layout/`` signoff outputs (#348).
+NAME_ROOTS = ("sim/", "layout/")
+
+
 def canonical_name(name) -> bool:
-    return (isinstance(name, str) and name.startswith("sim/")
+    return (isinstance(name, str) and name.startswith(NAME_ROOTS)
             and "\\" not in name and "\0" not in name
             and posixpath.normpath(name) == name
             and not {"", ".", ".."} & set(name.split("/")))
@@ -156,7 +161,7 @@ def entry_problems(entry) -> list[str]:
     if "name" not in entry:
         problems.append("name is required here (the logical sim/ path of the bytes)")
     elif not canonical_name(entry["name"]):
-        problems.append("name must be a canonical relative sim/... path")
+        problems.append("name must be a canonical relative sim/... or layout/... path")
     if "media_type" in entry and not isinstance(entry["media_type"], str):
         problems.append("media_type must be a string")
     return problems
