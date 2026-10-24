@@ -87,6 +87,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import signoff_store  # noqa: E402
 
 BUILD_DIR = REPO_ROOT / "layout" / "build"
@@ -114,16 +115,6 @@ _OK_EXITS = (0, 3, 4)
 
 class ControlError(Exception):
     """A tool prerequisite failed before any verdict could be graded."""
-
-
-def _run(klt: str, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [klt, "erc", str(GDS.relative_to(REPO_ROOT)), *args],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
 
 
 def _grade_arm(
@@ -161,26 +152,22 @@ def _grade_arm(
     request_path = stage / f"{record_id}.erc-request.json"
     request_path.write_text(json.dumps(request, indent=2) + "\n")
 
-    invocation = [str(spec)]
+    argv = [klt, "erc", str(GDS.relative_to(REPO_ROOT)), str(spec)]
     if deck is not None:
-        invocation += ["--deck", deck]
-    json_proc = _run(klt, *invocation, "--format", "json")
-    text_proc = _run(klt, *invocation, "--format", "text")
-    if json_proc.returncode not in _OK_EXITS:
-        print(json_proc.stdout, json_proc.stderr, file=sys.stderr)
-        print(
-            f"error: klt erc failed on the '{arm}' arm (exit {json_proc.returncode})",
-            file=sys.stderr,
-        )
-        raise ControlError(arm)
+        argv += ["--deck", deck]
+    try:
+        report = klt_report.run_klt_report(REPO_ROOT, argv, ok_codes=_OK_EXITS)
+    except klt_report.KltRunError:
+        print(f"error: klt erc failed on the '{arm}' arm", file=sys.stderr)
+        raise ControlError(arm) from None
 
-    (stage / f"{record_id}.erc.json").write_text(json_proc.stdout)
-    (stage / f"{record_id}.erc.txt").write_text(text_proc.stdout)
+    (stage / f"{record_id}.erc.json").write_text(report.json)
+    (stage / f"{record_id}.erc.txt").write_text(report.text)
     signoff_store.store_or_exit(
         stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
         name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
     )
-    return record_id, json.loads(json_proc.stdout)
+    return record_id, report.payload
 
 
 def main() -> int:

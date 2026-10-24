@@ -44,6 +44,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import signoff_store  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -122,22 +123,18 @@ def main() -> int:
     extracted = stage / f"{record_id}.extracted.spice"
 
     # 2. Extract.
-    extract_proc = subprocess.run(
-        [
-            klt, "extract", str(gds_rel),
-            "--deck", args.deck,
-            "--top", top,
-            "--format", "json",
-            "-o", str(extracted),
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if extract_proc.returncode != 0:
-        print(extract_proc.stdout, extract_proc.stderr, file=sys.stderr)
-        print(f"error: klt extract failed (exit {extract_proc.returncode})", file=sys.stderr)
+    try:
+        extract_proc = klt_report.run_klt(
+            REPO_ROOT,
+            [
+                klt, "extract", str(gds_rel),
+                "--deck", args.deck,
+                "--top", top,
+                "--format", "json",
+                "-o", str(extracted),
+            ],
+        )
+    except klt_report.KltRunError:
         return 1
     (stage / f"{record_id}.extract.json").write_text(extract_proc.stdout)
 
@@ -153,39 +150,24 @@ def main() -> int:
     request_path.write_text(json.dumps(request, indent=2) + "\n")
     request_arg = str(request_path.relative_to(REPO_ROOT))
 
-    lvs_json = subprocess.run(
-        [klt, "lvs", request_arg, "--format", "json"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
     # exit 0 (match) and exit 3 (mismatch) are both successful runs.
-    if lvs_json.returncode not in (0, 3):
-        print(
-            f"{lvs_json.stdout}{lvs_json.stderr}\n"
-            f"error: klt lvs failed (exit {lvs_json.returncode})",
-            file=sys.stderr,
+    try:
+        lvs = klt_report.run_klt_report(
+            REPO_ROOT, [klt, "lvs", request_arg], ok_codes=(0, 3)
         )
+    except klt_report.KltRunError:
         return 1
-    lvs_text = subprocess.run(
-        [klt, "lvs", request_arg, "--format", "text"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    (stage / f"{record_id}.lvs.txt").write_text(lvs_text.stdout)
+    (stage / f"{record_id}.lvs.txt").write_text(lvs.text)
     manifest = signoff_store.store_or_exit(
         stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
         name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
     )
     # Committed only after the store succeeded (check_tier_report.py reads it).
     reports_dir.mkdir(parents=True, exist_ok=True)
-    (reports_dir / f"{record_id}.lvs.json").write_text(lvs_json.stdout)
+    (reports_dir / f"{record_id}.lvs.json").write_text(lvs.json)
 
     extract_payload = json.loads(extract_proc.stdout)
-    lvs_payload = json.loads(lvs_json.stdout)
+    lvs_payload = lvs.payload
     print(f"record id        : {record_id}")
     print(f"block            : {block}")
     print(f"extracted devices: {extract_payload['device_count']} {extract_payload['device_counts']}")

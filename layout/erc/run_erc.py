@@ -40,8 +40,6 @@ Usage (from the repo root):
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
 from pathlib import Path
 
@@ -49,6 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 import signoff_store  # noqa: E402
 
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
@@ -92,44 +91,31 @@ def main() -> int:
     gds_rel = gds_path.relative_to(REPO_ROOT)
     spec_rel = spec_path.relative_to(REPO_ROOT)
 
-    common = [klt, "erc", str(gds_rel), str(spec_rel), "--deck", args.deck]
-    json_proc = subprocess.run(
-        [*common, "--format", "json"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    text_proc = subprocess.run(
-        [*common, "--format", "text"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
     # exit 0 (clean), 3 (violations found) and 4 (antenna not_checked) are
     # all successful runs per klt erc's documented exit-code contract; only
     # exit 1/2 are errors.
-    if json_proc.returncode not in (0, 3, 4):
-        print(json_proc.stdout, file=sys.stdout)
-        print(json_proc.stderr, file=sys.stderr)
-        print(f"error: klt erc failed (exit {json_proc.returncode})", file=sys.stderr)
+    try:
+        report = klt_report.run_klt_report(
+            REPO_ROOT,
+            [klt, "erc", str(gds_rel), str(spec_rel), "--deck", args.deck],
+            ok_codes=(0, 3, 4),
+        )
+    except klt_report.KltRunError:
         return 1
 
     # The text twin is stored; the json envelope is what the tier report cites
     # from the tree, so it is committed -- but only after the store succeeded.
     stage = signoff_store.stage_dir(REPO_ROOT, bench, record_id)
-    (stage / f"{record_id}.erc.txt").write_text(text_proc.stdout)
+    (stage / f"{record_id}.erc.txt").write_text(report.text)
     manifest = signoff_store.store_or_exit(
         stage, repo_root=REPO_ROOT, bench=bench, rid=record_id,
         name_prefix=str(reports_dir.relative_to(REPO_ROOT)),
     )
     reports_dir.mkdir(parents=True, exist_ok=True)
     json_path = reports_dir / f"{record_id}.erc.json"
-    json_path.write_text(json_proc.stdout)
+    json_path.write_text(report.json)
 
-    payload = json.loads(json_proc.stdout)
+    payload = report.payload
     print(f"record id        : {record_id}")
     print(f"fixture          : {fixture}")
     print(f"klt              : {payload['provenance']['klt_version']}")
