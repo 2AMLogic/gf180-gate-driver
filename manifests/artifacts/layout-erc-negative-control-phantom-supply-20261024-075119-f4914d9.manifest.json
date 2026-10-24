@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "sha256": "8805fe50623e23959335347577ceb4dda7426468e664af0bec8afe46900093f0",
+      "size": 353,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.7.1.dev2599+geaf26f00df36",
+        "loom.repo": "2AMLogic/gf180-gate-driver",
+        "commit": "f4914d9bb79b2d06f8d02c35875cdb2cb9dceb4e"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-gate-driver/88/8805fe50623e23959335347577ceb4dda7426468e664af0bec8afe46900093f0",
+      "name": "layout/erc/reports/negative-control/phantom-supply/20261024-075119-f4914d9.erc-request.json",
+      "media_type": "application/json"
+    },
+    {
+      "sha256": "a97c6a03e67aef9423cd518fade00be807d61a789ee3321e6b4e1bb430651a8b",
+      "size": 49656,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.7.1.dev2599+geaf26f00df36",
+        "loom.repo": "2AMLogic/gf180-gate-driver",
+        "commit": "f4914d9bb79b2d06f8d02c35875cdb2cb9dceb4e"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-gate-driver/a9/a97c6a03e67aef9423cd518fade00be807d61a789ee3321e6b4e1bb430651a8b",
+      "name": "layout/erc/reports/negative-control/phantom-supply/20261024-075119-f4914d9.erc.json",
+      "media_type": "application/json"
+    },
+    {
+      "sha256": "c2b7d00ce6d25ad1426184261c1939b9a0107ce22f54788326f6b620b151cdd6",
+      "size": 12764,
+      "kind": "evidence",
+      "producer": {
+        "tool": "klt",
+        "version": "0.7.1.dev2599+geaf26f00df36",
+        "loom.repo": "2AMLogic/gf180-gate-driver",
+        "commit": "f4914d9bb79b2d06f8d02c35875cdb2cb9dceb4e"
+      },
+      "uri": "artifact:evidence/2AMLogic__gf180-gate-driver/c2/c2b7d00ce6d25ad1426184261c1939b9a0107ce22f54788326f6b620b151cdd6",
+      "name": "layout/erc/reports/negative-control/phantom-supply/20261024-075119-f4914d9.erc.txt",
+      "media_type": "text/plain"
+    }
+  ]
+}
