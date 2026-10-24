@@ -17,7 +17,7 @@ harness and evidence formats valid.
 
 | requirement | artifact | sha256 |
 |---|---|---|
-| README: what the block is, spec table, reproduction | `README.md` | `sha256:6c437c7bc926d07746bf18be96b25fa787463adabbfca633235a5eaa75fc9586` |
+| README: what the block is, spec table, reproduction | `README.md` | `sha256:98a37e7f59873ffe945b2a18792a2c8f7593cf70f420b006a8d09937d96da12c` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
 | CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:2df6f0eba0eabddea91efbd723025dc79ddfea7c8d1bcfee7bda8bfcd1d62560` |
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:80967abe117347d181575ff00b177e8a203aec5475a66bdd38842cc260097b7d` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
-| `layout/README.md` | `sha256:ca30d4e7142a14e5be71a3cef997ad8ce7a8086f938c94f70db730c92dd2c93e` |
+| `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -148,3 +148,25 @@ tables:
 The other listed files are unchanged. No simulation, netlisting or layout flow
 was run for this re-audit beyond the DRC re-run recorded in
 `layout/drc/triage_sab_implant.md`.
+
+## Re-audit for issue #362 (2026-10-24)
+
+Two listed files changed on the issue #362 branch (`feature/issue-362`) and
+were re-read against the findings above; their hashes are refreshed in the
+tables:
+
+- `README.md` (**read** the diff): the status line and the Layout bullet now
+  say DRC is clean under the current curated deck (not a medium-voltage
+  signoff) and that the post-layout PVT records were not re-run on the
+  regenerated GDS, instead of quoting 1513 violations. Reproduction commands
+  are unchanged.
+- `layout/README.md` (**read** the diff): the DRC status heading, table row,
+  "Current status" paragraph, `dnwell_partition` description, LVS "Latest
+  report" line, Known-gaps bullet and "Post-layout simulation" row now describe
+  the regenerated GDS and its fresh DRC/LVS/ERC reports. Reproduction commands
+  are unchanged.
+
+The other listed files are unchanged. The layout flow was run for the change
+itself (`gen_gate_driver_core.py`, `check_gate_driver_core.py`, `run_drc.py`,
+`run_lvs.py`, `run_erc.py`), not as part of this audit; no simulation or
+netlisting was run.

@@ -142,7 +142,7 @@ time/shoot-through control, and thermal shutdown are all explicitly
 deferred to a follow-on spec revision (`spec/gate-driver.md` §1, §5).
 
 The complete block — `level_shifter` + `output_stage` + `uvlo` — is drawn at
-transistor level in `layout/gate_driver_core.gds` (DRC: 0 violations under the retired 18-layer deck only; the current deck reports 1513 real violations, #358)
+transistor level in `layout/gate_driver_core.gds` (DRC: 0 violations under the current 34-layer curated deck, #362; the deck models no `_MV` rules, so this is not a medium-voltage signoff)
 and LVS-matched (2044/2044 devices, 295/295 nets, one benign topology-only
 warning unrelated to any device/net mismatch) against the schematic
 (`layout/README.md`, decision record 0019). Post-layout, extracted-netlist

@@ -166,6 +166,8 @@ RAIL_MARGIN_UM = 6.0  # first rail's offset from the device column
 STUB_WIDTH_UM = 0.42  # Metal1 pad stub / gate route
 VIA_SIZE_UM = 0.26  # Via1 square
 LANDING_UM = 0.6  # Metal1 landing pad around a via
+METAL1_SPACE_UM = 0.23  # metal1.space.1
+NATIVE_TAP_CORNER_UM = 1.5  # a cell-own tap pad within this of the bbox edge is a corner tap
 JUMPER_WIDTH_UM = 0.6  # Metal1 left-rail <-> right-rail jumper
 JUMPER_PITCH_UM = 1.4
 JUMPER_BAND_GAP_UM = 4.0  # stack top -> first jumper
@@ -189,7 +191,11 @@ DUALGATE_MARGIN_UM = 2.0  # Dualgate enclosure of the 5V/6V group
 CONTACT_SIZE_UM = 0.22  # contact.width.1 (CO.1)
 ENCLOSURE_MARGIN_UM = 0.10  # comp.enclosing.contact.1 / poly2.enclosing.contact.1 (CO.3/CO.4)
 TAP_COMP_UM = CONTACT_SIZE_UM + 2 * ENCLOSURE_MARGIN_UM  # 0.42um Comp tap pad
-TAP_LEFT_OFFSET_UM = 0.6  # tap center, left of the device's own bbox.x0
+TAP_IMPLANT_ENCLOSURE_UM = 0.16  # nplus/pplus.enclosing.comp.1 (NP.3/PP.3): the tap's
+# Nplus/Pplus must extend this far past its Comp pad on every side
+TAP_LEFT_OFFSET_UM = 0.8  # tap center, left of the device's own bbox.x0 -- far enough
+# that the tap's enlarged implant (TAP_IMPLANT_ENCLOSURE_UM) clears the
+# device cell's own corner-tap implant by >= pplus.space.1/nplus.space.1 (0.4um)
 TAP_TOP_OFFSET_UM = 0.6  # tap center, above the device's own bbox.y1
 WELL_TIE_MARGIN_UM = 1.2  # PMOS per-device Nwell-tie rectangle margin --
 # same value/rationale as LVPWELL_MARGIN_UM above (both must clear the tap
@@ -215,9 +221,7 @@ GUARD_RING_MARGIN_UM = 5.5  # PCOMP guard ring offset -- genuinely *outside*
 # interact with it at all since it draws bare Comp only -- see guard_ring().
 GUARD_RING_WIDTH_UM = 1.0  # PCOMP guard ring stroke width
 GUARD_RING_STROKE_COUNT = 4  # N/S/E/W rects guard_ring() draws (one Comp
-# "active" shape each, positioned entirely outside DNWELL_DRV -- exported
-# so check_gate_driver_core.py's dnwell_partition check can account for them
-# in its own expected "active regions outside DNWELL" arithmetic).
+# "active" shape each, positioned entirely outside DNWELL_DRV).
 GUARD_RING_STRAP_WIDTH_UM = STUB_WIDTH_UM  # Metal1 strap along the ring's own
 # contacted N/S strokes -- same width as every other Metal1 stub/strap this
 # generator draws, wide enough to enclose CONTACT_SIZE_UM with margin.
@@ -929,6 +933,32 @@ def _ports_by_role(report: dict) -> dict[str, dict]:
     return roles
 
 
+def native_tap_pads(report: dict) -> list[tuple[float, float, float, float]]:
+    """Cell-local ``(x0, y0, x1, y1)`` of every Metal1 pad a ``mos_array`` cell
+    draws for its *own* contacted body taps (no ``klt gen`` report field lists
+    them).
+
+    Current ``klt gen mos_array`` cells carry contacted Comp+implant body taps
+    at the corners (and, on a wide cell, at the middle of the top and bottom
+    rows).  Each tap's Metal1 pad is an isolated square touching no S/D/G port,
+    so it is recovered here as a Metal1 connected component that contains no
+    reported port.  Any interconnect Metal1 drawn across one of these pads
+    would short that net onto the cell's well/substrate tie.
+    """
+    gds_path = report.get("gds_path")
+    if not gds_path:
+        return []
+    comps = _klt("components", gds_path, "--conductors", json.dumps([{"name": "m1", "layer": [34, 0]}]))
+    ports = [(p["x_um"], p["y_um"]) for p in report.get("ports", [])]
+    pads = []
+    for comp in comps.get("components", []):
+        box = comp["bbox_um"]
+        if any(box["left"] <= px <= box["right"] and box["bottom"] <= py <= box["top"] for px, py in ports):
+            continue
+        pads.append((box["left"], box["bottom"], box["right"], box["top"]))
+    return pads
+
+
 class Placement:
     """Absolute placement of one device strip."""
 
@@ -947,6 +977,12 @@ class Placement:
             role: (port["x_um"] + origin_x, port["y_um"] + origin_y)
             for role, port in roles.items()
         }
+        #: Absolute Metal1 pads of the cell's own body taps (see
+        #: :func:`native_tap_pads`); the gate route must not cross them.
+        self.native_tap_pads = [
+            (x0 + origin_x, y0 + origin_y, x1 + origin_x, y1 + origin_y)
+            for x0, y0, x1, y1 in native_tap_pads(report)
+        ]
 
 
 def place_devices(devices: list[Device], reports: dict[str, dict]) -> list[Placement]:
@@ -1079,6 +1115,7 @@ class Interconnect:
         #: known -- see module-level ``build()``.
         self.resistor_placements: list["ResistorPlacement"] = []
         self.shapes: list[dict] = []
+        self._landings: dict[float, list[float]] = {}  # rail x -> via-landing ys (see _via_stack)
         self.labels: list[dict] = []
         #: Provenance for the drawn MiM stack, filled in by :meth:`mim_caps`
         #: and echoed into ``gate_driver_core.provenance.json`` -- one entry
@@ -1123,7 +1160,25 @@ class Interconnect:
     # -- primitives -------------------------------------------------------- #
 
     def _via_stack(self, x: float, y: float) -> None:
-        """Via1 plus its Metal1 landing pad (the Metal2 rail is the top plate)."""
+        """Via1 plus its Metal1 landing pad (the Metal2 rail is the top plate).
+
+        Two landings on one rail are the same net, so when a new one would sit
+        closer than ``metal1.space.1`` to an earlier one the gap between them
+        is filled rather than left as a spacing violation.
+        """
+        for prior_y in self._landings.get(x, ()):
+            gap = abs(y - prior_y) - LANDING_UM
+            if 0 < gap < METAL1_SPACE_UM:
+                self.shapes.append(
+                    _rect(
+                        L_METAL1,
+                        x - LANDING_UM / 2,
+                        min(y, prior_y) + LANDING_UM / 2,
+                        x + LANDING_UM / 2,
+                        max(y, prior_y) - LANDING_UM / 2,
+                    )
+                )
+        self._landings.setdefault(x, []).append(y)
         self.shapes.append(
             _rect(
                 L_METAL1,
@@ -1199,16 +1254,35 @@ class Interconnect:
             gx, gy = placement.pad["g"]
             channel_y = self._gate_channel_y(index)
             rail = self.left_rail_x[device.g]
-            self.shapes.append(
-                _vbar(
-                    L_METAL1,
-                    gy - STUB_WIDTH_UM / 2,
-                    channel_y + STUB_WIDTH_UM / 2,
-                    gx,
-                    STUB_WIDTH_UM,
-                    name=device.g,
+            if self._gate_bar_hits_native_tap(placement, gx, gy, channel_y):
+                # The cell's own body-tap pad sits in the gate's column: a
+                # Metal1 bar would short the gate net onto that well/substrate
+                # tie.  Go up on Metal2 instead (nothing else is drawn on
+                # Metal2 over a device strip) and drop back to Metal1 in the
+                # channel, where the existing Metal1 run to the rail starts.
+                self._via_stack(gx, gy)
+                self.shapes.append(
+                    _vbar(
+                        L_METAL2,
+                        gy - LANDING_UM / 2,
+                        channel_y + LANDING_UM / 2,
+                        gx,
+                        LANDING_UM,
+                        name=device.g,
+                    )
                 )
-            )
+                self._via_stack(gx, channel_y)
+            else:
+                self.shapes.append(
+                    _vbar(
+                        L_METAL1,
+                        gy - STUB_WIDTH_UM / 2,
+                        channel_y + STUB_WIDTH_UM / 2,
+                        gx,
+                        STUB_WIDTH_UM,
+                        name=device.g,
+                    )
+                )
             self.shapes.append(
                 _hbar(
                     L_METAL1,
@@ -1220,6 +1294,21 @@ class Interconnect:
                 )
             )
             self._via_stack(rail, channel_y)
+
+    @staticmethod
+    def _gate_bar_hits_native_tap(
+        placement: "Placement", gx: float, gy: float, channel_y: float
+    ) -> bool:
+        """True if a Metal1 gate bar at ``gx`` would touch one of the cell's own
+        body-tap pads on its way up from ``gy`` to ``channel_y``."""
+        half = STUB_WIDTH_UM / 2.0
+        return any(
+            x0 < gx + half + METAL1_SPACE_UM
+            and x1 > gx - half - METAL1_SPACE_UM
+            and y1 > gy - half
+            and y0 < channel_y + half
+            for x0, y0, x1, y1 in placement.native_tap_pads
+        )
 
     def _gate_channel_y(self, index: int) -> float:
         """Centre of the empty horizontal channel above device strip ``index``."""
@@ -1294,7 +1383,8 @@ class Interconnect:
         for `klt extract`, whose gf180mcu deck derives its tap region as
         ``(tap_nplus & active & nwell) | (tap_pplus & (active - nwell))``
         (klayout-tools #1084).  Drawing the implant *only* over the tap
-        footprint (never as a blanket rectangle over a device) is therefore
+        footprint, enlarged by ``TAP_IMPLANT_ENCLOSURE_UM`` so it satisfies
+        NP.3/PP.3 (never as a blanket rectangle over a device), is therefore
         load-bearing: a Pplus rectangle covering an nfet's own diffusion would
         turn its source and drain into substrate ties and short the block.
 
@@ -1305,7 +1395,10 @@ class Interconnect:
         half_comp = TAP_COMP_UM / 2.0
         half_contact = CONTACT_SIZE_UM / 2.0
         self.shapes.append(_rect(L_COMP, x - half_comp, y - half_comp, x + half_comp, y + half_comp))
-        self.shapes.append(_rect(implant, x - half_comp, y - half_comp, x + half_comp, y + half_comp))
+        half_implant = half_comp + TAP_IMPLANT_ENCLOSURE_UM
+        self.shapes.append(
+            _rect(implant, x - half_implant, y - half_implant, x + half_implant, y + half_implant)
+        )
         self.shapes.append(
             _rect(L_CONTACT, x - half_contact, y - half_contact, x + half_contact, y + half_contact)
         )
@@ -1387,7 +1480,7 @@ class Interconnect:
         ``layout/lvs/make_reference.py``'s transform 3 and ``layout/README.md``
         for how the LVS reference models the body identity and what that costs.
         """
-        for placement in self.placements:
+        for index, placement in enumerate(self.placements):
             device = placement.device
             tap_x = placement.x0 - TAP_LEFT_OFFSET_UM
             tap_y = placement.y1 + TAP_TOP_OFFSET_UM
@@ -1405,6 +1498,48 @@ class Interconnect:
                 )
             else:
                 self._tap(tap_x, tap_y, L_PPLUS, device.b)
+                self._strap_native_taps(index, placement, device.b)
+
+    def _strap_native_taps(self, index: int, placement: "Placement", net: str) -> None:
+        """Tie an nfet cell's own corner substrate-tap pads to ``net``.
+
+        Current ``klt gen mos_array`` cells draw contacted Pplus body taps of
+        their own at the corners (see :func:`native_tap_pads`).  Left floating,
+        each is a substrate tap tied to nothing, which ``klt erc`` rules
+        ``erc.missing_tie`` against the 3.3 V substrate assertion.  Strap each
+        corner pad horizontally out to ``net``'s left (west pads) or right
+        (east pads) Metal2 rail, the same way :meth:`_tap` straps its own tap.
+        A pad in the middle of a wide cell has no clear horizontal path out
+        (the gate and S/D routes sit there), so it is left alone: that cell's
+        substrate/well is already tied by the corner pads and by :meth:`_tap`.
+
+        A strap is also skipped where its Metal1 run would sit within
+        ``metal1.space.1`` of a Via1 landing on a neighbouring rail: the runs
+        cross those rails' columns, so its y must stay clear of every other
+        stub's y in the strip (small cells put their tap pads that close).
+        """
+        other_ys = [
+            placement.pad["s"][1],
+            placement.pad["d"][1],
+            placement.y1 + TAP_TOP_OFFSET_UM,
+            self._gate_channel_y(index),
+        ]
+        if index > 0:
+            other_ys.append(self._gate_channel_y(index - 1))
+        clearance = LANDING_UM / 2 + STUB_WIDTH_UM / 2 + METAL1_SPACE_UM
+        for x0, y0, x1, y1 in placement.native_tap_pads:
+            y = (y0 + y1) / 2.0
+            if any(abs(y - other) < clearance for other in other_ys):
+                continue
+            if x1 <= placement.x0 + NATIVE_TAP_CORNER_UM:
+                rail = self.left_rail_x[net]
+                self.shapes.append(_hbar(L_METAL1, rail, x1, y, STUB_WIDTH_UM, name=net))
+            elif x0 >= placement.x1 - NATIVE_TAP_CORNER_UM:
+                rail = self.right_rail_x[net]
+                self.shapes.append(_hbar(L_METAL1, x0, rail, y, STUB_WIDTH_UM, name=net))
+            else:
+                continue
+            self._via_stack(rail, y)
 
     def guard_ring(self) -> None:
         """Closed, contacted PCOMP guard ring around ``DNWELL_DRV`` (DN.3).
@@ -1479,7 +1614,16 @@ class Interconnect:
         ]
         for rect in strokes:
             self.shapes.append(_rect(L_COMP, *rect, name="GUARD_RING_DRV"))
-            self.shapes.append(_rect(L_PPLUS, *rect, name="GUARD_RING_DRV"))
+            self.shapes.append(
+                _rect(
+                    L_PPLUS,
+                    rect[0] - TAP_IMPLANT_ENCLOSURE_UM,
+                    rect[1] - TAP_IMPLANT_ENCLOSURE_UM,
+                    rect[2] + TAP_IMPLANT_ENCLOSURE_UM,
+                    rect[3] + TAP_IMPLANT_ENCLOSURE_UM,
+                    name="GUARD_RING_DRV",
+                )
+            )
 
         # Contact row + Metal1 strap on the north and south strokes only (see
         # the docstring for why not east/west), tied to the substrate net.
