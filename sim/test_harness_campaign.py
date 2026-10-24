@@ -38,6 +38,7 @@ from pathlib import Path
 SIM_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SIM_DIR))
 
+import mismatch_body_fixture as fixture  # noqa: E402
 from harness import campaign  # noqa: E402
 from harness import runner as harness_runner  # noqa: E402
 from harness.corners import CORNERS, PvtPoint, Rail  # noqa: E402
@@ -452,6 +453,64 @@ class EvidenceWriterTests(unittest.TestCase):
                 source_experiment="fake-experiment", worst=None,
             )
             self.assertEqual(len(list((Path(tmp) / "rec").iterdir())), 3)
+
+
+class RecordBodyGoldenTests(unittest.TestCase):
+    """The three mismatch runners' `build_record_body` output is pinned byte
+    for byte (issue #344). The goldens in ``sim/testdata/mismatch_record_body/``
+    were captured from the runners *before* the shared section builders moved
+    into ``campaign.py``; ``sim/`` records are append-only evidence, so the
+    refactor must not change a single byte of generated markdown.
+    """
+
+    def test_every_runner_scenario_matches_its_golden(self):
+        golden_dir = SIM_DIR / "testdata" / "mismatch_record_body"
+        for key in fixture.RUNNERS:
+            for scenario in fixture.SCENARIOS:
+                for smoke in (False, True):
+                    if smoke and scenario != "mixed":
+                        continue
+                    name = f"{key}-{scenario}{'-smoke' if smoke else ''}.md"
+                    with self.subTest(golden=name):
+                        self.assertEqual(
+                            fixture.render(key, scenario, smoke),
+                            (golden_dir / name).read_text(),
+                        )
+
+
+class RecordSectionHelperTests(unittest.TestCase):
+    def test_dropped_note_pluralises_and_reports_none(self):
+        self.assertEqual(campaign.dropped_note(10, 10, "--"), " All 10 draws converged; none is excluded.")
+        one = campaign.dropped_note(10, 9, "--")
+        self.assertIn("1 of 10 draws did not converge and is excluded", one)
+        self.assertIn("leaving 9 in the distribution.", one)
+        self.assertIn("2 of 10 draws did not converge and are excluded", campaign.dropped_note(10, 8, "--"))
+
+    def test_verdict_for_requires_bound_and_control(self):
+        self.assertEqual(campaign.verdict_for(True, True), "PASS")
+        self.assertEqual(campaign.verdict_for(True, False), "FAIL")
+        self.assertEqual(campaign.verdict_for(False, True), "FAIL")
+
+    def test_control_table_rows_flags_disagreement(self):
+        good = _outcome([5.1])
+        bad = _outcome([5.1], baseline=5.5)
+        rows, ok, worst = campaign.control_table_rows(
+            [good, bad], lambda o: (None, o.control_value("vout"), 2e-6)
+        )
+        self.assertFalse(ok)
+        self.assertAlmostEqual(worst, 2e-6)
+        self.assertIn("| yes | yes | +2.00 |", rows[0])
+        self.assertIn("| **NO** | yes | +2.00 |", rows[1])
+
+    def test_non_converged_section_lists_failed_draws(self):
+        outcome = _outcome([5.1, 5.2], statuses=["ok", "failed"])
+        lines = campaign.non_converged_section([outcome], 2, "--", ", why.", "closing")
+        text = "\n".join(lines)
+        self.assertIn("**1 of 2 draws** did not complete and is excluded", text)
+        self.assertIn("| `tt_27c_vdrv5p00v` | 2 | 101 |", text)
+        self.assertEqual(lines[-2], "closing")
+        none = campaign.non_converged_section([_outcome([5.1])], 1, "--", "", "")
+        self.assertIn("None -- all 1 mismatch draws completed", "\n".join(none))
 
 
 if __name__ == "__main__":
