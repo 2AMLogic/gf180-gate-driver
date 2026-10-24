@@ -34,25 +34,26 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#333**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
+- **#344**: Dedupe mismatch record-body composers into harness/campaign.py
+- **#346**: Remove dead device_write_record helper in sim/harness/report.py
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#347**: refactor(sim): remove unused device_write_record helper
 
 ## Approved (Awaiting Merge)
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#345**: refactor(sim): share mismatch record-body sections via harness campaign
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#333**: Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -70,10 +71,10 @@ _None._
 | Very important | 0 |
 | Important | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 0 |
-| Curated | 0 |
+| In Progress (`loom:building`) | 2 |
+| PRs awaiting review | 1 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 1 |
 | Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
