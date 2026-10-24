@@ -58,9 +58,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import re
 import statistics
-import subprocess
 import sys
 import tempfile
 import time
@@ -183,18 +181,12 @@ def _run_sample(
             + '\n.include "control.spice"\n.end\n',
             encoding="utf-8",
         )
-        proc = subprocess.run(
-            ["ngspice", "-b", local_deck.name],
-            cwd=work,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-    log = proc.stdout + proc.stderr
-    if proc.returncode != 0:
-        return "error", f"ngspice exited {proc.returncode}\n{log}", {}
-    if re.search(r"^\s*(Error|ERROR|fatal)", log, re.MULTILINE):
-        return "error", log, {}
+        try:
+            log = script_helpers.run_ngspice(
+                work, local_deck.name, f"{corner.name} @ {temp_c} C"
+            )
+        except RuntimeError as exc:
+            return "error", str(exc), {}
     try:
         flat = flatten(base.extract(log))
     except Exception as exc:  # noqa: BLE001 -- disclose, don't crash the campaign
