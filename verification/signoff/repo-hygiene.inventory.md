@@ -17,7 +17,7 @@ harness and evidence formats valid.
 
 | requirement | artifact | sha256 |
 |---|---|---|
-| README: what the block is, spec table, reproduction | `README.md` | `sha256:2590d37185e6af715de854de3b26201ab70889c1bab9e9d93d19936ce4dcdb6a` |
+| README: what the block is, spec table, reproduction | `README.md` | `sha256:6c437c7bc926d07746bf18be96b25fa787463adabbfca633235a5eaa75fc9586` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
 | CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:2df6f0eba0eabddea91efbd723025dc79ddfea7c8d1bcfee7bda8bfcd1d62560` |
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:80967abe117347d181575ff00b177e8a203aec5475a66bdd38842cc260097b7d` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
-| `layout/README.md` | `sha256:15f8b6753a76db41debb3892b573cbfb6ec6ea74dd95ea2f8a78104dd346e665` |
+| `layout/README.md` | `sha256:aa2ebaf07b3f1b50674df03a91c874c3dee79364853e4051118fc8a7da6c4f80` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -130,3 +130,21 @@ The other listed files are unchanged. No simulation, netlisting or layout flow
 was run for this re-audit.
 
 Artifact binding verifies the bytes listed here, not the truth of this audit.
+
+## Re-audit for issue #358 (2026-10-24)
+
+Two listed files changed on the issue #358 branch (`feature/issue-358`) and
+were re-read against the findings above; their hashes are refreshed in the
+tables:
+
+- `README.md` (**read** the diff): the status line and the Layout bullet now
+  say DRC is not clean under the current deck (1513 violations) instead of
+  quoting the old `status: clean`. Reproduction commands are unchanged.
+- `layout/README.md` (**read** the diff): the DRC status heading, table row,
+  "Latest report" paragraph and Known-gaps bullet now state the current
+  violations and scope the old clean report as historical. Reproduction
+  commands are unchanged.
+
+The other listed files are unchanged. No simulation, netlisting or layout flow
+was run for this re-audit beyond the DRC re-run recorded in
+`layout/drc/triage_sab_implant.md`.

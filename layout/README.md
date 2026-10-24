@@ -33,7 +33,7 @@ layout/
   erc/                              klt erc runner + committed reports (#238)
 ```
 
-## Status: DRC-clean and LVS-match, within a stated deck scope
+## Status: LVS-match; DRC clean only under the retired 18-layer deck, 1513 violations under the current deck (#358)
 
 The block now includes all three sub-cells the schematic instantiates —
 `level_shifter`, `output_stage`, and (issue #221) `uvlo` (UVLO comparator +
@@ -46,13 +46,14 @@ reference, including its bias-resistor network) — not just the first two.
 | Compensation capacitor drawn | **yes (#166)** — four `cap_mim_2f0_m4m5_noshield` plates in series, 5.0 × 5.0 µm each, on the process-fixed Metal4-FuseTop-Metal5 pair; extracted, LVS-matched, and its three interior nodes asserted floating ([below](#the-xccomp-mim-compensation-stack-166)) |
 | `uvlo` bias-resistor network drawn | **yes (#221)** — `Rref`/`R1`/`R2`/`Rfb`, each a `klt gen res_array` block of series `ppolyf_u` unit resistors sized to the schematic's own ohms value ([`resistor_array_params`](gen_gate_driver_core.py)); extracted and LVS-matched |
 | 3.3 V and 5 V/6 V devices in separate DNWELL regions | yes — verified geometrically (DRM 7.2) |
-| DRC-clean | yes — `status: clean`, 0 violations, **within the deck scope below** |
+| DRC | **not clean under the current deck (#358).** `status: violations`, 1513, klt `0.7.1.dev2599+geaf26f00df36`, deck hash `sha256:0eb6df1b…` (34 layers) — all 7 rules are real layout violations ([triage](drc/triage_sab_implant.md)). The earlier `status: clean`, 0 violations (klt 0.3.0, 18-layer deck, committed reports kept as history) predates the SAB, implant-enclosure and COMP-coverage rules and never checked them |
 | LVS-clean | yes — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins, **1 warning-only finding below (unrelated to body ties)** |
 | Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 1769 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 664 PMOS, the deck's global substrate identity for the 1105 NMOS). `klt lvs`'s `device.body_unverified` finding is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for how the two grounds now compare — revised by issue #221) |
 | Post-layout simulation | **pending re-verification against this GDS (issue #222)** — the committed PVT-grid records under `sim/gate-driver-core-drive-postlayout/` were extracted from the pre-#221 (level_shifter + output_stage only) GDS; re-running them against the uvlo-extended extracted netlist is explicitly the next slice of #219, not this issue's scope. [Below](#post-layout-simulation) still describes that pre-#221 evidence as what it is |
 
-Both verdicts are real (each has a committed negative control, below) but
-neither is a tapeout signoff: the deck does not carry rules for this layout's
+The LVS verdict is real (it has a committed negative control, below), and the
+old DRC verdict was real *for the rules that deck shipped*, but neither is a
+tapeout signoff, and the DRC one no longer holds under the current deck: the deck does not carry rules for this layout's
 well/marker layers, and the DRC deck cannot check the guard ring's own
 geometry (only its *presence*, drawn to satisfy DN.3 by inspection). Read
 "[What the DRC verdict covers](#what-the-drc-verdict-covers)" and "[What the
@@ -609,8 +610,23 @@ mismatch means the deck build itself has moved, not that this layout changed.
 
 ### DRC (`klt drc`)
 
-Latest report: [`layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json`](drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json)
-— `status: clean`, `violation_count: 0`, deck `gf180mcu`, run against the
+**Current status (#358): not clean.** `python3 layout/drc/run_drc.py layout/gate_driver_core.gds`
+with klt `0.7.1.dev2599+geaf26f00df36`, `PDK=gf180mcuD`, deck `gf180mcu` hash
+`sha256:0eb6df1bafc5106ec50bd58479dbd7cda36bb685f1ef18cd3a2244a6e7e48666`
+reports `status: violations`, 1513 violations on the unchanged GDS
+(`poly2.enclosing.sab.1` 542, `sab.separation.contact.1` 542, `sab.space.1` 246,
+`pplus.enclosing.comp.1` 68, `nplus.enclosing.comp.1` 60, `comp.coverage.1` 35,
+`pplus.enclosing.comp.far.1` 20; report
+`drc/reports/gate_driver_core/20261024-075045-f4914d9.drc.json`, committed with
+PR #360). [`drc/triage_sab_implant.md`](drc/triage_sab_implant.md) classifies every
+rule as a real layout violation (resistor SAB geometry; tap implants with zero
+COMP enclosure; no source/drain implants on any transistor). The deck was not
+relaxed. The layout fix is tracked in #362; until then the block is **not**
+DRC-clean.
+
+Historical report (superseded, kept as append-only evidence):
+[`layout/drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json`](drc/reports/gate_driver_core/20260826-044706-fdf17d9.drc.json)
+— `status: clean`, `violation_count: 0`, klt 0.3.0 and its 18-layer deck, run against the
 stream whose content hash is the committed `gate_driver_core.provenance.json`'s
 (issue #221: the `uvlo` sub-cell and its bias-resistor network are now part of
 the drawn block too — still DRC-clean, including all three MIM Option B rules
@@ -630,7 +646,12 @@ before quoting "DRC clean":
 | `coverage.rules_skipped` | **4** (metaltop width/space, pad, BJT) | down from 23: only rules for layers this layout still does not draw. The MIM Option B and Metal3/Metal4/Metal5 + Via2/Via3/Via4 rules that dominated the old skip list are live now |
 | `coverage.voltage_domain_warnings` | 1 | the deck models `DF.1a`/`DF.3a` COMP width/space as `_LV`/`_MV` pairs scoped to the `Dualgate` marker, but **every other rule still applies 3.3 V thresholds to thick-oxide geometry** — see the `Dualgate` gap below |
 
-So: **clean against the rules this deck ships, with the medium-voltage
+The table above describes the *historical* 20260826 report. The old deck had no
+`SAB`, `comp.coverage`, `nplus/pplus.enclosing.comp` rules, so SAB spacing,
+implant enclosure and COMP implant coverage were **not checked** by the old
+verdict; the current deck checks them and fails (see above).
+
+So, for the historical report: **clean against the rules that deck shipped, with the medium-voltage
 thresholds and the well/marker-layer rules outside it.** That is the honest
 scope, and it is exactly the friction CLAUDE.md predicts for the first block
 to use the 5 V/6 V flavors.
@@ -1040,7 +1061,8 @@ python3 layout/common/test_power_array_folded.py     # PDK-free unit tests
   ground-star cards without teaching several assertions that distinction.
   Left as a real, separate refactor (see the constant's own comment in that
   file), not folded into #201's netlist-regeneration scope.
-- **DRC is clean within a deck scope, not against the full DRM.** The deck
+- **DRC is not clean under the current deck (#358): 1513 violations, all real
+  (see [DRC](#drc-klt-drc) above).** The old `clean` was within an 18-layer deck scope and, even so, not against the full DRM. The deck
   ships no rules for `DNWELL`/`LVPWELL`, and every rule but `DF.1a`/`DF.3a`
   still applies 3.3 V thresholds to thick-oxide geometry — see the coverage
   table above. DRM 7.2's well spacing/enclosure rules, and the guard ring's
