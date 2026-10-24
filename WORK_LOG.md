@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-24
+
+- **PR #334**: feat(sim): store new sim evidence in the artifact store, commit manifests only
+
 ### 2026-10-23
 
 - **PR #341**: refactor(sim): share first_crossing and range_verdict across experiment scripts
