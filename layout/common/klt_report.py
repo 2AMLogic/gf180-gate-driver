@@ -27,8 +27,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 
 
 class KltRunError(Exception):
