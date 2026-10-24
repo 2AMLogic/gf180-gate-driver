@@ -5,6 +5,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-24
 
+- **PR #351**: sim: add first manifest-backed smoke-mv-inverter run with verified manifest
+- **PR #347**: refactor(sim): remove unused device_write_record helper
+- **Issue #346** (closed): Remove dead device_write_record helper in sim/harness/report.py
+- **Issue #333** (closed): Adopt the common artifact store for sim evidence (manifests in git, bytes via klt artifact)
 - **PR #334**: feat(sim): store new sim evidence in the artifact store, commit manifests only
 
 ### 2026-10-23
