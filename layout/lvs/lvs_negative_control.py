@@ -74,13 +74,15 @@ def main() -> int:
 
     kept, dropped, total = [], 0, 0
     for line in REFERENCE.read_text().splitlines():
-        # Every reference device card, whichever class: `M...` transistors and
-        # (since issue #166) `C...` MiM capacitors.  Counted rather than
+        # Every reference device card, whichever class -- this must mirror the
+        # device classes klt counts in `counts.devices.reference`: `M...`
+        # transistors, (since issue #166) `C...` MiM capacitors, and `R...`
+        # resistors (issue #359).  Counted rather than
         # hard-coded so this control states "one fewer than whatever the
         # reference has" -- a count baked in here would have to be edited every
         # time the schematic gains a device, and would fail *this* control
         # rather than the thing it is meant to be watching.
-        if re.fullmatch(r"[MC]\S+", line.split(" ", 1)[0] or ""):
+        if re.fullmatch(r"[MCR]\S+", line.split(" ", 1)[0] or ""):
             total += 1
         if line.split(" ", 1)[0] == DROPPED_DEVICE:
             dropped += 1
