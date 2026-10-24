@@ -184,8 +184,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "the same ones Exception 3's figure came from."
     )
     add("- **Corner matrix run**:")
-    add("  - Process: " + ", ".join(PROCESS_CORNERS))
-    add("  - Temperature: " + ", ".join(f"{t:g} °C" for t in TEMPERATURES_C))
+    lines.extend(campaign.pvt_axes_lines(PROCESS_CORNERS, TEMPERATURES_C))
     add(f"  - Supply (vlogic, nominal 3.30 V): {STRETCH_SUPPLIES['vlogic']:.2f} V")
     add(f"  - Supply (vdrv, nominal 5.00 V): {STRETCH_SUPPLIES['vdrv']:.2f} V (stretch point)")
     add(
@@ -217,15 +216,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     )
     drawn = sum(len(o.samples) for o in outcomes)
     converged = sum(len(o.ok) for o in outcomes)
-    dropped = drawn - converged
-    dropped_note = (
-        f" **{dropped} of {drawn} draws did not converge and "
-        f"{'is' if dropped == 1 else 'are'} excluded from "
-        f"every statistic below** — enumerated in \"Non-converged draws\", "
-        f"leaving {converged} in the distribution."
-        if dropped
-        else f" All {drawn} draws converged; none is excluded."
-    )
+    dropped_note = campaign.dropped_note(drawn, converged, "—")
     add(
         f"- **Statistical convention**: Monte Carlo **local device mismatch** "
         f"(intra-die), N = {n_samples} independent draws per PVT point, "
@@ -239,18 +230,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"pull**; the reported σ below is the sample standard deviation of "
         f"the measured node voltage over the draws, and the reported worst "
         f"case is the observed maximum, not a fitted quantile. "
-        f"`sw_stat_global = 0` throughout, so the deterministic `.LIB` "
-        f"process corner remains the sole global-skew axis and is not "
-        f"double-counted. Seeds are deterministic: "
-        f"`seed = {BASE_SEED} + point_index × {mc_mod.SEED_STRIDE} + sample`, "
-        f"point_index in the grid order tabulated below "
-        f"(`sim/harness/montecarlo.py`). Every PVT point additionally carries "
-        f"a **deterministic negative control** in three legs: a plain "
-        f"`mc=None` deck (byte-identical to what `sim/run_corners.py` "
-        f"generates), plus two `sw_stat_mismatch = 0` decks at two different "
-        f"seeds — all three must agree bit-for-bit, and are additionally "
-        f"compared against the committed corner-matrix record "
-        f"`sim/{SOURCE_EXPERIMENT}/records/{REFERENCE_RECORD}.md`."
+        + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "—")
     )
     add("- **Result**:")
     add("")
@@ -294,21 +274,15 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"seed-A = seed-B | Δ vs `{REFERENCE_RECORD}` (µV) |"
     )
     add("  |---|---|---|---|---|")
-    control_ok = True
-    worst_ref_delta = 0.0
-    for outcome in outcomes:
-        delta = outcome.reference_delta(CLAIM_MEASUREMENT)
-        agree = outcome.controls_agree
-        matches_baseline = outcome.control_matches_baseline
-        control_ok = control_ok and agree and matches_baseline
-        if delta is not None:
-            worst_ref_delta = max(worst_ref_delta, abs(delta))
-        add(
-            f"  | `{outcome.corner_id}` | {_fmt(outcome.control_value(CLAIM_MEASUREMENT), 10)} "
-            f"| {'yes' if matches_baseline else '**NO**'} "
-            f"| {'yes' if agree else '**NO**'} "
-            f"| {'n/a' if delta is None else f'{delta * 1e6:+.2f}'} |"
-        )
+    rows, control_ok, worst_ref_delta = campaign.control_table_rows(
+        outcomes,
+        lambda o: (
+            None,
+            o.control_value(CLAIM_MEASUREMENT),
+            o.reference_delta(CLAIM_MEASUREMENT),
+        ),
+    )
+    lines.extend(rows)
     add("")
 
     # --- distribution table ---
@@ -350,43 +324,18 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     add("")
 
     # --- non-converged draws (disclosed, never silently dropped) ---
-    add("  ### Non-converged draws")
-    add("")
-    bad = [
-        (outcome, mc, result)
-        for outcome in outcomes
-        for mc, result in outcome.samples
-        if result.status != "ok"
-    ]
-    if not bad:
-        add(
-            f"  None — all {drawn} mismatch draws completed and every one is in "
-            f"the statistics above."
-        )
-    else:
-        add(
-            f"  **{len(bad)} of {drawn} draws** did not complete and "
-            f"{'is' if len(bad) == 1 else 'are'} "
-            f"excluded from every statistic in this record. "
-            f"{'It is' if len(bad) == 1 else 'They are'} listed "
-            f"here rather than dropped silently: a Monte Carlo record whose "
-            f"sample count does not match its draw count is unauditable, and "
-            f"a non-converged draw is not evidence of a low value — it is "
-            f"absence of evidence at that draw. Each is reproducible from the "
-            f"seed below."
-        )
-        add("")
-        add("  | PVT point | sample | seed | ngspice message |")
-        add("  |---|---|---|---|")
-        for outcome, mc, result in bad:
-            message = " ".join(result.message.split())[:180]
-            add(
-                f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | "
-                f"`{message}` |"
-            )
-        add("")
-        add(
-            "  This is the same solver failure mode `sim/README.md`'s transient-"
+    lines.extend(
+        campaign.non_converged_section(
+            outcomes,
+            drawn,
+            "—",
+            ". {it_is} listed "
+            "here rather than dropped silently: a Monte Carlo record whose "
+            "sample count does not match its draw count is unauditable, and "
+            "a non-converged draw is not evidence of a low value — it is "
+            "absence of evidence at that draw. Each is reproducible from the "
+            "seed below.",
+              "  This is the same solver failure mode `sim/README.md`'s transient-"
             "tolerance decision record already documents for this class of deck "
             "(ngspice \"Timestep too small\" on a source branch current); at the "
             "harness's ratified `reltol=1e-4` it is rare rather than absent. "
@@ -395,7 +344,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             "have peaked at, which is exactly why it is excluded rather than "
             "counted."
         )
-    add("")
+    )
 
     # --- taper nodes (context, not this record's claim) ---
     add("  ### Output-stage taper nodes under the same draws (context, not this claim)")
@@ -435,11 +384,11 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     # --- verdict ---
     if worst_overall is None:
         verdict = "ERROR"
-        add("  - **Overall: ERROR** — no Monte Carlo sample completed.")
+        add(campaign.error_verdict_line("—"))
     else:
         outcome, hi, margin = worst_overall
         within = margin >= -EXCEPTION3_BOUND_V
-        verdict = "PASS" if (within and control_ok) else "FAIL"
+        verdict = campaign.verdict_for(within, control_ok)
         add(
             f"  - **Overall: {verdict}** — across "
             f"{converged} converged local-mismatch draws (of {drawn} run) "
@@ -647,41 +596,28 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     )
     add("")
 
-    add("- **Links**:")
-    add(f"  - Run script: `sim/{HERE.name}/run_indrv_mismatch.py`")
-    add(
-        f"  - Testbench (reused verbatim): "
-        f"`sim/{SOURCE_EXPERIMENT}/testbench/{tb.netlist.name}`, "
-        f"`sim/{SOURCE_EXPERIMENT}/testbench/tb.json`"
-    )
-    add(f"  - Monte Carlo deck machinery: `sim/harness/montecarlo.py`")
-    add(f"  - Netlist snapshot: `sim/{HERE.name}/netlist-snapshots/{record}.spice`")
-    add(
-        f"  - Raw logs: `sim/{HERE.name}/corners/{record}/` — one `.log` per "
-        "zero-sigma control and per worst-case draw, plus a "
-        "`samples-<corner-id>.csv` sidecar carrying every draw's seed and "
-        "measurements"
-    )
-    add(
-        f"  - Reference corner matrix: "
-        f"`sim/{SOURCE_EXPERIMENT}/records/{REFERENCE_RECORD}.md`"
-    )
-    add(f"  - PDK: {pdk.variant} ({pdk.path}), ngspice {ngspice}")
-    add(
-        f"  - Deck tolerance: `reltol="
-        f"{harness_runner.effective_reltol(tb)[0]}` "
-        f"({harness_runner.effective_reltol(tb)[1]}) — the same convention as "
-        f"`{REFERENCE_RECORD}`"
-    )
-    add(f"- **Timestamp / author**: {stamp:%Y-%m-%dT%H:%M:%SZ}, agent-builder (issue #204)")
-    add("- **Supersedes**: (none — first Monte Carlo / local-mismatch record in this repo)")
-    add("")
-    if args.smoke:
-        add(
-            "> **NOTE**: produced by a `--smoke` run — a deliberately thin "
-            "sample set for pipeline debugging, not evidence."
+    lines.extend(
+        campaign.links_lines(
+            record=record,
+            script_dir=HERE.name,
+            script_name="run_indrv_mismatch.py",
+            source_experiment=SOURCE_EXPERIMENT,
+            reference_record=REFERENCE_RECORD,
+            tb=tb,
+            pdk=pdk,
+            ngspice=ngspice,
+            dash="—",
         )
-        add("")
+    )
+    lines.extend(
+        campaign.trailer_lines(
+            stamp,
+            204,
+            "(none — first Monte Carlo / local-mismatch record in this repo)",
+            args.smoke,
+            "—",
+        )
+    )
     return "\n".join(lines), verdict
 
 

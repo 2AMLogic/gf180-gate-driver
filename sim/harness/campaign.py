@@ -642,17 +642,197 @@ def point_sigma_summary(
     return f"{min(sigmas) * 1e6:.0f}–{max(sigmas) * 1e6:.0f} µV"
 
 
+def pvt_axes_lines(process_corners, temperatures_c) -> list[str]:
+    """The `Process:` / `Temperature:` lines of a record's corner-matrix block."""
+    return [
+        "  - Process: " + ", ".join(process_corners),
+        "  - Temperature: " + ", ".join(f"{t:g} °C" for t in temperatures_c),
+    ]
+
+
+def dropped_note(drawn: int, converged: int, dash: str) -> str:
+    """The sentence a record's statistical-convention paragraph uses to say
+    how many draws were excluded (or that none were)."""
+    dropped = drawn - converged
+    if not dropped:
+        return f" All {drawn} draws converged; none is excluded."
+    return (
+        f" **{dropped} of {drawn} draws did not converge and "
+        f"{'is' if dropped == 1 else 'are'} excluded from "
+        f"every statistic below** {dash} enumerated in \"Non-converged draws\", "
+        f"leaving {converged} in the distribution."
+    )
+
+
+def convention_tail(
+    base_seed: int,
+    source_experiment: str,
+    reference_record: str,
+    dash: str,
+    reference_suffix: str = ".",
+) -> str:
+    """The seed convention and negative-control description that closes every
+    mismatch record's `Statistical convention` bullet, from `sw_stat_global`
+    onwards. `reference_suffix` completes the final sentence."""
+    return (
+        f"`sw_stat_global = 0` throughout, so the deterministic `.LIB` "
+        f"process corner remains the sole global-skew axis and is not "
+        f"double-counted. Seeds are deterministic: "
+        f"`seed = {base_seed} + point_index × {mc_mod.SEED_STRIDE} + sample`, "
+        f"point_index in the grid order tabulated below "
+        f"(`sim/harness/montecarlo.py`). Every PVT point additionally carries "
+        f"a **deterministic negative control** in three legs: a plain "
+        f"`mc=None` deck (byte-identical to what `sim/run_corners.py` "
+        f"generates), plus two `sw_stat_mismatch = 0` decks at two different "
+        f"seeds {dash} all three must agree bit-for-bit, and are additionally "
+        f"compared against the committed corner-matrix record "
+        f"`sim/{source_experiment}/records/{reference_record}.md`{reference_suffix}"
+    )
+
+
+def control_table_rows(outcomes, probe) -> tuple[list[str], bool, float]:
+    """Rows of the deterministic-negative-control table.
+
+    `probe(outcome)` returns `(node, value, delta)`: the node name (or `None`
+    for a single-node claim, which drops that column), the control value and
+    its delta against the reference record. Returns `(rows, control_ok,
+    worst_ref_delta)`, the last two feeding the verdict.
+    """
+    rows = []
+    control_ok = True
+    worst_ref_delta = 0.0
+    for outcome in outcomes:
+        node, value, delta = probe(outcome)
+        agree = outcome.controls_agree
+        matches_baseline = outcome.control_matches_baseline
+        control_ok = control_ok and agree and matches_baseline
+        if delta is not None:
+            worst_ref_delta = max(worst_ref_delta, abs(delta))
+        node_cell = "" if node is None else f"`{node}` | "
+        rows.append(
+            f"  | `{outcome.corner_id}` | {node_cell}{fmt(value, 10)} "
+            f"| {'yes' if matches_baseline else '**NO**'} "
+            f"| {'yes' if agree else '**NO**'} "
+            f"| {'n/a' if delta is None else f'{delta * 1e6:+.2f}'} |"
+        )
+    return rows, control_ok, worst_ref_delta
+
+
+def non_converged_section(
+    outcomes, drawn: int, dash: str, explanation: str, closing: str
+) -> list[str]:
+    """The `Non-converged draws` section, disclosing every excluded draw.
+
+    `explanation` follows "excluded from every statistic in this record" and
+    may use `{it_is}` for "It is"/"They are"; `closing` is the paragraph
+    after the table. Both are claim-specific wording.
+    """
+    lines = ["  ### Non-converged draws", ""]
+    bad = [
+        (outcome, mc, result)
+        for outcome in outcomes
+        for mc, result in outcome.samples
+        if result.status != "ok"
+    ]
+    if not bad:
+        lines.append(
+            f"  None {dash} all {drawn} mismatch draws completed and every one is in "
+            f"the statistics above."
+        )
+    else:
+        lines.append(
+            f"  **{len(bad)} of {drawn} draws** did not complete and "
+            f"{'is' if len(bad) == 1 else 'are'} "
+            f"excluded from every statistic in this record"
+            + explanation.format(it_is="It is" if len(bad) == 1 else "They are")
+        )
+        lines += ["", "  | PVT point | sample | seed | ngspice message |", "  |---|---|---|---|"]
+        for outcome, mc, result in bad:
+            message = " ".join(result.message.split())[:180]
+            lines.append(f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | `{message}` |")
+        lines += ["", closing]
+    lines.append("")
+    return lines
+
+
+def verdict_for(within: bool, control_ok: bool) -> str:
+    """PASS iff the bound holds and the negative control held everywhere."""
+    return "PASS" if (within and control_ok) else "FAIL"
+
+
+def error_verdict_line(dash: str) -> str:
+    return f"  - **Overall: ERROR** {dash} no Monte Carlo sample completed."
+
+
+def links_lines(
+    *,
+    record: str,
+    script_dir: str,
+    script_name: str,
+    source_experiment: str,
+    reference_record: str,
+    tb,
+    pdk,
+    ngspice: str,
+    dash: str,
+) -> list[str]:
+    """The `Links` block, identical across mismatch records but for the dash."""
+    reltol, reltol_source = harness_runner.effective_reltol(tb)
+    return [
+        "- **Links**:",
+        f"  - Run script: `sim/{script_dir}/{script_name}`",
+        f"  - Testbench (reused verbatim): "
+        f"`sim/{source_experiment}/testbench/{tb.netlist.name}`, "
+        f"`sim/{source_experiment}/testbench/tb.json`",
+        "  - Monte Carlo deck machinery: `sim/harness/montecarlo.py`",
+        f"  - Netlist snapshot: `sim/{script_dir}/netlist-snapshots/{record}.spice`",
+        f"  - Raw logs: `sim/{script_dir}/corners/{record}/` {dash} one `.log` per "
+        "zero-sigma control and per worst-case draw, plus a "
+        "`samples-<corner-id>.csv` sidecar carrying every draw's seed and "
+        "measurements",
+        f"  - Reference corner matrix: `sim/{source_experiment}/records/{reference_record}.md`",
+        f"  - PDK: {pdk.variant} ({pdk.path}), ngspice {ngspice}",
+        f"  - Deck tolerance: `reltol={reltol}` ({reltol_source}) {dash} the same "
+        f"convention as `{reference_record}`",
+    ]
+
+
+def trailer_lines(stamp, issue: int, supersedes: str, smoke: bool, dash: str) -> list[str]:
+    """Timestamp/author, supersedes, and the `--smoke` disclaimer."""
+    lines = [
+        f"- **Timestamp / author**: {stamp:%Y-%m-%dT%H:%M:%SZ}, agent-builder (issue #{issue})",
+        f"- **Supersedes**: {supersedes}",
+        "",
+    ]
+    if smoke:
+        lines += [
+            f"> **NOTE**: produced by a `--smoke` run {dash} a deliberately thin "
+            "sample set for pipeline debugging, not evidence.",
+            "",
+        ]
+    return lines
+
+
 __all__ = [
     "CONTROL_SEED_OFFSET",
     "PointOutcome",
     "baseline_log_header",
+    "control_table_rows",
+    "convention_tail",
+    "dropped_note",
+    "error_verdict_line",
     "fmt",
+    "links_lines",
     "log_header",
     "mv",
+    "non_converged_section",
     "point_sigma_summary",
+    "pvt_axes_lines",
     "run_device_point_campaign",
     "run_mismatch_main",
     "run_point_campaign",
+    "trailer_lines",
+    "verdict_for",
     "write_log",
     "write_outcome_logs",
     "write_sample_csv",
