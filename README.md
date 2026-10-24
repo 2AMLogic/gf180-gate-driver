@@ -6,7 +6,7 @@ agents driving [klayout-tools](https://github.com/2AMLogic/klayout-tools) and
 the open-source xschem + ngspice analog flow.
 
 **Status: spec ratified; schematic captured and PVT-simulated; layout
-DRC-clean and LVS-match within a stated deck scope; post-layout PVT records
+LVS-match, DRC under the current deck reports 1513 real violations (#358); post-layout PVT records
 committed. Not tapeout-ready, not tier T1.** Ratified targets are not all met
 (two bounded, documented exceptions; one open UVLO finding), and silicon has
 not been measured. See [Current status](#current-status) and [Target
@@ -80,10 +80,10 @@ seat; no measured silicon.** What is committed, and what it does not show:
   characterization and Monte Carlo mismatch campaigns. The block-level
   roll-up against spec section 3 is
   [`design/gate-driver-characterization.md`](design/gate-driver-characterization.md).
-- **Layout** (`layout/`): `gate_driver_core.gds`, `status: clean` DRC (0
-  violations) and `status: match` LVS (2044/2044 devices) -- both **within a
-  stated deck scope**; the DRC deck does not cover every DRM chapter, so
-  neither is a tapeout signoff. See [`layout/README.md`](layout/README.md).
+- **Layout** (`layout/`): `gate_driver_core.gds`, `status: match` LVS (2044/2044 devices) **within a stated deck scope**. DRC was
+  `clean` only under the retired 18-layer deck; the current 34-layer deck reports
+  1513 violations (SAB, implant enclosure, COMP coverage), all triaged as real
+  layout violations ([`layout/drc/triage_sab_implant.md`](layout/drc/triage_sab_implant.md), #358). Not a tapeout signoff. See [`layout/README.md`](layout/README.md).
   (That file's "Post-layout simulation" status row predates the committed
   complete-block post-layout records and is stale; the `sim/` records are
   the evidence.)
