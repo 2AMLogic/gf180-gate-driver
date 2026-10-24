@@ -77,6 +77,7 @@ from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
+from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
@@ -836,6 +837,8 @@ def main(argv=None) -> int:
         n_samples = 3
         selected = {i for i, (corner, temp) in enumerate(grid) if corner.name == "ss" and temp == 125.0}
 
+    if not args.no_write:
+        harness_evidence_store.preflight_or_exit(REPO_ROOT)
     git = harness_report.git_provenance(REPO_ROOT)
     record = harness_report.allocate_record_id(REPO_ROOT, HERE / harness_report.RECORDS_DIR, git=git)
     stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
@@ -891,16 +894,20 @@ def main(argv=None) -> int:
         print("evidence  : not recorded (--no-write)")
         return 0
 
-    corners_dir = HERE / harness_report.CORNERS_DIR
+    stage = harness_evidence_store.stage_dir(REPO_ROOT, HERE.name, record)
+    corners_dir = stage / harness_report.CORNERS_DIR
     for outcome in outcomes:
         campaign.write_sample_csv(corners_dir, record, outcome, FLATTEN_NAMES)
         write_logs(corners_dir, record, stamp, pdk, ngspice, outcome)
 
-    snapshot = harness_report.write_device_netlist_snapshot(HERE / "netlist-snapshots", record, DECK_PATH)
-    path = harness_report.device_write_record(HERE / harness_report.RECORDS_DIR, record, body)
+    harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, DECK_PATH)
+    path = HERE / harness_report.RECORDS_DIR / f"{record}.md"
+    manifest = harness_evidence_store.commit_run_or_exit(
+        stage, repo_root=REPO_ROOT, bench=HERE.name, rid=record, record_text=body, record_path=path
+    )
     print(f"record    : {path}")
-    print(f"snapshot  : {snapshot}")
-    print(f"raw logs  : {corners_dir / record}")
+    print(f"manifest  : {manifest}")
+    print(f"staged    : {stage}")
     print(f"status    : {verdict}")
     if anomalies:
         print(f"anomalies : {len(anomalies)}")

@@ -13,6 +13,8 @@ name: CI
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_campaign.py`                | python3      | `test` (here)  |
+# | `sim/test_evidence_store.py`, `scripts/tests/` | python3      | `test` (here)  |
+# | `scripts/check_artifact_manifests.py check`   | python3+git  | `lint` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
@@ -64,6 +66,15 @@ jobs:
         # resolving, fail loudly instead of passing on a skipped check.
         # Same script `npm run lint` runs locally.
         run: .github/scripts/lint.sh --require-shellcheck --require-append-only
+
+      - name: Stored-evidence manifests
+        # New sim evidence lives in the fleet artifact store; git keeps only
+        # manifests/artifacts/*.manifest.json. This checks the schema, that
+        # every uri is artifact:<key>, and that no stored object's bytes are
+        # also committed. CI cannot reach the broker, so it does NOT
+        # hash-verify the bytes: schema-valid is not hash-verified (run
+        # `klt artifact verify <manifest>` from a fleet worker for that).
+        run: python3 scripts/check_artifact_manifests.py check --tree HEAD
 
   test:
     name: Harness self-test (no PDK)
@@ -130,6 +141,15 @@ jobs:
         # rather than as a refactor. Stubs runner.run_point/run_samples, so
         # no ngspice and no PDK -- it belongs on this PDK-free runner.
         run: python3 sim/test_harness_campaign.py
+
+      - name: Evidence-store and manifest-check unit tests
+        # sim/test_evidence_store.py and scripts/tests/ pin the fail-closed
+        # evidence writer (fake klt, local fake broker), the manifest-aware
+        # record lint and the manifest schema / committed-bytes guard
+        # (issue #333). Stdlib only; no klt, no broker, no PDK.
+        run: |
+          python3 sim/test_evidence_store.py
+          python3 scripts/tests/test_check_artifact_manifests.py
 
       - name: Layout generator unit tests
         # layout/test_gen_gate_driver_core.py pins how the generator reads a

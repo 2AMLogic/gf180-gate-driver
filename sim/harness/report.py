@@ -458,14 +458,16 @@ def _refuse_if_exists(path: Path, message: str) -> None:
         raise RecordExists(message)
 
 
-def write_netlist_snapshot(tb: Testbench, experiment_dir: Path, record_id: str) -> Path:
+def write_netlist_snapshot(
+    tb: Testbench, experiment_dir: Path, record_id: str, out_dir: Path | None = None
+) -> Path:
     """Freeze the DUT netlist for this record.
 
     ``sim/README.md``: ``netlist-snapshots/<record-id>.spice`` is "the frozen
     DUT netlist used for this record", so later edits to ``testbench/`` never
     change what an existing record refers to.
     """
-    out_dir = experiment_dir / SNAPSHOT_DIR
+    out_dir = out_dir if out_dir is not None else experiment_dir / SNAPSHOT_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{record_id}.spice"
     _refuse_if_exists(path, f"{path} already exists; append-only evidence is never rewritten")

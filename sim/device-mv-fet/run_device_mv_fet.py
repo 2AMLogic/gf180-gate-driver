@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE.parent))
 
 from harness import corners as harness_corners  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
+from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
@@ -487,8 +488,10 @@ def main() -> int:
     pdk = harness_pdk.find_pdk()
     root = harness_pdk.REPO_ROOT
     ngspice = ngspice_version()
+    harness_evidence_store.preflight_or_exit(root)
     git = harness_report.git_provenance(root)
     record = harness_report.allocate_record_id(root, HERE / "records", git=git)
+    stage = harness_evidence_store.stage_dir(root, HERE.name, record)
     stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
     deck = HERE / "testbench" / "tb_device_mv_fet.spice"
 
@@ -499,7 +502,7 @@ def main() -> int:
             cid = harness_corners.device_corner_id(section, temp)
             log = _run_corner(deck, pdk, section, temp)
             harness_report.write_device_corner_log(
-                HERE / "corners",
+                stage / "corners",
                 record,
                 cid,
                 harness_report.device_log_header(
@@ -510,10 +513,13 @@ def main() -> int:
             results[(section, temp)] = extract(log)
             print(f"  {cid}: ok")
 
-    harness_report.write_device_netlist_snapshot(HERE / "netlist-snapshots", record, deck)
+    harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, deck)
     body, verdicts = build_record(record, stamp, pdk, ngspice, results)
-    path = harness_report.device_write_record(HERE / "records", record, body)
-    print(f"wrote {path}")
+    path = HERE / "records" / f"{record}.md"
+    manifest = harness_evidence_store.commit_run_or_exit(
+        stage, repo_root=root, bench=HERE.name, rid=record, record_text=body, record_path=path
+    )
+    print(f"wrote {path} (evidence manifest {manifest})")
     n_fail = sum(1 for d in verdicts.values() for v in d.values() if v != "PASS")
     print(f"verdicts: {n_fail} failing quantity/device combinations")
     return 0
