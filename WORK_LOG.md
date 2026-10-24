@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-24
 
+- **PR #345**: refactor(sim): share mismatch record-body sections via harness campaign
+- **Issue #344** (closed): Dedupe mismatch record-body composers into harness/campaign.py
 - **PR #364**: fix(layout): regenerate gate_driver_core DRC-clean under the 34-layer deck
 - **PR #363**: docs: scope the DRC-clean claim and triage 1513 violations under the current deck
 - **PR #361**: fix: count resistor cards in LVS negative-control device total

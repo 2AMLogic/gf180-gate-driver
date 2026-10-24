@@ -34,7 +34,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#344**: Dedupe mismatch record-body composers into harness/campaign.py
+_None._
 
 ## PRs Awaiting Review
 
@@ -46,7 +46,7 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#345**: refactor(sim): share mismatch record-body sections via harness campaign
+_None._
 
 ## Proposed
 
@@ -56,7 +56,7 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
 
 ## Epics
 
@@ -70,10 +70,10 @@ _None._
 | Very important | 0 |
 | Important | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
+| Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 0 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
