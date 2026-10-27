@@ -22,7 +22,7 @@ _None._
 
 `loom:important`; taken before unlabelled work.
 
-_None._
+- **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS
 
 ## Ready
 
@@ -34,8 +34,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#367**: T1 item 5 (Full corner verification): cite klt sim corner envelopes covering every ratified spec/gate-driver.md row
-- **#368**: T1 item 6 (Monte Carlo): express the four local-mismatch campaigns as klt yield reports and cite them
+_None._
 
 ## PRs Awaiting Review
 
@@ -53,8 +52,7 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#367**: T1 item 5 (Full corner verification): cite klt sim corner envelopes covering every ratified spec/gate-driver.md row *(curated)*
-- **#368**: T1 item 6 (Monte Carlo): express the four local-mismatch campaigns as klt yield reports and cite them *(curated)*
+_None._
 
 ## Proposed (Architect / Hermit)
 
@@ -70,12 +68,12 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
-| Important | 0 |
+| Important | 1 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 2 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 2 |
+| Curated | 0 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->

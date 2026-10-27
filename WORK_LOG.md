@@ -3,6 +3,13 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-27
+
+- **PR #373**: feat(signoff): cite klt sim corner envelopes for T1 item 5
+- **PR #372**: feat(signoff): cite Monte Carlo mismatch campaigns as klt yield evidence for T1 item 6
+- **Issue #367** (closed): T1 item 5 (Full corner verification): cite klt sim corner envelopes covering every ratified spec/gate-driver.md row
+- **Issue #368** (closed): T1 item 6 (Monte Carlo): express the four local-mismatch campaigns as klt yield reports and cite them
+
 ### 2026-10-24
 
 - **PR #345**: refactor(sim): share mismatch record-body sections via harness campaign
