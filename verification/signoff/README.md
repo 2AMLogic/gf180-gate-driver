@@ -21,6 +21,7 @@ re-graded by a command, and CI re-grades it on every PR.
 | `repo-hygiene.generic.json`, `repo-hygiene.inventory.md` | T1 item **10** (issue #289): the artifact-bound `generic` envelope (`"t1_item": 10`) and the audited inventory it binds to, which lists `README.md`, `LICENSE`, `spec/gate-driver.md`, `.github/workflows/ci.yml` and the reproduction documents with their sha256 values. The manifest pins the inventory's hash. |
 | `design-sources.inventory.md`, `testbenches.inventory.md` | The audited inventories items 1 and 9 bind to: every listed source/testbench with its sha256, the regeneration or cold-start command, and what the audit did and did not run. Read the "What was actually run" sections before quoting either `met`. |
 | `check_tier_report.py` | The freshness gate run by the `signoff` CI job (and `npm run signoff:check`): anchors every manifest pin to the live tree's sha256, re-runs the grading, and diffs the fresh render against the committed report. Explicit `provenance.input.path` bindings are resolved with the grader's own semantics (string beside the envelope, repo-scoped object from the repo root; a malformed declared path fails, never falls back to `source`), and every `path` + `sha256:` pair an inventory lists is re-hashed. |
+| `yield/*.samples.json`, `yield/*.yield.json` | T1 item **6** (issue #368): per campaign, the `klt yield` sample-set document (converted from the committed `sim/*-mismatch` `samples-*.csv` by `sim/mc_to_yield.py`) and its committed `klt yield --format json` report. The manifest pins each *samples* file (a `yield` citation's `content_hash` is the hash of the samples document its report names). |
 | `test_check_tier_report.py` | Stdlib regression tests for the checker (run by the `signoff` CI job): both path forms, malformed/missing/stale/wrong-item cases, `source` unable to redirect a binding, the legacy item-8 rule, compound item 11, inventory hashes. |
 
 ## Current graded state: 8/11 met, tier `null` — the honest state
@@ -87,12 +88,51 @@ turns `unmet` if they change. What each audit found:
 
 Why the other unmet rows say `no_evidence`:
 
-- **5, 6, 7** — the block has real PVT-corner, Monte-Carlo, and post-layout
-  evidence, but as `sim/` markdown records from this repo's own harness —
-  not in `klt sim`/`klt yield`/`klt pex` envelope form. Item 7 additionally
-  accepts **only** a `klt pex` report for an analog block; a clean DRC or a
-  pre-layout sim renders `wrong_kind` by design. Converting a campaign to a
-  `klt`-native envelope is a content decision each item's own issue tracks.
+- **5, 7** — the block has real PVT-corner and post-layout evidence, but as
+  `sim/` markdown records from this repo's own harness — not in `klt sim`/
+  `klt pex` envelope form. Item 7 additionally accepts **only** a `klt pex`
+  report for an analog block; a clean DRC or a pre-layout sim renders
+  `wrong_kind` by design. Converting a campaign to a `klt`-native envelope is a
+  content decision each item's own issue tracks.
+
+### Item 6: Monte Carlo evidence (issue #368)
+
+`spec_rows."6"` declares the four statistical rows the mismatch campaigns back:
+
+| row id | spec row | campaign | status |
+|---|---|---|---|
+| `exception3_indrv` | `spec/gate-driver.md` §5 Exception 3, `IN_DRV` ≤ 10 mV over 6.0 V | `gate-driver-indrv-mismatch` | covered, limit 6.010 V |
+| `exception1_inb` | §5 Exception 1, `inb` ≤ 40 mV over `VDD_LOGIC` 3.63 V | `level-shifter-inb-mismatch` | covered, limit 3.670 V |
+| `exception2_taper` | §5 Exception 2, taper nodes ≤ 175 mV over 6.0 V | `output-stage-taper-mismatch` | covered, limit 6.175 V (max of `n1..n5_max_v`) |
+| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | declared `gap` |
+
+What the item-6 evidence is, and is not:
+
+- **Samples come from the committed `samples-*.csv`; nothing was re-simulated.**
+  Each PVT point is its own population (15 measurements per report, named
+  `<measurement>@<pvt>`), never pooled. Baseline and the `sw_stat_mismatch = 0`
+  rows are excluded; non-converged draws are carried as errored samples (1 of
+  3000 `indrv`, 10 of 3000 taper), which `klt yield` warns make the empirical
+  yield conditional on the converged draws.
+- **Sample size grades `sufficient`** on every measurement at the default
+  ±0.01 half-width (zero failures in N = 198–200 gives "at least 98.15% at 95%
+  confidence"); no `target_ci_halfwidth` was tuned. "At least ~98%" is the
+  honest statement, not "100% yield".
+- **No negative control is declared** (`not_declared`, which still grades `met`
+  per the tiers doc). The harness's zero-sigma check is a bit-for-bit
+  reproducibility control, not the seeded-defect campaign `klt yield` means by
+  a negative control, so it is deliberately not presented as one. Producing one
+  needs a second, defect-seeded Monte Carlo campaign per row; the harness decks
+  are not expressed as `klt sim` requests, so it cannot be submitted to the
+  batch fleet as they stand, and it was not hand-launched locally.
+- **The `Ron·W` row is a declared gap**: its record states it has no ratified
+  per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
+  deterministic sample, not a limit). Inventing a limit would amount to a spec
+  change, so the item stays `unmet` (`partial_coverage`) until the spec says
+  what bound a Monte Carlo draw must meet.
+- The campaigns cover only the supply points each record justifies (a subset of
+  the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
+  coverage limits for the 5 V / 6 V devices; this evidence inherits both.
 
 **Grading context.** `scope: "repo"` paths are resolved by the grader from the
 git repository root, so grading a copy of the tree that has no `.git`
@@ -184,14 +224,14 @@ must move with it, and CI enforces that:
 
 `klt` install for grading-only (no klayout, no PDK — this is what the
 `signoff` CI job does). The pin is the exact source commit the committed
-report was graded with (klayout-tools merge `3a75c3ae…`, #2843); the PyPI
+report was graded with (klayout-tools `879d39ba…`; see "Grader pin move, 3a75c3ae to 879d39ba"); the PyPI
 `0.5.0` wheel predates it (it bundles the 10-item tiers doc and lacks the
 `source_doc_content_hash` report field, so its render can never match
 `tier-report.json`). `jsonschema` is required
 because `klt`'s CLI entry imports it eagerly:
 
 ```bash
-pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@3a75c3ae705b7ad3803625255de93bcd982e70c6"
+pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e"
 pip install 'jsonschema>=4.0'
 ```
 
@@ -202,3 +242,24 @@ report: no item's `status`, `reason` or `citation` changed. Only report
 metadata (`source_doc_content_hash`, `tool.version`, `git_commit`,
 `grading_ruleset_id`) and descriptive text (items 6 and 8 `text`, item 11
 `notes`) differ. The four added citations were then rendered separately.
+
+## Grader pin move, 3a75c3ae to 879d39ba (issue #368)
+
+The older grader renders a `spec_rows."6"` multi-row item 6 as
+`invalid_evidence`, so the pin moved to klayout-tools `879d39ba` (CI's `signoff`
+job installs it with `--no-deps`; grading needs no native yield extension, only
+producing the reports does). Re-rendered against the unchanged item 1–5 and 7–11
+evidence: no item's `status` or `reason` changed; only report metadata
+(`source_doc_content_hash`, `build`), the descriptive `text` of items 4, 5, 6, 11
+and item 11's `notes` differ. Item 6 moved from `no_evidence` to
+`partial_coverage`.
+
+To regenerate the yield reports (needs the `klt_yield_native` extension, which
+the published `klt` build lacks; built here in a throwaway env from a
+klayout-tools checkout, never installed on the host):
+
+```bash
+python3 sim/mc_to_yield.py <campaign> sim/<campaign>/corners/<run> \
+  -o verification/signoff/yield/<campaign>.samples.json
+cd verification/signoff/yield && klt yield <campaign>.samples.json --format json > <campaign>.yield.json
+```

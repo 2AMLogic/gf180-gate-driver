@@ -227,6 +227,33 @@ class NativeEnvelopeRepoScopedInput(unittest.TestCase):
         self.assertTrue(any("names no input path" in f for f in self.r.anchor(manifest)))
 
 
+class YieldReportSamplesInput(unittest.TestCase):
+    """A ``klt yield`` report names its sample set beside itself (issue #368)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.r = Repo(self._tmp.name)
+        self.r.write("verification/signoff/yield/s.samples.json", b"SAMPLES")
+        self.r.write("verification/signoff/yield/s.yield.json",
+                     json.dumps({"samples": "s.samples.json", "measurement_count": 1, "measurements": []}))
+        self.manifest = self.r.manifest(**{"6": [{"file": "verification/signoff/yield/s.yield.json",
+                                                  "content_hash": sha(b"SAMPLES"), "rows": ["a"]}]})
+
+    def test_samples_beside_report_anchor(self):
+        self.assertEqual(self.r.anchor(self.manifest), [])
+
+    def test_edited_samples_fail(self):
+        self.r.write("verification/signoff/yield/s.samples.json", b"EDITED")
+        failures = self.r.anchor(self.manifest)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("stale citation", failures[0])
+
+    def test_missing_samples_fail(self):
+        (self.r.root / "verification/signoff/yield/s.samples.json").unlink()
+        self.assertTrue(any("does not exist" in f for f in self.r.anchor(self.manifest)))
+
+
 class InventoryListedHashes(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

@@ -75,6 +75,7 @@ INPUT_PATH_FIELDS = {
     "extract": ("file", "repo_root"),  # emitted with cwd = repo root (run_lvs.py step 2)
     "generic": ("source", "repo_root"),
     "erc": ("file", "repo_root"),  # emitted with cwd = repo root (run_erc.py)
+    "yield": ("samples", "envelope_dir"),  # `klt yield` run with cwd = the report's directory (issue #368)
 }
 
 RENDER_EXIT_CODES = (0, 3)
@@ -91,7 +92,7 @@ def sha256_file(path: Path) -> str:
 def envelope_kind(envelope: dict) -> str | None:
     """Kind of a ``klt`` JSON envelope from its own discriminating shape.
 
-    The five shapes the manifest may cite today; mirrors
+    The six shapes the manifest may cite today; mirrors
     ``docs/cli/signoff.md``'s "Envelope validation" table, restricted to what
     ``INPUT_PATH_FIELDS`` can anchor.
     """
@@ -105,6 +106,8 @@ def envelope_kind(envelope: dict) -> str | None:
         return "extract"
     if "erc_findings" in envelope:
         return "erc"
+    if "samples" in envelope and "measurement_count" in envelope:
+        return "yield"
     return None
 
 

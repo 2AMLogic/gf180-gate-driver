@@ -28,7 +28,7 @@
     },
     "10": {
       "file": "verification/signoff/repo-hygiene.generic.json",
-      "content_hash": "sha256:51bbd45520e9014e713b487069a0fa1146d3fd8d46573a1f7f5ee81faba555c7"
+      "content_hash": "sha256:308bbcaa72a3091f3d6569e119c484745caf0e96952e2bf63fcf83eb43c68674"
     },
     "11": [
       {
@@ -38,6 +38,46 @@
       {
         "file": "layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json",
         "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa"
+      }
+    ],
+    "6": [
+      {
+        "file": "verification/signoff/yield/gate-driver-indrv-mismatch.yield.json",
+        "content_hash": "sha256:b6aa76c62a0cdfa698fa45823fbc07dc5a71ace68e00ff33c4ccaae97a4795fd",
+        "rows": [
+          "exception3_indrv"
+        ]
+      },
+      {
+        "file": "verification/signoff/yield/level-shifter-inb-mismatch.yield.json",
+        "content_hash": "sha256:a61e2744afb531823ce789f4d03877bebbcaf95af60b1847ae665934817e409c",
+        "rows": [
+          "exception1_inb"
+        ]
+      },
+      {
+        "file": "verification/signoff/yield/output-stage-taper-mismatch.yield.json",
+        "content_hash": "sha256:de43c623079f03271829f053df64e4cf38dad8566b36a277eb014e3455673677",
+        "rows": [
+          "exception2_taper"
+        ]
+      }
+    ]
+  },
+  "spec_rows": {
+    "6": [
+      {
+        "id": "exception3_indrv"
+      },
+      {
+        "id": "exception1_inb"
+      },
+      {
+        "id": "exception2_taper"
+      },
+      {
+        "id": "ronw_nfet_06v0",
+        "gap": "the Ron*W campaign is a spread measurement with no ratified per-row bound to grade yield against (spec/low-side-power-switch.md 2.1; sim record 20260821-134653-804155b)"
       }
     ]
   }
