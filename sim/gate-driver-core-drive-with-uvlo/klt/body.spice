@@ -1,0 +1,39 @@
+* gate-driver-core-drive-with-uvlo -- `klt sim` circuit BODY (T1 item 5, issue #367).
+*
+* Same DUT, 1 nF reference load and IN pulse shape (0 -> VDD_LOGIC, 20n delay, 1n
+* edges, 300n high, 700n period) as ../testbench/gate_driver_core_uvlo_tb.spice
+* (the harness bench behind the ratified 60-point record), restated as a `klt sim`
+* circuit body: no models/.lib/.temp/.control/.end -- klt owns those. The DUT is the
+* live fragment design/netlist/gate_driver_core.spice, pulled in by .include so its
+* sha256 lands in the report's environment.netlist_closure.
+*
+* The two rails are the voltage sources vsup_logic / vsup_drv, swept TIED by index
+* through the request's corners.supply_v (the harness's tied two-rail grid,
+* sim/README.md). Because supply_v only alters DC sources, the IN pulse is built
+* as a unit pulse scaled by v(VDD_LOGIC), and the 10/50/90 % crossings are taken
+* on rail-normalised copies of IN and OUT (vin_n, vout_n) so the file-scope .meas
+* cards carry literal thresholds that are right at every rail point.
+*
+* Harness-wide transient tolerance (sim/harness/runner.py DEFAULT_TRAN_RELTOL).
+* Carried here, not in options.ngspice_options: the batch fleet's runner drops
+* that request field and klt then fails the finished job.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../design/netlist/gate_driver_core.spice"
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 1n 1n 300n 700n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load (spec Sec.3)
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* rail-normalised monitors (measurement only; nothing in the DUT reads them)
+bvin_n vin_n 0 V='v(IN)/v(VDD_LOGIC)'
+bvout_n vout_n 0 V='v(OUT)/v(VDD_DRV)'

@@ -29,8 +29,8 @@ re-graded by a command, and CI re-grades it on every PR.
 Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
 clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
-**5, 6 and 7** render `unmet` (`no_evidence`) with a per-item `reason` in
-`tier-report.json`. Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+**5, 6 and 7** render `unmet` with a per-item `reason` in
+`tier-report.json` (item 5: `check_failed`, see below; 6 and 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -86,14 +86,62 @@ turns `unmet` if they change. What each audit found:
   GDS regeneration limitation above, and `sim/README.md`'s facet table
   omitting four on-disk experiments (`testbenches.inventory.md` is complete).
 
-Why the other unmet rows say `no_evidence`:
+### Item 5: `klt sim` corner envelopes (issue #367)
 
-- **5, 7** — the block has real PVT-corner and post-layout evidence, but as
-  `sim/` markdown records from this repo's own harness — not in `klt sim`/
-  `klt pex` envelope form. Item 7 additionally accepts **only** a `klt pex`
-  report for an analog block; a clean DRC or a pre-layout sim renders
-  `wrong_kind` by design. Converting a campaign to a `klt`-native envelope is a
-  content decision each item's own issue tracks.
+Item 5 cites two `klt sim` envelopes, committed append-only under
+`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/`, from the **re-run
+route** (nothing re-expressed from the old records): the schematic DUT
+`design/netlist/gate_driver_core.spice` (sha256 `1d442503…`, pinned in each
+envelope's `environment.netlist_closure`) at the 45-point ±10 % tied-rail
+matrix (`…-nominal-rail.json`, ratified *target* bounds) and the 15-point
+6 V stretch rail (`…-stretch-rail.json`, ratified *stretch* bounds for
+current and propagation delay; rise/fall keep their only bound). Both ran on
+the Spot batch fleet; the requests and the generator that emits them are in
+`sim/gate-driver-core-drive-with-uvlo/klt/` (`gen_requests.py`, `body.spice`).
+The rows are `peak_source_current`, `peak_sink_current`, `propagation_delay`
+and `rise_fall_time` (each measurement carries its `spec_row` tag); `drive_rail`
+and `uvlo` are declared `gap`s with their reasons in `manifest.json`.
+
+Item 5 renders **`unmet`/`check_failed`, and that is the true result, not a
+tooling problem**: no bound was relaxed and the ratified exceptions are not
+encoded, so they fail in the envelopes exactly as the spec says they do.
+
+- Stretch rail: `ipeak_sink_a` < 1 A at `ss_125c` (0.8776 A) and `sf_125c`
+  (0.9221 A) — decision record 0016's two corners; 13/15 pass.
+- Nominal rail: `ss_-40c_vlogic2p97v-vdrv4p50v` fails `ipeak_source_a`
+  (0.49944 A < 0.5 A, decision record 0020's corner), and **two** corners at
+  that low-line point are UVLO-locked so OUT never reaches 90 % and the
+  rise/fall/propagation measurements produce no value: that `ss_-40c` corner
+  and `sf_-40c` (0.69 A source, 0.91 A sink; its thresholds are not
+  reached either). The harness record scored the locked `ss_-40c` point with
+  swing-relative thresholds on a 0.24 V glitch; these envelopes use
+  rail-normalised 10/50/90 % crossings, so a block that never switches reports
+  *no value* rather than a flattering delay. The `sf_-40c` locked point has
+  no ratified exception: it is a new observation of the open UVLO false-trip
+  finding (spec §5, decision record 0018) at a second corner.
+- 43/45 nominal corners pass every graded row; 13/15 stretch corners do.
+
+Method differences from the harness bench (`testbench/tb.json`): thresholds
+are on rail-normalised monitors rather than min/max-swing vectors, the IN
+pulse is built from a unit pulse scaled by `v(VDD_LOGIC)` (`supply_v` alters
+DC sources only), `reltol=1e-4` is a body-level `.options` card (the fleet
+runner drops `options.ngspice_options`), and the inherited sanity bands
+(`n*_min_v ≥ −50 mV` etc.) are not re-asserted — they are not §3 rows and the
+harness records still carry them. `drive_rail`/`uvlo` stay gaps, so even a
+clean re-run would grade `partial_coverage` until those are expressed.
+
+The grader pin moved to `879d39ba` for this: `3a75c3ae` grades the
+multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
+new pin, no other item's `status`/`reason` changed (only report metadata and
+descriptive text).
+
+Why item 7 still says `no_evidence`:
+
+- **7** — the block has real post-layout evidence, but as `sim/` markdown
+  records from this repo's own harness — not in `klt pex` envelope form. Item 7
+  accepts **only** a `klt pex` report for an analog block; a clean DRC or a
+  pre-layout sim renders `wrong_kind` by design. Converting a campaign to a
+  `klt`-native envelope is a content decision the item's own issue tracks.
 
 ### Item 6: Monte Carlo evidence (issue #368)
 
@@ -224,7 +272,7 @@ must move with it, and CI enforces that:
 
 `klt` install for grading-only (no klayout, no PDK — this is what the
 `signoff` CI job does). The pin is the exact source commit the committed
-report was graded with (klayout-tools `879d39ba…`; see "Grader pin move, 3a75c3ae to 879d39ba"); the PyPI
+report was graded with (klayout-tools merge `879d39ba…`, moved from `3a75c3ae…` by issues #367 and #368; see "Grader pin move, 3a75c3ae to 879d39ba"); the PyPI
 `0.5.0` wheel predates it (it bundles the 10-item tiers doc and lacks the
 `source_doc_content_hash` report field, so its render can never match
 `tier-report.json`). `jsonschema` is required

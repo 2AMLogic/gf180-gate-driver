@@ -28,7 +28,7 @@
     },
     "10": {
       "file": "verification/signoff/repo-hygiene.generic.json",
-      "content_hash": "sha256:308bbcaa72a3091f3d6569e119c484745caf0e96952e2bf63fcf83eb43c68674"
+      "content_hash": "sha256:67b7a0e04bde006d5dc6fcc61f850621727de3c9aed59a4b59a8c2e562941688"
     },
     "11": [
       {
@@ -38,6 +38,28 @@
       {
         "file": "layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json",
         "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa"
+      }
+    ],
+    "5": [
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-nominal-rail.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-stretch-rail.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
       }
     ],
     "6": [
@@ -65,6 +87,28 @@
     ]
   },
   "spec_rows": {
+    "5": [
+      {
+        "id": "peak_source_current"
+      },
+      {
+        "id": "peak_sink_current"
+      },
+      {
+        "id": "propagation_delay"
+      },
+      {
+        "id": "rise_fall_time"
+      },
+      {
+        "id": "drive_rail",
+        "gap": "operating-condition axis, not a measured bound: spec/gate-driver.md Sec.3 fixes the rail at 5 V nominal (+/-10 %, DRM 14.1.2) / 6 V stretch; it is exercised as the tied supply_v axis of both envelopes (4.5/5.0/5.5 V and 6.0 V) rather than graded by a limit"
+      },
+      {
+        "id": "uvlo",
+        "gap": "UVLO trip/hysteresis rows are graded by sim/uvlo-trip-verification (harness records, not klt sim envelopes) and carry an open, unbounded false-trip finding (spec Sec.5, decision record 0018); the envelopes here only report x3.lockout / OUT at IN-high, ungraded"
+      }
+    ],
     "6": [
       {
         "id": "exception3_indrv"
