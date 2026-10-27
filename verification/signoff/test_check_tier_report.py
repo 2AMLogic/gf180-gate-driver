@@ -227,6 +227,50 @@ class NativeEnvelopeRepoScopedInput(unittest.TestCase):
         self.assertTrue(any("names no input path" in f for f in self.r.anchor(manifest)))
 
 
+class SimEnvelopeNetlistClosure(unittest.TestCase):
+    """``klt sim`` envelopes anchor on the body netlist and on every repo file it simulated (issue #367)."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.r = Repo(self._tmp.name)
+        self.r.write("sim/k/body.spice", b"BODY")
+        self.r.write("design/dut.spice", b"DUT")
+        self.pin = sha(b"BODY")
+        closure = [
+            {"path": "sim/k/body.spice", "scope": "repo", "sha256": hashlib.sha256(b"BODY").hexdigest()},
+            {"path": "design/dut.spice", "scope": "repo", "sha256": hashlib.sha256(b"DUT").hexdigest()},
+        ]
+        env = {
+            "schema_version": 3,
+            "netlist": {"path": "sim/k/body.spice", "scope": "repo"},
+            "corner_count": 1,
+            "measurements": [],
+            "environment": {"netlist_closure": closure},
+        }
+        self.r.write("sim/k/env.json", json.dumps(env))
+        self.manifest = self.r.manifest(**{"5": [{"file": "sim/k/env.json", "content_hash": self.pin}]})
+
+    def test_fresh_envelope_anchors(self):
+        self.assertEqual(self.r.anchor(self.manifest), [])
+
+    def test_editing_the_body_netlist_is_stale(self):
+        self.r.write("sim/k/body.spice", b"EDITED")
+        self.assertTrue(any("stale citation" in f for f in self.r.anchor(self.manifest)))
+
+    def test_editing_the_included_dut_is_stale(self):
+        self.r.write("design/dut.spice", b"EDITED")
+        failures = self.r.anchor(self.manifest)
+        self.assertEqual(len(failures), 1)
+        self.assertIn("stale simulation input design/dut.spice", failures[0])
+
+    def test_missing_closure_fails(self):
+        env = json.loads((self.r.root / "sim/k/env.json").read_text())
+        del env["environment"]["netlist_closure"]
+        self.r.write("sim/k/env.json", json.dumps(env))
+        self.assertTrue(any("netlist_closure" in f for f in self.r.anchor(self.manifest)))
+
+
 class InventoryListedHashes(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()

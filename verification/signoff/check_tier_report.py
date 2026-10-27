@@ -75,6 +75,7 @@ INPUT_PATH_FIELDS = {
     "extract": ("file", "repo_root"),  # emitted with cwd = repo root (run_lvs.py step 2)
     "generic": ("source", "repo_root"),
     "erc": ("file", "repo_root"),  # emitted with cwd = repo root (run_erc.py)
+    "sim": ("netlist", "repo_root"),  # {"path", "scope": "repo"} body netlist (issue #367)
 }
 
 RENDER_EXIT_CODES = (0, 3)
@@ -91,7 +92,7 @@ def sha256_file(path: Path) -> str:
 def envelope_kind(envelope: dict) -> str | None:
     """Kind of a ``klt`` JSON envelope from its own discriminating shape.
 
-    The five shapes the manifest may cite today; mirrors
+    The six shapes the manifest may cite today; mirrors
     ``docs/cli/signoff.md``'s "Envelope validation" table, restricted to what
     ``INPUT_PATH_FIELDS`` can anchor.
     """
@@ -105,7 +106,35 @@ def envelope_kind(envelope: dict) -> str | None:
         return "extract"
     if "erc_findings" in envelope:
         return "erc"
+    if "corner_count" in envelope and "measurements" in envelope and "environment" in envelope:
+        return "sim"
     return None
+
+
+def check_netlist_closure(envelope: dict, repo_root: Path) -> list[str]:
+    """Every repo-scoped file a ``klt sim`` envelope says it simulated is still live.
+
+    The body netlist is the envelope's anchored input; the DUT it ``.include``s
+    is only named in ``environment.netlist_closure``. Without this, editing
+    ``design/netlist/*.spice`` would leave a corner envelope looking fresh.
+    """
+    closure = (envelope.get("environment") or {}).get("netlist_closure")
+    if not isinstance(closure, list) or not closure:
+        return ["sim envelope records no environment.netlist_closure to anchor"]
+    failures: list[str] = []
+    for entry in closure:
+        if not isinstance(entry, dict) or entry.get("scope") != "repo":
+            continue
+        rel, listed = entry.get("path"), entry.get("sha256")
+        target = repo_root / rel if isinstance(rel, str) else None
+        if target is None or not target.is_file():
+            failures.append(f"netlist_closure lists a file that does not exist: {rel!r}")
+        elif sha256_file(target) != f"sha256:{listed}":
+            failures.append(
+                f"netlist_closure: stale simulation input {rel} -- envelope simulated sha256:{listed} "
+                f"but the live file is {sha256_file(target)}; re-run the sim and refresh the envelope"
+            )
+    return failures
 
 
 def _citation_entries(item_id: str, entry: object) -> list[tuple[str, object]]:
@@ -254,6 +283,8 @@ def anchor_citations(manifest: dict, repo_root: Path = REPO_ROOT) -> list[str]:
                     f"re-run the evidence and refresh the manifest + tier-report"
                 )
                 continue
+            if kind == "sim":
+                failures += [f"item {label}: {m}" for m in check_netlist_closure(envelope, repo_root)]
             if declared and artifact.name.endswith(INVENTORY_SUFFIX):
                 failures += [f"item {label}: {m}" for m in check_inventory_hashes(artifact, repo_root)]
     return failures

@@ -275,7 +275,9 @@ jobs:
         # report's source_doc_content_hash schema (#2191), so its render
         # can never match the committed 11-item tier report. This pin is
         # the exact source commit the report was graded with (klayout-tools
-        # merge 3a75c3ae, #2843: artifact-bound generic envelopes for T1
+        # merge 879d39ba (was 3a75c3ae, #2843; moved by issue #367 because the
+        # older build grades item 5's multi-envelope list + spec_rows form
+        # invalid_evidence): artifact-bound generic envelopes for T1
         # items 1, 2, 9 and 10, issue #288) -- moving it
         # is a deliberate PR that also refreshes verification/signoff/
         # (the fresh render is diffed against the committed report below),
@@ -285,7 +287,7 @@ jobs:
         # eagerly (klt kb validate; observed as a CI failure on the first
         # run of this job), while klayout itself stays unnecessary.
         run: |
-          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@3a75c3ae705b7ad3803625255de93bcd982e70c6"
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e"
           pip install 'jsonschema>=4.0'
 
       - name: Checker regression tests
