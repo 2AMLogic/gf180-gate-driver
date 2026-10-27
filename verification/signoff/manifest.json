@@ -28,7 +28,7 @@
     },
     "10": {
       "file": "verification/signoff/repo-hygiene.generic.json",
-      "content_hash": "sha256:9bf0ccebf045932c1ff0ea5cf53c97900a85381fcb35dcf91733a9bcccbd6dbe"
+      "content_hash": "sha256:67b7a0e04bde006d5dc6fcc61f850621727de3c9aed59a4b59a8c2e562941688"
     },
     "11": [
       {
@@ -61,6 +61,29 @@
           "rise_fall_time"
         ]
       }
+    ],
+    "6": [
+      {
+        "file": "verification/signoff/yield/gate-driver-indrv-mismatch.yield.json",
+        "content_hash": "sha256:b6aa76c62a0cdfa698fa45823fbc07dc5a71ace68e00ff33c4ccaae97a4795fd",
+        "rows": [
+          "exception3_indrv"
+        ]
+      },
+      {
+        "file": "verification/signoff/yield/level-shifter-inb-mismatch.yield.json",
+        "content_hash": "sha256:a61e2744afb531823ce789f4d03877bebbcaf95af60b1847ae665934817e409c",
+        "rows": [
+          "exception1_inb"
+        ]
+      },
+      {
+        "file": "verification/signoff/yield/output-stage-taper-mismatch.yield.json",
+        "content_hash": "sha256:de43c623079f03271829f053df64e4cf38dad8566b36a277eb014e3455673677",
+        "rows": [
+          "exception2_taper"
+        ]
+      }
     ]
   },
   "spec_rows": {
@@ -84,6 +107,21 @@
       {
         "id": "uvlo",
         "gap": "UVLO trip/hysteresis rows are graded by sim/uvlo-trip-verification (harness records, not klt sim envelopes) and carry an open, unbounded false-trip finding (spec Sec.5, decision record 0018); the envelopes here only report x3.lockout / OUT at IN-high, ungraded"
+      }
+    ],
+    "6": [
+      {
+        "id": "exception3_indrv"
+      },
+      {
+        "id": "exception1_inb"
+      },
+      {
+        "id": "exception2_taper"
+      },
+      {
+        "id": "ronw_nfet_06v0",
+        "gap": "the Ron*W campaign is a spread measurement with no ratified per-row bound to grade yield against (spec/low-side-power-switch.md 2.1; sim record 20260821-134653-804155b)"
       }
     ]
   }

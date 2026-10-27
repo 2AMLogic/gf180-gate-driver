@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:98a37e7f59873ffe945b2a18792a2c8f7593cf70f420b006a8d09937d96da12c` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:688441444c39878426f80e869524c8c4a2f694d69936c00802a2699c967307d0` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7b740e23ad226fa6d538ddfed04859e36467a6bad214860aafbfd578ed845099` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -171,6 +171,20 @@ itself (`gen_gate_driver_core.py`, `check_gate_driver_core.py`, `run_drc.py`,
 `run_lvs.py`, `run_erc.py`), not as part of this audit; no simulation or
 netlisting was run.
 
+## Re-audit for issue #368 (2026-10-27)
+
+`.github/workflows/ci.yml` changed and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- adds a `Monte Carlo CSV to klt-yield converter unit tests` step to `test`
+  (stdlib unittest, no ngspice or PDK) and moves the `signoff` job's klt pin
+  from `3a75c3ae` to `879d39ba` (see `verification/signoff/README.md`, "Grader
+  pin move, 3a75c3ae to 879d39ba"). `lint`, the harness self-test and the
+  signoff job's steps are otherwise unchanged, so the CI finding still holds.
+  CI was read, not observed to pass here.
+
+The other listed files are unchanged for #368.
+
 ## Re-audit for issue #367 (2026-10-27)
 
 One listed file changed on the issue #367 branch (`feature/issue-367`, on top of
@@ -185,5 +199,6 @@ hash is refreshed in the table:
   here.
 
 The other listed files are unchanged. `klt sim` corner envelopes were produced
-for item 5 (see `verification/signoff/README.md`); no netlisting or layout flow
+for item 5 (see `verification/signoff/README.md`); no simulation (beyond those
+envelopes, run on the batch fleet), netlisting or layout flow
 was run for this re-audit.

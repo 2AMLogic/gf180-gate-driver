@@ -34,7 +34,8 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#367**: T1 item 5 (Full corner verification): cite klt sim corner envelopes covering every ratified spec/gate-driver.md row
+- **#368**: T1 item 6 (Monte Carlo): express the four local-mismatch campaigns as klt yield reports and cite them
 
 ## PRs Awaiting Review
 
@@ -52,7 +53,8 @@ _None._
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#367**: T1 item 5 (Full corner verification): cite klt sim corner envelopes covering every ratified spec/gate-driver.md row *(curated)*
+- **#368**: T1 item 6 (Monte Carlo): express the four local-mismatch campaigns as klt yield reports and cite them *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -70,10 +72,10 @@ _None._
 | Very important | 0 |
 | Important | 0 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
+| In Progress (`loom:building`) | 2 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 0 |
+| Curated | 2 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->

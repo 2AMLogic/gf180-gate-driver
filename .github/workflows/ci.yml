@@ -13,6 +13,7 @@ name: CI
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_campaign.py`                | python3      | `test` (here)  |
+# | `sim/test_mc_to_yield.py`                     | python3      | `test` (here)  |
 # | `sim/test_evidence_store.py`, `scripts/tests/` | python3      | `test` (here)  |
 # | `scripts/check_artifact_manifests.py check`   | python3+git  | `lint` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
@@ -142,6 +143,12 @@ jobs:
         # rather than as a refactor. Stubs runner.run_point/run_samples, so
         # no ngspice and no PDK -- it belongs on this PDK-free runner.
         run: python3 sim/test_harness_campaign.py
+
+      - name: Monte Carlo CSV to klt-yield converter unit tests
+        # sim/test_mc_to_yield.py pins which samples-*.csv rows become
+        # `klt yield` samples (baseline/zero-sigma control rows excluded,
+        # non-converged draws kept as errored; issue #368). Stdlib only.
+        run: python3 -m unittest discover -s sim -p test_mc_to_yield.py
 
       - name: Evidence-store and manifest-check unit tests
         # sim/test_evidence_store.py and scripts/tests/ pin the fail-closed
@@ -277,8 +284,9 @@ jobs:
         # the exact source commit the report was graded with (klayout-tools
         # merge 879d39ba (was 3a75c3ae, #2843; moved by issue #367 because the
         # older build grades item 5's multi-envelope list + spec_rows form
-        # invalid_evidence): artifact-bound generic envelopes for T1
-        # items 1, 2, 9 and 10, issue #288) -- moving it
+        # invalid_evidence, and again needed by issue #368 because it renders a
+        # multi-row `yield` item 6 as invalid_evidence): artifact-bound generic
+        # envelopes for T1 items 1, 2, 9 and 10, issue #288) -- moving it
         # is a deliberate PR that also refreshes verification/signoff/
         # (the fresh render is diffed against the committed report below),
         # never a silent grading change; when a PyPI release carrying item
