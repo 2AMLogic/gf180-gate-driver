@@ -5,9 +5,11 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-28
 
+- **PR #384**: feat(sim): shard item-5 requests to encode ratified DR-0016/0020 corner bounds
 - **PR #383**: feat(signoff): grade uvlo and drive_rail rows of T1 item 5 as klt sim evidence
 - **PR #381**: spec: draft record 0021 bounding low-line UVLO lockout timing rows
 - **PR #380**: docs: draft Ron·W statistical-row decision 0021 and fix item 5-7 doc drift
+- **Issue #376** (closed): T1 item 5 (corner verification): encode ratified exceptions 0016/0020 in the klt sim requests so item 5 grades the ratified spec
 - **Issue #377** (closed): T1 item 5 (corner verification): express the uvlo and drive_rail rows as graded klt sim evidence (remove the declared gaps)
 - **Issue #378** (closed): T1 item 5 (corner verification): resolve the sf_-40c low-line UVLO lockout (no ratified exception)
 
