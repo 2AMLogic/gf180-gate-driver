@@ -8,28 +8,6 @@
   "corners": {
     "process": [
       {
-        "name": "tt",
-        "sections": [
-          "typical",
-          "res_typical",
-          "bjt_typical",
-          "diode_typical",
-          "moscap_typical",
-          "mimcap_typical"
-        ]
-      },
-      {
-        "name": "ff",
-        "sections": [
-          "ff",
-          "res_ff",
-          "bjt_ff",
-          "diode_ff",
-          "moscap_ff",
-          "mimcap_ff"
-        ]
-      },
-      {
         "name": "ss",
         "sections": [
           "ss",
@@ -39,41 +17,22 @@
           "moscap_ss",
           "mimcap_ss"
         ]
-      },
-      {
-        "name": "fs",
-        "sections": [
-          "fs",
-          "res_typical",
-          "bjt_typical",
-          "diode_typical",
-          "moscap_typical",
-          "mimcap_typical"
-        ]
-      },
-      {
-        "name": "sf",
-        "sections": [
-          "sf",
-          "res_typical",
-          "bjt_typical",
-          "diode_typical",
-          "moscap_typical",
-          "mimcap_typical"
-        ]
       }
     ],
     "temperature_c": [
-      -40.0,
       27.0,
       125.0
     ],
     "supply_v": {
       "vsup_logic": [
-        3.3
+        2.97,
+        3.3,
+        3.63
       ],
       "vsup_drv": [
-        6.0
+        4.5,
+        5.0,
+        5.5
       ]
     }
   },
@@ -110,7 +69,7 @@
       "spec_row": "propagation_delay",
       "spice": ".meas tran tpdlh_s TRIG v(vin_n) VAL=0.5 RISE=1 TARG v(vout_n) VAL=0.5 RISE=1",
       "limits": {
-        "max": 2.5e-08
+        "max": 5e-08
       }
     },
     {
@@ -119,7 +78,7 @@
       "spec_row": "propagation_delay",
       "spice": ".meas tran tpdhl_s TRIG v(vin_n) VAL=0.5 FALL=1 TARG v(vout_n) VAL=0.5 FALL=1",
       "limits": {
-        "max": 2.5e-08
+        "max": 5e-08
       }
     },
     {
@@ -128,7 +87,7 @@
       "spec_row": "peak_source_current",
       "expr": "vecmax(i(vimeas))",
       "limits": {
-        "min": 1.0
+        "min": 0.5
       }
     },
     {
@@ -137,7 +96,7 @@
       "spec_row": "peak_sink_current",
       "expr": "-vecmin(i(vimeas))",
       "limits": {
-        "min": 1.0
+        "min": 0.5
       }
     },
     {

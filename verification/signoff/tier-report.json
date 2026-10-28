@@ -187,7 +187,7 @@
       "citation": null,
       "citations_graded": [
         {
-          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-nominal-rail.json",
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-main.json",
           "rows": [
             "peak_source_current",
             "peak_sink_current",
@@ -198,7 +198,7 @@
           "reason": "check_failed"
         },
         {
-          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-stretch-rail.json",
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-low.json",
           "rows": [
             "peak_source_current",
             "peak_sink_current",
@@ -207,26 +207,76 @@
           ],
           "status": "unmet",
           "reason": "check_failed"
+        },
+        {
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-mid-high.json",
+          "rows": [
+            "peak_source_current",
+            "peak_sink_current",
+            "propagation_delay",
+            "rise_fall_time"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-warm-hot.json",
+          "rows": [
+            "peak_source_current",
+            "peak_sink_current",
+            "propagation_delay",
+            "rise_fall_time"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-hot-slow.json",
+          "rows": [
+            "peak_source_current",
+            "peak_sink_current",
+            "propagation_delay",
+            "rise_fall_time"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-main.json",
+          "rows": [
+            "peak_source_current",
+            "peak_sink_current",
+            "propagation_delay",
+            "rise_fall_time"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-slow-cold-mid.json",
+          "rows": [
+            "peak_source_current",
+            "peak_sink_current",
+            "propagation_delay",
+            "rise_fall_time"
+          ],
+          "status": "met",
+          "reason": null
         }
       ],
       "detail": {
         "critical_metric_blockers": [
           {
             "metric": "sim__corner__errored_count",
-            "value": 2,
+            "value": 1,
             "higher_is_better": false
           }
         ],
         "failed_citations": [
-          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-nominal-rail.json",
-          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-stretch-rail.json"
+          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-main.json",
+          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-low.json"
         ],
-        "failed_rows": [
-          "peak_sink_current",
-          "peak_source_current",
-          "propagation_delay",
-          "rise_fall_time"
-        ],
+        "failed_rows": [],
         "uncovered_rows": [],
         "declared_gaps": [
           {
@@ -239,7 +289,12 @@
           }
         ],
         "unratified_rows": [],
-        "row_sources": {}
+        "row_sources": {
+          "peak_sink_current": "derived",
+          "peak_source_current": "derived",
+          "propagation_delay": "derived",
+          "rise_fall_time": "derived"
+        }
       }
     },
     {

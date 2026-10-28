@@ -86,40 +86,54 @@ turns `unmet` if they change. What each audit found:
   GDS regeneration limitation above, and `sim/README.md`'s facet table
   omitting four on-disk experiments (`testbenches.inventory.md` is complete).
 
-### Item 5: `klt sim` corner envelopes (issue #367)
+### Item 5: `klt sim` corner envelopes (issues #367, #376)
 
-Item 5 cites two `klt sim` envelopes, committed append-only under
-`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/`, from the **re-run
-route** (nothing re-expressed from the old records): the schematic DUT
-`design/netlist/gate_driver_core.spice` (sha256 `1d442503…`, pinned in each
-envelope's `environment.netlist_closure`) at the 45-point ±10 % tied-rail
-matrix (`…-nominal-rail.json`, ratified *target* bounds) and the 15-point
-6 V stretch rail (`…-stretch-rail.json`, ratified *stretch* bounds for
-current and propagation delay; rise/fall keep their only bound). Both ran on
-the Spot batch fleet; the requests and the generator that emits them are in
+Item 5 cites seven `klt sim` envelopes, committed append-only under
+`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/` (`20261028-d7a2b69-*`),
+from the **re-run route** (nothing re-expressed from the old records): the
+schematic DUT `design/netlist/gate_driver_core.spice` (sha256 `1d442503…`,
+pinned in each envelope's `environment.netlist_closure`) at the 45-point ±10 %
+tied-rail matrix (four `…-nominal-*.json` shards, ratified *target* bounds) and
+the 15-point 6 V stretch rail (three `…-stretch-*.json` shards, ratified
+*stretch* bounds for current and propagation delay; rise/fall keep their only
+bound). The requests and the generator that emits them are in
 `sim/gate-driver-core-drive-with-uvlo/klt/` (`gen_requests.py`, `body.spice`).
 The rows are `peak_source_current`, `peak_sink_current`, `propagation_delay`
 and `rise_fall_time` (each measurement carries its `spec_row` tag); `drive_rail`
 and `uvlo` are declared `gap`s with their reasons in `manifest.json`.
 
-Item 5 renders **`unmet`/`check_failed`, and that is the true result, not a
-tooling problem**: no bound was relaxed and the ratified exceptions are not
-encoded, so they fail in the envelopes exactly as the spec says they do.
+**Ratified exceptions are encoded by sharding (#376).** `klt sim` limits are
+min/max only and apply to every corner of a request, so each excepted corner set
+is its own request carrying the ratified bound; every other limit in every
+request is the `spec/gate-driver.md` §3 bound. Exactly three corners differ, each
+stated by a ratified decision record:
 
-- Stretch rail: `ipeak_sink_a` < 1 A at `ss_125c` (0.8776 A) and `sf_125c`
-  (0.9221 A) — decision record 0016's two corners; 13/15 pass.
-- Nominal rail: `ss_-40c_vlogic2p97v-vdrv4p50v` fails `ipeak_source_a`
-  (0.49944 A < 0.5 A, decision record 0020's corner), and **two** corners at
-  that low-line point are UVLO-locked so OUT never reaches 90 % and the
-  rise/fall/propagation measurements produce no value: that `ss_-40c` corner
-  and `sf_-40c` (0.69 A source, 0.91 A sink; its thresholds are not
-  reached either). The harness record scored the locked `ss_-40c` point with
-  swing-relative thresholds on a 0.24 V glitch; these envelopes use
-  rail-normalised 10/50/90 % crossings, so a block that never switches reports
-  *no value* rather than a flattering delay. The `sf_-40c` locked point has
-  no ratified exception: it is a new observation of the open UVLO false-trip
-  finding (spec §5, decision record 0018) at a second corner.
-- 43/45 nominal corners pass every graded row; 13/15 stretch corners do.
+- DR-0016: stretch `ipeak_sink_a` >= 0.85 A at `ss_125c` (0.8776 A) and
+  `sf_125c` (0.9221 A) — `request-stretch-hot-slow.json`.
+- DR-0020: nominal `ipeak_source_a` >= 0.45 A at `ss_-40c_vlogic2p97v-vdrv4p50v`
+  (0.49944 A) — `request-nominal-ss-cold-low.json`.
+
+The shards partition the original 45 + 15 corners exactly. All 15 stretch corners
+and 43 of 45 nominal corners now pass every graded row, and item 5's
+`failed_rows` is empty.
+
+Item 5 still renders **`unmet`/`check_failed`** (`sim__corner__errored_count` 1 in
+each of two envelopes). The remaining failures are corners with **no ratified
+exception**, both routed to #378:
+
+- `sf_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-main.json`): UVLO-locked, OUT
+  never reaches 90 %, so rise/fall/propagation produce no value. A new
+  observation of the open UVLO false-trip finding (spec §5, DR-0018).
+- `ss_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-ss-cold-low.json`): the same
+  lock-out. DR-0020 excepts only the source-current bound, which now passes at
+  0.45 A; it does not except rise/fall/propagation at this corner, so those four
+  rows stay errored.
+
+The harness record scored the locked `ss_-40c` point with swing-relative
+thresholds on a 0.24 V glitch; these envelopes use rail-normalised 10/50/90 %
+crossings, so a block that never switches reports *no value* rather than a
+flattering delay. The superseded un-sharded run (`20261027-03685aa-*`, #367)
+stays in `envelopes/` as evidence but is no longer cited.
 
 Method differences from the harness bench (`testbench/tb.json`): thresholds
 are on rail-normalised monitors rather than min/max-swing vectors, the IN

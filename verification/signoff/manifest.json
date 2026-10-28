@@ -42,7 +42,7 @@
     ],
     "5": [
       {
-        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-nominal-rail.json",
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-main.json",
         "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
         "rows": [
           "peak_source_current",
@@ -52,7 +52,57 @@
         ]
       },
       {
-        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261027-03685aa-klt-sim-stretch-rail.json",
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-low.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-mid-high.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-warm-hot.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-hot-slow.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-main.json",
+        "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+        "rows": [
+          "peak_source_current",
+          "peak_sink_current",
+          "propagation_delay",
+          "rise_fall_time"
+        ]
+      },
+      {
+        "file": "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-stretch-slow-cold-mid.json",
         "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
         "rows": [
           "peak_source_current",

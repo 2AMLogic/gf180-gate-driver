@@ -1,0 +1,127 @@
+{
+  "netlist": "body.spice",
+  "engine": "ngspice",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_ss",
+          "bjt_ss",
+          "diode_ss",
+          "moscap_ss",
+          "mimcap_ss"
+        ]
+      },
+      {
+        "name": "sf",
+        "sections": [
+          "sf",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      125.0
+    ],
+    "supply_v": {
+      "vsup_logic": [
+        3.3
+      ],
+      "vsup_drv": [
+        6.0
+      ]
+    }
+  },
+  "batch": {
+    "runner_version_check": "warn",
+    "capacity_wait_s": 1800
+  },
+  "analysis": {
+    "kind": "tran",
+    "args": "0.1n 700n"
+  },
+  "measurements": [
+    {
+      "name": "trise_s",
+      "unit": "s",
+      "spec_row": "rise_fall_time",
+      "spice": ".meas tran trise_s TRIG v(vout_n) VAL=0.1 RISE=1 TARG v(vout_n) VAL=0.9 RISE=1",
+      "limits": {
+        "max": 5e-08
+      }
+    },
+    {
+      "name": "tfall_s",
+      "unit": "s",
+      "spec_row": "rise_fall_time",
+      "spice": ".meas tran tfall_s TRIG v(vout_n) VAL=0.9 FALL=1 TARG v(vout_n) VAL=0.1 FALL=1",
+      "limits": {
+        "max": 5e-08
+      }
+    },
+    {
+      "name": "tpdlh_s",
+      "unit": "s",
+      "spec_row": "propagation_delay",
+      "spice": ".meas tran tpdlh_s TRIG v(vin_n) VAL=0.5 RISE=1 TARG v(vout_n) VAL=0.5 RISE=1",
+      "limits": {
+        "max": 2.5e-08
+      }
+    },
+    {
+      "name": "tpdhl_s",
+      "unit": "s",
+      "spec_row": "propagation_delay",
+      "spice": ".meas tran tpdhl_s TRIG v(vin_n) VAL=0.5 FALL=1 TARG v(vout_n) VAL=0.5 FALL=1",
+      "limits": {
+        "max": 2.5e-08
+      }
+    },
+    {
+      "name": "ipeak_source_a",
+      "unit": "A",
+      "spec_row": "peak_source_current",
+      "expr": "vecmax(i(vimeas))",
+      "limits": {
+        "min": 1.0
+      }
+    },
+    {
+      "name": "ipeak_sink_a",
+      "unit": "A",
+      "spec_row": "peak_sink_current",
+      "expr": "-vecmin(i(vimeas))",
+      "limits": {
+        "min": 0.85
+      }
+    },
+    {
+      "name": "uvlo_lockout_at_in_high",
+      "unit": "V",
+      "spice": ".meas tran uvlo_lockout_at_in_high FIND v(x3.lockout) AT=200n"
+    },
+    {
+      "name": "uvlo_vout_at_in_high_v",
+      "unit": "V",
+      "spice": ".meas tran uvlo_vout_at_in_high_v FIND v(OUT) AT=200n"
+    }
+  ],
+  "options": {
+    "timeout_s": 3000,
+    "keep_artifacts": false,
+    "ngspice_init": [
+      "set measureprec=10",
+      "set numdgt=10"
+    ]
+  }
+}
