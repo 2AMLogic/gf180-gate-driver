@@ -3,6 +3,14 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-28
+
+- **PR #383**: feat(signoff): grade uvlo and drive_rail rows of T1 item 5 as klt sim evidence
+- **PR #381**: spec: draft record 0021 bounding low-line UVLO lockout timing rows
+- **PR #380**: docs: draft Ron·W statistical-row decision 0021 and fix item 5-7 doc drift
+- **Issue #377** (closed): T1 item 5 (corner verification): express the uvlo and drive_rail rows as graded klt sim evidence (remove the declared gaps)
+- **Issue #378** (closed): T1 item 5 (corner verification): resolve the sf_-40c low-line UVLO lockout (no ratified exception)
+
 ### 2026-10-27
 
 - **PR #373**: feat(signoff): cite klt sim corner envelopes for T1 item 5
