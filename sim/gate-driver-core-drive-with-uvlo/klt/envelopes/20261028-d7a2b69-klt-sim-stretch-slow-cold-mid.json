@@ -1,0 +1,698 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/gate-driver-core-drive-with-uvlo/klt/body.spice",
+    "scope": "repo"
+  },
+  "status": "pass",
+  "corner_count": 4,
+  "passed": 4,
+  "failed": 0,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {},
+    "by_severity": {},
+    "corners_with_diagnostics": 0
+  },
+  "metrics": {
+    "sim__corner__count": 4,
+    "sim__corner__passed_count": 4,
+    "sim__corner__failed_count": 0,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "46",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-46 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2025, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Wed Aug  5 10:12:28 UTC 2026\n******",
+      "binary_sha256": "c874869b16dc8a31cfa9d37d2b90a2a9e0e5b996f8e2535db89eb82855072931",
+      "probe": "ok",
+      "reason": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+    "corner_coverage": {
+      "pdk": "gf180mcuD",
+      "sections": [
+        {
+          "process": "ss",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "sf",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        }
+      ]
+    },
+    "netlist_closure": [
+      {
+        "path": "sim/gate-driver-core-drive-with-uvlo/klt/body.spice",
+        "scope": "repo",
+        "sha256": "748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb"
+      },
+      {
+        "path": "sim/gate-driver-core-drive-with-uvlo/klt/design.ngspice",
+        "scope": "repo",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "path": "design/netlist/gate_driver_core.spice",
+        "scope": "repo",
+        "sha256": "1d44250367d95eaa935645036a80f682c2e31770f908b90b46b9cc7c26dcb83c"
+      }
+    ],
+    "netlist_identity": "sha256:d420a642f1eb0f5ab77bd68db38ae792fdab68b1bf55601d95beafab57f743ff",
+    "remote": {
+      "provider": "aws-batch-fleet",
+      "job_id": "klt-sim-466511d04de5",
+      "region": "us-east-1",
+      "instance_id": "i-03f90cb6e06edaf75",
+      "instance_type": "m7i.4xlarge",
+      "availability_zone": "us-east-1b",
+      "ami_id": "ami-0fe7e8c2bb10dc45a",
+      "lifecycle": "spot",
+      "spot": true,
+      "state": "done",
+      "exit_code": "0",
+      "concurrency": "1",
+      "physical_cores": "8",
+      "elapsed_seconds": 102,
+      "client_submitted_at": "2026-10-28T18:51:14.003232Z",
+      "client_launched_at": "2026-10-28T18:52:15.705812Z",
+      "client_status_terminal_at": "2026-10-28T18:54:19.346302Z",
+      "client_collected_at": "2026-10-28T18:54:20.149611Z",
+      "runner_klt_version": "0.8.0",
+      "client_klt_version": "0.8.1.dev604+g4f345a577997",
+      "runner_compatibility": "match",
+      "runner_request_features": {
+        "required": [
+          "measurements[].expr",
+          "options.ngspice_init"
+        ],
+        "missing": [],
+        "status": "supported"
+      },
+      "worker_environment": {
+        "capture": "ok",
+        "simulator": {
+          "requested_binary": "ngspice",
+          "binary_source": "PATH",
+          "selected_path": "/usr/local/bin/ngspice",
+          "version_banner": "******\n** ngspice-46 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2025, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Thu Oct  1 23:51:59 UTC 2026\n******\n",
+          "version_probe": "ok"
+        },
+        "pdk": {
+          "variant": "gf180mcuD",
+          "root": "/opt/pdk",
+          "stamp_scheme": "sources-sha256",
+          "stamp_sha256": "d5ac52956829da3fee35d0b307d4e6cb83ae0e6535b56dba2eefed61cdffaf9b",
+          "stamp_text": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b",
+          "models_staged": false,
+          "stamp_scope": "executed"
+        },
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+        "omp_num_threads": null,
+        "image_manifest": null,
+        "model_inputs": null,
+        "diagnostics": [],
+        "pdk_stamp_comparison": {
+          "status": "not_comparable",
+          "reason": "client_stamp_unavailable"
+        },
+        "engine_build_comparison": {
+          "status": "mismatch",
+          "warning": "the worker's ngspice --version banner differs from the local binary's; build options (e.g. FFT linkage) may differ, so results derived from them can differ from a local run"
+        }
+      },
+      "runner_model_inputs": null,
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 4,
+        "per_unit_timeout_s": 3000,
+        "overhead_s": 120.0,
+        "job_bound_s": 12120.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": true,
+        "check": "warn",
+        "max_units_per_job": 1,
+        "recommended_hosts": 4,
+        "warning": "batch job bound 12120s (options.timeout_s 3000s x 4 units + 120s; a conservative fully-serial upper bound, not a runtime estimate) exceeds the fleet's whole-job ceiling of 3600s (max_job_seconds from fleet_config); a job still running at the ceiling is killed and every unit is reported batch_job_timeout. Set request.remote.hosts to at least 4 to run one job per shard of at most 1 units, each within the ceiling"
+      }
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "backend": {
+      "resolved": "batch",
+      "source": "env",
+      "requested": "batch"
+    }
+  },
+  "coverage": {
+    "corners_simulated": 4,
+    "measurements_declared": 8,
+    "measurements_with_limits": 6,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "measurement:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_lockout_at_in_high\"]/observation",
+      "measurement:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_vout_at_in_high_v\"]/observation",
+      "measurement:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_lockout_at_in_high\"]/observation",
+      "measurement:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_vout_at_in_high_v\"]/observation",
+      "measurement:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_lockout_at_in_high\"]/observation",
+      "measurement:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_vout_at_in_high_v\"]/observation",
+      "measurement:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_lockout_at_in_high\"]/observation",
+      "measurement:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_vout_at_in_high_v\"]/observation"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "measurement:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_lockout_at_in_high\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_vout_at_in_high_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_lockout_at_in_high\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_vout_at_in_high_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_lockout_at_in_high\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"uvlo_vout_at_in_high_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_lockout_at_in_high\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"uvlo_vout_at_in_high_v\"]/limits",
+        "reason": "characterization_without_limits"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.8.1.dev604+g4f345a577997",
+    "klt_git_commit": "4f345a577997d2c31d4fa55e0092efbb3ee24f41",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@4f345a577997d2c31d4fa55e0092efbb3ee24f41",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "ambiguous_sources": [
+        "search root: ~/.volare"
+      ]
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:748db69ba6837218d4bcf066a1b39b81a5c48c58fd14525aa6aff6fb29f35ccb",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "trise_s",
+      "unit": "s",
+      "limits": {
+        "max": 5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 5.3932483124e-09,
+        "margin": 4.46067516876e-08
+      },
+      "spec_row": "rise_fall_time"
+    },
+    {
+      "name": "tfall_s",
+      "unit": "s",
+      "limits": {
+        "max": 5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 5.3631113361e-09,
+        "margin": 4.46368886639e-08
+      },
+      "spec_row": "rise_fall_time"
+    },
+    {
+      "name": "tpdlh_s",
+      "unit": "s",
+      "limits": {
+        "max": 2.5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 4.5759258277e-09,
+        "margin": 2.04240741723e-08
+      },
+      "spec_row": "propagation_delay"
+    },
+    {
+      "name": "tpdhl_s",
+      "unit": "s",
+      "limits": {
+        "max": 2.5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 4.643061768e-09,
+        "margin": 2.0356938232e-08
+      },
+      "spec_row": "propagation_delay"
+    },
+    {
+      "name": "ipeak_source_a",
+      "unit": "A",
+      "limits": {
+        "min": 1.0
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 1.1710096681,
+        "margin": 0.17100966809999996
+      },
+      "spec_row": "peak_source_current"
+    },
+    {
+      "name": "ipeak_sink_a",
+      "unit": "A",
+      "limits": {
+        "min": 1.0
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 1.0169711248,
+        "margin": 0.01697112479999996
+      },
+      "spec_row": "peak_sink_current"
+    },
+    {
+      "name": "uvlo_lockout_at_in_high",
+      "unit": "V",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -1.2171627114e-07,
+        "margin": null
+      }
+    },
+    {
+      "name": "uvlo_vout_at_in_high_v",
+      "unit": "V",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 5.9999997668,
+        "margin": null
+      }
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "ss",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 96.111,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.4864862575e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5513513742499996e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.6927757393e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.53072242607e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.9436944139e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.10563055861e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.1529690923e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.08470309077e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.3526740985,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.3526740985000001
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.1301713136,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.1301713136
+        },
+        {
+          "name": "uvlo_lockout_at_in_high",
+          "value": -1.2171627114e-07,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "uvlo_vout_at_in_high_v",
+          "value": 5.9999997668,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "ss",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 90.851,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 5.3932483124e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.46067516876e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.3631113361e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.46368886639e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.5759258277e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.04240741723e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.643061768e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0356938232e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.1710096681,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.17100966809999996
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.0169711248,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.01697112479999996
+        },
+        {
+          "name": "uvlo_lockout_at_in_high",
+          "value": 1.5398121277e-07,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "uvlo_vout_at_in_high_v",
+          "value": 6.0000000483,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "sf",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 96.261,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 3.4300607805e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6569939219499995e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.4156833525e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.55843166475e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.1082362476e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.18917637524e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.6776802417e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.13223197583e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.7841607273,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.7841607273
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.2052886325,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.20528863250000007
+        },
+        {
+          "name": "uvlo_lockout_at_in_high",
+          "value": -3.1265593404e-06,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "uvlo_vout_at_in_high_v",
+          "value": 5.9999968608,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "sf",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 96.162,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.0637260746e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.59362739254e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.0792655003e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.49207344997e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.551167065e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1448832935e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.1174459949e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0882554005099998e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.5750020256,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.5750020255999999
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.0857160842,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.08571608419999999
+        },
+        {
+          "name": "uvlo_lockout_at_in_high",
+          "value": -4.4697214012e-07,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "uvlo_vout_at_in_high_v",
+          "value": 5.9999994976,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ]
+}
