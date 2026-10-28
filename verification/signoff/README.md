@@ -117,8 +117,13 @@ encoded, so they fail in the envelopes exactly as the spec says they do.
   swing-relative thresholds on a 0.24 V glitch; these envelopes use
   rail-normalised 10/50/90 % crossings, so a block that never switches reports
   *no value* rather than a flattering delay. The `sf_-40c` locked point has
-  no ratified exception: it is a new observation of the open UVLO false-trip
-  finding (spec §5, decision record 0018) at a second corner.
+  no ratified exception. It is not a new observation: decision record 0018
+  Finding 2 already names `sf_-40c` and `ss_-40c` as the two locked corners at
+  this point, and the false trip stays open. The no-value timing rows at both
+  corners are **bounded by draft decision record 0022, awaiting operator
+  ratification** (`proposed`; it extends 0018/0020 and relaxes nothing). They
+  are not covered until it is ratified and encoded in the requests, so item 5
+  renders as above.
 - 43/45 nominal corners pass every graded row; 13/15 stretch corners do.
 
 Method differences from the harness bench (`testbench/tb.json`): thresholds
