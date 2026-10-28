@@ -30,7 +30,7 @@ Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
 clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
 **5, 6 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (item 5: `check_failed`, see below; 6 and 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+`tier-report.json` (item 5: `check_failed`, see below; item 6: `partial_coverage`, three of four rows graded, see below; item 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -99,8 +99,33 @@ the 15-point 6 V stretch rail (three `…-stretch-*.json` shards, ratified
 bound). The requests and the generator that emits them are in
 `sim/gate-driver-core-drive-with-uvlo/klt/` (`gen_requests.py`, `body.spice`).
 The rows are `peak_source_current`, `peak_sink_current`, `propagation_delay`
-and `rise_fall_time` (each measurement carries its `spec_row` tag); `drive_rail`
-and `uvlo` are declared `gap`s with their reasons in `manifest.json`.
+and `rise_fall_time` (each measurement carries its `spec_row` tag). Issue #377
+adds the last two rows, `uvlo` and `drive_rail`, from four more envelopes under
+`sim/uvlo-trip-verification/klt/envelopes/` (requests and generator in that
+directory; no `gap` is declared any more):
+
+- `uvlo`, trip (`…-uvlo-trip.json`, 15 process × temperature points,
+  `design/netlist/uvlo.spice`): falling trip 3.3–3.9 V and rising trip
+  3.6–4.2 V (decision record 0001 Decision 4). **4/15 pass, 11 fail**, the same
+  4 corners the harness record `20260826-013053-6299c36` passes — decision
+  record 0018's false-trip finding is not softened and not encoded as an
+  exception. Hysteresis is reported ungraded (a typical value only, no
+  ratified worst-case range). So item 5 stays `check_failed`.
+- `uvlo`, response (`…-uvlo-response.json`): lockout response < 500 ns
+  (Decision 5), timed from `VDD_DRV` crossing 3.6 V to `OUT` at 0.5 V; 15/15
+  pass, worst 237.7 ns (`ss`/−40 °C). The harness times from each corner's own
+  trip; the difference is ~1 ns over the 1 ns step edge.
+- `drive_rail` (`…-uvlo-rail-nominal.json`, `…-uvlo-rail-stretch.json`): a
+  condition, not a measured bound, and `klt signoff` has only `{id}` /
+  `{id, gap}` rows. It is graded as an `op` measurement of the applied rail at
+  the DUT pin against the §3 band (4.5–5.5 V over the 45-point tied matrix;
+  6.0 V at the 15 stretch points); 45/45 and 15/15 pass. The rail is an ideal
+  source, so this **asserts the condition the other envelopes ran under**; it
+  does not measure the design.
+
+The response run's first batch attempt lost a Spot shard (5 corners `error`,
+no values); that envelope was discarded and the request re-run in full with
+5 shards — only the complete re-run is committed.
 
 **Ratified exceptions are encoded by sharding (#376).** `klt sim` limits are
 min/max only and apply to every corner of a request, so each excepted corner set
@@ -122,12 +147,18 @@ each of two envelopes). The remaining failures are corners with **no ratified
 exception**, both routed to #378:
 
 - `sf_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-main.json`): UVLO-locked, OUT
-  never reaches 90 %, so rise/fall/propagation produce no value. A new
-  observation of the open UVLO false-trip finding (spec §5, DR-0018).
+  never reaches 90 %, so rise/fall/propagation produce no value. Not a new
+  observation: decision record 0018 Finding 2 already names `sf_-40c` and
+  `ss_-40c` as the two locked corners at this point, and the false trip stays open.
 - `ss_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-ss-cold-low.json`): the same
   lock-out. DR-0020 excepts only the source-current bound, which now passes at
   0.45 A; it does not except rise/fall/propagation at this corner, so those four
   rows stay errored.
+
+The no-value timing rows at both locked corners are **bounded by draft decision
+record 0022, awaiting operator ratification** (`proposed`; it extends 0018/0020
+and relaxes nothing). They are not covered until it is ratified and encoded in
+the requests, so item 5 renders as above.
 
 The harness record scored the locked `ss_-40c` point with swing-relative
 thresholds on a 0.24 V glitch; these envelopes use rail-normalised 10/50/90 %
@@ -141,8 +172,9 @@ pulse is built from a unit pulse scaled by `v(VDD_LOGIC)` (`supply_v` alters
 DC sources only), `reltol=1e-4` is a body-level `.options` card (the fleet
 runner drops `options.ngspice_options`), and the inherited sanity bands
 (`n*_min_v ≥ −50 mV` etc.) are not re-asserted — they are not §3 rows and the
-harness records still carry them. `drive_rail`/`uvlo` stay gaps, so even a
-clean re-run would grade `partial_coverage` until those are expressed.
+harness records still carry them. With `drive_rail`/`uvlo` expressed
+(#377) item 5 no longer grades `partial_coverage`; it is `check_failed` on the
+failures above.
 
 The grader pin moved to `879d39ba` for this: `3a75c3ae` grades the
 multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
@@ -191,7 +223,9 @@ What the item-6 evidence is, and is not:
   per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
   deterministic sample, not a limit). Inventing a limit would amount to a spec
   change, so the item stays `unmet` (`partial_coverage`) until the spec says
-  what bound a Monte Carlo draw must meet.
+  what bound a Monte Carlo draw must meet. A bound is proposed in Draft
+  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)
+  (reproduce with `derive_ronw_bound.py`); it is not ratified, so the row stays a gap.
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.

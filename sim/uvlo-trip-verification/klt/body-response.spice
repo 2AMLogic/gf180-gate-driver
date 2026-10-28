@@ -1,0 +1,16 @@
+* uvlo-trip-verification -- `klt sim` circuit BODY for the UVLO lockout response
+* time row (T1 item 5, issue #377).
+*
+* Same DUT and boundary condition as body-trip.spice; VDD_DRV is a fast step
+* from 6.0 V (released at every measured corner) to 1.8 V (locked out at every
+* measured corner), 1 ns edge starting at 500 ns -- the harness's response
+* deck (../run_uvlo_trip.py, STEP_*). No models/.lib/.temp/.control/.end.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../design/netlist/uvlo.spice"
+
+vsup VDD_DRV 0 pwl(0 6 500n 6 501n 1.8 2000n 1.8)
+vgnd GND_DRV 0 dc 0
+rpu VDD_DRV OUT 100k
+cload OUT GND_DRV 6f

@@ -262,6 +262,38 @@
           ],
           "status": "met",
           "reason": null
+        },
+        {
+          "citation": "sim/uvlo-trip-verification/klt/envelopes/20261028-d7a2b69-klt-sim-uvlo-trip.json",
+          "rows": [
+            "uvlo"
+          ],
+          "status": "unmet",
+          "reason": "check_failed"
+        },
+        {
+          "citation": "sim/uvlo-trip-verification/klt/envelopes/20261028-d7a2b69-klt-sim-uvlo-response.json",
+          "rows": [
+            "uvlo"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/uvlo-trip-verification/klt/envelopes/20261028-d7a2b69-klt-sim-uvlo-rail-nominal.json",
+          "rows": [
+            "drive_rail"
+          ],
+          "status": "met",
+          "reason": null
+        },
+        {
+          "citation": "sim/uvlo-trip-verification/klt/envelopes/20261028-d7a2b69-klt-sim-uvlo-rail-stretch.json",
+          "rows": [
+            "drive_rail"
+          ],
+          "status": "met",
+          "reason": null
         }
       ],
       "detail": {
@@ -274,26 +306,20 @@
         ],
         "failed_citations": [
           "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-main.json",
-          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-low.json"
+          "sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-klt-sim-nominal-ss-cold-low.json",
+          "sim/uvlo-trip-verification/klt/envelopes/20261028-d7a2b69-klt-sim-uvlo-trip.json"
         ],
         "failed_rows": [],
         "uncovered_rows": [],
-        "declared_gaps": [
-          {
-            "id": "drive_rail",
-            "gap": "operating-condition axis, not a measured bound: spec/gate-driver.md Sec.3 fixes the rail at 5 V nominal (+/-10 %, DRM 14.1.2) / 6 V stretch; it is exercised as the tied supply_v axis of both envelopes (4.5/5.0/5.5 V and 6.0 V) rather than graded by a limit"
-          },
-          {
-            "id": "uvlo",
-            "gap": "UVLO trip/hysteresis rows are graded by sim/uvlo-trip-verification (harness records, not klt sim envelopes) and carry an open, unbounded false-trip finding (spec Sec.5, decision record 0018); the envelopes here only report x3.lockout / OUT at IN-high, ungraded"
-          }
-        ],
+        "declared_gaps": [],
         "unratified_rows": [],
         "row_sources": {
+          "drive_rail": "derived",
           "peak_sink_current": "derived",
           "peak_source_current": "derived",
           "propagation_delay": "derived",
-          "rise_fall_time": "derived"
+          "rise_fall_time": "derived",
+          "uvlo": "derived"
         }
       }
     },
@@ -431,7 +457,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:67b7a0e04bde006d5dc6fcc61f850621727de3c9aed59a4b59a8c2e562941688",
+        "content_hash": "sha256:99649ecaaa835a34abb71fe11f3e83819352f2742e2060bf05be57f031391dfc",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -440,7 +466,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:67b7a0e04bde006d5dc6fcc61f850621727de3c9aed59a4b59a8c2e562941688",
+          "content_hash": "sha256:99649ecaaa835a34abb71fe11f3e83819352f2742e2060bf05be57f031391dfc",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"
