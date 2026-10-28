@@ -30,7 +30,7 @@ Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
 clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
 **5, 6 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (item 5: `check_failed`, see below; 6 and 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+`tier-report.json` (item 5: `check_failed`, see below; item 6: `partial_coverage`, three of four rows graded, see below; item 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -177,7 +177,9 @@ What the item-6 evidence is, and is not:
   per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
   deterministic sample, not a limit). Inventing a limit would amount to a spec
   change, so the item stays `unmet` (`partial_coverage`) until the spec says
-  what bound a Monte Carlo draw must meet.
+  what bound a Monte Carlo draw must meet. A bound is proposed in Draft
+  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)
+  (reproduce with `derive_ronw_bound.py`); it is not ratified, so the row stays a gap.
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.
