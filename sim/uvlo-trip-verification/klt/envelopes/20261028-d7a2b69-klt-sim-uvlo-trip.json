@@ -1,0 +1,1020 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/uvlo-trip-verification/klt/body-trip.spice",
+    "scope": "repo"
+  },
+  "status": "fail",
+  "corner_count": 15,
+  "passed": 4,
+  "failed": 11,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {},
+    "by_severity": {},
+    "corners_with_diagnostics": 0
+  },
+  "metrics": {
+    "sim__corner__count": 15,
+    "sim__corner__passed_count": 4,
+    "sim__corner__failed_count": 11,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "46",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-46 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2025, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Sat Aug  1 17:32:09 UTC 2026\n******",
+      "binary_sha256": "555e04b8ddf17a382fe28d409251ce8968ba983b8c82396fb78e1ff542aa5dd5",
+      "probe": "ok",
+      "reason": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "fbdaefe3e5988bdd42584d7b5f34a33f15d1b267dc25b76fecf9f067c26a17f5",
+    "corner_coverage": {
+      "pdk": "gf180mcuD",
+      "sections": [
+        {
+          "process": "ff",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "ss",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "fs",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "sf",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        }
+      ]
+    },
+    "netlist_closure": [
+      {
+        "path": "sim/uvlo-trip-verification/klt/body-trip.spice",
+        "scope": "repo",
+        "sha256": "fbdaefe3e5988bdd42584d7b5f34a33f15d1b267dc25b76fecf9f067c26a17f5"
+      },
+      {
+        "path": "sim/uvlo-trip-verification/klt/design.ngspice",
+        "scope": "repo",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "path": "design/netlist/uvlo.spice",
+        "scope": "repo",
+        "sha256": "dcb299ea7da685ccc42c7fbb3ebbdcd3858626d676bf944ca815689fbb352d41"
+      }
+    ],
+    "netlist_identity": "sha256:46138aed8815fce9308577d2608f06858e0f277bd0a8b1c684f4b16fa68d96fa",
+    "remote": {
+      "provider": "aws-batch-fleet",
+      "job_id": "klt-sim-424e2969ca7c",
+      "region": "us-east-1",
+      "instance_id": "i-072622724d928eae5",
+      "instance_type": "c7i.8xlarge",
+      "availability_zone": "us-east-1a",
+      "ami_id": "ami-0fe7e8c2bb10dc45a",
+      "lifecycle": "spot",
+      "spot": true,
+      "state": "failed",
+      "exit_code": "3",
+      "concurrency": "2",
+      "physical_cores": "16",
+      "elapsed_seconds": 271,
+      "client_submitted_at": "2026-10-28T18:12:46.793345Z",
+      "client_launched_at": "2026-10-28T18:13:07.350747Z",
+      "client_status_terminal_at": "2026-10-28T18:18:15.873467Z",
+      "client_collected_at": "2026-10-28T18:18:16.802473Z",
+      "runner_klt_version": "0.8.0",
+      "client_klt_version": "0.8.1.dev604+g4f345a577997",
+      "runner_compatibility": "match",
+      "runner_request_features": {
+        "required": [
+          "options.ngspice_init"
+        ],
+        "missing": [],
+        "status": "supported"
+      },
+      "worker_environment": {
+        "capture": "ok",
+        "simulator": {
+          "requested_binary": "ngspice",
+          "binary_source": "PATH",
+          "selected_path": "/usr/local/bin/ngspice",
+          "version_banner": "******\n** ngspice-46 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2025, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Thu Oct  1 23:51:59 UTC 2026\n******\n",
+          "version_probe": "ok"
+        },
+        "pdk": {
+          "variant": "gf180mcuD",
+          "root": "/opt/pdk",
+          "stamp_scheme": "sources-sha256",
+          "stamp_sha256": "d5ac52956829da3fee35d0b307d4e6cb83ae0e6535b56dba2eefed61cdffaf9b",
+          "stamp_text": "open_pdks c6d73a35f524070e85faff4a6a9eef49553ebc2b",
+          "models_staged": false,
+          "stamp_scope": "executed"
+        },
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+        "omp_num_threads": null,
+        "image_manifest": null,
+        "model_inputs": null,
+        "diagnostics": [],
+        "pdk_stamp_comparison": {
+          "status": "not_comparable",
+          "reason": "client_stamp_unavailable"
+        },
+        "engine_build_comparison": {
+          "status": "mismatch",
+          "warning": "the worker's ngspice --version banner differs from the local binary's; build options (e.g. FFT linkage) may differ, so results derived from them can differ from a local run"
+        }
+      },
+      "runner_model_inputs": null,
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 15,
+        "per_unit_timeout_s": 3000,
+        "overhead_s": 120.0,
+        "job_bound_s": 45120.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": true,
+        "check": "warn",
+        "max_units_per_job": 1,
+        "recommended_hosts": 15,
+        "warning": "batch job bound 45120s (options.timeout_s 3000s x 15 units + 120s; a conservative fully-serial upper bound, not a runtime estimate) exceeds the fleet's whole-job ceiling of 3600s (max_job_seconds from fleet_config); a job still running at the ceiling is killed and every unit is reported batch_job_timeout. Set request.remote.hosts to at least 15 to run one job per shard of at most 1 units, each within the ceiling"
+      }
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "backend": {
+      "resolved": "batch",
+      "source": "flag",
+      "requested": "batch"
+    }
+  },
+  "coverage": {
+    "corners_simulated": 15,
+    "measurements_declared": 3,
+    "measurements_with_limits": 2,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"tt/novdd/-40C\",\"falling_trip_v\",\"max\"]",
+      "limit:[0,\"tt/novdd/-40C\",\"falling_trip_v\",\"min\"]",
+      "limit:[0,\"tt/novdd/-40C\",\"rising_trip_v\",\"max\"]",
+      "limit:[0,\"tt/novdd/-40C\",\"rising_trip_v\",\"min\"]",
+      "limit:[1,\"tt/novdd/27C\",\"falling_trip_v\",\"max\"]",
+      "limit:[1,\"tt/novdd/27C\",\"falling_trip_v\",\"min\"]",
+      "limit:[1,\"tt/novdd/27C\",\"rising_trip_v\",\"max\"]",
+      "limit:[1,\"tt/novdd/27C\",\"rising_trip_v\",\"min\"]",
+      "limit:[10,\"fs/novdd/27C\",\"falling_trip_v\",\"max\"]",
+      "limit:[10,\"fs/novdd/27C\",\"falling_trip_v\",\"min\"]",
+      "limit:[10,\"fs/novdd/27C\",\"rising_trip_v\",\"max\"]",
+      "limit:[10,\"fs/novdd/27C\",\"rising_trip_v\",\"min\"]",
+      "limit:[11,\"fs/novdd/125C\",\"falling_trip_v\",\"max\"]",
+      "limit:[11,\"fs/novdd/125C\",\"falling_trip_v\",\"min\"]",
+      "limit:[11,\"fs/novdd/125C\",\"rising_trip_v\",\"max\"]",
+      "limit:[11,\"fs/novdd/125C\",\"rising_trip_v\",\"min\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"falling_trip_v\",\"max\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"falling_trip_v\",\"min\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"rising_trip_v\",\"max\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"rising_trip_v\",\"min\"]",
+      "limit:[13,\"sf/novdd/27C\",\"falling_trip_v\",\"max\"]",
+      "limit:[13,\"sf/novdd/27C\",\"falling_trip_v\",\"min\"]",
+      "limit:[13,\"sf/novdd/27C\",\"rising_trip_v\",\"max\"]",
+      "limit:[13,\"sf/novdd/27C\",\"rising_trip_v\",\"min\"]",
+      "limit:[14,\"sf/novdd/125C\",\"falling_trip_v\",\"max\"]",
+      "limit:[14,\"sf/novdd/125C\",\"falling_trip_v\",\"min\"]",
+      "limit:[14,\"sf/novdd/125C\",\"rising_trip_v\",\"max\"]",
+      "limit:[14,\"sf/novdd/125C\",\"rising_trip_v\",\"min\"]",
+      "limit:[2,\"tt/novdd/125C\",\"falling_trip_v\",\"max\"]",
+      "limit:[2,\"tt/novdd/125C\",\"falling_trip_v\",\"min\"]",
+      "limit:[2,\"tt/novdd/125C\",\"rising_trip_v\",\"max\"]",
+      "limit:[2,\"tt/novdd/125C\",\"rising_trip_v\",\"min\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"falling_trip_v\",\"max\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"falling_trip_v\",\"min\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"rising_trip_v\",\"max\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"rising_trip_v\",\"min\"]",
+      "limit:[4,\"ff/novdd/27C\",\"falling_trip_v\",\"max\"]",
+      "limit:[4,\"ff/novdd/27C\",\"falling_trip_v\",\"min\"]",
+      "limit:[4,\"ff/novdd/27C\",\"rising_trip_v\",\"max\"]",
+      "limit:[4,\"ff/novdd/27C\",\"rising_trip_v\",\"min\"]",
+      "limit:[5,\"ff/novdd/125C\",\"falling_trip_v\",\"max\"]",
+      "limit:[5,\"ff/novdd/125C\",\"falling_trip_v\",\"min\"]",
+      "limit:[5,\"ff/novdd/125C\",\"rising_trip_v\",\"max\"]",
+      "limit:[5,\"ff/novdd/125C\",\"rising_trip_v\",\"min\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"falling_trip_v\",\"max\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"falling_trip_v\",\"min\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"rising_trip_v\",\"max\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"rising_trip_v\",\"min\"]",
+      "limit:[7,\"ss/novdd/27C\",\"falling_trip_v\",\"max\"]",
+      "limit:[7,\"ss/novdd/27C\",\"falling_trip_v\",\"min\"]",
+      "limit:[7,\"ss/novdd/27C\",\"rising_trip_v\",\"max\"]",
+      "limit:[7,\"ss/novdd/27C\",\"rising_trip_v\",\"min\"]",
+      "limit:[8,\"ss/novdd/125C\",\"falling_trip_v\",\"max\"]",
+      "limit:[8,\"ss/novdd/125C\",\"falling_trip_v\",\"min\"]",
+      "limit:[8,\"ss/novdd/125C\",\"rising_trip_v\",\"max\"]",
+      "limit:[8,\"ss/novdd/125C\",\"rising_trip_v\",\"min\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"falling_trip_v\",\"max\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"falling_trip_v\",\"min\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"rising_trip_v\",\"max\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"rising_trip_v\",\"min\"]",
+      "measurement:[0,\"tt/novdd/-40C\",\"hysteresis_v\"]/observation",
+      "measurement:[1,\"tt/novdd/27C\",\"hysteresis_v\"]/observation",
+      "measurement:[10,\"fs/novdd/27C\",\"hysteresis_v\"]/observation",
+      "measurement:[11,\"fs/novdd/125C\",\"hysteresis_v\"]/observation",
+      "measurement:[12,\"sf/novdd/-40C\",\"hysteresis_v\"]/observation",
+      "measurement:[13,\"sf/novdd/27C\",\"hysteresis_v\"]/observation",
+      "measurement:[14,\"sf/novdd/125C\",\"hysteresis_v\"]/observation",
+      "measurement:[2,\"tt/novdd/125C\",\"hysteresis_v\"]/observation",
+      "measurement:[3,\"ff/novdd/-40C\",\"hysteresis_v\"]/observation",
+      "measurement:[4,\"ff/novdd/27C\",\"hysteresis_v\"]/observation",
+      "measurement:[5,\"ff/novdd/125C\",\"hysteresis_v\"]/observation",
+      "measurement:[6,\"ss/novdd/-40C\",\"hysteresis_v\"]/observation",
+      "measurement:[7,\"ss/novdd/27C\",\"hysteresis_v\"]/observation",
+      "measurement:[8,\"ss/novdd/125C\",\"hysteresis_v\"]/observation",
+      "measurement:[9,\"fs/novdd/-40C\",\"hysteresis_v\"]/observation"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "measurement:[0,\"tt/novdd/-40C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"tt/novdd/27C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[10,\"fs/novdd/27C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[11,\"fs/novdd/125C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[12,\"sf/novdd/-40C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[13,\"sf/novdd/27C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[14,\"sf/novdd/125C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"tt/novdd/125C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ff/novdd/-40C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"ff/novdd/27C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"ff/novdd/125C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[6,\"ss/novdd/-40C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[7,\"ss/novdd/27C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[8,\"ss/novdd/125C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[9,\"fs/novdd/-40C\",\"hysteresis_v\"]/limits",
+        "reason": "characterization_without_limits"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.8.1.dev604+g4f345a577997",
+    "klt_git_commit": "4f345a577997d2c31d4fa55e0092efbb3ee24f41",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@4f345a577997d2c31d4fa55e0092efbb3ee24f41",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "ambiguous_sources": [
+        "search root: ~/.volare"
+      ]
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:fbdaefe3e5988bdd42584d7b5f34a33f15d1b267dc25b76fecf9f067c26a17f5",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "falling_trip_v",
+      "unit": "V",
+      "limits": {
+        "min": 3.3,
+        "max": 3.9
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "ff/novdd/125C",
+        "value": 2.2307369519,
+        "margin": -1.0692630480999998
+      },
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "rising_trip_v",
+      "unit": "V",
+      "limits": {
+        "min": 3.6,
+        "max": 4.2
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "ff/novdd/125C",
+        "value": 2.5034102143,
+        "margin": -1.0965897857
+      },
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "hysteresis_v",
+      "unit": "V",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "tt/novdd/-40C",
+        "value": 0.3280543764,
+        "margin": null
+      }
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "tt/novdd/-40C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "fail",
+      "runtime_s": 263.635,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 4.0052358108,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.10523581080000044
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 4.3332901872,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.13329018720000008
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.3280543764,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/novdd/27C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 263.424,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.6064580063,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.2935419936999999
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.9306114104,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.2693885896000001
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.32415340417,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/novdd/125C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "fail",
+      "runtime_s": 141.266,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.0167873272,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.28321267279999995
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.3405621256,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.2594378744000001
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.32377479843,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/-40C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "fail",
+      "runtime_s": 261.853,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.2604983657,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.039501634299999644
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.542496588,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.057503411999999976
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.28199822234,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/27C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "fail",
+      "runtime_s": 263.446,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 2.8487303149,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.45126968509999976
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.1257659404,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.4742340596000001
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.27703562554,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/125C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "fail",
+      "runtime_s": 255.215,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 2.2307369519,
+          "unit": "V",
+          "status": "fail",
+          "margin": -1.0692630480999998
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 2.5034102143,
+          "unit": "V",
+          "status": "fail",
+          "margin": -1.0965897857
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.27267326242,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/-40C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "fail",
+      "runtime_s": 263.725,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 4.7370184223,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.8370184223000003
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 5.1147614761,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.9147614760999998
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.37774305384,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/27C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "fail",
+      "runtime_s": 263.909,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 4.3515319291,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.4515319291000002
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 4.7263943264,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.5263943264000002
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.37486239727,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/125C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 263.719,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.7859007921,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.11409920789999983
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 4.1615789421,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.038421057899999944
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.37567814994,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/-40C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 263.882,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.4679284958,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.16792849580000002
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.7750350555,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.17503505549999998
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.30710655967,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/27C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "fail",
+      "runtime_s": 263.913,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.0598536443,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.24014635569999987
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.3647705201,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.2352294799000001
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.30491687574,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/125C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "fail",
+      "runtime_s": 263.893,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 2.4490130827,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.8509869172999998
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 2.757065042,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.8429349580000003
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.30805195933,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/-40C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "fail",
+      "runtime_s": 263.154,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 4.526086721,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.6260867210000005
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 4.8760113652,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.6760113651999999
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.34992464413,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/27C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "fail",
+      "runtime_s": 263.52,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 4.1371700284,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.2371700284
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 4.4809198115,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.28091981149999956
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.34374978307,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/125C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 263.868,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "falling_trip_v",
+          "value": 3.5661653899,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.26616538990000027
+        },
+        {
+          "name": "rising_trip_v",
+          "value": 3.9062120499,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.29378795010000003
+        },
+        {
+          "name": "hysteresis_v",
+          "value": 0.34004665999,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ]
+}

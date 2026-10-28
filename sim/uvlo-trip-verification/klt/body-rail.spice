@@ -1,0 +1,15 @@
+* uvlo-trip-verification -- `klt sim` circuit BODY asserting the applied drive
+* rail per corner (T1 item 5 `drive_rail` row, issue #377).
+*
+* `drive_rail` is an operating condition of spec/gate-driver.md Sec.3 (5 V
+* nominal +/-10 %, 6 V stretch), not a measured bound, and `klt signoff` has no
+* condition-row kind (only `{id}` and `{id, gap}`). It is therefore graded as an
+* `op` measurement of the rail at the DUT's VDD_DRV pin, limited to the Sec.3
+* band, so a corner whose applied rail left the band would FAIL. The rail is an
+* ideal source (swept by corners.supply_v), so this asserts the condition the
+* other envelopes were run under; it does not measure the design.
+.include "design.ngspice"
+
+vsup_drv VDD_DRV 0 dc 5.0
+vgnd GND_DRV 0 dc 0
+rload VDD_DRV GND_DRV 1meg

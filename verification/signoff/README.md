@@ -88,7 +88,7 @@ turns `unmet` if they change. What each audit found:
 
 ### Item 5: `klt sim` corner envelopes (issue #367)
 
-Item 5 cites two `klt sim` envelopes, committed append-only under
+Item 5 first cited two `klt sim` envelopes (#367), committed append-only under
 `sim/gate-driver-core-drive-with-uvlo/klt/envelopes/`, from the **re-run
 route** (nothing re-expressed from the old records): the schematic DUT
 `design/netlist/gate_driver_core.spice` (sha256 `1d442503…`, pinned in each
@@ -99,8 +99,33 @@ current and propagation delay; rise/fall keep their only bound). Both ran on
 the Spot batch fleet; the requests and the generator that emits them are in
 `sim/gate-driver-core-drive-with-uvlo/klt/` (`gen_requests.py`, `body.spice`).
 The rows are `peak_source_current`, `peak_sink_current`, `propagation_delay`
-and `rise_fall_time` (each measurement carries its `spec_row` tag); `drive_rail`
-and `uvlo` are declared `gap`s with their reasons in `manifest.json`.
+and `rise_fall_time` (each measurement carries its `spec_row` tag). Issue #377
+adds the last two rows, `uvlo` and `drive_rail`, from four more envelopes under
+`sim/uvlo-trip-verification/klt/envelopes/` (requests and generator in that
+directory; no `gap` is declared any more):
+
+- `uvlo`, trip (`…-uvlo-trip.json`, 15 process × temperature points,
+  `design/netlist/uvlo.spice`): falling trip 3.3–3.9 V and rising trip
+  3.6–4.2 V (decision record 0001 Decision 4). **4/15 pass, 11 fail**, the same
+  4 corners the harness record `20260826-013053-6299c36` passes — decision
+  record 0018's false-trip finding is not softened and not encoded as an
+  exception. Hysteresis is reported ungraded (a typical value only, no
+  ratified worst-case range). So item 5 stays `check_failed`.
+- `uvlo`, response (`…-uvlo-response.json`): lockout response < 500 ns
+  (Decision 5), timed from `VDD_DRV` crossing 3.6 V to `OUT` at 0.5 V; 15/15
+  pass, worst 237.7 ns (`ss`/−40 °C). The harness times from each corner's own
+  trip; the difference is ~1 ns over the 1 ns step edge.
+- `drive_rail` (`…-uvlo-rail-nominal.json`, `…-uvlo-rail-stretch.json`): a
+  condition, not a measured bound, and `klt signoff` has only `{id}` /
+  `{id, gap}` rows. It is graded as an `op` measurement of the applied rail at
+  the DUT pin against the §3 band (4.5–5.5 V over the 45-point tied matrix;
+  6.0 V at the 15 stretch points); 45/45 and 15/15 pass. The rail is an ideal
+  source, so this **asserts the condition the other envelopes ran under**; it
+  does not measure the design.
+
+The response run's first batch attempt lost a Spot shard (5 corners `error`,
+no values); that envelope was discarded and the request re-run in full with
+5 shards — only the complete re-run is committed.
 
 Item 5 renders **`unmet`/`check_failed`, and that is the true result, not a
 tooling problem**: no bound was relaxed and the ratified exceptions are not
@@ -132,8 +157,9 @@ pulse is built from a unit pulse scaled by `v(VDD_LOGIC)` (`supply_v` alters
 DC sources only), `reltol=1e-4` is a body-level `.options` card (the fleet
 runner drops `options.ngspice_options`), and the inherited sanity bands
 (`n*_min_v ≥ −50 mV` etc.) are not re-asserted — they are not §3 rows and the
-harness records still carry them. `drive_rail`/`uvlo` stay gaps, so even a
-clean re-run would grade `partial_coverage` until those are expressed.
+harness records still carry them. With `drive_rail`/`uvlo` expressed
+(#377) item 5 no longer grades `partial_coverage`; it is `check_failed` on the
+failures above.
 
 The grader pin moved to `879d39ba` for this: `3a75c3ae` grades the
 multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
