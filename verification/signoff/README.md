@@ -120,7 +120,7 @@ encoded, so they fail in the envelopes exactly as the spec says they do.
   no ratified exception. It is not a new observation: decision record 0018
   Finding 2 already names `sf_-40c` and `ss_-40c` as the two locked corners at
   this point, and the false trip stays open. The no-value timing rows at both
-  corners are **bounded by draft decision record 0021, awaiting operator
+  corners are **bounded by draft decision record 0022, awaiting operator
   ratification** (`proposed`; it extends 0018/0020 and relaxes nothing). They
   are not covered until it is ratified and encoded in the requests, so item 5
   renders as above.

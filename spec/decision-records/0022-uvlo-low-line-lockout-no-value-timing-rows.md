@@ -1,4 +1,4 @@
-# 0021: Bound the `sf_-40c`/`ss_-40c` low-line UVLO lockout — the four rise/fall/propagation rows that produce no value at `vdrv4p50v` are the already-open false trip of decision record 0018, not a new defect
+# 0022: Bound the `sf_-40c`/`ss_-40c` low-line UVLO lockout — the four rise/fall/propagation rows that produce no value at `vdrv4p50v` are the already-open false trip of decision record 0018, not a new defect
 
 - **Status**: proposed
 - **Date**: 2026-10-28
