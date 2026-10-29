@@ -34,13 +34,13 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#376**: T1 item 5 (corner verification): encode ratified exceptions 0016/0020 in the klt sim requests so item 5 grades the ratified spec
+_None._
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#384**: feat(sim): shard item-5 requests to encode ratified DR-0016/0020 corner bounds
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -53,7 +53,6 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
-- **#376**: T1 item 5 (corner verification): encode ratified exceptions 0016/0020 in the klt sim requests so item 5 grades the ratified spec *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -71,10 +70,10 @@ _None._
 | Very important | 0 |
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 1 |
+| In Progress (`loom:building`) | 0 |
+| PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 2 |
+| Curated | 1 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
