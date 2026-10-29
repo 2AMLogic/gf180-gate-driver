@@ -34,13 +34,13 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#389**: docs: define ratification key non-author check as session separation
 
 ## Approved (Awaiting Merge)
 
@@ -53,6 +53,7 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
+- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -70,10 +71,10 @@ _None._
 | Very important | 0 |
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
-| PRs awaiting review | 0 |
+| In Progress (`loom:building`) | 1 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 1 |
+| Curated | 2 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
