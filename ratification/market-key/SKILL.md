@@ -29,12 +29,16 @@ that has grown a dependence on non-public material somewhere — see
 ## Non-author enforcement (stated here, enforced elsewhere)
 
 **This skill must not be invoked by an agent that authored the PR under
-review or the spec/design the PR ratifies.** The actual identity check is the
-invoking review automation's job — until that exists, self-check: if the
-PR's author, or the design's original proposer, is the same identity running
-this review, stop and say so instead of producing a verdict. A market-key
-verdict from an interested party is not incentive-separated and is worse than
-no verdict at all.
+review or the spec/design the PR ratifies.** Independence comes from session
+separation, not from a separate GitHub login: this key runs in a fresh session
+that did not author the PR, spec or design under review, and sees only this
+skill and the evidence it allows. "Non-author" means not the authoring
+session; it never means a different GitHub account. Self-check: if this
+session authored the PR or the spec/design, stop and say so instead of
+producing a verdict. Post the verdict as an ordinary comment that names this
+session's run id. The operator's ratification after both keys is the step
+that carries a human identity. A market-key verdict from an interested party
+is not incentive-separated and is worse than no verdict at all.
 
 ## Disclosure discipline (hard requirement, structural)
 
