@@ -61,7 +61,6 @@ Usage:
 from __future__ import annotations
 
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -74,11 +73,10 @@ from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
-from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
-from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
+from harness.script_helpers import run_corner_deck as _run_corner_deck  # noqa: E402
 
 # The five MOS process corners, as full per-device-family section bundles
 # (see the module docstring for why this differs from sim/device-mv-fet).
@@ -174,23 +172,16 @@ def _run_corner(
     deck: Path, pdk: harness_pdk.Pdk, corner: harness_corners.Corner, temp_c: float
 ) -> str:
     """Run `deck` through ngspice at one (process corner, temperature) point."""
-    with tempfile.TemporaryDirectory(prefix="low-side-power-switch-") as tmp:
-        work = Path(tmp)
-        local_deck = work / deck.name
-        (work / "corner.spice").write_text(
-            _corner_shim(
-                pdk, corner.sections, temp_c, script="run_low_side_power_switch.py"
-            ),
-            encoding="utf-8"
-        )
-        (work / "control.spice").write_text(_control_block(), encoding="utf-8")
-        local_deck.write_text(
-            '.include "corner.spice"\n'
-            + deck.read_text(encoding="utf-8")
-            + '\n.include "control.spice"\n.end\n',
-            encoding="utf-8",
-        )
-        return _run_ngspice(work, deck.name, f"{corner.name} @ {temp_c} C")
+    return _run_corner_deck(
+        deck,
+        pdk,
+        corner.sections,
+        temp_c,
+        script="run_low_side_power_switch.py",
+        control=_control_block(),
+        label=f"{corner.name} @ {temp_c} C",
+        prefix="low-side-power-switch-",
+    )
 
 
 # --------------------------------------------------------------------------
