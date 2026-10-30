@@ -10,7 +10,7 @@ each update; do not hand-edit that region.
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
 
-_None._
+- **#392**: docs(decision-records): ratify 0021, Ron·W statistical row for item 6
 
 ## Very Important
 
@@ -22,7 +22,7 @@ _None._
 
 `loom:important`; taken before unlabelled work.
 
-- **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS
+_None._
 
 ## Ready
 
@@ -46,19 +46,18 @@ PRs waiting on Judge (`loom:review-requested`).
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#392**: docs(decision-records): ratify 0021, Ron·W statistical row for item 6
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
 - **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
-- **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
 
 ## Proposed (Architect / Hermit)
 
-- **#394**: Dedupe the corner/control deck-staging block across three sim scripts *(hermit)*
 - **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
+- **#394**: Dedupe the corner/control deck-staging block across three sim scripts *(hermit)*
 
 ## Epics
 
@@ -68,14 +67,14 @@ _None._
 
 | Bucket | Count |
 |------|-------|
-| Operator merge-risk holds | 0 |
+| Operator merge-risk holds | 1 |
 | Very important | 0 |
-| Important | 1 |
+| Important | 0 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 1 |
-| Approved PRs awaiting merge | 0 |
-| Curated | 2 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 1 |
 | Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
