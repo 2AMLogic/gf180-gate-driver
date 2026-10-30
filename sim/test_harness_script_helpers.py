@@ -119,6 +119,40 @@ def test_run_ngspice_raises_on_error_line(tmp_path, monkeypatch):
         script_helpers.run_ngspice(work, "d.spice", "tt")
 
 
+def test_run_corner_deck_stages_wrapper_and_included_files(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(work, deck_name, label):
+        seen["deck_name"] = deck_name
+        seen["label"] = label
+        seen["files"] = {p.name: p.read_text() for p in work.iterdir()}
+        return "log"
+
+    monkeypatch.setattr(script_helpers, "run_ngspice", fake_run)
+    deck = tmp_path / "dut.spice"
+    deck.write_text("* dut\nR1 a b 1k")
+
+    class _Pdk:
+        design_include = "design.ngspice"
+        model_lib = "sm141064.ngspice"
+
+    log = script_helpers.run_corner_deck(
+        deck, _Pdk(), ["typical"], 27.0,
+        script="run_x.py", control=".control\nrun\n.endc", label="tt @ 27 C",
+        prefix="x-", extra_lines=[".options abstol=1e-12"],
+    )
+    assert log == "log"
+    assert seen["deck_name"] == "dut.spice" and seen["label"] == "tt @ 27 C"
+    files = seen["files"]
+    assert set(files) == {"corner.spice", "control.spice", "dut.spice"}
+    assert ".temp 27" in files["corner.spice"]
+    assert ".options abstol=1e-12" in files["corner.spice"]
+    assert files["control.spice"] == ".control\nrun\n.endc"
+    assert files["dut.spice"] == (
+        '.include "corner.spice"\n* dut\nR1 a b 1k\n.include "control.spice"\n.end\n'
+    )
+
+
 def test_first_crossing_rising_interpolates():
     assert script_helpers.first_crossing([0, 1, 2], [0.0, 1.0, 3.0], 2.0) == 1.5
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import re
 import subprocess
+import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -149,6 +150,41 @@ def run_ngspice(work: Path, deck_name: str, label: str) -> str:
             f"ngspice reported an error for {deck_name} [{label}]:\n{log}"
         )
     return log
+
+
+def run_corner_deck(
+    deck: Path,
+    pdk,
+    sections: Iterable[str],
+    temp_c: float,
+    *,
+    script: str,
+    control: str,
+    label: str,
+    prefix: str,
+    extra_lines: Iterable[str] = (),
+) -> str:
+    """Stage and run `deck` at one corner point; return the ngspice log.
+
+    In a fresh temp dir (named with `prefix`) writes ``corner.spice``
+    (`corner_shim`), ``control.spice`` (`control`, the caller's ``.control``
+    block) and a wrapper deck that ``.include``s both around `deck`'s text,
+    then calls `run_ngspice` (raises `RuntimeError` as it does; `label` names
+    the point)."""
+    with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
+        work = Path(tmp)
+        (work / "corner.spice").write_text(
+            corner_shim(pdk, sections, temp_c, script=script, extra_lines=extra_lines),
+            encoding="utf-8",
+        )
+        (work / "control.spice").write_text(control, encoding="utf-8")
+        (work / deck.name).write_text(
+            '.include "corner.spice"\n'
+            + deck.read_text(encoding="utf-8")
+            + '\n.include "control.spice"\n.end\n',
+            encoding="utf-8",
+        )
+        return run_ngspice(work, deck.name, label)
 
 
 def build_points(
