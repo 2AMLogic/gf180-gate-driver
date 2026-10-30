@@ -77,6 +77,7 @@ INPUT_PATH_FIELDS = {
     "erc": ("file", "repo_root"),  # emitted with cwd = repo root (run_erc.py)
     "sim": ("netlist", "repo_root"),  # {"path", "scope": "repo"} body netlist (issue #367)
     "yield": ("samples", "envelope_dir"),  # `klt yield` run with cwd = the report's directory (issue #368)
+    "pex": ("layout", "repo_root"),  # {"path", "scope": "repo"} extracted GDS (issue #369)
 }
 
 RENDER_EXIT_CODES = (0, 3)
@@ -111,6 +112,8 @@ def envelope_kind(envelope: dict) -> str | None:
         return "sim"
     if "samples" in envelope and "measurement_count" in envelope:
         return "yield"
+    if "delta" in envelope and "body_bias" in envelope and "testbenches" in envelope:
+        return "pex"
     return None
 
 

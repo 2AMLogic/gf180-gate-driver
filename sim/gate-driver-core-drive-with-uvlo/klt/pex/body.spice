@@ -1,0 +1,48 @@
+* gate-driver-core-drive-with-uvlo -- `klt sim` circuit BODY (T1 item 7, issue #369; derived from ../body.spice).
+*
+* Same DUT, 1 nF reference load and IN pulse shape (0 -> VDD_LOGIC, 20n delay, 1n
+* edges, 300n high, 700n period) as ../testbench/gate_driver_core_uvlo_tb.spice
+* (the harness bench behind the ratified 60-point record), restated as a `klt sim`
+* circuit body: no models/.lib/.temp/.control/.end -- klt owns those. The DUT is the
+* live fragment design/netlist/gate_driver_core.spice, wrapped as .subckt
+* gate_driver_core by dut.spice (the one .include below) so `klt pex` can swap it.
+*
+* The two rails are the voltage sources vsup_logic / vsup_drv, swept TIED by index
+* through the request's corners.supply_v (the harness's tied two-rail grid,
+* sim/README.md). Because supply_v only alters DC sources, the IN pulse is built
+* as a unit pulse scaled by v(VDD_LOGIC), and the 10/50/90 % crossings are taken
+* on rail-normalised copies of IN and OUT (vin_n, vout_n) so the file-scope .meas
+* cards carry literal thresholds that are right at every rail point.
+*
+* Harness-wide transient tolerance (sim/harness/runner.py DEFAULT_TRAN_RELTOL).
+* Carried here, not in options.ngspice_options: the batch fleet's runner drops
+* that request field and klt then fails the finished job.
+.options reltol=1e-4
+
+* PDK global switches (gf180mcuD design.ngspice, 7 .param cards) inlined: klt pex
+* needs EXACTLY ONE .include in the body (the DUT swap point), and these are needed
+* by the corner .lib sections on both the schematic and the extracted leg.
+.param sw_stat_global=0
+.param sw_stat_mismatch=0
+.param mc_skew=3
+.param res_mc_skew=3
+.param cap_mc_skew=3
+.param fnoicor=0
+.include "dut.spice"
+xdut GND_DRV GND_LOGIC IN OUT VDD_DRV VDD_LOGIC gate_driver_core
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 1n 1n 300n 700n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load (spec Sec.3)
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* rail-normalised monitors (measurement only; nothing in the DUT reads them)
+bvin_n vin_n 0 V='v(IN)/v(VDD_LOGIC)'
+bvout_n vout_n 0 V='v(OUT)/v(VDD_DRV)'
