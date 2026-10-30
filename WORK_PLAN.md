@@ -54,11 +54,10 @@ Issues carrying `loom:curated`.
 
 - **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
 - **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
-- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
 
 ## Proposed (Architect / Hermit)
 
-- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(architect)*
+- **#394**: Dedupe the corner/control deck-staging block across three sim scripts *(hermit)*
 - **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
 
 ## Epics
