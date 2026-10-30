@@ -5,7 +5,7 @@
   "tier": null,
   "t1_item_count": 11,
   "build_t1_item_count": 11,
-  "t1_met_count": 8,
+  "t1_met_count": 9,
   "source_doc": "docs/design-evidence-tiers.md",
   "source_doc_content_hash": "sha256:a26b90262320d0fbd32b3f549a02b6300832706041797a559d8bf6bdb62efdc7",
   "build": {
@@ -330,10 +330,41 @@
       "partition": null,
       "text": "any accuracy, offset, or matching spec row is statistical; a corner matrix (or STA corner sweep) cannot validate it. This applies to whichever spec rows are actually statistical, regardless of block kind \u2014 most digital spec rows (functional correctness, Fmax, timing closure) are not, and a block whose spec has no statistical row must say so explicitly rather than omit the item. Where it does apply, MC runs need a recorded seed, sample count, a deterministic negative control, and results combined with (not instead of) process corners (#344). A `klt yield` JSON report \u2014 a yield estimate with its confidence interval, sample-size verdict, and Cpk/sigma-to-spec against the row's own limits \u2014 is the machine-checkable evidence for this item (`klt signoff`'s tier-verdict mode grades it the same way it grades the deterministic items above). **The campaign's own self-report is a grading input, not just a footnote** (issue #2467): a cited report whose `sample_size.verdict` is `insufficient` on any measurement renders `unmet` with `reason: \"undersized_sample\"`, and one whose declared negative control did not show the seeded degradation renders `unmet` with `reason: \"negative_control_not_detected\"` \u2014 the report's passing `status` answers only \"did every declared `target_yield` hold\", which a campaign declaring none can never fail. A campaign that declared **no** negative control at all is still `met`, but says so: `citation.yield_campaign.negative_control` reads `\"not_declared\"`, since `klt yield` itself treats that as a warning rather than a failure and whether it is acceptable for a given spec row is the claimant's call. See [`cli/signoff.md`](cli/signoff.md)'s \"Campaign discipline on item 6\". **This item's evidence verb needs the `yield` extra.** Unlike every other T1 item's evidence verb (`drc`, `lvs`, `extract`, `sim`, `pex`, `sta`, `functional-verification`, `erc`, `place-and-route`), `klt yield` requires the `klt_yield_native` Rust extension. It is published as the prebuilt `klt-yield-native` wheel (Linux x86_64, macOS arm64), reached by `pip install 'klayout-tools[yield]'`; a bare `pip install klayout-tools` and the git-pinned form do not include it. A consumer pinning a release that predates the first `klt-yield-native` publication, or on another platform, still needs a repo checkout with a Rust toolchain; see `docs/cli/yield.md`'s \"What the extra does and does not reach\" callout and `docs/releasing-native.md`. **When \"not applicable\" is legitimate** (issue #2865): a block whose ratified spec has *no* statistical row passes this item by a recorded \"not applicable\", not by a waiver at grant time and not by inventing a statistical claim. That holds only when the spec is ratified, a committed statement accounts for every spec row with the reason its row class is not statistical (for example \"timing rows are corner-bounded by STA at the PDK's characterised corners\"), and both are bound by content hash so editing either invalidates the claim. Any accuracy, offset, matching or yield row is statistical by definition: a spec carrying one \u2014 or a sigma, yield, Cpk or `3\u03c3`-style bound \u2014 cannot use the outcome and needs `klt yield` evidence for that row. The outcome is available to a digital partition only; an analog partition (including the analog half of a mixed-signal block) always requires Monte Carlo evidence. `klt signoff` reports it as `not_applicable`, never as `met`. **Several statistical rows, only some evidenced** (issue #2908): item 6 is a claim about *every* statistical row, so a manifest may declare the row set under `spec_rows.\"6\"` and cite one `klt yield` report per row set (`rows` on each citation). Item 6 grades `met` only when every declared row is covered by a passing citation against a ratified target. A row with no citation (`uncovered_rows`), a row declared a `gap` because no evidence can exist yet (`declared_gaps`), or a row declared `ratified: false` (`unratified_rows`, evidence against a proposed limit is provisional) grades `unmet` / `partial_coverage`, never `met`. Without a declaration the item grades as before; a `not_applicable` entry contradicts a declared row set and is `invalid_evidence`.",
       "notes": [],
-      "status": "unmet",
-      "reason": "partial_coverage",
+      "status": "met",
+      "reason": null,
       "graded_by_build": true,
-      "citation": null,
+      "citation": {
+        "file": "verification/signoff/yield/gate-driver-indrv-mismatch.yield.json",
+        "command": null,
+        "kind": "yield",
+        "check_status": "reported",
+        "content_hash": "sha256:b6aa76c62a0cdfa698fa45823fbc07dc5a71ace68e00ff33c4ccaae97a4795fd",
+        "input_verified": true,
+        "exit_status": 0,
+        "yield_campaign": {
+          "sample_size": "sufficient",
+          "undersized_measurements": [],
+          "negative_control": "not_declared",
+          "measurements_without_negative_control": [
+            "indrv_max_v@ff_-40c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@ff_125c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@ff_27c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@fs_-40c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@fs_125c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@fs_27c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@sf_-40c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@sf_125c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@sf_27c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@ss_-40c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@ss_125c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@ss_27c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@tt_-40c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@tt_125c_vlogic3p30v-vdrv6p00v",
+            "indrv_max_v@tt_27c_vlogic3p30v-vdrv6p00v"
+          ],
+          "undetected_negative_controls": []
+        }
+      },
       "citations_graded": [
         {
           "citation": "verification/signoff/yield/gate-driver-indrv-mismatch.yield.json",
@@ -358,24 +389,158 @@
           ],
           "status": "met",
           "reason": null
+        },
+        {
+          "citation": "verification/signoff/yield/ronw-nfet-06v0-mismatch.yield.json",
+          "rows": [
+            "ronw_nfet_06v0"
+          ],
+          "status": "met",
+          "reason": null
         }
       ],
-      "detail": {
+      "row_coverage": {
         "failed_rows": [],
         "uncovered_rows": [],
-        "declared_gaps": [
-          {
-            "id": "ronw_nfet_06v0",
-            "gap": "the Ron*W campaign is a spread measurement with no ratified per-row bound to grade yield against (spec/low-side-power-switch.md 2.1; sim record 20260821-134653-804155b)"
-          }
-        ],
+        "declared_gaps": [],
         "unratified_rows": [],
         "row_sources": {
           "exception1_inb": "asserted",
           "exception2_taper": "asserted",
-          "exception3_indrv": "asserted"
+          "exception3_indrv": "asserted",
+          "ronw_nfet_06v0": "asserted"
         }
-      }
+      },
+      "citations": [
+        {
+          "file": "verification/signoff/yield/gate-driver-indrv-mismatch.yield.json",
+          "command": null,
+          "kind": "yield",
+          "check_status": "reported",
+          "content_hash": "sha256:b6aa76c62a0cdfa698fa45823fbc07dc5a71ace68e00ff33c4ccaae97a4795fd",
+          "input_verified": true,
+          "exit_status": 0,
+          "yield_campaign": {
+            "sample_size": "sufficient",
+            "undersized_measurements": [],
+            "negative_control": "not_declared",
+            "measurements_without_negative_control": [
+              "indrv_max_v@ff_-40c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@ff_125c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@ff_27c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@fs_-40c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@fs_125c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@fs_27c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@sf_-40c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@sf_125c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@sf_27c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@ss_-40c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@ss_125c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@ss_27c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@tt_-40c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@tt_125c_vlogic3p30v-vdrv6p00v",
+              "indrv_max_v@tt_27c_vlogic3p30v-vdrv6p00v"
+            ],
+            "undetected_negative_controls": []
+          }
+        },
+        {
+          "file": "verification/signoff/yield/level-shifter-inb-mismatch.yield.json",
+          "command": null,
+          "kind": "yield",
+          "check_status": "reported",
+          "content_hash": "sha256:a61e2744afb531823ce789f4d03877bebbcaf95af60b1847ae665934817e409c",
+          "input_verified": true,
+          "exit_status": 0,
+          "yield_campaign": {
+            "sample_size": "sufficient",
+            "undersized_measurements": [],
+            "negative_control": "not_declared",
+            "measurements_without_negative_control": [
+              "vinb_max_v@ff_-40c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@ff_125c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@ff_27c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@fs_-40c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@fs_125c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@fs_27c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@sf_-40c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@sf_125c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@sf_27c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@ss_-40c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@ss_125c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@ss_27c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@tt_-40c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@tt_125c_vlogic3p63v-vdrv5p50v",
+              "vinb_max_v@tt_27c_vlogic3p63v-vdrv5p50v"
+            ],
+            "undetected_negative_controls": []
+          }
+        },
+        {
+          "file": "verification/signoff/yield/output-stage-taper-mismatch.yield.json",
+          "command": null,
+          "kind": "yield",
+          "check_status": "reported",
+          "content_hash": "sha256:de43c623079f03271829f053df64e4cf38dad8566b36a277eb014e3455673677",
+          "input_verified": true,
+          "exit_status": 0,
+          "yield_campaign": {
+            "sample_size": "sufficient",
+            "undersized_measurements": [],
+            "negative_control": "not_declared",
+            "measurements_without_negative_control": [
+              "taper_max_v@ff_-40c_vdrv6p00v",
+              "taper_max_v@ff_125c_vdrv6p00v",
+              "taper_max_v@ff_27c_vdrv6p00v",
+              "taper_max_v@fs_-40c_vdrv6p00v",
+              "taper_max_v@fs_125c_vdrv6p00v",
+              "taper_max_v@fs_27c_vdrv6p00v",
+              "taper_max_v@sf_-40c_vdrv6p00v",
+              "taper_max_v@sf_125c_vdrv6p00v",
+              "taper_max_v@sf_27c_vdrv6p00v",
+              "taper_max_v@ss_-40c_vdrv6p00v",
+              "taper_max_v@ss_125c_vdrv6p00v",
+              "taper_max_v@ss_27c_vdrv6p00v",
+              "taper_max_v@tt_-40c_vdrv6p00v",
+              "taper_max_v@tt_125c_vdrv6p00v",
+              "taper_max_v@tt_27c_vdrv6p00v"
+            ],
+            "undetected_negative_controls": []
+          }
+        },
+        {
+          "file": "verification/signoff/yield/ronw-nfet-06v0-mismatch.yield.json",
+          "command": null,
+          "kind": "yield",
+          "check_status": "pass",
+          "content_hash": "sha256:1dcb79c5249d3d3b47cfaa34f5598321f70ccbaec91182613ecd82605c581729",
+          "input_verified": true,
+          "exit_status": 0,
+          "yield_campaign": {
+            "sample_size": "sufficient",
+            "undersized_measurements": [],
+            "negative_control": "not_declared",
+            "measurements_without_negative_control": [
+              "ronw_n06_3.6@ff_-40c_nosupply",
+              "ronw_n06_3.6@ff_125c_nosupply",
+              "ronw_n06_3.6@ff_27c_nosupply",
+              "ronw_n06_3.6@fs_-40c_nosupply",
+              "ronw_n06_3.6@fs_125c_nosupply",
+              "ronw_n06_3.6@fs_27c_nosupply",
+              "ronw_n06_3.6@sf_-40c_nosupply",
+              "ronw_n06_3.6@sf_125c_nosupply",
+              "ronw_n06_3.6@sf_27c_nosupply",
+              "ronw_n06_3.6@ss_-40c_nosupply",
+              "ronw_n06_3.6@ss_125c_nosupply",
+              "ronw_n06_3.6@ss_27c_nosupply",
+              "ronw_n06_3.6@tt_-40c_nosupply",
+              "ronw_n06_3.6@tt_125c_nosupply",
+              "ronw_n06_3.6@tt_27c_nosupply"
+            ],
+            "undetected_negative_controls": []
+          }
+        }
+      ]
     },
     {
       "tier": "T1",
@@ -457,7 +622,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:99649ecaaa835a34abb71fe11f3e83819352f2742e2060bf05be57f031391dfc",
+        "content_hash": "sha256:479c2e9f4b7e3c2d84a7961768964beb1e236b80f0d851970bda41c601e8b626",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -466,7 +631,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:99649ecaaa835a34abb71fe11f3e83819352f2742e2060bf05be57f031391dfc",
+          "content_hash": "sha256:479c2e9f4b7e3c2d84a7961768964beb1e236b80f0d851970bda41c601e8b626",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"
