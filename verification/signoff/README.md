@@ -30,7 +30,7 @@ Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
 clean)**, **6 (Monte Carlo yield)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
 **5 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (item 5: `check_failed`, see below; item 7: `no_evidence`). Nine of eleven is not tier T1, and "met" on items 1, 2, 9
+`tier-report.json` (items 5 and 7: `check_failed`, see below). Nine of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -181,13 +181,60 @@ multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
 new pin, no other item's `status`/`reason` changed (only report metadata and
 descriptive text).
 
-Why item 7 still says `no_evidence`:
+### Item 7: `klt pex` post-layout report (issue #369)
 
-- **7** — the block has real post-layout evidence, but as `sim/` markdown
-  records from this repo's own harness — not in `klt pex` envelope form. Item 7
-  accepts **only** a `klt pex` report for an analog block; a clean DRC or a
-  pre-layout sim renders `wrong_kind` by design. Converting a campaign to a
-  `klt`-native envelope is a content decision the item's own issue tracks.
+`manifest.json` cites `pex-report-gate_driver_core-15fa5b645815.json` (append-only;
+named for the GDS content hash prefix, `layout/gate_driver_core.gds` sha256
+`15fa5b645815…`, the same GDS items 3 and 4 cite). It is the stdout of one
+`klt pex` run (klt 0.8.1.dev758, graded by the pinned `879d39ba` build) over
+the 60 corners of the #367 request set, the schematic leg and the extracted leg
+both on the batch fleet:
+
+```bash
+python3 sim/gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py
+cd sim/gate-driver-core-drive-with-uvlo/klt/pex
+klt pex ../../../../layout/gate_driver_core.gds request-nominal.json request-stretch.json \
+  --deck gf180mcu --top gate_driver_core --pdk gf180mcuD --flatten-schematic \
+  --pins VDD_LOGIC,GND_LOGIC,IN,OUT,VDD_DRV,GND_DRV --tie-declared-pins \
+  --backend batch --format json
+```
+
+The report is the evidence of record; `klt pex` also leaves the 1 MB extracted
+netlist beside the GDS, which is regenerable and not committed.
+
+**`body_bias.status` is `"biased"`** (0 unbiased devices, no unbiased nets), so
+the post-layout numbers were measured on a properly biased netlist, not one with
+floating wells.
+
+Result: item 7 renders `check_failed`. 408 of 420 delta rows pass; 4 fail and 8
+error. No bound is relaxed.
+
+| Row | Corner | Schematic | Extracted | Delta |
+|---|---|---|---|---|
+| `ipeak_source_a` (>= 0.5 A) | nominal ss, 2.97/4.5 V, -40 C | 0.4994 A (fail) | 0.4670 A (fail) | -6.49 % |
+| `ipeak_sink_a` (stretch, >= 1 A) | ss, 3.3/6.0 V, 27 C | 1.0170 A (pass) | 0.9996 A (fail) | -1.71 % |
+| `ipeak_sink_a` (stretch) | ss, 3.3/6.0 V, 125 C | 0.8776 A (fail) | 0.8637 A (fail) | -1.59 % |
+| `ipeak_sink_a` (stretch) | sf, 3.3/6.0 V, 125 C | 0.9221 A (fail) | 0.9145 A (fail) | -0.82 % |
+| `trise_s`, `tfall_s`, `tpdlh_s`, `tpdhl_s` (nominal) | ss and sf, 2.97/4.5 V, -40 C | error | error | no value |
+
+All of these are the corners where the schematic leg already misses or cannot
+resolve the row (the eight `error` rows are ngspice `out of interval` on both legs, i.e. the
+`.meas` crossing is not found at that corner; item 5 shows the same corners), so they are not
+new layout-induced failures, with one exception: stretch `ipeak_sink_a` at ss/27 C
+passes pre-layout (1.0170 A) and fails post-layout (0.9996 A), a 0.04 % miss
+introduced by the extracted parasitics. The remaining 412 rows, including every
+delay and edge-rate row at every other corner, pass on both legs.
+
+How the request set had to differ from item 5 so `klt pex` can run it
+(`sim/gate-driver-core-drive-with-uvlo/klt/pex/`): the DUT fragment is wrapped as
+`.subckt gate_driver_core` by `dut.spice` and instantiated as `xdut`, because
+`klt pex` re-points exactly one `.include` at the extracted netlist (which always
+carries that `.SUBCKT`), and the diagnostic `uvlo_lockout_at_in_high` probe of the
+internal node `x3.lockout` is omitted (no spec row, no bound, and no equivalent
+hierarchical name in the flat extracted netlist). Every graded measurement,
+corner and bound is identical to item 5. `--pdk gf180mcuD` is required: without
+it the extracted netlist carries bare `nfet`/`pfet` models that ngspice cannot
+load, and the 5 V / 6 V devices are not distinguished from the 3.3 V ones.
 
 ### Item 6: Monte Carlo evidence (issue #368)
 

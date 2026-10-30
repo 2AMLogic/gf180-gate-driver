@@ -169,7 +169,11 @@
           "ronw_nfet_06v0"
         ]
       }
-    ]
+    ],
+    "7": {
+      "file": "verification/signoff/pex-report-gate_driver_core-15fa5b645815.json",
+      "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa"
+    }
   },
   "spec_rows": {
     "5": [

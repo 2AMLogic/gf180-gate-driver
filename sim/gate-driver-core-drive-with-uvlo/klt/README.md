@@ -36,3 +36,13 @@ done
 ```
 
 Result and caveats: `verification/signoff/README.md` § "Item 5".
+
+## `pex/` (issue #369)
+
+The same requests restated for `klt pex` (T1 item 7): `dut.spice` wraps the DUT
+fragment as `.subckt gate_driver_core`, `body.spice` instantiates it as `xdut`
+and carries the single DUT `.include`, and `gen_pex_requests.py` reuses
+`../gen_requests.py` (same corners, measurements, bounds) with `remote.hosts`
+set because `klt pex` has no `--hosts` flag. The diagnostic
+`uvlo_lockout_at_in_high` probe is omitted. Command and result:
+`verification/signoff/README.md` § "Item 7".
