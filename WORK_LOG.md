@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-10-30
+
+- **PR #393**: feat: grade Ron*W per-PVT bound with klt yield, closing item 6 gap
+- **Issue #379** (closed): T1 item 6 (Monte Carlo): draft the Ron·W statistical-row decision for ratification and clear the ronw_nfet_06v0 gap
+
 ### 2026-10-28
 
 - **PR #384**: feat(sim): shard item-5 requests to encode ratified DR-0016/0020 corner bounds
