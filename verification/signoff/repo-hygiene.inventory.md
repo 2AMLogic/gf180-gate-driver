@@ -17,7 +17,7 @@ harness and evidence formats valid.
 
 | requirement | artifact | sha256 |
 |---|---|---|
-| README: what the block is, spec table, reproduction | `README.md` | `sha256:98a37e7f59873ffe945b2a18792a2c8f7593cf70f420b006a8d09937d96da12c` |
+| README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
 | CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7b740e23ad226fa6d538ddfed04859e36467a6bad214860aafbfd578ed845099` |
@@ -201,4 +201,18 @@ hash is refreshed in the table:
 The other listed files are unchanged. `klt sim` corner envelopes were produced
 for item 5 (see `verification/signoff/README.md`); no simulation (beyond those
 envelopes, run on the batch fleet), netlisting or layout flow
+was run for this re-audit.
+
+## Re-audit for issue #379 (2026-10-28)
+
+One listed file changed on the issue #379 branch (`feature/issue-379`, on top
+of `origin/main` at `d7a2b69`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `README.md` (**read** the diff): the "Signoff" bullet now describes items 5-7
+  as the report grades them (item 5 `check_failed`, item 6 `partial_coverage`,
+  item 7 no `klt pex` envelope) instead of "no `klt`-native sim/yield/pex
+  envelopes". Reproduction commands are unchanged.
+
+The other listed files are unchanged. No simulation, netlisting or layout flow
 was run for this re-audit.

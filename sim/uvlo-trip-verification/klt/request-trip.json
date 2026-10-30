@@ -1,0 +1,115 @@
+{
+  "netlist": "body-trip.spice",
+  "engine": "ngspice",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "tt",
+        "sections": [
+          "typical",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "ff",
+        "sections": [
+          "ff",
+          "res_ff",
+          "bjt_ff",
+          "diode_ff",
+          "moscap_ff",
+          "mimcap_ff"
+        ]
+      },
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_ss",
+          "bjt_ss",
+          "diode_ss",
+          "moscap_ss",
+          "mimcap_ss"
+        ]
+      },
+      {
+        "name": "fs",
+        "sections": [
+          "fs",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "sf",
+        "sections": [
+          "sf",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      -40.0,
+      27.0,
+      125.0
+    ]
+  },
+  "batch": {
+    "runner_version_check": "warn",
+    "capacity_wait_s": 1800
+  },
+  "analysis": {
+    "kind": "tran",
+    "args": "10n 40u"
+  },
+  "measurements": [
+    {
+      "name": "falling_trip_v",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran falling_trip_v FIND v(VDD_DRV) WHEN v(lockout)=1.5 RISE=1 TD=20u",
+      "limits": {
+        "min": 3.3,
+        "max": 3.9
+      }
+    },
+    {
+      "name": "rising_trip_v",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran rising_trip_v FIND v(VDD_DRV) WHEN v(lockout)=1.5 FALL=1",
+      "limits": {
+        "min": 3.6,
+        "max": 4.2
+      }
+    },
+    {
+      "name": "hysteresis_v",
+      "unit": "V",
+      "spice": ".meas tran hysteresis_v PARAM='rising_trip_v-falling_trip_v'"
+    }
+  ],
+  "options": {
+    "timeout_s": 3000,
+    "keep_artifacts": false,
+    "ngspice_init": [
+      "set measureprec=10",
+      "set numdgt=10"
+    ]
+  }
+}

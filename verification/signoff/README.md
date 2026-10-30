@@ -24,13 +24,13 @@ re-graded by a command, and CI re-grades it on every PR.
 | `yield/*.samples.json`, `yield/*.yield.json` | T1 item **6** (issue #368): per campaign, the `klt yield` sample-set document (converted from the committed `sim/*-mismatch` `samples-*.csv` by `sim/mc_to_yield.py`) and its committed `klt yield --format json` report. The manifest pins each *samples* file (a `yield` citation's `content_hash` is the hash of the samples document its report names). |
 | `test_check_tier_report.py` | Stdlib regression tests for the checker (run by the `signoff` CI job): both path forms, malformed/missing/stale/wrong-item cases, `source` unable to redirect a binding, the legacy item-8 rule, compound item 11, inventory hashes. |
 
-## Current graded state: 8/11 met, tier `null` — the honest state
+## Current graded state: 9/11 met, tier `null` — the honest state
 
 Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
-clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
+clean)**, **6 (Monte Carlo yield)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
-**5, 6 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (items 5 and 7: `check_failed`, see below; 6: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+**5 and 7** render `unmet` with a per-item `reason` in
+`tier-report.json` (items 5 and 7: `check_failed`, see below). Nine of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -86,40 +86,85 @@ turns `unmet` if they change. What each audit found:
   GDS regeneration limitation above, and `sim/README.md`'s facet table
   omitting four on-disk experiments (`testbenches.inventory.md` is complete).
 
-### Item 5: `klt sim` corner envelopes (issue #367)
+### Item 5: `klt sim` corner envelopes (issues #367, #376)
 
-Item 5 cites two `klt sim` envelopes, committed append-only under
-`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/`, from the **re-run
-route** (nothing re-expressed from the old records): the schematic DUT
-`design/netlist/gate_driver_core.spice` (sha256 `1d442503…`, pinned in each
-envelope's `environment.netlist_closure`) at the 45-point ±10 % tied-rail
-matrix (`…-nominal-rail.json`, ratified *target* bounds) and the 15-point
-6 V stretch rail (`…-stretch-rail.json`, ratified *stretch* bounds for
-current and propagation delay; rise/fall keep their only bound). Both ran on
-the Spot batch fleet; the requests and the generator that emits them are in
+Item 5 cites seven `klt sim` envelopes, committed append-only under
+`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/` (`20261028-d7a2b69-*`),
+from the **re-run route** (nothing re-expressed from the old records): the
+schematic DUT `design/netlist/gate_driver_core.spice` (sha256 `1d442503…`,
+pinned in each envelope's `environment.netlist_closure`) at the 45-point ±10 %
+tied-rail matrix (four `…-nominal-*.json` shards, ratified *target* bounds) and
+the 15-point 6 V stretch rail (three `…-stretch-*.json` shards, ratified
+*stretch* bounds for current and propagation delay; rise/fall keep their only
+bound). The requests and the generator that emits them are in
 `sim/gate-driver-core-drive-with-uvlo/klt/` (`gen_requests.py`, `body.spice`).
 The rows are `peak_source_current`, `peak_sink_current`, `propagation_delay`
-and `rise_fall_time` (each measurement carries its `spec_row` tag); `drive_rail`
-and `uvlo` are declared `gap`s with their reasons in `manifest.json`.
+and `rise_fall_time` (each measurement carries its `spec_row` tag). Issue #377
+adds the last two rows, `uvlo` and `drive_rail`, from four more envelopes under
+`sim/uvlo-trip-verification/klt/envelopes/` (requests and generator in that
+directory; no `gap` is declared any more):
 
-Item 5 renders **`unmet`/`check_failed`, and that is the true result, not a
-tooling problem**: no bound was relaxed and the ratified exceptions are not
-encoded, so they fail in the envelopes exactly as the spec says they do.
+- `uvlo`, trip (`…-uvlo-trip.json`, 15 process × temperature points,
+  `design/netlist/uvlo.spice`): falling trip 3.3–3.9 V and rising trip
+  3.6–4.2 V (decision record 0001 Decision 4). **4/15 pass, 11 fail**, the same
+  4 corners the harness record `20260826-013053-6299c36` passes — decision
+  record 0018's false-trip finding is not softened and not encoded as an
+  exception. Hysteresis is reported ungraded (a typical value only, no
+  ratified worst-case range). So item 5 stays `check_failed`.
+- `uvlo`, response (`…-uvlo-response.json`): lockout response < 500 ns
+  (Decision 5), timed from `VDD_DRV` crossing 3.6 V to `OUT` at 0.5 V; 15/15
+  pass, worst 237.7 ns (`ss`/−40 °C). The harness times from each corner's own
+  trip; the difference is ~1 ns over the 1 ns step edge.
+- `drive_rail` (`…-uvlo-rail-nominal.json`, `…-uvlo-rail-stretch.json`): a
+  condition, not a measured bound, and `klt signoff` has only `{id}` /
+  `{id, gap}` rows. It is graded as an `op` measurement of the applied rail at
+  the DUT pin against the §3 band (4.5–5.5 V over the 45-point tied matrix;
+  6.0 V at the 15 stretch points); 45/45 and 15/15 pass. The rail is an ideal
+  source, so this **asserts the condition the other envelopes ran under**; it
+  does not measure the design.
 
-- Stretch rail: `ipeak_sink_a` < 1 A at `ss_125c` (0.8776 A) and `sf_125c`
-  (0.9221 A) — decision record 0016's two corners; 13/15 pass.
-- Nominal rail: `ss_-40c_vlogic2p97v-vdrv4p50v` fails `ipeak_source_a`
-  (0.49944 A < 0.5 A, decision record 0020's corner), and **two** corners at
-  that low-line point are UVLO-locked so OUT never reaches 90 % and the
-  rise/fall/propagation measurements produce no value: that `ss_-40c` corner
-  and `sf_-40c` (0.69 A source, 0.91 A sink; its thresholds are not
-  reached either). The harness record scored the locked `ss_-40c` point with
-  swing-relative thresholds on a 0.24 V glitch; these envelopes use
-  rail-normalised 10/50/90 % crossings, so a block that never switches reports
-  *no value* rather than a flattering delay. The `sf_-40c` locked point has
-  no ratified exception: it is a new observation of the open UVLO false-trip
-  finding (spec §5, decision record 0018) at a second corner.
-- 43/45 nominal corners pass every graded row; 13/15 stretch corners do.
+The response run's first batch attempt lost a Spot shard (5 corners `error`,
+no values); that envelope was discarded and the request re-run in full with
+5 shards — only the complete re-run is committed.
+
+**Ratified exceptions are encoded by sharding (#376).** `klt sim` limits are
+min/max only and apply to every corner of a request, so each excepted corner set
+is its own request carrying the ratified bound; every other limit in every
+request is the `spec/gate-driver.md` §3 bound. Exactly three corners differ, each
+stated by a ratified decision record:
+
+- DR-0016: stretch `ipeak_sink_a` >= 0.85 A at `ss_125c` (0.8776 A) and
+  `sf_125c` (0.9221 A) — `request-stretch-hot-slow.json`.
+- DR-0020: nominal `ipeak_source_a` >= 0.45 A at `ss_-40c_vlogic2p97v-vdrv4p50v`
+  (0.49944 A) — `request-nominal-ss-cold-low.json`.
+
+The shards partition the original 45 + 15 corners exactly. All 15 stretch corners
+and 43 of 45 nominal corners now pass every graded row, and item 5's
+`failed_rows` is empty.
+
+Item 5 still renders **`unmet`/`check_failed`** (`sim__corner__errored_count` 1 in
+each of two envelopes). The remaining failures are corners with **no ratified
+exception**, both routed to #378:
+
+- `sf_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-main.json`): UVLO-locked, OUT
+  never reaches 90 %, so rise/fall/propagation produce no value. Not a new
+  observation: decision record 0018 Finding 2 already names `sf_-40c` and
+  `ss_-40c` as the two locked corners at this point, and the false trip stays open.
+- `ss_-40c_vlogic2p97v-vdrv4p50v` (`request-nominal-ss-cold-low.json`): the same
+  lock-out. DR-0020 excepts only the source-current bound, which now passes at
+  0.45 A; it does not except rise/fall/propagation at this corner, so those four
+  rows stay errored.
+
+The no-value timing rows at both locked corners are **bounded by draft decision
+record 0022, awaiting operator ratification** (`proposed`; it extends 0018/0020
+and relaxes nothing). They are not covered until it is ratified and encoded in
+the requests, so item 5 renders as above.
+
+The harness record scored the locked `ss_-40c` point with swing-relative
+thresholds on a 0.24 V glitch; these envelopes use rail-normalised 10/50/90 %
+crossings, so a block that never switches reports *no value* rather than a
+flattering delay. The superseded un-sharded run (`20261027-03685aa-*`, #367)
+stays in `envelopes/` as evidence but is no longer cited.
 
 Method differences from the harness bench (`testbench/tb.json`): thresholds
 are on rail-normalised monitors rather than min/max-swing vectors, the IN
@@ -127,8 +172,9 @@ pulse is built from a unit pulse scaled by `v(VDD_LOGIC)` (`supply_v` alters
 DC sources only), `reltol=1e-4` is a body-level `.options` card (the fleet
 runner drops `options.ngspice_options`), and the inherited sanity bands
 (`n*_min_v ≥ −50 mV` etc.) are not re-asserted — they are not §3 rows and the
-harness records still carry them. `drive_rail`/`uvlo` stay gaps, so even a
-clean re-run would grade `partial_coverage` until those are expressed.
+harness records still carry them. With `drive_rail`/`uvlo` expressed
+(#377) item 5 no longer grades `partial_coverage`; it is `check_failed` on the
+failures above.
 
 The grader pin moved to `879d39ba` for this: `3a75c3ae` grades the
 multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
@@ -199,7 +245,7 @@ load, and the 5 V / 6 V devices are not distinguished from the 3.3 V ones.
 | `exception3_indrv` | `spec/gate-driver.md` §5 Exception 3, `IN_DRV` ≤ 10 mV over 6.0 V | `gate-driver-indrv-mismatch` | covered, limit 6.010 V |
 | `exception1_inb` | §5 Exception 1, `inb` ≤ 40 mV over `VDD_LOGIC` 3.63 V | `level-shifter-inb-mismatch` | covered, limit 3.670 V |
 | `exception2_taper` | §5 Exception 2, taper nodes ≤ 175 mV over 6.0 V | `output-stage-taper-mismatch` | covered, limit 6.175 V (max of `n1..n5_max_v`) |
-| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | declared `gap` |
+| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | covered, per-PVT limit = that point's control + 0.13432 Ω·mm (`max`), target yield 0.98 |
 
 What the item-6 evidence is, and is not:
 
@@ -220,11 +266,15 @@ What the item-6 evidence is, and is not:
   needs a second, defect-seeded Monte Carlo campaign per row; the harness decks
   are not expressed as `klt sim` requests, so it cannot be submitted to the
   batch fleet as they stand, and it was not hand-launched locally.
-- **The `Ron·W` row is a declared gap**: its record states it has no ratified
-  per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
-  deterministic sample, not a limit). Inventing a limit would amount to a spec
-  change, so the item stays `unmet` (`partial_coverage`) until the spec says
-  what bound a Monte Carlo draw must meet.
+- **The `Ron·W` row is graded against the bound ratified in
+  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)**
+  (operator ruling 2026-10-29): at each PVT point separately, a draw must stay
+  within that point's deterministic control + 5 % of the §2.1 window
+  (+0.13432 Ω·mm), target yield ≥ 0.98 at 95 % confidence. The samples document
+  is emitted by `python3 verification/signoff/derive_ronw_bound.py --emit-samples
+  verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (15
+  populations of `ronw_n06_3.6`, N = 200, one `max` limit each); all 15 grade
+  `sufficient` and pass.
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.
@@ -358,3 +408,8 @@ python3 sim/mc_to_yield.py <campaign> sim/<campaign>/corners/<run> \
   -o verification/signoff/yield/<campaign>.samples.json
 cd verification/signoff/yield && klt yield <campaign>.samples.json --format json > <campaign>.yield.json
 ```
+
+The `ronw-nfet-06v0-mismatch` pair is the exception: its samples document comes from
+`python3 verification/signoff/derive_ronw_bound.py --emit-samples
+verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (it carries the
+per-PVT `max` limits from decision record 0021), then the same `klt yield` step.

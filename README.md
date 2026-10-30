@@ -91,9 +91,9 @@ seat; no measured silicon.** What is committed, and what it does not show:
   records 0018, 0019; an open finding, not narrowed to pass); the two bounded
   exceptions above; PDK model coverage limits (decision record 0017).
 - **Signoff** (`verification/signoff/`): the mechanically graded gap to tier
-  T1 is committed in `tier-report.json`; several items are still `unmet`
-  (no `klt`-native sim/yield/pex envelopes for items 5-7), so the block is
-  **not tier T1**. See [`verification/signoff/README.md`](verification/signoff/README.md)
+  T1 is committed in `tier-report.json`; items 5 and 7 are still `unmet` (item 5
+  has `klt sim` envelopes and grades `check_failed`; item 7 has no `klt pex`
+  envelope); item 6 grades `met` (all four statistical rows carry `klt yield` evidence), so the block is **not tier T1**. See [`verification/signoff/README.md`](verification/signoff/README.md)
   for the current count and what each `met` does and does not claim.
 
 ## Reproducing the results
