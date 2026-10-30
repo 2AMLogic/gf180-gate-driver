@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-30
 
+- **PR #400**: docs: disclose klt pex error status and model_mismatch in item 7 note
+- **Issue #397** (closed): Disclose pex report model_mismatch block (and top-level status=error) in signoff README Item 7
 - **PR #396**: feat: record klt pex post-layout report and cite it as T1 item 7
 - **Issue #369** (closed): T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS
 - **PR #393**: feat: grade Ron*W per-PVT bound with klt yield, closing item 6 gap
