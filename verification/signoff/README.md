@@ -24,13 +24,13 @@ re-graded by a command, and CI re-grades it on every PR.
 | `yield/*.samples.json`, `yield/*.yield.json` | T1 item **6** (issue #368): per campaign, the `klt yield` sample-set document (converted from the committed `sim/*-mismatch` `samples-*.csv` by `sim/mc_to_yield.py`) and its committed `klt yield --format json` report. The manifest pins each *samples* file (a `yield` citation's `content_hash` is the hash of the samples document its report names). |
 | `test_check_tier_report.py` | Stdlib regression tests for the checker (run by the `signoff` CI job): both path forms, malformed/missing/stale/wrong-item cases, `source` unable to redirect a binding, the legacy item-8 rule, compound item 11, inventory hashes. |
 
-## Current graded state: 8/11 met, tier `null` — the honest state
+## Current graded state: 9/11 met, tier `null` — the honest state
 
 Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
-clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
+clean)**, **6 (Monte Carlo yield)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
-**5, 6 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (item 5: `check_failed`, see below; item 6: `partial_coverage`, three of four rows graded, see below; item 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+**5 and 7** render `unmet` with a per-item `reason` in
+`tier-report.json` (item 5: `check_failed`, see below; item 7: `no_evidence`). Nine of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -198,7 +198,7 @@ Why item 7 still says `no_evidence`:
 | `exception3_indrv` | `spec/gate-driver.md` §5 Exception 3, `IN_DRV` ≤ 10 mV over 6.0 V | `gate-driver-indrv-mismatch` | covered, limit 6.010 V |
 | `exception1_inb` | §5 Exception 1, `inb` ≤ 40 mV over `VDD_LOGIC` 3.63 V | `level-shifter-inb-mismatch` | covered, limit 3.670 V |
 | `exception2_taper` | §5 Exception 2, taper nodes ≤ 175 mV over 6.0 V | `output-stage-taper-mismatch` | covered, limit 6.175 V (max of `n1..n5_max_v`) |
-| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | declared `gap` |
+| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | covered, per-PVT limit = that point's control + 0.13432 Ω·mm (`max`), target yield 0.98 |
 
 What the item-6 evidence is, and is not:
 
@@ -219,13 +219,15 @@ What the item-6 evidence is, and is not:
   needs a second, defect-seeded Monte Carlo campaign per row; the harness decks
   are not expressed as `klt sim` requests, so it cannot be submitted to the
   batch fleet as they stand, and it was not hand-launched locally.
-- **The `Ron·W` row is a declared gap**: its record states it has no ratified
-  per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
-  deterministic sample, not a limit). Inventing a limit would amount to a spec
-  change, so the item stays `unmet` (`partial_coverage`) until the spec says
-  what bound a Monte Carlo draw must meet. A bound is proposed in Draft
-  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)
-  (reproduce with `derive_ronw_bound.py`); it is not ratified, so the row stays a gap.
+- **The `Ron·W` row is graded against the bound ratified in
+  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)**
+  (operator ruling 2026-10-29): at each PVT point separately, a draw must stay
+  within that point's deterministic control + 5 % of the §2.1 window
+  (+0.13432 Ω·mm), target yield ≥ 0.98 at 95 % confidence. The samples document
+  is emitted by `python3 verification/signoff/derive_ronw_bound.py --emit-samples
+  verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (15
+  populations of `ronw_n06_3.6`, N = 200, one `max` limit each); all 15 grade
+  `sufficient` and pass.
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.
@@ -359,3 +361,8 @@ python3 sim/mc_to_yield.py <campaign> sim/<campaign>/corners/<run> \
   -o verification/signoff/yield/<campaign>.samples.json
 cd verification/signoff/yield && klt yield <campaign>.samples.json --format json > <campaign>.yield.json
 ```
+
+The `ronw-nfet-06v0-mismatch` pair is the exception: its samples document comes from
+`python3 verification/signoff/derive_ronw_bound.py --emit-samples
+verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (it carries the
+per-PVT `max` limits from decision record 0021), then the same `klt yield` step.

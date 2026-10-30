@@ -54,6 +54,7 @@ Issues carrying `loom:curated`.
 
 - **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
 - **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
+- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
 
 ## Proposed (Architect / Hermit)
 

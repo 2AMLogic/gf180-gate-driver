@@ -28,7 +28,7 @@
     },
     "10": {
       "file": "verification/signoff/repo-hygiene.generic.json",
-      "content_hash": "sha256:99649ecaaa835a34abb71fe11f3e83819352f2742e2060bf05be57f031391dfc"
+      "content_hash": "sha256:479c2e9f4b7e3c2d84a7961768964beb1e236b80f0d851970bda41c601e8b626"
     },
     "11": [
       {
@@ -161,6 +161,13 @@
         "rows": [
           "exception2_taper"
         ]
+      },
+      {
+        "file": "verification/signoff/yield/ronw-nfet-06v0-mismatch.yield.json",
+        "content_hash": "sha256:1dcb79c5249d3d3b47cfaa34f5598321f70ccbaec91182613ecd82605c581729",
+        "rows": [
+          "ronw_nfet_06v0"
+        ]
       }
     ]
   },
@@ -196,8 +203,7 @@
         "id": "exception2_taper"
       },
       {
-        "id": "ronw_nfet_06v0",
-        "gap": "the Ron*W campaign is a spread measurement with no ratified per-row bound to grade yield against (spec/low-side-power-switch.md 2.1; sim record 20260821-134653-804155b)"
+        "id": "ronw_nfet_06v0"
       }
     ]
   }
