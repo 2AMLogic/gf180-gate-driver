@@ -52,11 +52,12 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
 - **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
+- **#369**: T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS *(curated)*
 
 ## Proposed (Architect / Hermit)
 
+- **#394**: Dedupe the corner/control deck-staging block across three sim scripts *(hermit)*
 - **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
 
 ## Epics
@@ -75,6 +76,6 @@ _None._
 | PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 2 |
-| Architect / Hermit proposals | 1 |
+| Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
