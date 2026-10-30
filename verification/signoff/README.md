@@ -225,6 +225,43 @@ passes pre-layout (1.0170 A) and fails post-layout (0.9996 A), a 0.04 % miss
 introduced by the extracted parasitics. The remaining 412 rows, including every
 delay and edge-rate row at every other corner, pass on both legs.
 
+**The report's top-level `status` is `"error"`** (the 8 errored rows above;
+`passed: 408`, `failed: 4`, `errored: 8`), and it carries a `model_mismatch`
+block: `kind: "model_set"`, `reference_only: []`, `extracted_only:
+[cap_mim_2f0_m4m5_noshield, nfet_03v3, nfet_06v0, pfet_03v3, pfet_06v0,
+ppolyf_u]`, `counts.reference: {}`, `counts.extracted: {cap_mim_2f0_m4m5_noshield: 4,
+nfet_03v3: 3, nfet_06v0: 1102, pfet_03v3: 1, pfet_06v0: 663, ppolyf_u: 271}`. The
+tool's `detail` warns the two sides "may be electrically unrelated". It is two
+separate things, assessed separately; neither is cleared by this note and item 7
+stays `check_failed`:
+
+- **(a) Empty `counts.reference` is a tool tally gap, not a design finding.**
+  Confirmed by reading klt source (0.8.1.dev778; the report was produced by
+  dev758, not re-run): `_model_mismatch` tallies the reference side by reading
+  only the text of the reference file for `M`/`X`/`Q`/`D` cards, and does not
+  follow `.include`. `dut.spice` is a wrapper whose only body is an `.include`
+  of `design/netlist/gate_driver_core.spice`, so it contains no device card and
+  the reference tally is empty (`schematic_flatten` agrees: `already_flat: true`,
+  `inlined_instances: 0`). The schematic does instantiate `nfet_03v3` x3,
+  `nfet_06v0` x17, `pfet_03v3` x1, `pfet_06v0` x14 and
+  `cap_mim_2f0_m4m5_noshield` x5, so those five models are not genuinely
+  extracted-only. Filed as
+  [2AMLogic/klayout-tools#4630](https://github.com/2AMLogic/klayout-tools/issues/4630).
+  Not checked: re-running `klt pex` with a non-wrapper reference to see the
+  tally populated (out of scope here).
+- **(b) `ppolyf_u` is a real schematic/layout model-class difference.** The
+  schematic bias resistors (`Rref`, `R1`, `R2`, `Rfb`) are ideal `R` elements
+  and the schematic has no `ppolyf_u`; the layout deliberately draws them as
+  271 series `ppolyf_u` unit resistors (issue #221, `layout/README.md`), and
+  the LVS-extracted netlist `layout/lvs/gate_driver_core.extracted.spice` reports
+  the same 271 `ppolyf_u` devices (a separate extraction from the `klt pex` one). So the post-layout
+  `delta[]` rows compare ideal resistors against poly resistors on the
+  bias network as well as parasitics. Not checked: how much of the delta this
+  accounts for (no run isolates it).
+- Also not checked: why extracted `nfet_06v0`/`pfet_06v0` counts (1102/663) far
+  exceed the schematic's (17/14); finger/segment splitting in extraction is
+  the likely reason but was not traced.
+
 How the request set had to differ from item 5 so `klt pex` can run it
 (`sim/gate-driver-core-drive-with-uvlo/klt/pex/`): the DUT fragment is wrapped as
 `.subckt gate_driver_core` by `dut.spice` and instantiated as `xdut`, because
