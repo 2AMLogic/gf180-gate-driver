@@ -57,7 +57,6 @@ Issues carrying `loom:curated`.
 ## Proposed (Architect / Hermit)
 
 - **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
-- **#394**: Dedupe the corner/control deck-staging block across three sim scripts *(hermit)*
 
 ## Epics
 
@@ -75,6 +74,6 @@ _None._
 | PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 1 |
 | Curated | 1 |
-| Architect / Hermit proposals | 2 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->

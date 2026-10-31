@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-10-30
 
+- **PR #401**: refactor: hoist corner/control deck staging into run_corner_deck
+- **Issue #394** (closed): Dedupe the corner/control deck-staging block across three sim scripts
 - **PR #400**: docs: disclose klt pex error status and model_mismatch in item 7 note
 - **Issue #397** (closed): Disclose pex report model_mismatch block (and top-level status=error) in signoff README Item 7
 - **PR #396**: feat: record klt pex post-layout report and cite it as T1 item 7
