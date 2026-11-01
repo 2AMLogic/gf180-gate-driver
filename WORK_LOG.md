@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-01
+
+- **PR #404**: Bump Repo Skills 0.24.7 -> 0.25.1
+
 ### 2026-10-30
 
 - **PR #401**: refactor: hoist corner/control deck staging into run_corner_deck
