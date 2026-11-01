@@ -22,7 +22,7 @@ _None._
 
 `loom:important`; taken before unlabelled work.
 
-_None._
+- **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
 
 ## Ready
 
@@ -68,7 +68,7 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 1 |
 | Very important | 0 |
-| Important | 0 |
+| Important | 1 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 1 |
