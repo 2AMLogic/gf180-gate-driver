@@ -1,8 +1,8 @@
 # 0021: `Ron·W` is a statistical row for T1 item 6, graded against a 5 %-of-window excursion bound
 
-- **Status**: Draft (proposed; not ratified, operator decision required)
+- **Status**: Ratified 2026-10-29 by the operator (Robb, attended fleet:decide q133, option 1 of #379: as drafted)
 - **Date**: 2026-10-28
-- **Decided by**: pending operator ratification (drafted by Builder agent, issue #379; tracker #370)
+- **Decided by**: operator (Robb), ratifying the Builder draft from issue #379 (tracker #370)
 - **Extends**: `spec/low-side-power-switch.md` §2.1, §2.2. **Supersedes**: none.
   Does not edit §2.1 or §2.2; no ratified value changes.
 
