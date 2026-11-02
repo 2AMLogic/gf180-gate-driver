@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-02
+
+- **PR #410**: refactor: remove unused report_stored helper from signoff_store
+- **Issue #409** (closed): Remove report_stored: unused helper duplicated inline by its callers
+
 ### 2026-11-01
 
 - **PR #392**: docs(decision-records): ratify 0021, Ron·W statistical row for item 6
