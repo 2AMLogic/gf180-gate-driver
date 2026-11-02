@@ -5,6 +5,7 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-01
 
+- **PR #392**: docs(decision-records): ratify 0021, Ron·W statistical row for item 6
 - **PR #404**: Bump Repo Skills 0.24.7 -> 0.25.1
 
 ### 2026-10-30
