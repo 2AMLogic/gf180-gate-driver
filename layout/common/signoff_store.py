@@ -111,7 +111,3 @@ def store_or_exit(stage: Path, *, repo_root: Path, bench: str, rid: str,
         print(f"SIGNOFF OUTPUT NOT STORED -- nothing committed (fail closed): {exc}\n"
               f"staged bytes kept in {stage}", file=sys.stderr)
         raise SystemExit(EXIT_NOT_STORED) from None
-
-
-def report_stored(manifest: Path, repo_root: Path = REPO_ROOT) -> None:
-    print(f"manifest       : {manifest.relative_to(repo_root)}")
