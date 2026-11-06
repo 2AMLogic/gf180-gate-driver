@@ -56,7 +56,7 @@ Issues carrying `loom:curated`.
 
 ## Proposed (Architect / Hermit)
 
-- **#343**: Dedupe reference_measurements, claim progress_detail and sigma summary across mismatch campaigns *(hermit)*
+_None._
 
 ## Epics
 
@@ -74,6 +74,6 @@ _None._
 | PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 1 |
-| Architect / Hermit proposals | 1 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->

@@ -5,6 +5,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-06
 
+- **PR #416**: refactor: hoist duplicated reference_measurements and claim progress/sigma helpers into script_helpers
+- **Issue #343** (closed): Hoist duplicated reference_measurements and claim progress/sigma helpers into script_helpers
 - **PR #414**: sim: 3-diode stacked UVLO reference measured over 15 corners (negative), DR-0023 proposed
 - **Issue #412** (closed): Prototype a stacked-diode UVLO reference and measure its 15-corner trip spread (DR-0018)
 
