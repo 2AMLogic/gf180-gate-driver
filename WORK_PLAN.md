@@ -23,6 +23,7 @@ _None._
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
+- **#412**: Prototype a stacked-diode UVLO reference and measure its 15-corner trip spread (DR-0018)
 
 ## Ready
 
@@ -53,6 +54,7 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
+- **#412**: Prototype a stacked-diode UVLO reference and measure its 15-corner trip spread (DR-0018) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -68,12 +70,12 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
-| Important | 1 |
+| Important | 2 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 1 |
+| Curated | 2 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
