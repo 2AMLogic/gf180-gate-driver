@@ -18,6 +18,7 @@ from pathlib import Path
 from . import campaign
 from . import corners as harness_corners
 from . import report as harness_report
+from . import runner as harness_runner
 
 SIM_DIR = Path(__file__).resolve().parent.parent
 
@@ -217,6 +218,25 @@ def reference_log_path(
         / f"{corner_id}.log"
     )
     return log if log.is_file() else None
+
+
+def reference_measurements(
+    source_experiment: str, reference_record: str, corner_id: str
+) -> dict[str, float]:
+    """The corner-matrix record's own numbers at `corner_id`, from its raw log.
+
+    Returns `{}` when the reference record has no log for this point (e.g. a
+    `--smoke` run at a corner the reference never visited).
+    """
+    log = reference_log_path(source_experiment, reference_record, corner_id)
+    return harness_runner.parse_measurements(log.read_text()) if log else {}
+
+
+def claim_progress_detail(result, measurement: str) -> str:
+    """Progress-line detail for one point: the claim measurement to 10 digits,
+    or the point's message when it produced none."""
+    value = result.measurements.get(measurement)
+    return campaign.fmt(value, 10) if value is not None else result.message
 
 
 def delta_vs_reference(value: float | None, reference: float | None) -> float | None:

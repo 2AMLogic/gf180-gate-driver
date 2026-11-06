@@ -53,7 +53,6 @@ sys.path.insert(0, str(HERE.parent))
 from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
-from harness import runner as harness_runner  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
@@ -104,8 +103,7 @@ def build_points() -> list[harness_corners.PvtPoint]:
 
 def reference_measurements(corner_id: str) -> dict[str, float]:
     """The corner-matrix record's own numbers at `corner_id`, from its raw log."""
-    log = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
-    return harness_runner.parse_measurements(log.read_text()) if log else {}
+    return script_helpers.reference_measurements(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
 
 
 def worst_taper(measurements: dict[str, float]) -> tuple[str, float] | None:

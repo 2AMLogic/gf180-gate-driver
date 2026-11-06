@@ -224,3 +224,26 @@ def test_ronw_mismatch_run_sample_discloses_ngspice_error(tmp_path, monkeypatch)
     assert status == "error"
     assert "reported an error for" in log and "tt @ 27.0 C" in log
     assert flat == {}
+
+
+def test_reference_measurements_parses_log_and_defaults_empty(tmp_path, monkeypatch):
+    log = tmp_path / "c1.log"
+    log.write_text("m_peak_v = 1.25e+00\n")
+    paths = {"c1": log}
+    monkeypatch.setattr(
+        script_helpers, "reference_log_path", lambda exp, rec, cid: paths.get(cid)
+    )
+    assert script_helpers.reference_measurements("exp", "rec", "c1") == {"peak_v": 1.25}
+    assert script_helpers.reference_measurements("exp", "rec", "missing") == {}
+
+
+def test_claim_progress_detail_formats_measurement_or_falls_back():
+    class Result:
+        def __init__(self):
+            self.measurements = {"m": 1.5}
+            self.message = "no data"
+
+    from harness import campaign
+
+    assert script_helpers.claim_progress_detail(Result(), "m") == campaign.fmt(1.5, 10)
+    assert script_helpers.claim_progress_detail(Result(), "other") == "no data"
