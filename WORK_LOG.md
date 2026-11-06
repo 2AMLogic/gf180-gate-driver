@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-06
+
+- **PR #414**: sim: 3-diode stacked UVLO reference measured over 15 corners (negative), DR-0023 proposed
+- **Issue #412** (closed): Prototype a stacked-diode UVLO reference and measure its 15-corner trip spread (DR-0018)
+
 ### 2026-11-02
 
 - **PR #410**: refactor: remove unused report_stored helper from signoff_store
