@@ -55,7 +55,6 @@ sys.path.insert(0, str(HERE.parent))
 from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import montecarlo as mc_mod  # noqa: E402
-from harness import runner as harness_runner  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
 REPO_ROOT = HERE.parents[1]
@@ -122,13 +121,8 @@ def build_points() -> list[harness_corners.PvtPoint]:
 
 
 def reference_measurements(corner_id: str) -> dict[str, float]:
-    """The corner-matrix record's own numbers at `corner_id`, from its raw log.
-
-    Returns `{}` when the reference record has no log for this point (e.g. a
-    `--smoke` run at a corner the reference never visited).
-    """
-    log = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
-    return harness_runner.parse_measurements(log.read_text()) if log else {}
+    """The corner-matrix record's own numbers at `corner_id`, from its raw log."""
+    return script_helpers.reference_measurements(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
 
 
 # --------------------------------------------------------------------------
@@ -205,7 +199,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "**Exception 3 does not exist at any other supply**: `spec/"
         "gate-driver.md` §5 records `IN_DRV` clearing the 6.0 V ceiling by "
         "≥ 397 mV at every nominal-tolerance point, and this record measures "
-        f"the node's local-mismatch spread at σ = {_point_sigma_summary(outcomes)} "
+        f"the node's local-mismatch spread at σ = {script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)} "
         "— two to three orders of magnitude smaller than that headroom, so "
         "mismatch cannot bring a nominal-tolerance point near the ceiling. "
         "Spending the "
@@ -425,7 +419,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     )
     add("")
     add(
-        f"  - **Spread**: σ(`indrv_max_v`) = {_point_sigma_summary(outcomes)} "
+        f"  - **Spread**: σ(`indrv_max_v`) = {script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)} "
         f"per PVT point (largest {stats['sigma_max'] * 1e6:.0f} µV, at the hot "
         f"slow corners; smallest at `tt`/`fs`, where the node barely moves at "
         f"all). Even the largest is well under the −2.66 mV excursion the "
@@ -664,18 +658,13 @@ def _campaign_stats(outcomes) -> dict:
     }
 
 
-def _point_sigma_summary(outcomes) -> str:
-    return script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)
-
-
 # --------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------
 
 
 def _progress_detail(result) -> str:
-    value = result.measurements.get(CLAIM_MEASUREMENT)
-    return _fmt(value, 10) if value is not None else result.message
+    return script_helpers.claim_progress_detail(result, CLAIM_MEASUREMENT)
 
 
 def main(argv=None) -> int:
