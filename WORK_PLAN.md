@@ -41,7 +41,6 @@ Issues currently being built (`loom:building`).
 PRs waiting on Judge (`loom:review-requested`).
 
 - **#389**: docs: define ratification key non-author check as session separation
-- **#418**: Bump Repo Skills 0.25.1 -> 0.25.10
 
 ## Approved (Awaiting Merge)
 
@@ -72,7 +71,7 @@ _None._
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 2 |
+| PRs awaiting review | 1 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 1 |
 | Architect / Hermit proposals | 0 |

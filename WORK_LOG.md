@@ -3,6 +3,10 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-07
+
+- **PR #418**: Bump Repo Skills 0.25.1 -> 0.25.10
+
 ### 2026-11-06
 
 - **PR #416**: refactor: hoist duplicated reference_measurements and claim progress/sigma helpers into script_helpers
