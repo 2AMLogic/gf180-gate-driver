@@ -34,10 +34,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#424**: Repair or remove gen_pex_requests.py: calls gen_requests.request() with a stale signature and cannot run
-- **#427**: Consolidate the two samples-csv to klt-yield converters: derive_ronw_bound.py --emit-samples drifts from sim/mc_to_yield.py
-- **#428**: Remove dead worktree:return npm script: its target .loom/scripts/worktree-return.sh no longer exists
-- **#429**: Wire sim/test_harness_script_helpers.py into CI: 20 pytest-style tests that no CI step or stdlib runner ever executes
+_None._
 
 ## PRs Awaiting Review
 
@@ -59,7 +56,8 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#441**: Consolidate the two klt gen_requests.py generators: UVLO copy duplicates the process table and request envelope and is outside the reproduction test *(hermit)*
+- **#442**: Mismatch campaigns report a 0.00 reference residual when no reference log was found: make the skipped cross-check explicit and drop the ronw script's inline copy of control_table_rows *(hermit)*
 
 ## Epics
 
@@ -73,10 +71,10 @@ _None._
 | Very important | 0 |
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 4 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 0 |
+| Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
