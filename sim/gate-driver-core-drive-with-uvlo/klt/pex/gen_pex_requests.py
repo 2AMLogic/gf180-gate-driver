@@ -7,7 +7,7 @@ Builds both requests with ../gen_requests.py `request()` unchanged (same corner
 construction, same measurement set) over the un-sharded 45 + 15 corner matrices at
 the plain `spec/gate-driver.md` Sec.3 bounds -- NOT the seven DR-0016 / DR-0020
 shards that `gen_requests.main()` emits for item 5. Those shards relax two bounds at
-four corners; the Sec.3 bounds used here are the stricter of the two, so nothing is
+three corners; the Sec.3 bounds used here are the stricter of the two, so nothing is
 relaxed. Whether item 7 should adopt the shards is an open spec/verification
 question, not something this generator decides.
 
