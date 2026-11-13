@@ -268,7 +268,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"seed-A = seed-B | Δ vs `{REFERENCE_RECORD}` (µV) |"
     )
     add("  |---|---|---|---|---|")
-    rows, control_ok, worst_ref_delta = campaign.control_table_rows(
+    rows, control_ok, worst_ref_delta, ref_compared = campaign.control_table_rows(
         outcomes,
         lambda o: (
             None,
@@ -277,6 +277,15 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         ),
     )
     lines.extend(rows)
+    # A `--smoke` run legitimately visits a corner the reference never did; a
+    # full run that cannot compare every point has skipped the cross-check it
+    # advertises, and must not report PASS on it (#442).
+    ref_note = campaign.reference_coverage_note(
+        REFERENCE_RECORD, ref_compared, len(outcomes), "\u2014"
+    )
+    ref_ok = args.smoke or campaign.reference_anomaly(
+        REFERENCE_RECORD, ref_compared, len(outcomes)
+    ) is None
     add("")
 
     # --- distribution table ---
@@ -382,7 +391,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     else:
         outcome, hi, margin = worst_overall
         within = margin >= -EXCEPTION3_BOUND_V
-        verdict = campaign.verdict_for(within, control_ok)
+        verdict = campaign.verdict_for(within, control_ok, ref_ok)
         add(
             f"  - **Overall: {verdict}** — across "
             f"{converged} converged local-mismatch draws (of {drawn} run) "
@@ -396,12 +405,17 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"The three-leg deterministic negative control holds at "
             f"{'every' if control_ok else '**not every**'} PVT point "
             f"(baseline = seed-A control = seed-B control, bit-for-bit, on "
-            f"every measurement). Against the **committed** corner-matrix "
-            f"record the same control differs by up to "
-            f"{worst_ref_delta * 1e6:.0f} µV, which is an ngspice-46 → "
-            f"ngspice-47 effect and is treated as a finding in its own right "
-            f"below, not folded into this claim. "
-            "No ratified bound is amended by this record."
+            f"every measurement). "
+            + (
+                f"Against the **committed** corner-matrix record the same "
+                f"control differs by up to {worst_ref_delta * 1e6:.0f} µV, "
+                f"which is an ngspice-46 → ngspice-47 effect and is treated "
+                f"as a finding in its own right below, not folded into this "
+                f"claim.{ref_note}"
+                if worst_ref_delta is not None
+                else ref_note.lstrip()
+            )
+            + " No ratified bound is amended by this record."
         )
     add("")
 
@@ -481,47 +495,61 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "below, is not varied by this PDK at all."
     )
     add("")
-    add("  ### Finding: the ngspice version change moves this node more than mismatch does")
-    add("")
-    sigma_ratio = worst_ref_delta / max(stats["sigma_max"], 1e-12)
-    add(
-        f"  The committed corner-matrix record `{REFERENCE_RECORD}` was taken "
-        f"under **ngspice-46**; this campaign ran under "
-        f"**{ngspice.split(':')[0].strip()}**. The zero-sigma control — the "
-        f"*same deck*, mismatch off — differs from that record by up to "
-        f"**{worst_ref_delta * 1e6:.0f} µV** at the worst point. That is "
-        f"**{sigma_ratio:.1f}×** the largest per-point mismatch σ this campaign "
-        f"measured ({stats['sigma_max'] * 1e6:.0f} µV) and "
-        f"{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.1f} % of Exception 3's "
-        f"entire ≤ 10 mV bound. **The simulator version change is a larger "
-        f"perturbation of this measurement than local device mismatch is** — "
-        f"which is the single most useful thing this campaign found, and it is "
-        f"not a circuit result."
-    )
-    add("")
-    add(
-        "  It is isolated to the simulator, not to the deck or the circuit: the "
-        "three same-machine control legs (the plain `mc=None` deck and two "
-        "`sw_stat_mismatch = 0` decks at different seeds) agree **bit-for-bit** "
-        "with each other at every PVT point, so the only variable between this "
-        "record's control column and the reference record's number is the "
-        "ngspice binary. Per `CLAUDE.md` (\"when something behaves oddly, "
-        "suspect the tool or the deck before the circuit\") this is recorded as "
-        "a tool-fidelity finding, not absorbed into the circuit claim."
-    )
-    add("")
-    add(
-        f"  **It does not threaten Exception 3's bound.** The residue is "
-        f"largest at points with wide margin, and at the binding corner "
-        f"`ss_125c_vlogic3p30v-vdrv6p00v` the control reproduces the reference "
-        f"record to well under a microvolt (see the control table above). "
-        f"But it does mean the −2.66 mV figure decision records 0014/0006 "
-        f"quote carries a simulator-version uncertainty of order ±1 mV that no "
-        f"prior record stated — comfortably inside the ≤ 10 mV bound, and a "
-        f"further reason not to narrow that bound toward the measured value."
-    )
-    add("")
-
+    # Emitted only when a residual was actually measured: with no reference
+    # log there is no ngspice-46 -> ngspice-47 delta to report (#442).
+    if worst_ref_delta is not None:
+        add("  ### Finding: the ngspice version change moves this node more than mismatch does")
+        add("")
+        sigma_ratio = worst_ref_delta / max(stats["sigma_max"], 1e-12)
+        add(
+            f"  The committed corner-matrix record `{REFERENCE_RECORD}` was taken "
+            f"under **ngspice-46**; this campaign ran under "
+            f"**{ngspice.split(':')[0].strip()}**. The zero-sigma control — the "
+            f"*same deck*, mismatch off — differs from that record by up to "
+            f"**{worst_ref_delta * 1e6:.0f} µV** at the worst point. That is "
+            f"**{sigma_ratio:.1f}×** the largest per-point mismatch σ this campaign "
+            f"measured ({stats['sigma_max'] * 1e6:.0f} µV) and "
+            f"{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.1f} % of Exception 3's "
+            f"entire ≤ 10 mV bound. **The simulator version change is a larger "
+            f"perturbation of this measurement than local device mismatch is** — "
+            f"which is the single most useful thing this campaign found, and it is "
+            f"not a circuit result."
+        )
+        add("")
+        add(
+            "  It is isolated to the simulator, not to the deck or the circuit: the "
+            "three same-machine control legs (the plain `mc=None` deck and two "
+            "`sw_stat_mismatch = 0` decks at different seeds) agree **bit-for-bit** "
+            "with each other at every PVT point, so the only variable between this "
+            "record's control column and the reference record's number is the "
+            "ngspice binary. Per `CLAUDE.md` (\"when something behaves oddly, "
+            "suspect the tool or the deck before the circuit\") this is recorded as "
+            "a tool-fidelity finding, not absorbed into the circuit claim."
+        )
+        add("")
+        add(
+            f"  **It does not threaten Exception 3's bound.** The residue is "
+            f"largest at points with wide margin, and at the binding corner "
+            f"`ss_125c_vlogic3p30v-vdrv6p00v` the control reproduces the reference "
+            f"record to well under a microvolt (see the control table above). "
+            f"But it does mean the −2.66 mV figure decision records 0014/0006 "
+            f"quote carries a simulator-version uncertainty of order ±1 mV that no "
+            f"prior record stated — comfortably inside the ≤ 10 mV bound, and a "
+            f"further reason not to narrow that bound toward the measured value."
+        )
+        add("")
+    else:
+        add("  ### Finding: the committed-reference cross-check did not run")
+        add("")
+        add(
+            f"  This campaign compares its zero-sigma control against the "
+            f"committed corner-matrix record `{REFERENCE_RECORD}`, which was "
+            f"taken under **ngspice-46**, to separate a simulator-version "
+            f"residue from local mismatch.{ref_note} No residue is reported "
+            f"here because none was measured \u2014 this record makes **no** claim "
+            f"about the ngspice-46 \u2192 ngspice-47 difference on this node."
+        )
+        add("")
     add("  ### What the open PDK does and does not model (issue #204's first ask)")
     add("")
     add(
