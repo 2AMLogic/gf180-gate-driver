@@ -232,10 +232,10 @@ def reference_flat(corner_id: str) -> dict[str, float]:
     log_path = script_helpers.reference_log_path(SOURCE_EXPERIMENT, REFERENCE_RECORD, corner_id)
     if log_path is None:
         return {}
-    try:
-        return flatten(base.extract(log_path.read_text(encoding="utf-8")))
-    except Exception:  # noqa: BLE001
-        return {}
+    # Deliberately NOT wrapped in `except Exception: return {}` -- a corrupt or
+    # unparseable reference log must fail loudly, not masquerade as "this point
+    # has no reference" and be silently dropped from the cross-check (#442).
+    return flatten(base.extract(log_path.read_text(encoding="utf-8")))
 
 
 # --------------------------------------------------------------------------
@@ -442,23 +442,27 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         f"seed-A = seed-B | Δ vs `{REFERENCE_RECORD}` (µΩ·mm) |"
     )
     add("  |---|---|---|---|---|")
-    control_ok = True
-    worst_ref_delta = 0.0
-    for outcome in outcomes:
-        delta = outcome.reference_delta(primary_name)
-        agree = outcome.controls_agree
-        matches_baseline = outcome.control_matches_baseline
-        control_ok = control_ok and agree and matches_baseline
-        if delta is not None:
-            worst_ref_delta = max(worst_ref_delta, abs(delta))
-        add(
-            f"  | `{outcome.corner_id}` | {_fmt(outcome.control_value(primary_name), 6)} "
-            f"| {'yes' if matches_baseline else '**NO**'} "
-            f"| {'yes' if agree else '**NO**'} "
-            f"| {'n/a' if delta is None else f'{delta * 1e6:+.3f}'} |"
-        )
+    # The shared helper, with this campaign's Ω·mm precision (6 fixed decimals
+    # on the control, 3 on the µΩ·mm residual) passed in rather than kept as a
+    # private copy of the loop.
+    rows, control_ok, worst_ref_delta, ref_compared = campaign.control_table_rows(
+        outcomes,
+        lambda o: (None, o.control_value(primary_name), o.reference_delta(primary_name)),
+        value_fmt=lambda value: _fmt(value, 6),
+        delta_fmt="+.3f",
+    )
+    lines.extend(rows)
     if not control_ok:
         anomalies.append("negative control did not agree bit-for-bit at every PVT point")
+    # A `--smoke` run legitimately visits a corner the reference never did; a
+    # full run that cannot compare every point has skipped the cross-check it
+    # advertises, and must not report PASS on it (#442).
+    ref_note = campaign.reference_coverage_note(
+        REFERENCE_RECORD, ref_compared, len(outcomes), "--"
+    )
+    ref_anomaly = campaign.reference_anomaly(REFERENCE_RECORD, ref_compared, len(outcomes))
+    if ref_anomaly is not None and not args.smoke:
+        anomalies.append(ref_anomaly)
     add("")
 
     # --- distribution table (primary claim) ---
@@ -671,11 +675,17 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
             "decision record is triggered.** The three-leg deterministic "
             f"negative control holds at {'every' if control_ok else '**not every**'} "
             "PVT point (baseline = seed-A control = seed-B control, "
-            "bit-for-bit), cross-checked against the committed corner-matrix "
-            f"record with a worst residual of {worst_ref_delta * 1e6:.2f} µΩ·mm "
-            "(same-ngspice-version comparison, so at-or-near-zero is expected "
-            "here, unlike the cross-version residue decision record 0017 "
-            "documents for a different facet). No ratified value in "
+            "bit-for-bit)"
+            + (
+                ", cross-checked against the committed corner-matrix "
+                f"record with a worst residual of {worst_ref_delta * 1e6:.2f} µΩ·mm "
+                "(same-ngspice-version comparison, so at-or-near-zero is expected "
+                "here, unlike the cross-version residue decision record 0017 "
+                f"documents for a different facet).{ref_note}"
+                if worst_ref_delta is not None
+                else f".{ref_note}"
+            )
+            + " No ratified value in "
             "`spec/low-side-power-switch.md` is amended by this record."
         )
     add("")

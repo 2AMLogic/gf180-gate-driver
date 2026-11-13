@@ -261,11 +261,20 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"seed-A = seed-B | Δ vs `{REFERENCE_RECORD}` `mq6` (µV) |"
     )
     add("  |---|---|---|---|---|")
-    rows, control_ok, worst_ref_delta = campaign.control_table_rows(
+    rows, control_ok, worst_ref_delta, ref_compared = campaign.control_table_rows(
         outcomes,
         lambda o: (None, o.control_value(CLAIM_MEASUREMENT), o.reference_delta()),
     )
     lines.extend(rows)
+    # A `--smoke` run legitimately visits a corner the reference never did; a
+    # full run that cannot compare every point has skipped the cross-check it
+    # advertises, and must not report PASS on it (#442).
+    ref_note = campaign.reference_coverage_note(
+        REFERENCE_RECORD, ref_compared, len(outcomes), "--"
+    )
+    ref_ok = args.smoke or campaign.reference_anomaly(
+        REFERENCE_RECORD, ref_compared, len(outcomes)
+    ) is None
     add("")
 
     add("  ### `inb` peak under local mismatch (Exception 1's node)")
@@ -325,7 +334,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     else:
         outcome, hi, over_rail = worst_overall
         within = over_rail <= EXCEPTION1_BOUND_V
-        verdict = campaign.verdict_for(within, control_ok)
+        verdict = campaign.verdict_for(within, control_ok, ref_ok)
         add(
             f"  - **Overall: {verdict}** -- across "
             f"{converged} converged local-mismatch draws (of {drawn} run) "
@@ -338,10 +347,15 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"still unspent. The three-leg deterministic negative control "
             f"holds at {'every' if control_ok else '**not every**'} PVT "
             f"point (baseline = seed-A control = seed-B control, "
-            f"bit-for-bit, on every measurement). Against the **committed** "
-            f"corner-matrix record's own raw `mq6` value the same control "
-            f"differs by up to {worst_ref_delta * 1e6:.0f} µV. No ratified "
-            f"bound is amended by this record."
+            f"bit-for-bit, on every measurement). "
+            + (
+                f"Against the **committed** corner-matrix record's own raw "
+                f"`mq6` value the same control differs by up to "
+                f"{worst_ref_delta * 1e6:.0f} µV.{ref_note}"
+                if worst_ref_delta is not None
+                else ref_note.lstrip()
+            )
+            + " No ratified bound is amended by this record."
         )
     add("")
 

@@ -456,15 +456,22 @@ class EvidenceWriterTests(unittest.TestCase):
 
 
 class RecordBodyGoldenTests(unittest.TestCase):
-    """The three mismatch runners' `build_record_body` output is pinned byte
-    for byte (issue #344). The goldens in ``sim/testdata/mismatch_record_body/``
-    were captured from the runners *before* the shared section builders moved
-    into ``campaign.py``; ``sim/`` records are append-only evidence, so the
-    refactor must not change a single byte of generated markdown.
+    """The mismatch runners' `build_record_body` output is pinned byte for byte
+    (issue #344). The goldens in ``sim/testdata/mismatch_record_body/`` were
+    captured from the runners *before* the shared section builders moved into
+    ``campaign.py``; ``sim/`` records are append-only evidence, so the refactor
+    must not change a single byte of generated markdown.
+
+    The ``ronw-*`` goldens were captured the same way for issue #442, which
+    replaced that runner's private copy of ``control_table_rows`` with the
+    shared helper plus a format override. They are rendered with the committed
+    reference record present at every point, so they are exactly the "same text
+    as today" case the refactor had to preserve.
     """
 
+    GOLDEN_DIR = SIM_DIR / "testdata" / "mismatch_record_body"
+
     def test_every_runner_scenario_matches_its_golden(self):
-        golden_dir = SIM_DIR / "testdata" / "mismatch_record_body"
         for key in fixture.RUNNERS:
             for scenario in fixture.SCENARIOS:
                 for smoke in (False, True):
@@ -474,8 +481,98 @@ class RecordBodyGoldenTests(unittest.TestCase):
                     with self.subTest(golden=name):
                         self.assertEqual(
                             fixture.render(key, scenario, smoke),
-                            (golden_dir / name).read_text(),
+                            (self.GOLDEN_DIR / name).read_text(),
                         )
+
+    def test_ronw_runner_scenarios_match_their_goldens(self):
+        # "error" is omitted deliberately: this runner's narrative dereferences
+        # a worst-excursion tuple that is `None` when no draw converged, which
+        # it does on `origin/main` too -- a pre-existing defect, out of #442's
+        # scope and tracked separately.
+        for scenario, smoke in (("mixed", False), ("clean", False), ("mixed", True)):
+            name = f"ronw-{scenario}{'-smoke' if smoke else ''}.md"
+            with self.subTest(golden=name):
+                self.assertEqual(
+                    fixture.render_ronw(scenario, smoke),
+                    (self.GOLDEN_DIR / name).read_text(),
+                )
+
+    def test_ronw_golden_actually_exercises_the_reference_cross_check(self):
+        # Guards the guard: a golden full of `n/a` rows would pin the *skipped*
+        # path and silently stop protecting the compared one (#442).
+        body = fixture.render_ronw("mixed", False)
+        self.assertNotIn("| n/a |", body)
+        self.assertIn("cross-checked against the committed corner-matrix", body)
+        self.assertNotIn("was **not performed**", body)
+
+
+class SkippedReferenceCrossCheckTests(unittest.TestCase):
+    """What every mismatch runner writes when it found no reference log.
+
+    Before issue #442 the aggregate fed to the verdict prose defaulted to
+    `0.0`, so a cross-check that never ran was reported as a measured residual
+    of zero -- which, for the `ronw` campaign, is also the *expected* value, so
+    a skipped check read as a clean pass.
+    """
+
+    def test_no_runner_reports_a_residual_it_did_not_measure(self):
+        for key in fixture.RUNNERS:
+            with self.subTest(runner=key):
+                body = fixture.render_without_reference(key)
+                self.assertIn("was **not performed**", body)
+                self.assertIn("not zero residuals", body)
+                self.assertNotIn("differs by up to 0 \u00b5V", body)
+
+    def test_ronw_does_not_report_a_residual_it_did_not_measure(self):
+        body = fixture.render_ronw_without_reference()
+        self.assertIn("was **not performed**", body)
+        self.assertNotIn("worst residual of 0.00 \u00b5\u03a9\u00b7mm", body)
+
+    def test_a_full_run_without_a_reference_does_not_read_pass(self):
+        for key in fixture.RUNNERS:
+            with self.subTest(runner=key):
+                self.assertTrue(
+                    fixture.render_without_reference(key).startswith("verdict=FAIL")
+                )
+        ronw = fixture.render_ronw_without_reference()
+        self.assertTrue(ronw.startswith("verdict=FAIL"))
+        self.assertIn("reference cross-check against", ronw)
+
+    def test_a_smoke_run_without_a_reference_does_not_change_the_verdict(self):
+        # A `--smoke` run legitimately visits a corner the reference never did;
+        # the per-point `n/a` stays, is disclosed, and must not move the
+        # verdict the same run reaches with the reference present (#442).
+        def verdict(body):
+            return body.splitlines()[0]
+
+        for key in fixture.RUNNERS:
+            with self.subTest(runner=key):
+                body = fixture.render_without_reference(key, smoke=True)
+                self.assertEqual(
+                    verdict(body), verdict(fixture.render(key, "clean", True))
+                )
+                self.assertIn("| n/a |", body)
+                self.assertIn("was **not performed**", body)
+        ronw = fixture.render_ronw_without_reference(smoke=True)
+        self.assertEqual(verdict(ronw), verdict(fixture.render_ronw("clean", True)))
+        self.assertIn("anomalies=[]", ronw)
+        self.assertIn("| n/a |", ronw)
+
+    def test_indrv_drops_its_ngspice_version_finding_without_a_residual(self):
+        # That whole section is arithmetic on the residual -- sigma ratio, % of
+        # Exception 3's bound -- so with nothing measured it must not be built.
+        body = fixture.render_without_reference("indrv")
+        self.assertNotIn("moves this node more than mismatch does", body)
+        self.assertIn("the committed-reference cross-check did not run", body)
+        self.assertIn(
+            "makes **no** claim about the ngspice-46 \u2192 ngspice-47 difference",
+            body,
+        )
+        # ...and it is still there when the residual *was* measured.
+        self.assertIn(
+            "moves this node more than mismatch does",
+            fixture.render("indrv", "clean", False),
+        )
 
 
 class RecordSectionHelperTests(unittest.TestCase):
@@ -491,16 +588,82 @@ class RecordSectionHelperTests(unittest.TestCase):
         self.assertEqual(campaign.verdict_for(True, False), "FAIL")
         self.assertEqual(campaign.verdict_for(False, True), "FAIL")
 
+    def test_verdict_for_fails_when_the_reference_check_did_not_run(self):
+        # A campaign that advertises a committed-reference cross-check must not
+        # read PASS when that check never ran (#442).
+        self.assertEqual(campaign.verdict_for(True, True, False), "FAIL")
+        self.assertEqual(campaign.verdict_for(True, True, True), "PASS")
+
     def test_control_table_rows_flags_disagreement(self):
         good = _outcome([5.1])
         bad = _outcome([5.1], baseline=5.5)
-        rows, ok, worst = campaign.control_table_rows(
+        rows, ok, worst, compared = campaign.control_table_rows(
             [good, bad], lambda o: (None, o.control_value("vout"), 2e-6)
         )
         self.assertFalse(ok)
         self.assertAlmostEqual(worst, 2e-6)
+        self.assertEqual(compared, 2)
         self.assertIn("| yes | yes | +2.00 |", rows[0])
         self.assertIn("| **NO** | yes | +2.00 |", rows[1])
+
+    def test_control_table_rows_reports_no_reference_as_none_not_zero(self):
+        # The defect this guards: with no reference log at any point the
+        # aggregate used to default to 0.0, indistinguishable from "every point
+        # matched the reference exactly" (#442).
+        rows, ok, worst, compared = campaign.control_table_rows(
+            [_outcome([5.1]), _outcome([5.2])],
+            lambda o: (None, o.control_value("vout"), None),
+        )
+        self.assertTrue(ok)
+        self.assertIsNone(worst)
+        self.assertEqual(compared, 0)
+        self.assertNotEqual(worst, 0.0)
+        for row in rows:
+            self.assertIn("| n/a |", row)
+
+    def test_control_table_rows_counts_a_partial_reference_comparison(self):
+        outcomes = [_outcome([5.1]), _outcome([5.2]), _outcome([5.3])]
+        deltas = iter([3e-6, None, -1e-6])
+        rows, _ok, worst, compared = campaign.control_table_rows(
+            outcomes, lambda o: (None, o.control_value("vout"), next(deltas))
+        )
+        self.assertAlmostEqual(worst, 3e-6)
+        self.assertEqual(compared, 2)
+        self.assertIn("| +3.00 |", rows[0])
+        self.assertIn("| n/a |", rows[1])
+        self.assertIn("| -1.00 |", rows[2])
+
+    def test_control_table_rows_honours_a_campaign_specific_format(self):
+        rows, _ok, _worst, _compared = campaign.control_table_rows(
+            [_outcome([5.1], control=0.123456789)],
+            lambda o: (None, o.control_value("vout"), 1.2345e-6),
+            value_fmt=lambda value: f"{value:.6f}",
+            delta_fmt="+.3f",
+        )
+        self.assertIn("| 0.123457 |", rows[0])
+        self.assertIn("| +1.234 |", rows[0])
+
+    def test_reference_coverage_note_is_silent_only_when_complete(self):
+        self.assertEqual(campaign.reference_coverage_note("rec", 3, 3, "--"), "")
+        none_ran = campaign.reference_coverage_note("rec", 0, 3, "--")
+        self.assertIn("was **not performed**", none_ran)
+        self.assertIn("any of the 3 PVT points", none_ran)
+        self.assertIn("not zero residuals", none_ran)
+        partial = campaign.reference_coverage_note("rec", 2, 3, "--")
+        self.assertIn("covers 2 of 3 PVT points only", partial)
+        self.assertIn("1 point had no reference log in `rec`", partial)
+
+    def test_reference_anomaly_fires_on_any_uncompared_point(self):
+        self.assertIsNone(campaign.reference_anomaly("rec", 3, 3))
+        self.assertIsNone(campaign.reference_anomaly("rec", 0, 0))
+        self.assertIn(
+            "did not run at 3 of 3 PVT points",
+            campaign.reference_anomaly("rec", 0, 3),
+        )
+        self.assertIn(
+            "did not run at 1 of 3 PVT point",
+            campaign.reference_anomaly("rec", 2, 3),
+        )
 
     def test_non_converged_section_lists_failed_draws(self):
         outcome = _outcome([5.1, 5.2], statuses=["ok", "failed"])

@@ -258,8 +258,19 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         delta = outcome.reference_delta(node) if control_worst is not None else None
         return node, value, delta
 
-    rows, control_ok, worst_ref_delta = campaign.control_table_rows(outcomes, control_probe)
+    rows, control_ok, worst_ref_delta, ref_compared = campaign.control_table_rows(
+        outcomes, control_probe
+    )
     lines.extend(rows)
+    # A `--smoke` run legitimately visits a corner the reference never did; a
+    # full run that cannot compare every point has skipped the cross-check it
+    # advertises, and must not report PASS on it (#442).
+    ref_note = campaign.reference_coverage_note(
+        REFERENCE_RECORD, ref_compared, len(outcomes), "--"
+    )
+    ref_ok = args.smoke or campaign.reference_anomaly(
+        REFERENCE_RECORD, ref_compared, len(outcomes)
+    ) is None
     add("")
 
     # --- distribution table: worst taper node under MC, per point ---
@@ -357,7 +368,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     else:
         outcome, hi, margin, hi_node = worst_overall
         within = margin >= -EXCEPTION2_BOUND_V
-        verdict = campaign.verdict_for(within, control_ok)
+        verdict = campaign.verdict_for(within, control_ok, ref_ok)
         add(
             f"  - **Overall: {verdict}** -- across "
             f"{converged} converged local-mismatch draws (of {drawn} run) "
@@ -370,10 +381,15 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"the bound still unspent. The three-leg deterministic negative "
             f"control holds at {'every' if control_ok else '**not every**'} "
             f"PVT point (baseline = seed-A control = seed-B control, "
-            f"bit-for-bit, on every measurement). Against the **committed** "
-            f"corner-matrix record the same control's binding node differs by "
-            f"up to {worst_ref_delta * 1e6:.0f} µV. No ratified bound is "
-            f"amended by this record."
+            f"bit-for-bit, on every measurement). "
+            + (
+                f"Against the **committed** corner-matrix record the same "
+                f"control's binding node differs by up to "
+                f"{worst_ref_delta * 1e6:.0f} µV.{ref_note}"
+                if worst_ref_delta is not None
+                else ref_note.lstrip()
+            )
+            + " No ratified bound is amended by this record."
         )
     add("")
 

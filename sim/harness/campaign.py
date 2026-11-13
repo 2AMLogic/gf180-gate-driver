@@ -690,32 +690,103 @@ def convention_tail(
     )
 
 
-def control_table_rows(outcomes, probe) -> tuple[list[str], bool, float]:
+def control_table_rows(
+    outcomes,
+    probe,
+    *,
+    value_fmt=None,
+    delta_fmt: str = "+.2f",
+) -> tuple[list[str], bool, float | None, int]:
     """Rows of the deterministic-negative-control table.
 
     `probe(outcome)` returns `(node, value, delta)`: the node name (or `None`
     for a single-node claim, which drops that column), the control value and
-    its delta against the reference record. Returns `(rows, control_ok,
-    worst_ref_delta)`, the last two feeding the verdict.
+    its delta against the reference record. `value_fmt(value)` renders the
+    control cell (default `fmt(value, 10)`) and `delta_fmt` is the format spec
+    applied to the delta once scaled to micro-units -- a campaign whose unit
+    needs different precision passes its own rather than keeping a private
+    copy of this loop.
+
+    Returns `(rows, control_ok, worst_ref_delta, compared)`.
+    `worst_ref_delta` is `None` -- never `0.0` -- when **no** point had a
+    reference to compare against, so a caller can never print a residual for a
+    cross-check that did not run (#442); `compared` is how many of `outcomes`
+    actually had one, so a partial cross-check can be disclosed too.
     """
+    if value_fmt is None:
+        def value_fmt(value):
+            return fmt(value, 10)
+
     rows = []
     control_ok = True
-    worst_ref_delta = 0.0
+    worst_ref_delta: float | None = None
+    compared = 0
     for outcome in outcomes:
         node, value, delta = probe(outcome)
         agree = outcome.controls_agree
         matches_baseline = outcome.control_matches_baseline
         control_ok = control_ok and agree and matches_baseline
         if delta is not None:
-            worst_ref_delta = max(worst_ref_delta, abs(delta))
+            compared += 1
+            worst_ref_delta = (
+                abs(delta) if worst_ref_delta is None
+                else max(worst_ref_delta, abs(delta))
+            )
         node_cell = "" if node is None else f"`{node}` | "
         rows.append(
-            f"  | `{outcome.corner_id}` | {node_cell}{fmt(value, 10)} "
+            f"  | `{outcome.corner_id}` | {node_cell}{value_fmt(value)} "
             f"| {'yes' if matches_baseline else '**NO**'} "
             f"| {'yes' if agree else '**NO**'} "
-            f"| {'n/a' if delta is None else f'{delta * 1e6:+.2f}'} |"
+            f"| {'n/a' if delta is None else format(delta * 1e6, delta_fmt)} |"
         )
-    return rows, control_ok, worst_ref_delta
+    return rows, control_ok, worst_ref_delta, compared
+
+
+def reference_coverage_note(
+    reference_record: str, compared: int, total: int, dash: str
+) -> str:
+    """Disclosure for a reference cross-check that did not cover every point.
+
+    `""` when all `total` points were compared (the record's own prose already
+    states the residual). Otherwise a sentence -- leading space included, so it
+    appends to that prose -- saying how much of the cross-check did not run, so
+    no record implies a comparison it never made (#442).
+    """
+    missing = total - compared
+    if total <= 0 or missing <= 0:
+        return ""
+    these = "point" if missing == 1 else "points"
+    if compared == 0:
+        all_points = "point" if total == 1 else "points"
+        return (
+            f" The cross-check against the committed corner-matrix record "
+            f"`{reference_record}` was **not performed**: no reference log was "
+            f"found for any of the {total} PVT {all_points}, so no residual "
+            f"was measured {dash} the `n/a` entries above are skipped "
+            f"comparisons, not zero residuals."
+        )
+    return (
+        f" That residual covers {compared} of {total} PVT points only: "
+        f"{missing} {these} had no reference log in `{reference_record}` and "
+        f"{'was' if missing == 1 else 'were'} not cross-checked."
+    )
+
+
+def reference_anomaly(reference_record: str, compared: int, total: int) -> str | None:
+    """The anomaly a skipped reference cross-check raises, or `None`.
+
+    A campaign that could not compare every point against its committed
+    reference has not run the check it advertises, so the record must not read
+    PASS on it (#442).
+    """
+    missing = total - compared
+    if total <= 0 or missing <= 0:
+        return None
+    these = "point" if missing == 1 else "points"
+    return (
+        f"reference cross-check against `{reference_record}` did not run at "
+        f"{missing} of {total} PVT {these} (no committed reference log found)"
+    )
 
 
 def non_converged_section(
@@ -755,9 +826,16 @@ def non_converged_section(
     return lines
 
 
-def verdict_for(within: bool, control_ok: bool) -> str:
-    """PASS iff the bound holds and the negative control held everywhere."""
-    return "PASS" if (within and control_ok) else "FAIL"
+def verdict_for(within: bool, control_ok: bool, reference_ok: bool = True) -> str:
+    """PASS iff the bound holds, the negative control held everywhere, and the
+    committed-reference cross-check actually ran at every point.
+
+    `reference_ok` defaults to `True` for a campaign that makes no such
+    cross-check; one that does passes the result of
+    `reference_anomaly(...) is None` so a skipped comparison cannot be read as
+    a clean one (#442).
+    """
+    return "PASS" if (within and control_ok and reference_ok) else "FAIL"
 
 
 def error_verdict_line(dash: str) -> str:
@@ -828,6 +906,8 @@ __all__ = [
     "non_converged_section",
     "point_sigma_summary",
     "pvt_axes_lines",
+    "reference_anomaly",
+    "reference_coverage_note",
     "run_device_point_campaign",
     "run_mismatch_main",
     "run_point_campaign",
