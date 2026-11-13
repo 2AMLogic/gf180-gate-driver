@@ -34,7 +34,10 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity
+- **#424**: Repair or remove gen_pex_requests.py: calls gen_requests.request() with a stale signature and cannot run
+- **#427**: Consolidate the two samples-csv to klt-yield converters: derive_ronw_bound.py --emit-samples drifts from sim/mc_to_yield.py
+- **#428**: Remove dead worktree:return npm script: its target .loom/scripts/worktree-return.sh no longer exists
+- **#429**: Wire sim/test_harness_script_helpers.py into CI: 20 pytest-style tests that no CI step or stdlib runner ever executes
 
 ## PRs Awaiting Review
 
@@ -46,17 +49,17 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#389**: docs: define ratification key non-author check as session separation
+_None._
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-- **#388**: Ratification keys: non-author means a fresh session, not a distinct GitHub identity *(curated)*
+_None._
 
 ## Proposed (Architect / Hermit)
 
-- **#424**: Repair or remove gen_pex_requests.py: calls gen_requests.request() with a stale signature and cannot run *(hermit)*
+_None._
 
 ## Epics
 
@@ -70,10 +73,10 @@ _None._
 | Very important | 0 |
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 4 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
-| Curated | 1 |
-| Architect / Hermit proposals | 1 |
+| Approved PRs awaiting merge | 0 |
+| Curated | 0 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
