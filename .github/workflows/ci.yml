@@ -13,6 +13,7 @@ name: CI
 # | `sim/test_harness_checks.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_runner.py`                  | python3      | `test` (here)  |
 # | `sim/test_harness_campaign.py`                | python3      | `test` (here)  |
+# | `sim/test_harness_script_helpers.py`          | python3      | `test` (here)  |
 # | `sim/test_mc_to_yield.py`                     | python3      | `test` (here)  |
 # | `sim/test_evidence_store.py`, `scripts/tests/` | python3      | `test` (here)  |
 # | `scripts/check_artifact_manifests.py check`   | python3+git  | `lint` (here)  |
@@ -144,6 +145,21 @@ jobs:
         # rather than as a refactor. Stubs runner.run_point/run_samples, so
         # no ngspice and no PDK -- it belongs on this PDK-free runner.
         run: python3 sim/test_harness_campaign.py
+
+      - name: run_*.py shared-helper unit tests
+        # sim/test_harness_script_helpers.py pins harness/script_helpers.py,
+        # the helpers the standalone sim/*/run_*.py evidence scripts share
+        # (run_ngspice, run_corner_deck, corner_shim, first_crossing,
+        # range_verdict, reference_measurements, ...). Eight dedupe refactors
+        # hoisted a helper up into that module and added its pin here, each
+        # claiming "pinned by a test" -- but the file was written pytest-style
+        # and no runner in this repo collected it, so none of those pins was
+        # ever enforced (issue #429). It is stdlib unittest now and runs here:
+        # the three ngspice tests put a two-line /bin/sh stub on PATH, so there
+        # is no simulator and no PDK to install. Step 5/5 of
+        # .github/scripts/lint.sh fails any tracked test_*.py missing from this
+        # file, so a future test cannot go unwired the same way.
+        run: python3 sim/test_harness_script_helpers.py
 
       - name: Monte Carlo CSV to klt-yield converter unit tests
         # sim/test_mc_to_yield.py pins which samples-*.csv rows become

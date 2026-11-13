@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:571c403af51e17eca176b42d6b26f9351671e544ea23180863595607a257c7fe` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:d105329a7d11475a6a112b44985092df36e8140f74acd0d929039b633141c12c` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -237,3 +237,32 @@ and could not run, which broke the first line of item 7's documented
 reproduction command; neither file is listed in this inventory, and no
 committed request, bound or evidence file changed. No simulation, netlisting or
 layout flow was run for this re-audit.
+
+## Re-audit for issue #429 (2026-11-13)
+
+One listed file changed on the issue #429 branch (`feature/issue-429`, on top
+of `origin/main` at `fef935d`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `run_*.py
+  shared-helper unit tests` step to `test`, running
+  `sim/test_harness_script_helpers.py` (stdlib unittest; its three ngspice
+  tests put a two-line `/bin/sh` stub on `PATH`, so the step needs no
+  simulator and no PDK and belongs on the PDK-free runner), plus the matching
+  row in the job table in this file's header comment. The `signoff` job --
+  including the grader pin -- and every other `test` step are unchanged, as is
+  the `lint` job's own definition, so the CI finding above still holds. CI was
+  read, not observed to pass here.
+
+The `lint` job's behaviour does change, through the script it invokes rather
+than through the workflow: `.github/scripts/lint.sh` gains a step 5/5 that
+fails any tracked `test_*.py` which no non-comment line of the workflow names.
+That script is not listed in this inventory and carries no hash here, so the
+change is recorded but not pinned; the evidence-record format and append-only
+checks it also runs, which the CI finding cites, are unchanged.
+
+The other listed files are unchanged. Both changes exist because
+`sim/test_harness_script_helpers.py` was written pytest-style in a stdlib-only
+repo, so `python3 -m unittest` collected nothing from it and no CI step named
+it -- its pins had never been enforced (issue #429). No simulation, netlisting
+or layout flow was run for this re-audit.
