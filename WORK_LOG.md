@@ -5,6 +5,14 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-13
 
+- **PR #440**: fix: extend the append-only evidence check to artifact manifests
+- **Issue #437** (closed): Enforce the manifest append-only rule: an edited or deleted manifests/artifacts/*.manifest.json passes every CI check
+- **PR #434**: test: convert script_helpers tests to unittest and run them in CI
+- **Issue #429** (closed): Wire sim/test_harness_script_helpers.py into CI: 20 pytest-style tests that no CI step or stdlib runner ever executes
+- **PR #438**: chore: gitignore klt's .klt/ working state, document the tracked batch receipt
+- **Issue #435** (closed): Gitignore .klt/ (klt working state) and document the one tracked batch receipt in sim/uvlo-trip-verification/klt
+- **PR #432**: refactor: route the Ron·W sample emitter through mc_to_yield's row selection
+- **Issue #427** (closed): Consolidate the two samples-csv to klt-yield converters: derive_ronw_bound.py --emit-samples drifts from sim/mc_to_yield.py
 - **PR #436**: chore: delete the retired ratification/ key trees
 - **Issue #426** (closed): Remove the retired ratification/ key trees (follow-on from PR #389)
 - **PR #433**: fix: call gen_requests.request() with its post-shard signature in the PEX generator
