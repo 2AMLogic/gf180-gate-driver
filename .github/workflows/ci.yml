@@ -17,6 +17,7 @@ name: CI
 # | `sim/test_evidence_store.py`, `scripts/tests/` | python3      | `test` (here)  |
 # | `scripts/check_artifact_manifests.py check`   | python3+git  | `lint` (here)  |
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
+# | klt request generators reproduce their JSON   | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `layout/common/test_signoff_store.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
@@ -158,6 +159,19 @@ jobs:
         run: |
           python3 sim/test_evidence_store.py
           python3 scripts/tests/test_check_artifact_manifests.py
+
+      - name: klt request-generator reproducibility tests
+        # sim/gate-driver-core-drive-with-uvlo/klt/test_gen_requests.py re-runs
+        # gen_requests.py and pex/gen_pex_requests.py in a temp tree and compares
+        # their output to the committed request-*.json bytes (issue #424). Before
+        # this, nothing imported either generator: the PEX one called
+        # gen_requests.request() with its pre-shard 4-argument signature and had
+        # been dead for two weeks, so the documented item-7 reproduction command
+        # in verification/signoff/README.md failed on its first line. These
+        # requests are the inputs of cited, append-only sign-off evidence, so a
+        # generator that silently stops reproducing them must fail here. Stdlib
+        # only -- no klt, no PDK, no ngspice. Writes nothing under sim/.
+        run: python3 sim/gate-driver-core-drive-with-uvlo/klt/test_gen_requests.py
 
       - name: Layout generator unit tests
         # layout/test_gen_gate_driver_core.py pins how the generator reads a
