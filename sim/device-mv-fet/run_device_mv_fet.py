@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import re
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,12 +40,11 @@ from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
-from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
-from harness.script_helpers import run_ngspice as _run_ngspice  # noqa: E402
+from harness.script_helpers import run_corner_deck as _run_corner_deck  # noqa: E402
 
 # gf180mcu top-level MOS `.LIB` sections in sm141064.ngspice -- confirmed by
 # sim/harness/corners.py's module docstring to already bundle the thick-oxide
@@ -157,21 +155,16 @@ def _control_block() -> str:
 
 def _run_corner(deck: Path, pdk: harness_pdk.Pdk, section: str, temp_c: float) -> str:
     """Run `deck` through ngspice at one (model section, temperature) point."""
-    with tempfile.TemporaryDirectory(prefix="device-mv-fet-") as tmp:
-        work = Path(tmp)
-        local_deck = work / deck.name
-        (work / "corner.spice").write_text(
-            _corner_shim(pdk, [section], temp_c, script="run_device_mv_fet.py"),
-            encoding="utf-8"
-        )
-        (work / "control.spice").write_text(_control_block(), encoding="utf-8")
-        local_deck.write_text(
-            '.include "corner.spice"\n'
-            + deck.read_text(encoding="utf-8")
-            + '\n.include "control.spice"\n.end\n',
-            encoding="utf-8",
-        )
-        return _run_ngspice(work, deck.name, f"{section} @ {temp_c} C")
+    return _run_corner_deck(
+        deck,
+        pdk,
+        [section],
+        temp_c,
+        script="run_device_mv_fet.py",
+        control=_control_block(),
+        label=f"{section} @ {temp_c} C",
+        prefix="device-mv-fet-",
+    )
 
 
 # --------------------------------------------------------------------------

@@ -24,13 +24,13 @@ re-graded by a command, and CI re-grades it on every PR.
 | `yield/*.samples.json`, `yield/*.yield.json` | T1 item **6** (issue #368): per campaign, the `klt yield` sample-set document (converted from the committed `sim/*-mismatch` `samples-*.csv` by `sim/mc_to_yield.py`) and its committed `klt yield --format json` report. The manifest pins each *samples* file (a `yield` citation's `content_hash` is the hash of the samples document its report names). |
 | `test_check_tier_report.py` | Stdlib regression tests for the checker (run by the `signoff` CI job): both path forms, malformed/missing/stale/wrong-item cases, `source` unable to redirect a binding, the legacy item-8 rule, compound item 11, inventory hashes. |
 
-## Current graded state: 8/11 met, tier `null` — the honest state
+## Current graded state: 9/11 met, tier `null` — the honest state
 
 Items **1 (design sources)**, **2 (layout)**, **3 (DRC clean)**, **4 (LVS
-clean)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
+clean)**, **6 (Monte Carlo yield)**, **8 (characterization report)**, **9 (testbenches shipped)**, **10
 (repo hygiene)** and **11 (power delivery, structural)** grade `met`; items
-**5, 6 and 7** render `unmet` with a per-item `reason` in
-`tier-report.json` (item 5: `check_failed`, see below; item 6: `partial_coverage`, three of four rows graded, see below; item 7: `no_evidence`). Eight of eleven is not tier T1, and "met" on items 1, 2, 9
+**5 and 7** render `unmet` with a per-item `reason` in
+`tier-report.json` (items 5 and 7: `check_failed`, see below). Nine of eleven is not tier T1, and "met" on items 1, 2, 9
 and 10 means what the next section says, no more. An `unmet` row with a `reason` is the machine-readable
 statement of the gap (#239).
 
@@ -181,13 +181,97 @@ multi-envelope list + `spec_rows` form `invalid_evidence`. Re-rendered with the
 new pin, no other item's `status`/`reason` changed (only report metadata and
 descriptive text).
 
-Why item 7 still says `no_evidence`:
+### Item 7: `klt pex` post-layout report (issue #369)
 
-- **7** — the block has real post-layout evidence, but as `sim/` markdown
-  records from this repo's own harness — not in `klt pex` envelope form. Item 7
-  accepts **only** a `klt pex` report for an analog block; a clean DRC or a
-  pre-layout sim renders `wrong_kind` by design. Converting a campaign to a
-  `klt`-native envelope is a content decision the item's own issue tracks.
+`manifest.json` cites `pex-report-gate_driver_core-15fa5b645815.json` (append-only;
+named for the GDS content hash prefix, `layout/gate_driver_core.gds` sha256
+`15fa5b645815…`, the same GDS items 3 and 4 cite). It is the stdout of one
+`klt pex` run (klt 0.8.1.dev758, graded by the pinned `879d39ba` build) over
+the 60 corners of the #367 request set, the schematic leg and the extracted leg
+both on the batch fleet:
+
+```bash
+python3 sim/gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py
+cd sim/gate-driver-core-drive-with-uvlo/klt/pex
+klt pex ../../../../layout/gate_driver_core.gds request-nominal.json request-stretch.json \
+  --deck gf180mcu --top gate_driver_core --pdk gf180mcuD --flatten-schematic \
+  --pins VDD_LOGIC,GND_LOGIC,IN,OUT,VDD_DRV,GND_DRV --tie-declared-pins \
+  --backend batch --format json
+```
+
+The report is the evidence of record; `klt pex` also leaves the 1 MB extracted
+netlist beside the GDS, which is regenerable and not committed.
+
+**`body_bias.status` is `"biased"`** (0 unbiased devices, no unbiased nets), so
+the post-layout numbers were measured on a properly biased netlist, not one with
+floating wells.
+
+Result: item 7 renders `check_failed`. 408 of 420 delta rows pass; 4 fail and 8
+error. No bound is relaxed.
+
+| Row | Corner | Schematic | Extracted | Delta |
+|---|---|---|---|---|
+| `ipeak_source_a` (>= 0.5 A) | nominal ss, 2.97/4.5 V, -40 C | 0.4994 A (fail) | 0.4670 A (fail) | -6.49 % |
+| `ipeak_sink_a` (stretch, >= 1 A) | ss, 3.3/6.0 V, 27 C | 1.0170 A (pass) | 0.9996 A (fail) | -1.71 % |
+| `ipeak_sink_a` (stretch) | ss, 3.3/6.0 V, 125 C | 0.8776 A (fail) | 0.8637 A (fail) | -1.59 % |
+| `ipeak_sink_a` (stretch) | sf, 3.3/6.0 V, 125 C | 0.9221 A (fail) | 0.9145 A (fail) | -0.82 % |
+| `trise_s`, `tfall_s`, `tpdlh_s`, `tpdhl_s` (nominal) | ss and sf, 2.97/4.5 V, -40 C | error | error | no value |
+
+All of these are the corners where the schematic leg already misses or cannot
+resolve the row (the eight `error` rows are ngspice `out of interval` on both legs, i.e. the
+`.meas` crossing is not found at that corner; item 5 shows the same corners), so they are not
+new layout-induced failures, with one exception: stretch `ipeak_sink_a` at ss/27 C
+passes pre-layout (1.0170 A) and fails post-layout (0.9996 A), a 0.04 % miss
+introduced by the extracted parasitics. The remaining 412 rows, including every
+delay and edge-rate row at every other corner, pass on both legs.
+
+**The report's top-level `status` is `"error"`** (the 8 errored rows above;
+`passed: 408`, `failed: 4`, `errored: 8`), and it carries a `model_mismatch`
+block: `kind: "model_set"`, `reference_only: []`, `extracted_only:
+[cap_mim_2f0_m4m5_noshield, nfet_03v3, nfet_06v0, pfet_03v3, pfet_06v0,
+ppolyf_u]`, `counts.reference: {}`, `counts.extracted: {cap_mim_2f0_m4m5_noshield: 4,
+nfet_03v3: 3, nfet_06v0: 1102, pfet_03v3: 1, pfet_06v0: 663, ppolyf_u: 271}`. The
+tool's `detail` warns the two sides "may be electrically unrelated". It is two
+separate things, assessed separately; neither is cleared by this note and item 7
+stays `check_failed`:
+
+- **(a) Empty `counts.reference` is a tool tally gap, not a design finding.**
+  Confirmed by reading klt source (0.8.1.dev778; the report was produced by
+  dev758, not re-run): `_model_mismatch` tallies the reference side by reading
+  only the text of the reference file for `M`/`X`/`Q`/`D` cards, and does not
+  follow `.include`. `dut.spice` is a wrapper whose only body is an `.include`
+  of `design/netlist/gate_driver_core.spice`, so it contains no device card and
+  the reference tally is empty (`schematic_flatten` agrees: `already_flat: true`,
+  `inlined_instances: 0`). The schematic does instantiate `nfet_03v3` x3,
+  `nfet_06v0` x17, `pfet_03v3` x1, `pfet_06v0` x14 and
+  `cap_mim_2f0_m4m5_noshield` x5, so those five models are not genuinely
+  extracted-only. Filed as
+  [2AMLogic/klayout-tools#4630](https://github.com/2AMLogic/klayout-tools/issues/4630).
+  Not checked: re-running `klt pex` with a non-wrapper reference to see the
+  tally populated (out of scope here).
+- **(b) `ppolyf_u` is a real schematic/layout model-class difference.** The
+  schematic bias resistors (`Rref`, `R1`, `R2`, `Rfb`) are ideal `R` elements
+  and the schematic has no `ppolyf_u`; the layout deliberately draws them as
+  271 series `ppolyf_u` unit resistors (issue #221, `layout/README.md`), and
+  the LVS-extracted netlist `layout/lvs/gate_driver_core.extracted.spice` reports
+  the same 271 `ppolyf_u` devices (a separate extraction from the `klt pex` one). So the post-layout
+  `delta[]` rows compare ideal resistors against poly resistors on the
+  bias network as well as parasitics. Not checked: how much of the delta this
+  accounts for (no run isolates it).
+- Also not checked: why extracted `nfet_06v0`/`pfet_06v0` counts (1102/663) far
+  exceed the schematic's (17/14); finger/segment splitting in extraction is
+  the likely reason but was not traced.
+
+How the request set had to differ from item 5 so `klt pex` can run it
+(`sim/gate-driver-core-drive-with-uvlo/klt/pex/`): the DUT fragment is wrapped as
+`.subckt gate_driver_core` by `dut.spice` and instantiated as `xdut`, because
+`klt pex` re-points exactly one `.include` at the extracted netlist (which always
+carries that `.SUBCKT`), and the diagnostic `uvlo_lockout_at_in_high` probe of the
+internal node `x3.lockout` is omitted (no spec row, no bound, and no equivalent
+hierarchical name in the flat extracted netlist). Every graded measurement,
+corner and bound is identical to item 5. `--pdk gf180mcuD` is required: without
+it the extracted netlist carries bare `nfet`/`pfet` models that ngspice cannot
+load, and the 5 V / 6 V devices are not distinguished from the 3.3 V ones.
 
 ### Item 6: Monte Carlo evidence (issue #368)
 
@@ -198,7 +282,7 @@ Why item 7 still says `no_evidence`:
 | `exception3_indrv` | `spec/gate-driver.md` §5 Exception 3, `IN_DRV` ≤ 10 mV over 6.0 V | `gate-driver-indrv-mismatch` | covered, limit 6.010 V |
 | `exception1_inb` | §5 Exception 1, `inb` ≤ 40 mV over `VDD_LOGIC` 3.63 V | `level-shifter-inb-mismatch` | covered, limit 3.670 V |
 | `exception2_taper` | §5 Exception 2, taper nodes ≤ 175 mV over 6.0 V | `output-stage-taper-mismatch` | covered, limit 6.175 V (max of `n1..n5_max_v`) |
-| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | declared `gap` |
+| `ronw_nfet_06v0` | `spec/low-side-power-switch.md` §2.1 `Ron·W` | `low-side-power-switch-ronw-mismatch` | covered, per-PVT limit = that point's control + 0.13432 Ω·mm (`max`), target yield 0.98 |
 
 What the item-6 evidence is, and is not:
 
@@ -219,13 +303,15 @@ What the item-6 evidence is, and is not:
   needs a second, defect-seeded Monte Carlo campaign per row; the harness decks
   are not expressed as `klt sim` requests, so it cannot be submitted to the
   batch fleet as they stand, and it was not hand-launched locally.
-- **The `Ron·W` row is a declared gap**: its record states it has no ratified
-  per-row bound to grade yield against (§2.1's 4.5719 Ω·mm is a single
-  deterministic sample, not a limit). Inventing a limit would amount to a spec
-  change, so the item stays `unmet` (`partial_coverage`) until the spec says
-  what bound a Monte Carlo draw must meet. A bound is proposed in Draft
-  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)
-  (reproduce with `derive_ronw_bound.py`); it is not ratified, so the row stays a gap.
+- **The `Ron·W` row is graded against the bound ratified in
+  [decision record 0021](../../spec/decision-records/0021-ronw-statistical-row-for-item-6.md)**
+  (operator ruling 2026-10-29): at each PVT point separately, a draw must stay
+  within that point's deterministic control + 5 % of the §2.1 window
+  (+0.13432 Ω·mm), target yield ≥ 0.98 at 95 % confidence. The samples document
+  is emitted by `python3 verification/signoff/derive_ronw_bound.py --emit-samples
+  verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (15
+  populations of `ronw_n06_3.6`, N = 200, one `max` limit each); all 15 grade
+  `sufficient` and pass.
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.
@@ -359,3 +445,8 @@ python3 sim/mc_to_yield.py <campaign> sim/<campaign>/corners/<run> \
   -o verification/signoff/yield/<campaign>.samples.json
 cd verification/signoff/yield && klt yield <campaign>.samples.json --format json > <campaign>.yield.json
 ```
+
+The `ronw-nfet-06v0-mismatch` pair is the exception: its samples document comes from
+`python3 verification/signoff/derive_ronw_bound.py --emit-samples
+verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (it carries the
+per-PVT `max` limits from decision record 0021), then the same `klt yield` step.

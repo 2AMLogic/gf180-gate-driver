@@ -156,10 +156,6 @@ class PointOutcome(campaign.PointOutcome):
 # --------------------------------------------------------------------------
 
 
-def _point_sigma_summary(outcomes) -> str:
-    return script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)
-
-
 def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args):
     lines: list[str] = []
     add = lines.append
@@ -361,7 +357,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         "decision record 0015 left open."
     )
     add("")
-    stats_sigma = _point_sigma_summary(outcomes)
+    stats_sigma = script_helpers.claim_sigma_summary(outcomes, CLAIM_MEASUREMENT)
     add(f"  - **Spread**: σ(`inb` peak) = {stats_sigma} per PVT point.")
     if worst_overall is not None:
         outcome, hi, over_rail = worst_overall
@@ -415,8 +411,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
 
 
 def _progress_detail(result) -> str:
-    value = result.measurements.get(CLAIM_MEASUREMENT)
-    return _fmt(value, 10) if value is not None else result.message
+    return script_helpers.claim_progress_detail(result, CLAIM_MEASUREMENT)
 
 
 def _alias_claim_measurement(tb) -> None:

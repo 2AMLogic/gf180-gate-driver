@@ -1,0 +1,11 @@
+* gate_driver_core DUT wrapper for `klt pex` (T1 item 7, issue #369).
+*
+* design/netlist/gate_driver_core.spice is a fragment (devices, no top .subckt), but
+* `klt pex` re-points the testbench's single DUT .include at the extracted netlist,
+* which always carries `.SUBCKT gate_driver_core`. Wrapping the fragment in the same
+* subcircuit (pin order = the extractor's alphabetical header) lets body.spice
+* instantiate it identically on the schematic and extracted legs. No device or
+* connection is changed.
+.subckt gate_driver_core GND_DRV GND_LOGIC IN OUT VDD_DRV VDD_LOGIC
+.include "../../../../design/netlist/gate_driver_core.spice"
+.ends gate_driver_core

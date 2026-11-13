@@ -3,6 +3,42 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-12
+
+- **PR #421**: Bump Repo Skills 0.25.10 -> 0.26.1
+
+### 2026-11-07
+
+- **PR #418**: Bump Repo Skills 0.25.1 -> 0.25.10
+
+### 2026-11-06
+
+- **PR #416**: refactor: hoist duplicated reference_measurements and claim progress/sigma helpers into script_helpers
+- **Issue #343** (closed): Hoist duplicated reference_measurements and claim progress/sigma helpers into script_helpers
+- **PR #414**: sim: 3-diode stacked UVLO reference measured over 15 corners (negative), DR-0023 proposed
+- **Issue #412** (closed): Prototype a stacked-diode UVLO reference and measure its 15-corner trip spread (DR-0018)
+
+### 2026-11-02
+
+- **PR #410**: refactor: remove unused report_stored helper from signoff_store
+- **Issue #409** (closed): Remove report_stored: unused helper duplicated inline by its callers
+
+### 2026-11-01
+
+- **PR #392**: docs(decision-records): ratify 0021, Ron·W statistical row for item 6
+- **PR #404**: Bump Repo Skills 0.24.7 -> 0.25.1
+
+### 2026-10-30
+
+- **PR #401**: refactor: hoist corner/control deck staging into run_corner_deck
+- **Issue #394** (closed): Dedupe the corner/control deck-staging block across three sim scripts
+- **PR #400**: docs: disclose klt pex error status and model_mismatch in item 7 note
+- **Issue #397** (closed): Disclose pex report model_mismatch block (and top-level status=error) in signoff README Item 7
+- **PR #396**: feat: record klt pex post-layout report and cite it as T1 item 7
+- **Issue #369** (closed): T1 item 7 (Post-layout verification): klt pex report on the current gate_driver_core GDS
+- **PR #393**: feat: grade Ron*W per-PVT bound with klt yield, closing item 6 gap
+- **Issue #379** (closed): T1 item 6 (Monte Carlo): draft the Ron·W statistical-row decision for ratification and clear the ronw_nfet_06v0 gap
+
 ### 2026-10-28
 
 - **PR #384**: feat(sim): shard item-5 requests to encode ratified DR-0016/0020 corner bounds

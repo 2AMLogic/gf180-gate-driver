@@ -60,7 +60,6 @@ from __future__ import annotations
 import argparse
 import statistics
 import sys
-import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -79,7 +78,6 @@ from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
-from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
@@ -161,32 +159,20 @@ def _run_sample(
     draws must tolerate a non-converged draw and disclose it rather than
     abort the whole campaign (decision record 0017's convention).
     """
-    with tempfile.TemporaryDirectory(prefix="ronw-mismatch-") as tmp:
-        work = Path(tmp)
-        local_deck = work / DECK_PATH.name
-        (work / "corner.spice").write_text(
-            _corner_shim(
-                pdk,
-                corner.sections,
-                temp_c,
-                script="run_ronw_mismatch.py",
-                extra_lines=mc.deck_lines() if mc is not None else (),
-            ),
-            encoding="utf-8"
+    try:
+        log = script_helpers.run_corner_deck(
+            DECK_PATH,
+            pdk,
+            corner.sections,
+            temp_c,
+            script="run_ronw_mismatch.py",
+            control=base._control_block(),
+            label=f"{corner.name} @ {temp_c} C",
+            prefix="ronw-mismatch-",
+            extra_lines=mc.deck_lines() if mc is not None else (),
         )
-        (work / "control.spice").write_text(base._control_block(), encoding="utf-8")
-        local_deck.write_text(
-            '.include "corner.spice"\n'
-            + DECK_PATH.read_text(encoding="utf-8")
-            + '\n.include "control.spice"\n.end\n',
-            encoding="utf-8",
-        )
-        try:
-            log = script_helpers.run_ngspice(
-                work, local_deck.name, f"{corner.name} @ {temp_c} C"
-            )
-        except RuntimeError as exc:
-            return "error", str(exc), {}
+    except RuntimeError as exc:
+        return "error", str(exc), {}
     try:
         flat = flatten(base.extract(log))
     except Exception as exc:  # noqa: BLE001 -- disclose, don't crash the campaign
