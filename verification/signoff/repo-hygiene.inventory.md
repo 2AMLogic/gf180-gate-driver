@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7b740e23ad226fa6d538ddfed04859e36467a6bad214860aafbfd578ed845099` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:571c403af51e17eca176b42d6b26f9351671e544ea23180863595607a257c7fe` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -216,3 +216,24 @@ hash is refreshed in the table:
 
 The other listed files are unchanged. No simulation, netlisting or layout flow
 was run for this re-audit.
+
+## Re-audit for issue #424 (2026-11-13)
+
+One listed file changed on the issue #424 branch (`feature/issue-424`, on top
+of `origin/main` at `06ea774`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `klt request-generator
+  reproducibility tests` step to `test` (stdlib unittest, no ngspice, no PDK,
+  writes nothing under `sim/`) and the matching row to the job table in the
+  file's header comment. `lint`, the `signoff` job and every other `test` step
+  -- including the grader pin -- are unchanged, so the CI finding still holds.
+  CI was read, not observed to pass here.
+
+The other listed files are unchanged. The new step exists because
+`sim/gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py` had been
+calling `gen_requests.request()` with its pre-shard signature since `26ea6de`
+and could not run, which broke the first line of item 7's documented
+reproduction command; neither file is listed in this inventory, and no
+committed request, bound or evidence file changed. No simulation, netlisting or
+layout flow was run for this re-audit.

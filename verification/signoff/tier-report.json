@@ -622,7 +622,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:479c2e9f4b7e3c2d84a7961768964beb1e236b80f0d851970bda41c601e8b626",
+        "content_hash": "sha256:afb54ff36e23f7e331d33bda0aaff9439f4c1c9c1215a3a50f27cad40a598229",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -631,7 +631,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:479c2e9f4b7e3c2d84a7961768964beb1e236b80f0d851970bda41c601e8b626",
+          "content_hash": "sha256:afb54ff36e23f7e331d33bda0aaff9439f4c1c9c1215a3a50f27cad40a598229",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"

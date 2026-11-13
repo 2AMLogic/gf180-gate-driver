@@ -15,6 +15,7 @@ sign-off grader can read it. The harness records in `../records/` are untouched.
 | `request-stretch-main.json` | tt/ff/fs x 3 temperatures at 3.3/6.0 V = 9 corners, stretch bounds (>= 1 A, < 25 ns). |
 | `request-stretch-slow-cold-mid.json` | ss/sf x {-40, 27} C at 3.3/6.0 V = 4 corners, stretch bounds. |
 | `request-stretch-hot-slow.json` | ss/sf x 125 C at 3.3/6.0 V = 2 corners. **Decision record 0016:** `ipeak_sink_a` >= 0.85 A (§3 stretch: 1 A). Every other limit is the stretch bound. |
+| `test_gen_requests.py` | Stdlib self-test (CI, no PDK): re-runs `gen_requests.py` and `pex/gen_pex_requests.py` in a temp tree and fails if either stops reproducing its committed `request-*.json` bytes (issue #424). |
 | `envelopes/` | Committed `klt sim` reports (append-only), cited by `verification/signoff/manifest.json` item 5. The `20261027-*` pair is the superseded un-sharded run (#367); it is kept as evidence but no longer cited. |
 
 `measurements[].limits` is min/max only and applies to every corner of a request,
@@ -39,10 +40,21 @@ Result and caveats: `verification/signoff/README.md` § "Item 5".
 
 ## `pex/` (issue #369)
 
-The same requests restated for `klt pex` (T1 item 7): `dut.spice` wraps the DUT
+The same bench restated for `klt pex` (T1 item 7): `dut.spice` wraps the DUT
 fragment as `.subckt gate_driver_core`, `body.spice` instantiates it as `xdut`
-and carries the single DUT `.include`, and `gen_pex_requests.py` reuses
-`../gen_requests.py` (same corners, measurements, bounds) with `remote.hosts`
-set because `klt pex` has no `--hosts` flag. The diagnostic
-`uvlo_lockout_at_in_high` probe is omitted. Command and result:
+and carries the single DUT `.include`, and `gen_pex_requests.py` calls
+`../gen_requests.py`'s `request()` (same corner construction, same measurement
+set) with `remote.hosts` set because `klt pex` has no `--hosts` flag. The
+diagnostic `uvlo_lockout_at_in_high` probe is omitted. Command and result:
 `verification/signoff/README.md` § "Item 7".
+
+**The PEX requests are not the shards above.** `request-nominal.json` and
+`request-stretch.json` are the *un-sharded* 45 + 15 corner matrices at the plain
+§3 bounds -- `ipeak_source_a` >= 0.5 A nominal and `ipeak_sink_a` >= 1 A stretch
+at every corner, with no DR-0016 / DR-0020 exception. Those are the stricter of
+the two, so item 7 relaxes nothing; whether it *should* adopt the shards is a spec
+and verification question (it would change graded evidence), not a property of the
+generator.
+
+`test_gen_requests.py` re-runs both generators in a temp tree and fails if either
+stops reproducing its committed request bytes.
