@@ -28,7 +28,7 @@ re-audit of the links):
 | document | sha256 |
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
-| `sim/README.md` | `sha256:80967abe117347d181575ff00b177e8a203aec5475a66bdd38842cc260097b7d` |
+| `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
 | `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
@@ -266,3 +266,34 @@ The other listed files are unchanged. Both changes exist because
 repo, so `python3 -m unittest` collected nothing from it and no CI step named
 it -- its pins had never been enforced (issue #429). No simulation, netlisting
 or layout flow was run for this re-audit.
+
+## Re-audit for issue #437 (2026-11-13)
+
+One listed file changed on the issue #437 branch (`feature/issue-437`, on top
+of `origin/main` at `dffd337`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `sim/README.md` (**read** the diff): the append-only section gains one
+  paragraph stating that the same check now covers
+  `manifests/artifacts/*.manifest.json`, because for a manifest-backed record
+  the manifest stands in for the netlist snapshot and per-corner logs that are
+  not committed, and that a stored run is superseded by storing a fresh run and
+  committing its manifest rather than by rewriting the old one. Nothing else
+  moved: the "Stored evidence" section, the facet table (whose four-experiment
+  omission disclosed above is unchanged) and every reproduction command are
+  untouched, so the Reproduction finding still holds.
+
+The other listed files are unchanged; in particular `.github/workflows/ci.yml`
+is untouched by this branch, so the CI finding still holds. The `lint` job's
+behaviour does broaden, through a module the workflow invokes rather than
+through the workflow itself: `sim/harness/evidence_lint.py` (reached via
+`sim/check_records.py --require-append-only`) now also refuses a modified or
+deleted `manifests/artifacts/*.manifest.json`, with a distinct remedy string.
+That module and `manifests/artifacts/README.md`, which gained the matching
+prose, are not listed in this inventory and carry no hash here, so the change
+is recorded but not pinned.
+
+Both edits exist because the append-only guarantee was documented and enforced
+for `sim/` records only, while the stored-run manifests that stand in for their
+uncommitted bytes were editable (issue #437). No simulation, netlisting or
+layout flow was run for this re-audit.
