@@ -3,11 +3,17 @@
 
     python3 sim/gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py
 
-Reuses ../gen_requests.py unchanged (same corners, same measurements, same
-ratified bounds, nothing relaxed) and only re-points `netlist` at ./body.spice,
-whose single `.include` is dut.spice, the schematic DUT wrapped as
-`.subckt gate_driver_core` and instantiated as `xdut` -- the swap point `klt pex`
-re-points at the extracted netlist.
+Builds both requests with ../gen_requests.py `request()` unchanged (same corner
+construction, same measurement set) over the un-sharded 45 + 15 corner matrices at
+the plain `spec/gate-driver.md` Sec.3 bounds -- NOT the seven DR-0016 / DR-0020
+shards that `gen_requests.main()` emits for item 5. Those shards relax two bounds at
+four corners; the Sec.3 bounds used here are the stricter of the two, so nothing is
+relaxed. Whether item 7 should adopt the shards is an open spec/verification
+question, not something this generator decides.
+
+`netlist` is re-pointed at ./body.spice, whose single `.include` is dut.spice, the
+schematic DUT wrapped as `.subckt gate_driver_core` and instantiated as `xdut` --
+the swap point `klt pex` re-points at the extracted netlist.
 """
 import json
 import sys
@@ -17,10 +23,20 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import gen_requests  # noqa: E402
 
+# The full un-sharded matrix: every process at every temperature, in the order the
+# committed request-*.json files carry them.
+PROCESSES = ["tt", "ff", "ss", "fs", "sf"]
+TEMPS_C = [-40.0, 27.0, 125.0]
+
 
 def main():
-    nominal = gen_requests.request([2.97, 3.3, 3.63], [4.5, 5.0, 5.5], 50e-9, 0.5)
-    stretch = gen_requests.request([3.3], [6.0], 25e-9, 1.0)
+    # The un-sharded 45 + 15 corner matrices at the plain spec/gate-driver.md Sec.3
+    # bounds -- equal source and sink minimums, no corner-scoped exception. See the
+    # module docstring for why the DR-0016 / DR-0020 shards are deliberately not used.
+    nominal = gen_requests.request(
+        PROCESSES, TEMPS_C, [2.97, 3.3, 3.63], [4.5, 5.0, 5.5], 50e-9, 0.5, 0.5
+    )
+    stretch = gen_requests.request(PROCESSES, TEMPS_C, [3.3], [6.0], 25e-9, 1.0, 1.0)
     for name, req, hosts in (
         ("request-nominal.json", nominal, 15),
         ("request-stretch.json", stretch, 5),
