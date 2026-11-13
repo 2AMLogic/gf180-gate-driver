@@ -13,6 +13,7 @@ grader can read them, plus the applied drive rail. The harness record in
 | `request-response.json` | Same 15 points; 6.0 -> 1.8 V step with a 1 ns edge. Graded `response_s` < 500 ns (row `uvlo`), timed from `VDD_DRV` crossing 3.6 V to `OUT` reaching 0.5 V. The harness times from each corner's own measured trip; over a 1 ns edge the two differ by about 1 ns against the 500 ns bound. |
 | `request-rail-nominal.json`, `request-rail-stretch.json` | `op` assertion of the applied rail at the DUT pin (row `drive_rail`): 4.5-5.5 V over the 45-point tied matrix and 6.0 V at the 15 stretch points. |
 | `envelopes/` | Committed `klt sim` reports (append-only), cited by `verification/signoff/manifest.json` item 5. |
+| `.klt/sim/batch-receipt.json` | klt's own working state, committed with the evidence in `d72424f`. **Kept deliberately**: it is the only committed copy of the as-submitted `request_sha256` (`5af1515f...`) for job `klt-sim-8453c410117b`, the job behind `envelopes/20261028-d7a2b69-klt-sim-uvlo-rail-stretch.json`; that value is in no other tracked file. `.klt/` is gitignored, so this is the only one: any further `.klt/` file is tool scratch, not evidence. |
 
 `drive_rail` is a condition of §3, not a measured bound, and `klt signoff`'s row
 schema has only `{id}` and `{id, gap}`; so it is graded as a limited

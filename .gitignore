@@ -24,6 +24,8 @@ layout/build/
 # klt extract output re-derived by layout/check_gate_driver_core.py on demand
 layout/*.extracted.spice
 layout/renders/
+# klt's per-directory working state; the one tracked exception is explained in sim/uvlo-trip-verification/klt/README.md
+.klt/
 # local klt install, created by the setup script
 .venv/
 # >>> loom-managed (do not edit) >>>
