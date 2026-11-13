@@ -42,8 +42,12 @@ What is checked, per ``sim/<slug>/records/<record-id>.md``:
   self-supporting evidence, and evidence is append-only (a defect in an
   already-committed, already-superseded record is fixed by minting a new
   head, not by editing the old one);
-- nothing under ``records/``, ``netlist-snapshots/`` or ``corners/`` has been
-  modified or deleted relative to the merge base -- evidence is append-only.
+- nothing under ``records/``, ``netlist-snapshots/`` or ``corners/``, and no
+  ``manifests/artifacts/*.manifest.json``, has been modified or deleted
+  relative to the merge base -- evidence is append-only. The manifests are in
+  scope because for a stored run the manifest *is* the record's netlist
+  snapshot and per-corner logs (the bytes are not in git), so an edited
+  manifest repoints committed evidence at different bytes.
 
 What is deliberately *not* checked: the prose inside a field (a record is a
 human/agent-written argument, not a form), and files under ``corners/<id>/``
@@ -127,6 +131,14 @@ NO_SUPPLY = "nosupply"
 EVIDENCE_PATH_RE = re.compile(
     r"^sim/(?P<slug>[^/]+)/(?P<kind>%s)/(?P<rest>.+)$"
     % "|".join(re.escape(d) for d in (RECORDS_DIR, SNAPSHOT_DIR, CORNERS_DIR))
+)
+
+#: ``manifests/artifacts/<name>.manifest.json`` -- one stored-evidence
+#: manifest. Anchored on the suffix, and on a single path segment, so the
+#: directory's own ``README.md`` stays editable prose rather than append-only
+#: evidence.
+MANIFEST_PATH_RE = re.compile(
+    r"^%s/[^/]+%s$" % (re.escape(MANIFEST_DIR), re.escape(MANIFEST_SUFFIX))
 )
 
 
@@ -640,25 +652,44 @@ def check_append_only(root: Path, base_ref: str) -> tuple[list, str | None]:
         base_sha,
         "--",
         "sim",
+        MANIFEST_DIR,
     )
     if diff is None or diff.returncode != 0:
         return [], "git diff against the merge base failed"
 
     verb = {"M": "modified", "D": "deleted"}
+    #: Both kinds are append-only, but they are superseded differently: a
+    #: committed record is replaced by minting a new one, whereas a manifest is
+    #: replaced by storing a fresh run and adding that run's manifest.
+    remedies = (
+        (
+            EVIDENCE_PATH_RE,
+            "sim/ evidence is append-only: mint a new <record-id> and reference "
+            "the old one via **Supersedes** (sim/README.md)",
+        ),
+        (
+            MANIFEST_PATH_RE,
+            "stored-evidence manifests are append-only: the manifest IS the run's "
+            "netlist snapshot and per-corner logs, so changing one rewrites "
+            "recorded evidence -- store a fresh run and add its manifest "
+            "instead (manifests/artifacts/README.md)",
+        ),
+    )
     problems = []
     for line in diff.stdout.splitlines():
         status, _, path = line.partition("\t")
         path = path.strip()
-        if not path or not EVIDENCE_PATH_RE.match(path):
+        if not path:
             continue
-        problems.append(
-            Problem(
-                path,
-                f"{verb.get(status[:1], status)} since {base_sha[:7]} -- sim/ evidence "
-                "is append-only: mint a new <record-id> and reference the old one "
-                "via **Supersedes** (sim/README.md)",
-            )
-        )
+        for pattern, remedy in remedies:
+            if pattern.match(path):
+                problems.append(
+                    Problem(
+                        path,
+                        f"{verb.get(status[:1], status)} since {base_sha[:7]} -- {remedy}",
+                    )
+                )
+                break
     return problems, None
 
 

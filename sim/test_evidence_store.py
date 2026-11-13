@@ -477,5 +477,85 @@ class ManifestBackedLint(unittest.TestCase):
         self.assertTrue(any("unreadable manifest" in str(p) for p in self.lint()))
 
 
+class AppendOnlyManifests(unittest.TestCase):
+    """``check_append_only`` covers ``manifests/artifacts/*.manifest.json``.
+
+    The manifest *is* a stored run's netlist snapshot and per-corner logs, so
+    editing or deleting one rewrites recorded evidence exactly the way editing
+    a committed record would (issue #437).
+    """
+
+    MANIFEST = "manifests/artifacts/b-20261022-000000-abc1234.manifest.json"
+
+    def setUp(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        self.root = Path(td.name).resolve()
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.email", "t@example.com")
+        self.git("config", "user.name", "t")
+        self.write(self.MANIFEST, json.dumps(
+            {"schema_version": 1, "entries": [{"name": "sim/b/corners/x/tt.log",
+                                               "sha256": "a" * 64}]}) + "\n")
+        self.write("manifests/artifacts/README.md", "prose\n")
+        self.write("sim/b/records/20261022-000000-abc1234.md", "- **Record ID**: x\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "base")
+        # The check diffs the merge base with base_ref against the WORKING
+        # TREE, so point base_ref at this commit and then tamper.
+        self.git("branch", "base")
+
+    def git(self, *args):
+        subprocess.run(("git", *args), cwd=self.root, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def write(self, rel, text):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def check(self):
+        from harness import evidence_lint as el
+        problems, skip = el.check_append_only(self.root, "base")
+        self.assertIsNone(skip, f"check could not run: {skip}")
+        return problems
+
+    def test_clean_tree_reports_nothing(self):
+        self.assertEqual(self.check(), [])
+
+    def test_modified_manifest_is_reported(self):
+        self.write(self.MANIFEST, json.dumps(
+            {"schema_version": 1, "entries": [{"name": "sim/b/corners/x/tt.log",
+                                               "sha256": "0" * 64}]}) + "\n")
+        problems = self.check()
+        self.assertEqual([p.path for p in problems], [self.MANIFEST])
+        self.assertIn("modified", problems[0].message)
+        self.assertIn("append-only", problems[0].message)
+
+    def test_deleted_manifest_is_reported(self):
+        (self.root / self.MANIFEST).unlink()
+        problems = self.check()
+        self.assertEqual([p.path for p in problems], [self.MANIFEST])
+        self.assertIn("deleted", problems[0].message)
+
+    def test_manifest_readme_stays_editable(self):
+        self.write("manifests/artifacts/README.md", "reworded prose\n")
+        self.assertEqual(self.check(), [])
+
+    def test_sim_record_still_reported_with_its_own_remedy(self):
+        self.write("sim/b/records/20261022-000000-abc1234.md", "- **Record ID**: y\n")
+        problems = self.check()
+        self.assertEqual(len(problems), 1)
+        self.assertIn("**Supersedes**", problems[0].message)
+
+    def test_both_kinds_reported_together(self):
+        (self.root / self.MANIFEST).unlink()
+        self.write("sim/b/records/20261022-000000-abc1234.md", "- **Record ID**: y\n")
+        self.assertEqual(
+            sorted(p.path for p in self.check()),
+            [self.MANIFEST, "sim/b/records/20261022-000000-abc1234.md"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
