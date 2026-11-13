@@ -40,13 +40,13 @@ Issues currently being built (`loom:building`).
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#389**: docs: define ratification key non-author check as session separation
+_None._
 
 ## Approved (Awaiting Merge)
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#389**: docs: define ratification key non-author check as session separation
 
 ## Proposed
 
@@ -56,7 +56,7 @@ Issues carrying `loom:curated`.
 
 ## Proposed (Architect / Hermit)
 
-_None._
+- **#424**: Repair or remove gen_pex_requests.py: calls gen_requests.request() with a stale signature and cannot run *(hermit)*
 
 ## Epics
 
@@ -71,9 +71,9 @@ _None._
 | Important | 1 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 1 |
-| Approved PRs awaiting merge | 0 |
+| PRs awaiting review | 0 |
+| Approved PRs awaiting merge | 1 |
 | Curated | 1 |
-| Architect / Hermit proposals | 0 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
