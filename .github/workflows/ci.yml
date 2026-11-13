@@ -147,7 +147,10 @@ jobs:
       - name: Monte Carlo CSV to klt-yield converter unit tests
         # sim/test_mc_to_yield.py pins which samples-*.csv rows become
         # `klt yield` samples (baseline/zero-sigma control rows excluded,
-        # non-converged draws kept as errored; issue #368). Stdlib only.
+        # non-converged draws kept as errored; issue #368) -- for all four
+        # campaigns, including the Ron*W emitter
+        # verification/signoff/derive_ronw_bound.py, which reads its draws
+        # and control through that same converter (issue #427). Stdlib only.
         run: python3 -m unittest discover -s sim -p test_mc_to_yield.py
 
       - name: Evidence-store and manifest-check unit tests
