@@ -15,7 +15,13 @@ outputs".
 Evidence bytes are private; these manifests are public (operator decision
 1.1, 2026-10-22). The run's Markdown summary is committed under `sim/<bench>/`.
 
-Manifests are append-only evidence: never edit or delete one. CI runs
+Manifests are append-only evidence: never edit or delete one. CI enforces
+that: `python3 sim/check_records.py --require-append-only` fails on any
+`*.manifest.json` here that a branch modified or deleted relative to its merge
+base with `main` (issue #437) -- for a stored run the manifest *is* the
+record's netlist snapshot and per-corner logs, so editing one repoints
+recorded evidence at different bytes. This file is prose, not a manifest, and
+stays editable. CI also runs
 `python3 scripts/check_artifact_manifests.py check --tree <sha>`, which checks
 the schema and that no stored object's bytes are also committed. To check the
 bytes, run `python3 scripts/check_artifact_manifests.py verify <manifest>` or

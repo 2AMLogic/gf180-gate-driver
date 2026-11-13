@@ -340,6 +340,12 @@ the append-only guarantee is what makes `sim/` usable as an evidence trail;
 "fixing" an existing record in place would defeat that. Enforced in CI by
 `sim/check_records.py` (see `.github/workflows/ci.yml`'s `lint` job).
 
+The same check covers `manifests/artifacts/*.manifest.json`, because for a
+manifest-backed record the manifest stands in for the snapshot and per-corner
+logs that are not committed: editing or deleting one is editing or deleting
+that evidence. Supersede a stored run by storing a fresh one and committing
+its manifest, never by rewriting the old manifest.
+
 ## Worked example
 
 `sim/smoke-mv-inverter/records/<record-id>.md` (see
