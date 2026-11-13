@@ -3,7 +3,6 @@
   "description": "Loom-managed workspace with AI development orchestration",
   "private": true,
   "scripts": {
-    "worktree:return": "./.loom/scripts/worktree-return.sh",
     "test": "python3 sim/run_corners.py --list",
     "test:layout": "python3 layout/test_gen_gate_driver_core.py",
     "test:harness": "python3 sim/test_harness_checks.py",
