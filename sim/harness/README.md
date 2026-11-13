@@ -469,6 +469,30 @@ What stays in a campaign script: which measurement is under claim, which
 committed record its control is checked against, and the record's own
 narrative (`build_record_body`).
 
+## `klt sim` requests: `harness/klt_request.py`
+
+Some sign-off rows are restated as `klt sim` requests -- JSON documents, graded
+by `klt signoff` rather than by this harness -- and the deterministic scripts
+that write the committed `request-*.json` files live under
+`sim/<experiment-slug>/klt/`. Those scripts are *not* harness testbenches and do
+not go through `run_corners.py`; but two parts of what they emit are the same
+facts the harness already holds, so they are defined here once instead of being
+hand-typed per generator (issue #441):
+
+| Name | What |
+|---|---|
+| `process_entries(names=None)` | The request's `corners.process` array, built from `corners.CORNERS[name].sections`. Defaults to `CORNER_SETS["mos"]` (tt/ff/ss/fs/sf), so the five-way `.lib`-section bundle has one definition rather than one per generator. |
+| `envelope(netlist, corners, analysis, measurements)` | A whole request: the four testbench-specific fields wrapped in the `engine` / `models` / `batch` / `options` envelope every request in this repo carries identically. |
+
+Stdlib-only and import-cheap by design — it imports only `corners.py`, so the
+generators still run on the PDK-free CI runner. The committed request bytes are
+inputs of cited, append-only sign-off evidence, so
+[`sim/test_gen_requests.py`](../test_gen_requests.py) re-runs every generator in
+a temp mirror of `sim/` and fails if any output moves a byte. **Editing
+`CORNERS` for tt/ff/ss/fs/sf now fails that test** — which is the point: the
+harness and the `klt sim` requests can no longer disagree about what `ss` means,
+and a change to either one surfaces the graded evidence that must be re-run.
+
 ## smoke-mv-inverter
 
 `sim/smoke-mv-inverter/` is the harness acceptance test, not a circuit

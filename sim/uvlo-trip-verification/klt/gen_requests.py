@@ -14,19 +14,24 @@ RESPONSE_MAX_S); nothing is relaxed. Decision record 0018's false-trip finding
 is NOT encoded as an exception: the corners it shows outside the ranges FAIL.
 Hysteresis has a typical value only (0001 Decision 4), so it is reported
 ungraded.
+
+The process axis and the engine/models/batch/options envelope are not defined
+here: both come from sim/harness/klt_request.py, shared with
+../../gate-driver-core-drive-with-uvlo/klt/gen_requests.py and derived from the
+harness's own corners.CORNERS (issue #441). The bounds below stay literals --
+klt wants plain numbers and importing run_uvlo_trip.py would drag the whole
+harness into a PDK-free generator -- but sim/test_gen_requests.py now asserts
+they still equal run_uvlo_trip.py's, and that this generator still reproduces
+its committed request bytes.
 """
 import json
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parents[1]))  # sim/, for the harness package
+from harness import klt_request  # noqa: E402
 
-PROCESS = {
-    "tt": ["typical", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-    "ff": ["ff", "res_ff", "bjt_ff", "diode_ff", "moscap_ff", "mimcap_ff"],
-    "ss": ["ss", "res_ss", "bjt_ss", "diode_ss", "moscap_ss", "mimcap_ss"],
-    "fs": ["fs", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-    "sf": ["sf", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-}
 TEMPS = [-40.0, 27.0, 125.0]
 
 # LOCKOUT is read at the harness's fixed absolute 1.5 V level (a literal: klt
@@ -42,25 +47,12 @@ OUT_LOW_V = 0.5
 
 def base(netlist, analysis, measurements, supply_v=None):
     corners = {
-        "process": [{"name": n, "sections": s} for n, s in PROCESS.items()],
+        "process": klt_request.process_entries(),
         "temperature_c": TEMPS,
     }
     if supply_v:
         corners["supply_v"] = supply_v
-    return {
-        "netlist": netlist,
-        "engine": "ngspice",
-        "models": {"pdk": "gf180mcuD", "lib": "libs.tech/ngspice/sm141064.ngspice"},
-        "corners": corners,
-        "batch": {"runner_version_check": "warn", "capacity_wait_s": 1800},
-        "analysis": analysis,
-        "measurements": measurements,
-        "options": {
-            "timeout_s": 3000,
-            "keep_artifacts": False,
-            "ngspice_init": ["set measureprec=10", "set numdgt=10"],
-        },
-    }
+    return klt_request.envelope(netlist, corners, analysis, measurements)
 
 
 def trip():

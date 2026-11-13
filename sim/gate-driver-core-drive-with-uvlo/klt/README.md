@@ -6,7 +6,7 @@ sign-off grader can read it. The harness records in `../records/` are untouched.
 
 | File | What |
 |---|---|
-| `gen_requests.py` | Emits all seven requests (deterministic). Bounds are copied from `spec/gate-driver.md` §3; the three corner-scoped ratified exceptions below are the only differences. |
+| `gen_requests.py` | Emits all seven requests (deterministic). Bounds are copied from `spec/gate-driver.md` §3; the three corner-scoped ratified exceptions below are the only differences. The process axis and the `engine`/`models`/`batch`/`options` envelope come from [`sim/harness/klt_request.py`](../../harness/klt_request.py), shared with the UVLO generator (issue #441). |
 | `body.spice`, `design.ngspice` | Circuit body (includes `design/netlist/gate_driver_core.spice`) and the PDK `design.ngspice` it needs, copied so the batch worker can stage them. |
 | `request-nominal-main.json` | tt/ff/fs/sf x 3 temperatures x 3 tied rail points (2.97/4.5, 3.3/5.0, 3.63/5.5 V) = 36 corners, §3 target bounds. |
 | `request-nominal-ss-warm-hot.json` | ss x {27, 125} C x 3 rail points = 6 corners, §3 target bounds. |
@@ -15,7 +15,6 @@ sign-off grader can read it. The harness records in `../records/` are untouched.
 | `request-stretch-main.json` | tt/ff/fs x 3 temperatures at 3.3/6.0 V = 9 corners, stretch bounds (>= 1 A, < 25 ns). |
 | `request-stretch-slow-cold-mid.json` | ss/sf x {-40, 27} C at 3.3/6.0 V = 4 corners, stretch bounds. |
 | `request-stretch-hot-slow.json` | ss/sf x 125 C at 3.3/6.0 V = 2 corners. **Decision record 0016:** `ipeak_sink_a` >= 0.85 A (§3 stretch: 1 A). Every other limit is the stretch bound. |
-| `test_gen_requests.py` | Stdlib self-test (CI, no PDK): re-runs `gen_requests.py` and `pex/gen_pex_requests.py` in a temp tree and fails if either stops reproducing its committed `request-*.json` bytes (issue #424). |
 | `envelopes/` | Committed `klt sim` reports (append-only), cited by `verification/signoff/manifest.json` item 5. The `20261027-*` pair is the superseded un-sharded run (#367); it is kept as evidence but no longer cited. |
 
 `measurements[].limits` is min/max only and applies to every corner of a request,
@@ -56,5 +55,8 @@ the two, so item 7 relaxes nothing; whether it *should* adopt the shards is a sp
 and verification question (it would change graded evidence), not a property of the
 generator.
 
-`test_gen_requests.py` re-runs both generators in a temp tree and fails if either
-stops reproducing its committed request bytes.
+[`sim/test_gen_requests.py`](../../test_gen_requests.py) re-runs every
+`sim/*/klt/` generator -- both of these and
+`../../uvlo-trip-verification/klt/gen_requests.py` -- in a temp mirror of `sim/`
+and fails if any stops reproducing its committed request bytes (issues #424,
+#441). It lives at `sim/` rather than here because it now spans two testbenches.
