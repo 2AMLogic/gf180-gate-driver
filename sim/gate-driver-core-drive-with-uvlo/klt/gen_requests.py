@@ -22,19 +22,21 @@ ratified decision record:
 DR-0020 excepts only that source-current bound. Rise/fall/propagation at that
 corner stay at Sec.3 and still error; that, and the sf / -40 C low-line corner,
 have no ratified exception (issue #378).
+
+The process axis and the engine/models/batch/options envelope are not defined
+here: both come from sim/harness/klt_request.py, which derives the five MOS
+corner bundles from the harness's own corners.CORNERS (issue #441). Only what
+is specific to this testbench -- netlist, analysis, measurements, the sharded
+corner matrices -- lives in this file. sim/test_gen_requests.py pins that every
+generator still reproduces its committed request bytes.
 """
 import json
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-
-PROCESS = {
-    "tt": ["typical", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-    "ff": ["ff", "res_ff", "bjt_ff", "diode_ff", "moscap_ff", "mimcap_ff"],
-    "ss": ["ss", "res_ss", "bjt_ss", "diode_ss", "moscap_ss", "mimcap_ss"],
-    "fs": ["fs", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-    "sf": ["sf", "res_typical", "bjt_typical", "diode_typical", "moscap_typical", "mimcap_typical"],
-}
+sys.path.insert(0, str(HERE.parents[1]))  # sim/, for the harness package
+from harness import klt_request  # noqa: E402
 
 
 def measurements(tpd_max, ipk_source_min, ipk_sink_min):
@@ -68,24 +70,16 @@ def measurements(tpd_max, ipk_source_min, ipk_sink_min):
 
 
 def request(processes, temps, vlogic, vdrv, tpd_max, ipk_source_min, ipk_sink_min):
-    return {
-        "netlist": "body.spice",
-        "engine": "ngspice",
-        "models": {"pdk": "gf180mcuD", "lib": "libs.tech/ngspice/sm141064.ngspice"},
-        "corners": {
-            "process": [{"name": n, "sections": PROCESS[n]} for n in processes],
+    return klt_request.envelope(
+        "body.spice",
+        {
+            "process": klt_request.process_entries(processes),
             "temperature_c": temps,
             "supply_v": {"vsup_logic": vlogic, "vsup_drv": vdrv},
         },
-        "batch": {"runner_version_check": "warn", "capacity_wait_s": 1800},
-        "analysis": {"kind": "tran", "args": "0.1n 700n"},
-        "measurements": measurements(tpd_max, ipk_source_min, ipk_sink_min),
-        "options": {
-            "timeout_s": 3000,
-            "keep_artifacts": False,
-            "ngspice_init": ["set measureprec=10", "set numdgt=10"],
-        },
-    }
+        {"kind": "tran", "args": "0.1n 700n"},
+        measurements(tpd_max, ipk_source_min, ipk_sink_min),
+    )
 
 
 def main():

@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:d105329a7d11475a6a112b44985092df36e8140f74acd0d929039b633141c12c` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
-| `sim/harness/README.md` | `sha256:cf7e7a918d7018ac5280d79f2ad6ff59a8d7c508641f83aff1fc088c4bf03eb5` |
+| `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
 | `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -297,3 +297,42 @@ Both edits exist because the append-only guarantee was documented and enforced
 for `sim/` records only, while the stored-run manifests that stand in for their
 uncommitted bytes were editable (issue #437). No simulation, netlisting or
 layout flow was run for this re-audit.
+
+## Re-audit for issue #441 (2026-11-13)
+
+Two listed files changed on the issue #441 branch (`feature/issue-441`, on top
+of `origin/main` at `1a74908`) and were re-read against the findings above;
+their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the `test` job's `klt
+  request-generator reproducibility tests` step changes the path it runs from
+  `sim/gate-driver-core-drive-with-uvlo/klt/test_gen_requests.py` to
+  `sim/test_gen_requests.py` (the same test, moved up because it now covers
+  generators under two testbenches rather than one), and its comment is
+  rewritten to describe the widened coverage. No job, trigger, permission,
+  concurrency setting or other step moved; `lint` (with the evidence-record and
+  append-only checks), the harness self-test steps and the `signoff` job are
+  unchanged, so the CI finding still holds. The header table's row for this
+  step names no path and is unchanged. CI was read, not observed to pass here.
+- `sim/harness/README.md` (**read** the diff): adds one section, "`klt sim`
+  requests: `harness/klt_request.py`", before "smoke-mv-inverter", documenting
+  the module the `sim/*/klt/` request generators now share and noting that
+  editing `corners.CORNERS` for tt/ff/ss/fs/sf fails the generator test. The
+  Quick start, Prerequisites, PVT grid, testbench-authoring, "What a run
+  writes", Monte Carlo and xschem sections are untouched, so every reproduction
+  command this inventory's Reproduction finding relies on is unchanged.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE` and
+`spec/gate-driver.md` are untouched by this branch, so those findings still
+hold. Recorded but **not** pinned here: the new `sim/harness/klt_request.py`,
+the relocated `sim/test_gen_requests.py`, the two `klt/` generators now
+importing that module, and the two `sim/*/klt/README.md` files -- none is
+listed in this inventory and none carries a hash in it. The committed
+`request-*.json` files under both `klt/` directories are byte-identical before
+and after (they are inputs of cited item-5 and item-7 evidence), which is what
+the relocated test asserts.
+
+Both edits exist because the UVLO request generator duplicated the process
+table and request envelope of the item-5 core-drive generator and was the one
+generator outside the reproduction test added for issue #424 (issue #441). No
+simulation, netlisting or layout flow was run for this re-audit.
