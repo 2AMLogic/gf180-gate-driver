@@ -488,7 +488,8 @@ class RecordBodyGoldenTests(unittest.TestCase):
         # "error" is omitted deliberately: this runner's narrative dereferences
         # a worst-excursion tuple that is `None` when no draw converged, which
         # it does on `origin/main` too -- a pre-existing defect, out of #442's
-        # scope and tracked separately.
+        # scope and tracked in #446. Add `ronw-error.md` and drop this comment
+        # when that lands.
         for scenario, smoke in (("mixed", False), ("clean", False), ("mixed", True)):
             name = f"ronw-{scenario}{'-smoke' if smoke else ''}.md"
             with self.subTest(golden=name):
