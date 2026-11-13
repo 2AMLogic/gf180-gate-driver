@@ -56,7 +56,7 @@ collect() {
   done < <(git ls-files -z -- "$1" ':!:.loom/**' ':!:.claude/**' ':!:loom.sh')
 }
 
-echo "== 1/4 shellcheck (shell scripts) =="
+echo "== 1/5 shellcheck (shell scripts) =="
 collect '*.sh'
 if [ "${#files[@]}" -eq 0 ]; then
   echo "no shell scripts tracked"
@@ -74,7 +74,7 @@ else
 fi
 
 echo
-echo "== 2/4 python syntax =="
+echo "== 2/5 python syntax =="
 collect '*.py'
 if [ "${#files[@]}" -eq 0 ]; then
   echo "no python files tracked"
@@ -89,7 +89,7 @@ else
 fi
 
 echo
-echo "== 3/4 json well-formedness =="
+echo "== 3/5 json well-formedness =="
 collect '*.json'
 if [ "${#files[@]}" -eq 0 ]; then
   echo "no json files tracked"
@@ -118,7 +118,7 @@ sys.exit(1 if bad else 0)
 fi
 
 echo
-echo "== 4/4 evidence records (sim/*/records) =="
+echo "== 4/5 evidence records (sim/*/records) =="
 # The schema in sim/README.md -- nine required fields, <record-id> naming, the
 # two-rail corner-id grammar, and the append-only rule -- enforced instead of
 # merely documented. Tracked files only, same as collect() above; the
@@ -127,6 +127,64 @@ echo "== 4/4 evidence records (sim/*/records) =="
 if ! python3 sim/check_records.py ${EVIDENCE_ARGS[@]+"${EVIDENCE_ARGS[@]}"}; then
   echo "FAIL: evidence records"
   status=1
+fi
+
+echo
+echo "== 5/5 every tracked test_*.py is run by CI =="
+# Recurrence guard for issue #429: sim/test_harness_script_helpers.py sat in
+# the tree for three weeks, grew through eight refactors that each cited it as
+# the pin for a newly shared helper, and was executed by nothing -- it was
+# pytest-style in a stdlib-only repo, so `python3 -m unittest` collected zero
+# tests from it and no CI step named it. Nothing failed; the coverage was
+# simply absent. A test file CI does not run must fail here instead.
+#
+# "Run by CI" = the file's repo-relative path (or, where that basename is
+# unique across the repo, its basename -- `-m unittest discover -p NAME.py`
+# names tests that way) appears on a non-comment line of the workflow. Comment
+# lines are stripped first so the workflow's own self-check table cannot
+# satisfy the check on its own.
+collect '*test_*.py'
+if [ "${#files[@]}" -eq 0 ]; then
+  echo "no python test files tracked"
+else
+  if ! python3 -c '
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+workflow = Path(".github/workflows/ci.yml")
+if not workflow.is_file():
+    print(f"{workflow}: missing -- cannot check which tests CI runs")
+    sys.exit(1)
+
+runnable = "\n".join(
+    line for line in workflow.read_text(encoding="utf-8").splitlines()
+    if not re.match(r"\s*#", line)
+)
+
+paths = sys.argv[1:]
+basenames = Counter(Path(p).name for p in paths)
+
+missing = []
+for path in paths:
+    name = Path(path).name
+    if path in runnable:
+        continue
+    if basenames[name] == 1 and re.search(rf"(?<![\w./-]){re.escape(name)}(?![\w-])", runnable):
+        continue
+    missing.append(path)
+
+for path in missing:
+    print(f"{path}: not run by any step in {workflow}")
+    print(f"    add a step that runs it, or delete the file -- an unrun test pins nothing")
+sys.exit(1 if missing else 0)
+' "${files[@]}"; then
+    echo "FAIL: a tracked test file is never run by CI"
+    status=1
+  else
+    echo "${#files[@]} tracked test file(s), all named by a CI step"
+  fi
 fi
 
 echo

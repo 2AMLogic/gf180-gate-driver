@@ -311,7 +311,13 @@ What the item-6 evidence is, and is not:
   is emitted by `python3 verification/signoff/derive_ronw_bound.py --emit-samples
   verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (15
   populations of `ronw_n06_3.6`, N = 200, one `max` limit each); all 15 grade
-  `sufficient` and pass.
+  `sufficient` and pass. That script computes the per-PVT limit, but it does
+  **not** decide which CSV rows are samples: it reads its draws and its control
+  through `sim/mc_to_yield.py` (`read_draws` / `read_control`), so all four
+  campaigns share the one row-selection rule `sim/test_mc_to_yield.py` pins —
+  including the convention that a non-converged draw stays in the population as
+  a `null` sample (`klt yield` counts it `errored`) instead of silently
+  shrinking it (issue #427).
 - The campaigns cover only the supply points each record justifies (a subset of
   the PVT matrix, per the records), and DR-0017 records the PDK's mismatch-model
   coverage limits for the 5 V / 6 V devices; this evidence inherits both.
@@ -446,7 +452,13 @@ python3 sim/mc_to_yield.py <campaign> sim/<campaign>/corners/<run> \
 cd verification/signoff/yield && klt yield <campaign>.samples.json --format json > <campaign>.yield.json
 ```
 
-The `ronw-nfet-06v0-mismatch` pair is the exception: its samples document comes from
+The `ronw-nfet-06v0-mismatch` pair is the exception, because its bound is
+relative to each PVT point's own control rather than a fixed ratified value, so
+`mc_to_yield.py`'s `CAMPAIGNS` table cannot express it. Its samples document comes
+from
 `python3 verification/signoff/derive_ronw_bound.py --emit-samples
 verification/signoff/yield/ronw-nfet-06v0-mismatch.samples.json` (it carries the
 per-PVT `max` limits from decision record 0021), then the same `klt yield` step.
+Only the *limit* is computed there — the draws and the control come from
+`sim/mc_to_yield.py`, so the exception is in the bound, not in what counts as a
+sample.

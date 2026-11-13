@@ -7,6 +7,14 @@ one `samples-<pvt>.csv` per PVT point. This turns them into the sample-set
 shape `klt yield` reads (docs/cli/yield.md, "Sample-set document") without
 re-simulating anything and without touching the campaign scripts or records.
 
+`CAMPAIGNS` below maps the three campaigns whose bound is a fixed ratified
+value, and `build_sample_set` assembles their whole document. The fourth,
+`low-side-power-switch-ronw-mismatch`, is graded against a per-PVT
+control-relative bound (decision record 0021) and is assembled by
+`verification/signoff/derive_ronw_bound.py` -- but that script selects its rows
+through `read_draws` and `read_control` here, so "which CSV rows are samples"
+is defined once, in this file, for all four campaigns.
+
 Conventions (each one is a claim about the evidence, so they are explicit):
 
 * Each PVT point is its own population -> one measurement per point, named
@@ -18,6 +26,8 @@ Conventions (each one is a claim about the evidence, so they are explicit):
   `klt yield` negative control (which must be a seeded-defect campaign).
 * A draw whose `status` is not `ok` (non-converged) is kept as a `null`
   sample, so `klt yield` counts it as `errored` rather than it vanishing.
+* The deterministic control, where a bound is relative to one, is the
+  `baseline` row (`read_control`). It is a control, never a sample.
 * Limits are the ratified bounds, never adjusted here (spec/gate-driver.md
   section 5 Exceptions 1-3).
 
@@ -35,6 +45,9 @@ import sys
 from pathlib import Path
 
 SCHEMA = "gf180-gate-driver/mc-sample-set/1"
+
+#: the `sample` cell of the deterministic control row (plain deck, mismatch off)
+BASELINE_SAMPLE = "baseline"
 
 #: campaign -> the claim it backs. `columns` is one CSV column or several
 #: (the draw's value is the max of them: the worst of the node set the
@@ -94,6 +107,30 @@ def read_draws(path: Path, columns: list[str]) -> tuple[list[float | None], list
     if not samples:
         raise ConversionError(f"{path}: no mismatch draws (sw_stat_mismatch == 1)")
     return samples, seeds
+
+
+def read_control(path: Path, columns: list[str]) -> float:
+    """Return the deterministic control value from one samples CSV.
+
+    The control is the `baseline` row (plain deck, mismatch off) -- the same
+    row `read_draws` excludes. Its value is the max over `columns`, so it is
+    comparable with the draws for a control-relative bound (decision record
+    0021). The `baseline` row's `sw_stat_mismatch` cell is prose, not a
+    number, so it is found by `sample`, never by parsing that column.
+    """
+    with path.open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        missing = [c for c in ["sample", *columns] if c not in (reader.fieldnames or [])]
+        if missing:
+            raise ConversionError(f"{path}: missing column(s) {missing}")
+        for row in reader:
+            if row["sample"].strip() != BASELINE_SAMPLE:
+                continue
+            try:
+                return max(float(row[c]) for c in columns)
+            except ValueError as exc:
+                raise ConversionError(f"{path}: baseline row: {exc}") from exc
+    raise ConversionError(f"{path}: no {BASELINE_SAMPLE!r} control row")
 
 
 def pvt_of(path: Path) -> str:

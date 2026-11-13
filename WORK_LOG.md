@@ -5,6 +5,12 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-13
 
+- **PR #436**: chore: delete the retired ratification/ key trees
+- **Issue #426** (closed): Remove the retired ratification/ key trees (follow-on from PR #389)
+- **PR #433**: fix: call gen_requests.request() with its post-shard signature in the PEX generator
+- **Issue #424** (closed): Repair or remove gen_pex_requests.py: calls gen_requests.request() with a stale signature and cannot run
+- **PR #431**: chore: remove dead worktree:return npm script
+- **Issue #428** (closed): Remove dead worktree:return npm script: its target .loom/scripts/worktree-return.sh no longer exists
 - **PR #389**: docs: define ratification key non-author check as session separation
 - **Issue #388** (closed): Ratification keys: non-author means a fresh session, not a distinct GitHub identity
 
