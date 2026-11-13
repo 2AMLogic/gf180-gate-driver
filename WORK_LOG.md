@@ -3,6 +3,11 @@
 Chronological record of merged PRs and closed issues in this repository.
 Maintained automatically by the Guide role's document maintenance phase.
 
+### 2026-11-13
+
+- **PR #389**: docs: define ratification key non-author check as session separation
+- **Issue #388** (closed): Ratification keys: non-author means a fresh session, not a distinct GitHub identity
+
 ### 2026-11-12
 
 - **PR #421**: Bump Repo Skills 0.25.10 -> 0.26.1
