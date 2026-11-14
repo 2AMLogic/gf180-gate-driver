@@ -45,6 +45,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -370,6 +371,37 @@ def summary_section(manifest_rel: str, manifest: dict, empty: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def store_manifest_only(files: list[tuple[Path, str]], *, repo_root: Path, bench: str,
+                        rid: str, put=None,
+                        also_refuse: Sequence[Path] = ()) -> tuple[Path, dict, list[str]]:
+    """Store ``files`` and commit only their manifest; the fail-closed core.
+
+    Steps (1)-(3) of :func:`store_files`, and the single definition of "refuse
+    before putting" that every caller shares: (1) refuse if the manifest -- or
+    any path in ``also_refuse``, which a caller writing further files passes so
+    they are guarded in the same pass -- already exists; (2) put every file;
+    (3) install the manifest exclusively. A failure in (1)-(2) leaves nothing
+    in the repo and runs no ``klt artifact put``.
+
+    The existence check is :func:`os.path.lexists`, not ``Path.exists``: a
+    dangling symlink at one of these paths is a collision (``open(p, "x")``
+    raises ``FileExistsError`` on it) and must be refused up front rather than
+    after the puts have already run.
+
+    Returns ``(manifest_path, manifest, empty_names)``.
+    """
+    mpath = manifest_path(repo_root, bench, rid)
+    for p in (mpath, *also_refuse):
+        if os.path.lexists(p):
+            raise StoreError(f"{p.relative_to(repo_root)} already exists; refusing "
+                             "to overwrite evidence")
+    if not files:
+        raise StoreError("nothing staged to store")
+    manifest, empty = (put or put_files)(files, repo_root)
+    install_manifest(manifest, mpath)
+    return mpath, manifest, empty
+
+
 def store_files(files: list[tuple[Path, str]], *, repo_root: Path, bench: str,
                 rid: str, summary_text: str, summary_path: Path,
                 put=None) -> Path:
@@ -379,18 +411,15 @@ def store_files(files: list[tuple[Path, str]], *, repo_root: Path, bench: str,
     already exists; (2) put every file; (3) install the manifest exclusively;
     (4) write the summary exclusively, with a "Stored evidence" section that
     lists every object. A failure in (1)-(2) leaves nothing in the repo.
-    Returns the manifest path.
+
+    Steps (1)-(3) are :func:`store_manifest_only`, which this delegates to with
+    ``also_refuse=(summary_path,)`` so the summary is still refused *before*
+    any put; only step (4) is this function's own. Returns the manifest path.
     """
-    mpath = manifest_path(repo_root, bench, rid)
-    for p in (mpath, summary_path):
-        if os.path.lexists(p):
-            raise StoreError(f"{p.relative_to(repo_root)} already exists; refusing "
-                             "to overwrite evidence")
-    if not files:
-        raise StoreError("nothing staged to store")
-    manifest, empty = (put or put_files)(files, repo_root)
+    mpath, manifest, empty = store_manifest_only(
+        files, repo_root=repo_root, bench=bench, rid=rid, put=put,
+        also_refuse=(summary_path,))
     mrel = mpath.relative_to(repo_root).as_posix()
-    install_manifest(manifest, mpath)
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with open(summary_path, "x", encoding="utf-8") as fh:
@@ -409,17 +438,33 @@ EXIT_NOT_STORED = 10
 STAGE_ROOT = Path("sim") / ".work" / "evidence"
 
 
-def stage_dir(repo_root: Path, bench: str, rid: str) -> Path:
+def stage_dir(repo_root: Path, bench: str, rid: str, *, root: Path = STAGE_ROOT) -> Path:
     """Fresh git-ignored scratch dir for one run (``sim/.work/`` is ignored).
 
     Writers lay files out exactly as they would under ``sim/<bench>/``
     (``corners/<rid>/*.log``, ``netlist-snapshots/<rid>.spice``); the relative
-    path becomes the manifest ``name``.
+    path becomes the manifest ``name``. ``root`` overrides ``STAGE_ROOT`` for a
+    facade that stages elsewhere (``layout/common/signoff_store.py`` passes its
+    own ``layout/build/evidence``); it must name a git-ignored directory.
     """
     manifest_path(repo_root, bench, rid)  # validates bench and rid
-    path = repo_root / STAGE_ROOT / bench / rid
+    path = repo_root / root / bench / rid
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def not_stored_message(exc: Exception, stage: Path, *, subject: str = "EVIDENCE") -> str:
+    """The fail-closed epilogue every commit path reports on a ``StoreError``.
+
+    One wording for "nothing was committed, your bytes are still here", so the
+    operator sees the same two lines whichever entry point refused. ``subject``
+    names what was not stored (``signoff_store`` passes ``"SIGNOFF OUTPUT"``).
+    Callers print this and then choose their own exit convention -- a
+    ``SystemExit(EXIT_NOT_STORED)`` from a runner, a returned
+    ``EXIT_NOT_STORED`` from a ``main()``.
+    """
+    return (f"{subject} NOT STORED -- nothing committed (fail closed): {exc}\n"
+            f"staged bytes kept in {stage}")
 
 
 def commit_run(stage: Path, *, repo_root: Path, bench: str, rid: str,
@@ -450,6 +495,5 @@ def commit_run_or_exit(stage: Path, *, repo_root: Path, bench: str, rid: str,
         return commit_run(stage, repo_root=repo_root, bench=bench, rid=rid,
                           record_text=record_text, record_path=record_path)
     except StoreError as exc:
-        print(f"EVIDENCE NOT STORED -- nothing committed (fail closed): {exc}\n"
-              f"staged bytes kept in {stage}", file=sys.stderr)
+        print(not_stored_message(exc, stage), file=sys.stderr)
         raise SystemExit(EXIT_NOT_STORED) from None
