@@ -19,6 +19,12 @@ layout/
                                     ground_rail_isolation check (#132)
   build/                            generator scratch (gitignored)
   common/report_id.py               shared <record-id> minting for the run scripts
+  common/control_verdict.py         the one pass/fail epilogue all four
+                                    negative controls return through (#468):
+                                    FAIL: lines + what they invalidate, or the
+                                    ok: line saying the sibling verdict is real
+  common/test_control_verdict.py    unit tests for the above (PDK-free CI;
+                                    the controls themselves need klt + the PDK)
   common/power_array_folded.py      folded, cross-row-tied high-m power-array
                                     generator (#254). Kept on purpose for future
                                     power-stage growth; nothing in this block

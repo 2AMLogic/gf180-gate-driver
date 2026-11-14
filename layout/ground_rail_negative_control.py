@@ -60,6 +60,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 
+import control_verdict  # noqa: E402  (path set above)
 import klt_env  # noqa: E402  (path set above)
 from check_gate_driver_core import (  # noqa: E402  (path set above)
     ground_rail_isolation_verdict,
@@ -160,23 +161,19 @@ def main() -> int:
             if net not in message:
                 failures.append(f"the 'shorted' verdict does not name {net}: {message}")
 
-    for failure in failures:
-        print(f"FAIL: {failure}", file=sys.stderr)
-    if failures:
-        print(
+    return control_verdict.control_verdict(
+        failures,
+        invalidates=(
             "ground_rail_isolation did not rule as it must on a known-good/"
             "known-bad pair -- the block's own PASS is not evidence until this "
-            "is explained.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(
-        "ok: ground_rail_isolation passed the isolated fixture (2 components) "
-        "and failed the bridged one, naming both rails -- the block's own PASS "
-        "is a real verdict"
+            "is explained."
+        ),
+        confirms=(
+            "ok: ground_rail_isolation passed the isolated fixture (2 components) "
+            "and failed the bridged one, naming both rails -- the block's own PASS "
+            "is a real verdict"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":
