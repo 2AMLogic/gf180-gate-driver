@@ -590,16 +590,23 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         name = f"ronw_{PRIMARY_DEV}_{vgs:g}"
         lo_w, hi_w = RATIFIED_WINDOW_OHMMM[PRIMARY_DEV][vgs]
         width_w = hi_w - lo_w
-        worst_exc = 0.0
+        worst_exc = None
         for outcome in outcomes:
             values = outcome.values(name)
             control = outcome.control_value(name)
             if values and control is not None:
-                worst_exc = max(worst_exc, max(0.0, max(values) - control))
-        add(
-            f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
-            f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
-        )
+                excursion = max(0.0, max(values) - control)
+                worst_exc = excursion if worst_exc is None else max(worst_exc, excursion)
+        if worst_exc is None:
+            # No converged draw at any PVT point for this row: report that,
+            # rather than formatting the 0.0 initialiser as a measurement --
+            # same convention as the primary table's `no data` cell above.
+            add(f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | no data | |")
+        else:
+            add(
+                f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
+                f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
+            )
     add("")
 
     # --- context: p06 (not the switch) ---
@@ -611,16 +618,23 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         name = f"ronw_p06_{vgs:g}"
         lo_w, hi_w = RATIFIED_WINDOW_OHMMM["p06"][vgs]
         width_w = hi_w - lo_w
-        worst_exc = 0.0
+        worst_exc = None
         for outcome in outcomes:
             values = outcome.values(name)
             control = outcome.control_value(name)
             if values and control is not None:
-                worst_exc = max(worst_exc, max(0.0, max(values) - control))
-        add(
-            f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
-            f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
-        )
+                excursion = max(0.0, max(values) - control)
+                worst_exc = excursion if worst_exc is None else max(worst_exc, excursion)
+        if worst_exc is None:
+            # No converged draw at any PVT point for this row: report that,
+            # rather than formatting the 0.0 initialiser as a measurement --
+            # same convention as the primary table's `no data` cell above.
+            add(f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | no data | |")
+        else:
+            add(
+                f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
+                f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
+            )
     add("")
 
     # --- verdict ---
@@ -641,8 +655,11 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         values = outcome.values(primary_name)
         if len(values) > 1:
             sigmas.append(statistics.stdev(values))
-    sigma_lo = min(sigmas) * 1e3 if sigmas else 0.0
-    sigma_hi = max(sigmas) * 1e3 if sigmas else 0.0
+    # `None`, not 0.0: with fewer than two converged draws at every PVT point
+    # there is no spread to report, and "0.000-0.000" would read as a measured
+    # zero spread rather than an absent one.
+    sigma_lo = min(sigmas) * 1e3 if sigmas else None
+    sigma_hi = max(sigmas) * 1e3 if sigmas else None
 
     if worst_excursion is None:
         verdict = "ERROR"
@@ -693,56 +710,96 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     # --- narrative ---
     add("  ### Finding: does the ratified 3:1 grid-wide window already absorb local mismatch?")
     add("")
-    worst_excursion_pct = worst_excursion[1] / window_width * 100 if window_width else 0.0
-    step_note = (
-        f" For scale, the smallest same-corner (fixed process, adjacent "
-        f"temperature step) `{primary_name}` gap already present in the "
-        f"deterministic 15-point grid is **{min_same_corner_step * 1e3:.3f} "
-        "mΩ·mm**"
-        + (
-            f" -- the largest mismatch excursion measured "
-            f"({worst_excursion[1] * 1e3:.3f} mΩ·mm) is only "
-            f"{worst_excursion[1] / min_same_corner_step * 100:.1f} % of that "
-            "step, i.e. local mismatch moves this device noticeably less "
-            "than one already-sampled temperature step does."
-            if min_same_corner_step
-            else "."
+    # The whole narrative is draw-derived, so it is guarded as a block rather
+    # than per-dereference: `worst_excursion` is `None` whenever no Monte Carlo
+    # draw converged at any PVT point, and guarding only the first subscript
+    # leaves the `step_note` pair below it to crash instead (its own guard,
+    # `min_same_corner_step is not None`, is satisfied in that state because
+    # that value comes from the deterministic baselines, not the MC draws).
+    # Matches `run_inb_mismatch.py` / `run_output_stage_mismatch.py`, which
+    # guard their narratives on `worst_overall is not None` the same way. The
+    # `### Finding:` heading above stays outside the guard so an ERROR record
+    # keeps the same section structure as a converged one.
+    if worst_excursion is not None:
+        worst_excursion_pct = worst_excursion[1] / window_width * 100 if window_width else 0.0
+        sigma_note = (
+            f"Per-PVT-point mismatch σ on this row ranges "
+            f"{sigma_lo:.3f}–{sigma_hi:.3f} mΩ·mm, consistent with (not larger "
+            "than) the observed excursion."
+            if sigma_lo is not None and sigma_hi is not None
+            else "Per-PVT-point mismatch σ on this row is n/a -- no PVT point "
+            "had more than one converged draw to compute a spread from."
         )
-        if min_same_corner_step is not None
-        else ""
-    )
-    add(
-        "  This is the question issue #216 poses, and the answer is in the "
-        "numbers above rather than asserted: the ratified window "
-        f"(§2.1: {win_lo:.4f} .. {win_hi:.4f} Ω·mm at the "
-        f"`Vgs` = {PRIMARY_VGS:g} V row, the worst-case design row) is "
-        f"**{window_width:.4f} Ω·mm wide**, a 3.0× spread across the whole "
-        "15-point process x temperature grid. The largest local-mismatch "
-        "excursion measured anywhere in this campaign, on that same row, is "
-        f"**{worst_excursion[1] * 1e3:.3f} mΩ·mm** ({worst_excursion_pct:.3f} % "
-        f"of the window's width), well under the "
-        f"{MATERIALITY_PCT_OF_WINDOW:g} % materiality threshold this record "
-        f"sets.{step_note} **The window is set by global process-corner "
-        "and cell-voltage skew, not by local device mismatch** -- the same "
-        "structural conclusion decision record 0017 reached for `IN_DRV`, "
-        "for a different physical reason: there, the node was rail-clamped "
-        "by construction; here, the switch is a single large device "
-        "(W/L = 10/0.7 µm) whose Pelgrom-scaled threshold mismatch "
-        "(σ ∝ 1/√(W_eff·L_eff)) is intrinsically small relative to a "
-        "3:1 corner+bias window built from the cell's whole 5.0→3.6 V "
-        "discharge range and the die's whole −40…125 °C spec range. "
-        f"Per-PVT-point mismatch σ on this row ranges "
-        f"{sigma_lo:.3f}–{sigma_hi:.3f} mΩ·mm, consistent with (not larger "
-        "than) the observed excursion."
-    )
-    add("")
-    add(
-        "  **Conclusion for issue #216's acceptance criteria**: the ratified "
-        "window already absorbs the measured local-mismatch spread with "
-        "wide margin; a per-corner mismatch campaign does **not** narrow it "
-        "materially. No revision to `spec/low-side-power-switch.md` §2.1's "
-        "table or §2.2's sizing rule is warranted by this evidence."
-    )
+        step_note = (
+            f" For scale, the smallest same-corner (fixed process, adjacent "
+            f"temperature step) `{primary_name}` gap already present in the "
+            f"deterministic 15-point grid is **{min_same_corner_step * 1e3:.3f} "
+            "mΩ·mm**"
+            + (
+                f" -- the largest mismatch excursion measured "
+                f"({worst_excursion[1] * 1e3:.3f} mΩ·mm) is only "
+                f"{worst_excursion[1] / min_same_corner_step * 100:.1f} % of that "
+                "step, i.e. local mismatch moves this device noticeably less "
+                "than one already-sampled temperature step does."
+                if min_same_corner_step
+                else "."
+            )
+            if min_same_corner_step is not None
+            else ""
+        )
+        add(
+            "  This is the question issue #216 poses, and the answer is in the "
+            "numbers above rather than asserted: the ratified window "
+            f"(§2.1: {win_lo:.4f} .. {win_hi:.4f} Ω·mm at the "
+            f"`Vgs` = {PRIMARY_VGS:g} V row, the worst-case design row) is "
+            f"**{window_width:.4f} Ω·mm wide**, a 3.0× spread across the whole "
+            "15-point process x temperature grid. The largest local-mismatch "
+            "excursion measured anywhere in this campaign, on that same row, is "
+            f"**{worst_excursion[1] * 1e3:.3f} mΩ·mm** ({worst_excursion_pct:.3f} % "
+            f"of the window's width), well under the "
+            f"{MATERIALITY_PCT_OF_WINDOW:g} % materiality threshold this record "
+            f"sets.{step_note} **The window is set by global process-corner "
+            "and cell-voltage skew, not by local device mismatch** -- the same "
+            "structural conclusion decision record 0017 reached for `IN_DRV`, "
+            "for a different physical reason: there, the node was rail-clamped "
+            "by construction; here, the switch is a single large device "
+            "(W/L = 10/0.7 µm) whose Pelgrom-scaled threshold mismatch "
+            "(σ ∝ 1/√(W_eff·L_eff)) is intrinsically small relative to a "
+            "3:1 corner+bias window built from the cell's whole 5.0→3.6 V "
+            "discharge range and the die's whole −40…125 °C spec range. "
+            f"{sigma_note}"
+        )
+        add("")
+        add(
+            "  **Conclusion for issue #216's acceptance criteria**: the ratified "
+            "window already absorbs the measured local-mismatch spread with "
+            "wide margin; a per-corner mismatch campaign does **not** narrow it "
+            "materially. No revision to `spec/low-side-power-switch.md` §2.1's "
+            "table or §2.2's sizing rule is warranted by this evidence."
+        )
+    else:
+        add(
+            "  This is the question issue #216 poses, and **this campaign "
+            "cannot answer it**: no Monte Carlo draw converged at any PVT "
+            "point, so there is no measured local-mismatch excursion to put "
+            f"against the ratified window (§2.1: {win_lo:.4f} .. {win_hi:.4f} "
+            f"Ω·mm at the `Vgs` = {PRIMARY_VGS:g} V row, the worst-case "
+            f"design row, **{window_width:.4f} Ω·mm wide**). Per-PVT-point "
+            "mismatch σ on this row is n/a. Every failed draw is listed in "
+            "the non-converged-draws table above, each reproducible from its "
+            "seed; this record is evidence that the campaign ran and what it "
+            "did, not evidence about the window."
+        )
+        add("")
+        add(
+            "  **Conclusion for issue #216's acceptance criteria**: none "
+            "drawn. With zero converged draws this campaign neither supports "
+            "nor contradicts the proposition that the ratified window absorbs "
+            "local mismatch. No revision to `spec/low-side-power-switch.md` "
+            "§2.1's table or §2.2's sizing rule is warranted by this record -- "
+            "and none is ruled out by it either; the question stays open until "
+            "a campaign converges."
+        )
     add("")
 
     add("  ### What the open PDK does and does not model (per decision record 0017)")
