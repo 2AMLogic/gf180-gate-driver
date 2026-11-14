@@ -28,6 +28,16 @@ above them. `run_point_campaign` assumes that `Testbench`/`runner.run_point`
 execution layer; `run_device_point_campaign` is the identical skeleton for a
 campaign whose execution layer is a bare device-level deck instead (issue
 #276 -- see its own docstring).
+
+One thing here is not Monte Carlo at all: `run_device_main` (issue #450), the
+command-line driver shared by the *device-characterization* runners
+(`sim/device-mv-fet`, `sim/low-side-power-switch`,
+`sim/uvlo-trip-verification`). It lives beside `run_mismatch_main` for the
+same reason that one does -- a runner's driver is evidence plumbing, and this
+module is where the layout `sim/README.md` ratifies has exactly one
+implementation -- so what this file really holds is "the run shape of a
+recorded experiment", of which the mismatch campaign is one shape and a
+PVT-grid device sweep is the other.
 """
 
 from __future__ import annotations
@@ -37,6 +47,7 @@ import csv
 import statistics
 import time
 from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -601,6 +612,99 @@ def run_mismatch_main(
     return 0 if verdict == "PASS" else 1
 
 
+def run_device_main(
+    *,
+    here: Path,
+    repo_root: Path,
+    deck: Path,
+    process_corners: Sequence[Any],
+    temperatures_c: Sequence[float],
+    run_point: Callable[[Pdk, Any, float], tuple[str, str, dict]],
+    build_record_body: Callable[..., tuple[str, Any]],
+    summarize: Callable[[Any], Sequence[str]],
+    corner_key: Callable[[Any], str] = lambda corner: corner,
+    progress_detail: Callable[[str, dict], str] = lambda cid, extracted: "ok",
+) -> int:
+    """The `main()` shared by the device-characterization runners.
+
+    The device-family counterpart of :func:`run_mismatch_main` (issue #450).
+    `sim/device-mv-fet`, `sim/low-side-power-switch` and
+    `sim/uvlo-trip-verification` each carried a near-identical copy of this
+    skeleton: PDK/ngspice discovery, the evidence-store preflight, minting a
+    record-id, the process-corner x temperature loop with its corner log,
+    freezing the deck as the record's netlist snapshot, and committing the
+    run. Those parts live here; what genuinely varies is passed in.
+
+    * `process_corners` / `temperatures_c` -- the two grid axes, traversed
+      corner-outer and temperature-inner. That is the order every committed
+      record was written in, so it is the order kept here.
+    * `run_point(pdk, corner, temp_c) -> (corner_id, log, extracted)` -- runs
+      one grid point and parses it. A runner that drives *several* decks per
+      point concatenates their logs inside its own `run_point`
+      (`run_uvlo_trip.py` does) rather than teaching the driver about it; the
+      `log` it returns is the bytes that land in the corner log.
+    * `corner_key(corner)` -- the corner's name, used both as the `results`
+      key and as the log banner's `corner` field. The default suits a runner
+      whose axis is already a `.LIB` section name; a runner iterating
+      :class:`corners.Corner` objects passes `lambda c: c.name`.
+    * `progress_detail(corner_id, extracted)` -- the text after `<cid>: ` on
+      a progress line; the default is the bare `ok` two of the three print.
+    * `build_record_body(record, stamp, pdk, ngspice, results)` -- the
+      runner's own record markdown, plus whatever summary object it wants
+      handed back to `summarize`.
+    * `summarize(summary)` -- the closing lines printed after the manifest.
+
+    A dirty input tree is disclosed for **every** runner using this driver.
+    Before #450 only `run_low_side_power_switch.py` said so, even though all
+    of them read `git_provenance()`; emitting it everywhere is the
+    behaviour-preserving superset, and this is the one place that decision
+    can be made once. Whether the record *body* should also carry
+    :func:`report.render_record`'s in-record disclosure is a separate call,
+    deliberately left to a follow-up.
+    """
+    pdk = harness_pdk.find_pdk()
+    ngspice = harness_runner.ngspice_version()
+    evidence_store.preflight_or_exit(repo_root)
+    git = report.git_provenance(repo_root)
+    record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
+    stage = evidence_store.stage_dir(repo_root, here.name, record)
+    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+
+    if git["dirty"]:
+        print(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {record} will not be reproducible from commit "
+            f"{git['short']} alone"
+        )
+
+    print(f"record {record}: {len(process_corners) * len(temperatures_c)} corner points")
+    results: dict[tuple[str, float], dict] = {}
+    for corner in process_corners:
+        for temp in temperatures_c:
+            cid, log, extracted = run_point(pdk, corner, temp)
+            name = corner_key(corner)
+            report.write_corner_log(
+                stage / report.CORNERS_DIR,
+                record,
+                cid,
+                report.device_log_header(pdk, deck, name, temp, record, stamp, ngspice),
+                log,
+            )
+            results[(name, temp)] = extracted
+            print(f"  {cid}: {progress_detail(cid, extracted)}")
+
+    report.write_device_netlist_snapshot(stage / report.SNAPSHOT_DIR, record, deck)
+    body, summary = build_record_body(record, stamp, pdk, ngspice, results)
+    path = here / report.RECORDS_DIR / f"{record}.md"
+    manifest = evidence_store.commit_run_or_exit(
+        stage, repo_root=repo_root, bench=here.name, rid=record,
+        record_text=body, record_path=path,
+    )
+    print(f"wrote {path} (evidence manifest {manifest})")
+    for line in summarize(summary):
+        print(line)
+    return 0
+
 # --------------------------------------------------------------------------
 # Record formatting
 # --------------------------------------------------------------------------
@@ -908,6 +1012,7 @@ __all__ = [
     "pvt_axes_lines",
     "reference_anomaly",
     "reference_coverage_note",
+    "run_device_main",
     "run_device_point_campaign",
     "run_mismatch_main",
     "run_point_campaign",

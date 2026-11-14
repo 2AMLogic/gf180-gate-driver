@@ -29,11 +29,14 @@ draws) that decision record 0017 ratifies.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
+import io
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 SIM_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SIM_DIR))
@@ -63,6 +66,8 @@ _POINT = PvtPoint(corner=CORNERS["tt"], temp_c=27.0, supplies={"vdrv": 5.0})
 _STAMP = _dt.datetime(2026, 1, 2, 3, 4, 5, tzinfo=_dt.timezone.utc)
 
 _BASE_SEED = 20260101
+
+_NGSPICE = "ngspice-47 : fake build for tests"
 
 
 def _result(point, value, status="ok", output="raw\n") -> PointResult:
@@ -675,6 +680,248 @@ class RecordSectionHelperTests(unittest.TestCase):
         self.assertEqual(lines[-2], "closing")
         none = campaign.non_converged_section([_outcome([5.1])], 1, "--", "", "")
         self.assertIn("None -- all 1 mismatch draws completed", "\n".join(none))
+
+
+class RunDeviceMainTests(unittest.TestCase):
+    """The device-characterization runners' shared `main()` (issue #450).
+
+    `sim/device-mv-fet`, `sim/low-side-power-switch` and
+    `sim/uvlo-trip-verification` each carried their own near-identical copy of
+    this driver; `campaign.run_device_main` is the single shared
+    implementation, the device-family counterpart of `run_mismatch_main`.
+
+    PDK-free and ngspice-free like the rest of this suite: the driver's only
+    contact with the outside world is `pdk.find_pdk`,
+    `runner.ngspice_version` and the three `evidence_store` entry points, all
+    stubbed here. What is pinned is the grid traversal order (corner outer,
+    temperature inner -- the order every existing record was written in), the
+    evidence layout, the literal log banner, and the fact that *every* runner
+    now discloses a dirty working tree rather than only
+    `run_low_side_power_switch.py`.
+    """
+
+    RECORD = "20260102-030405-abc1234"
+    MANIFEST = Path("sim/.evidence/manifests/fake-device/fake.json")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.here = self.root / "sim" / "fake-device"
+        (self.here / "records").mkdir(parents=True)
+        self.stage = self.root / "stage"
+        self.stage.mkdir()
+        self.deck = self.here / "testbench" / "tb_fake.spice"
+        self.deck.parent.mkdir(parents=True)
+        self.deck.write_text("* fake device deck\n.end\n", encoding="utf-8")
+
+        self.dirty = False
+        self.preflighted = []
+        self.committed = []
+
+        def _stage_dir(repo_root, bench, rid):
+            return self.stage
+
+        def _commit(stage, *, repo_root, bench, rid, record_text, record_path):
+            self.committed.append({
+                "stage": stage, "repo_root": repo_root, "bench": bench,
+                "rid": rid, "record_text": record_text, "record_path": record_path,
+            })
+            return self.MANIFEST
+
+        def _git(repo_root):
+            return {
+                "commit": "abc1234" + "0" * 33, "short": "abc1234",
+                "branch": "main", "dirty": self.dirty,
+            }
+
+        for module, name, replacement in (
+            (campaign.harness_pdk, "find_pdk", lambda: _PDK),
+            (campaign.harness_runner, "ngspice_version", lambda: _NGSPICE),
+            (campaign.evidence_store, "preflight_or_exit", self.preflighted.append),
+            (campaign.evidence_store, "stage_dir", _stage_dir),
+            (campaign.evidence_store, "commit_run_or_exit", _commit),
+            (campaign.report, "git_provenance", _git),
+            (campaign.report, "allocate_record_id", lambda *a, **k: self.RECORD),
+        ):
+            saved = getattr(module, name)
+            setattr(module, name, replacement)
+            self.addCleanup(setattr, module, name, saved)
+
+    def _run(self, **overrides):
+        """Drive `run_device_main` over a 2x2 grid; return what it did."""
+        points = []
+        bodies = []
+
+        def run_point(pdk, corner, temp_c):
+            points.append((pdk, corner, temp_c))
+            name = getattr(corner, "name", corner)
+            return (
+                f"{name}_{temp_c:g}c_nosupply",
+                f"raw log for {name} @ {temp_c:g} C\n",
+                {"index": len(points)},
+            )
+
+        def build_record_body(record, stamp, pdk, ngspice, results):
+            bodies.append((record, stamp, pdk, ngspice, results))
+            return f"# Record {record}\n", results
+
+        kwargs = dict(
+            here=self.here,
+            repo_root=self.root,
+            deck=self.deck,
+            process_corners=["typical", "ss"],
+            temperatures_c=[-40.0, 27.0],
+            run_point=run_point,
+            build_record_body=build_record_body,
+            summarize=lambda summary: [f"points: {len(summary)}"],
+        )
+        kwargs.update(overrides)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = campaign.run_device_main(**kwargs)
+        return SimpleNamespace(
+            code=code, out=buf.getvalue(), points=points, bodies=bodies
+        )
+
+    # -- grid traversal ---------------------------------------------------
+
+    def test_the_grid_is_traversed_corner_outer_temperature_inner(self):
+        run = self._run()
+        self.assertEqual(
+            [(corner, temp) for _, corner, temp in run.points],
+            [("typical", -40.0), ("typical", 27.0), ("ss", -40.0), ("ss", 27.0)],
+        )
+
+    def test_run_point_is_handed_the_discovered_pdk(self):
+        run = self._run()
+        self.assertEqual([pdk for pdk, _, _ in run.points], [_PDK] * 4)
+
+    def test_results_are_keyed_by_corner_and_temperature_in_grid_order(self):
+        run = self._run()
+        results = run.bodies[0][4]
+        self.assertEqual(
+            list(results),
+            [("typical", -40.0), ("typical", 27.0), ("ss", -40.0), ("ss", 27.0)],
+        )
+        self.assertEqual([r["index"] for r in results.values()], [1, 2, 3, 4])
+
+    def test_corner_key_maps_a_corner_object_to_the_name_records_use(self):
+        # sim/low-side-power-switch iterates `corners.Corner` objects but keys
+        # its results -- and labels its log banner -- by `corner.name`.
+        corners = [SimpleNamespace(name="tt"), SimpleNamespace(name="ff")]
+        run = self._run(
+            process_corners=corners,
+            temperatures_c=[27.0],
+            corner_key=lambda corner: corner.name,
+        )
+        self.assertEqual(list(run.bodies[0][4]), [("tt", 27.0), ("ff", 27.0)])
+        log = (self.stage / "corners" / self.RECORD / "tt_27c_nosupply.log").read_text()
+        self.assertIn("* corner    : tt\n", log)
+
+    def test_the_point_count_header_is_the_full_grid_size(self):
+        self.assertIn(f"record {self.RECORD}: 4 corner points\n", self._run().out)
+
+    # -- evidence ---------------------------------------------------------
+
+    def test_every_point_log_lands_under_corners_record_cid(self):
+        self._run()
+        written = sorted(p.name for p in (self.stage / "corners" / self.RECORD).iterdir())
+        self.assertEqual(written, [
+            "ss_-40c_nosupply.log", "ss_27c_nosupply.log",
+            "typical_-40c_nosupply.log", "typical_27c_nosupply.log",
+        ])
+
+    def test_a_point_log_is_the_device_banner_then_the_raw_output(self):
+        self._run()
+        path = self.stage / "corners" / self.RECORD / "typical_27c_nosupply.log"
+        self.assertEqual(
+            path.read_text(encoding="utf-8"),
+            "* ====================================================================\n"
+            f"* record-id : {self.RECORD}\n"
+            "* testbench : tb_fake.spice\n"
+            "* corner    : typical\n"
+            "* temp      : 27 C\n"
+            "* supply    : n/a (no supply rail in this device-level testbench)\n"
+            "* pdk       : gf180mcuD (/nonexistent/gf180mcuD)\n"
+            f"* ngspice   : {_NGSPICE}\n"
+            "* run (UTC) : 2026-01-02T03:04:05Z\n"
+            "* ====================================================================\n"
+            "raw log for typical @ 27 C\n",
+        )
+
+    def test_the_deck_is_frozen_as_this_records_netlist_snapshot(self):
+        self._run()
+        snapshot = self.stage / "netlist-snapshots" / f"{self.RECORD}.spice"
+        self.assertEqual(snapshot.read_text(encoding="utf-8"), self.deck.read_text())
+
+    def test_the_record_body_and_path_are_handed_to_the_evidence_store(self):
+        run = self._run()
+        self.assertEqual(len(self.committed), 1)
+        commit = self.committed[0]
+        self.assertEqual(commit["stage"], self.stage)
+        self.assertEqual(commit["repo_root"], self.root)
+        self.assertEqual(commit["bench"], "fake-device")
+        self.assertEqual(commit["rid"], self.RECORD)
+        self.assertEqual(commit["record_text"], f"# Record {self.RECORD}\n")
+        self.assertEqual(
+            commit["record_path"], self.here / "records" / f"{self.RECORD}.md"
+        )
+        self.assertIn(
+            f"wrote {self.here / 'records' / (self.RECORD + '.md')} "
+            f"(evidence manifest {self.MANIFEST})\n",
+            run.out,
+        )
+
+    def test_preflight_refuses_the_run_before_a_record_id_is_minted(self):
+        self._run()
+        self.assertEqual(self.preflighted, [self.root])
+
+    def test_build_record_body_gets_the_stamp_parsed_from_the_record_id(self):
+        run = self._run()
+        record, stamp, pdk, ngspice, _ = run.bodies[0]
+        self.assertEqual(record, self.RECORD)
+        self.assertEqual(stamp, _STAMP)
+        self.assertEqual(pdk, _PDK)
+        self.assertEqual(ngspice, _NGSPICE)
+
+    # -- dirty-tree disclosure (the behaviour this driver unifies) --------
+
+    def test_a_dirty_input_tree_is_disclosed_by_every_runner(self):
+        self.dirty = True
+        self.assertIn(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {self.RECORD} will not be reproducible from commit "
+            "abc1234 alone\n",
+            self._run().out,
+        )
+
+    def test_a_clean_input_tree_prints_no_warning(self):
+        self.assertNotIn("dirty", self._run().out)
+
+    # -- per-runner hooks -------------------------------------------------
+
+    def test_a_progress_line_reads_ok_unless_the_runner_says_otherwise(self):
+        out = self._run().out
+        self.assertIn("  typical_27c_nosupply: ok\n", out)
+
+    def test_progress_detail_replaces_the_text_after_the_corner_id(self):
+        out = self._run(
+            progress_detail=lambda cid, extracted: f"index={extracted['index']}"
+        ).out
+        self.assertIn("  typical_-40c_nosupply: index=1\n", out)
+        self.assertNotIn(": ok\n", out)
+
+    def test_summarize_lines_are_printed_verbatim_after_the_manifest(self):
+        out = self._run(
+            summarize=lambda summary: ["anomalies: 1", "  - something drifted"]
+        ).out
+        tail = out.splitlines()[-3:]
+        self.assertTrue(tail[0].startswith("wrote "))
+        self.assertEqual(tail[1:], ["anomalies: 1", "  - something drifted"])
+
+    def test_a_completed_run_exits_zero(self):
+        self.assertEqual(self._run().code, 0)
 
 
 if __name__ == "__main__":

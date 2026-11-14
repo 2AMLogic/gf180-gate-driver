@@ -469,6 +469,65 @@ What stays in a campaign script: which measurement is under claim, which
 committed record its control is checked against, and the record's own
 narrative (`build_record_body`).
 
+### The device-runner driver: `campaign.run_device_main`
+
+The `sim/device-*` / `sim/low-side-power-switch` / `sim/uvlo-trip-verification`
+experiments sweep DC tables and interpolate, so they compose their own decks
+instead of going through `runner.compose_deck` (each script's module docstring
+says why). What they share is not the deck half but the *run* half, and
+`campaign.run_device_main` is it -- the device-family counterpart of
+`run_mismatch_main` above (issue #450):
+
+```python
+from harness import campaign
+
+def _run_point(pdk, section, temp_c):          # one grid point
+    log = _run_corner(DECK, pdk, section, temp_c)
+    return corners.device_corner_id(section, temp_c), log, extract(log)
+
+def main() -> int:
+    return campaign.run_device_main(
+        here=HERE, repo_root=pdk.REPO_ROOT, deck=DECK,
+        process_corners=SECTIONS, temperatures_c=TEMPS,
+        run_point=_run_point,
+        build_record_body=build_record,        # (record, stamp, pdk, ngspice, results)
+        summarize=_summarize,                  # closing lines after the manifest
+    )
+```
+
+The driver owns PDK/ngspice discovery, the evidence-store preflight, minting
+the record-id and parsing its stamp, the `process corner x temperature` loop
+(corner outer, temperature inner -- the order every committed record was
+written in) with its `report.write_corner_log` + `report.device_log_header`
+pair, freezing `deck` as the record's netlist snapshot, and
+`evidence_store.commit_run_or_exit`.
+
+What stays in a device script: the deck, what a grid point runs and extracts
+(`run_point`), and the record's own narrative (`build_record_body`) and
+closing summary (`summarize`). Two optional hooks cover the rest of the
+spread:
+
+- `corner_key` -- the corner's name, used as both the `results` key and the
+  log banner's `corner` field. The default suits an axis that is already a
+  `.LIB` section name; `sim/low-side-power-switch` iterates
+  `corners.Corner` objects (it needs the full per-device-family section
+  bundle) and passes `lambda c: c.name`.
+- `progress_detail` -- the text after `<corner-id>: ` on a progress line;
+  the default is the bare `ok` two of the three runners print.
+
+A runner whose grid point is *several* ngspice runs concatenates their logs
+inside its own `run_point` rather than teaching the driver about it --
+`run_uvlo_trip.py` files its hysteresis and response-time decks as one corner
+log that way.
+
+**A dirty input tree is disclosed by every runner using this driver.** Before
+#450 only `run_low_side_power_switch.py` printed the "record will not be
+reproducible from commit `<sha>` alone" warning, even though all of them read
+`report.git_provenance()`; the driver is the one place that decision gets made
+once. Whether a device record's *body* should also carry
+`report.render_record`'s in-record dirty-tree disclosure is a separate call,
+deliberately left open.
+
 ## `klt sim` requests: `harness/klt_request.py`
 
 Some sign-off rows are restated as `klt sim` requests -- JSON documents, graded
