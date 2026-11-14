@@ -34,6 +34,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 SIM_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SIM_DIR))
@@ -485,12 +486,12 @@ class RecordBodyGoldenTests(unittest.TestCase):
                         )
 
     def test_ronw_runner_scenarios_match_their_goldens(self):
-        # "error" is omitted deliberately: this runner's narrative dereferences
-        # a worst-excursion tuple that is `None` when no draw converged, which
-        # it does on `origin/main` too -- a pre-existing defect, out of #442's
-        # scope and tracked in #446. Add `ronw-error.md` and drop this comment
-        # when that lands.
-        for scenario, smoke in (("mixed", False), ("clean", False), ("mixed", True)):
+        for scenario, smoke in (
+            ("mixed", False),
+            ("clean", False),
+            ("error", False),
+            ("mixed", True),
+        ):
             name = f"ronw-{scenario}{'-smoke' if smoke else ''}.md"
             with self.subTest(golden=name):
                 self.assertEqual(
@@ -505,6 +506,65 @@ class RecordBodyGoldenTests(unittest.TestCase):
         self.assertNotIn("| n/a |", body)
         self.assertIn("cross-checked against the committed corner-matrix", body)
         self.assertNotIn("was **not performed**", body)
+
+
+class RonwNoConvergedDrawTests(unittest.TestCase):
+    """What the `ronw` runner writes when the Monte Carlo campaign produced
+    nothing to report (issue #446).
+
+    `build_record_body` used to raise `TypeError` here: the verdict block
+    handled the zero-converged-draw state, but the narrative below it
+    dereferenced the same `None` worst-excursion tuple unconditionally. The
+    `error` scenario in `test_ronw_runner_scenarios_match_their_goldens` pins
+    the whole record; these tests pin the specific claims it must *not* make,
+    and the one state the goldens cannot reach.
+    """
+
+    def test_a_smoke_run_with_no_converged_draw_still_renders(self):
+        # The crash was independent of `--smoke`, so both paths are covered;
+        # only the non-smoke body has a committed golden, matching the
+        # siblings' golden sets.
+        body = fixture.render_ronw("error", True)
+        self.assertTrue(body.startswith("verdict=ERROR"))
+        self.assertIn("**this campaign cannot answer it**", body)
+
+    def test_it_does_not_assert_a_conclusion_it_cannot_support(self):
+        body = fixture.render_ronw("error", False)
+        self.assertNotIn("already absorbs the measured local-mismatch spread", body)
+        self.assertNotIn("does **not** narrow it", body)
+        self.assertIn("neither supports nor contradicts", body)
+
+    def test_it_reports_no_measurement_rather_than_a_zero_one(self):
+        body = fixture.render_ronw("error", False)
+        # Context tables: a fabricated `0.000 mΩ·mm` / `0.000 %` excursion is
+        # indistinguishable from a measured zero excursion.
+        self.assertNotIn("| 0.000 | 0.000 % |", body)
+        self.assertEqual(5, len([
+            line for line in body.splitlines()
+            if line.rstrip().endswith("| no data | |")
+        ]))
+        # Sigma: likewise `0.000–0.000 mΩ·mm`.
+        self.assertNotIn("0.000\u20130.000", body)
+        self.assertIn("\u03c3 on this row is n/a", body)
+
+    def test_one_converged_draw_per_point_reports_sigma_as_absent(self):
+        # Reachable without the crash and not covered by any fixture scenario:
+        # a worst excursion exists, so the measured narrative renders, but no
+        # point has the two draws a standard deviation needs. `sigma_lo`/`hi`
+        # defaulted to 0.0, so the record claimed a measured zero spread.
+        module = fixture.load_ronw()
+        outcomes = [
+            module.PointOutcome(o.point, o.baseline, o.controls, o.samples[:1])
+            for o in fixture.build_ronw_outcomes(module, "clean")
+        ]
+        body, verdict, _ = module.build_record_body(
+            "20260102-030405-abcdef0", fixture.STAMP, fixture.PDK, fixture.NGSPICE,
+            outcomes, 1, 123.0, SimpleNamespace(smoke=False),
+        )
+        self.assertNotEqual("ERROR", verdict)
+        self.assertIn("the answer is in the numbers above", body)
+        self.assertNotIn("0.000\u20130.000 m\u03a9\u00b7mm", body)
+        self.assertIn("\u03c3 on this row is n/a", body)
 
 
 class SkippedReferenceCrossCheckTests(unittest.TestCase):
