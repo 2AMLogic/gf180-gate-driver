@@ -21,6 +21,7 @@ name: CI
 # | klt request generators reproduce their JSON   | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `layout/common/test_signoff_store.py`         | python3      | `test` (here)  |
+# | `layout/test_negative_control_klt_binary.py`   | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
 # Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
@@ -218,6 +219,23 @@ jobs:
         # layout/ signoff writers (issue #348): a failed put raises, installs no
         # manifest and commits no bytes. `klt` is emulated; stdlib only.
         run: python3 layout/common/test_signoff_store.py
+
+      - name: Negative-control klt-binary unit tests
+        # layout/test_negative_control_klt_binary.py pins that both `klt draw`
+        # negative controls (layout/drc/deck_negative_control.py,
+        # layout/ground_rail_negative_control.py) invoke the binary
+        # klt_env.require_klt() resolved rather than a hardcoded "klt" argv --
+        # issue #451, which is also why they now route through
+        # klt_report.run_klt like every sibling runner. A negative control's
+        # only claim is "the same tool that produced the sibling verdict ran
+        # here", so a control that silently runs whatever bare PATH gives --
+        # while its own guard approved something else -- fails quietly and
+        # looks exactly like a passing one. The pin is structural (argv[0] is
+        # the resolved path), which the `git grep '"klt",'` that found this
+        # cannot be. klt_report.run_klt is stubbed and layout/build/ is
+        # redirected to a temp dir, so no klt runs, no PDK is read and nothing
+        # is written into the tree -- it belongs on this PDK-free runner.
+        run: python3 layout/test_negative_control_klt_binary.py
 
       - name: LVS reference-netlist unit tests
         # layout/lvs/test_make_reference.py pins the structural facts (PMOS
