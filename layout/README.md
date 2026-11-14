@@ -795,16 +795,39 @@ one electrical island per supply? For an analog block it rests on a
 supply nets in its compare.
 
 Latest report:
-[`layout/erc/reports/gate_driver_core/20260921-155739-3249587.erc.json`](erc/reports/gate_driver_core/20260921-155739-3249587.erc.json)
+[`layout/erc/reports/gate_driver_core/20261114-193042-cbf0cd4.erc.json`](erc/reports/gate_driver_core/20261114-193042-cbf0cd4.erc.json)
 — `erc_status: clean`, `erc_finding_count: 0`, every one of the four
 declared supplies (`VDD_LOGIC`/`GND_LOGIC`/`VDD_DRV`/`GND_DRV`,
 [`erc-supply-spec.json`](erc-supply-spec.json)) resolving to exactly one
 electrical island: zero `erc.unconnected_net`, zero `erc.supply_short`. The
 report's `provenance.input.content_hash` is the committed GDS's own sha256
-(`54f02626…`, matching `gate_driver_core.provenance.json`). The item-4 LVS
+(`15fa5b64…`, matching `gate_driver_core.provenance.json`). The item-4 LVS
 half is already on the record: all four supply nets appear in
 `20260826-062806-a7dcce1.lvs.json`'s `net_correspondence`, each paired
 layout↔reference.
+
+**Tool-drift history of this verdict (issue #470).** The envelope this
+section cited before that issue (`20261024-090832-de97a29.erc.json`, still
+committed in the same append-only directory) was produced by
+`klt 0.7.1.dev2599+geaf26f00df36`, whose
+ERC evaluated no substrate/well body graph. Under klt builds at or after
+0.9 the checker grew the body graph and the `erc.supply_short.substrate`
+check, and re-grading the unchanged GDS through that build reported one
+false `erc.supply_short` GND_LOGIC↔VDD_LOGIC through the substrate: the
+`substrate_gnd_logic` tie's second `well_boxes` entry began at y 23.1 µm,
+inside the `nwell_vdd_logic` well's y extent (top edge 27.16 µm over the
+strip's x range), so the assertion's `tap_requires` clip read the 3.3 V
+PMOS's own p+ active (Comp top edge 23.31 µm) as a substrate tap and welded
+the substrate body to the Nwell body. The spec's box was corrected to the
+Nwell's own top edge (27.16 µm) and the report above re-recorded the
+verdict under the current klt: still `erc_status: clean`, with
+`erc.missing_tie:["substrate_gnd_logic"]` still checked by the well
+assertion, `skipped` empty, and the other ERC checks unchanged. The negative
+control (`layout/erc/erc_negative_control.py`) grades all three arms as they
+must under the same build. The underlying tool gap — a declared tie's
+asserted region able to fabricate an `erc.supply_short` through the new
+substrate body graph, undetectable by `--validate-spec` — is filed upstream
+as klayout-tools [#5745].
 
 Two things the report's clean read depends on, stated here because a
 future reader re-running it must know them:
@@ -859,6 +882,7 @@ is actually installed, per the pinning section above.
 [#2183]: https://github.com/2AMLogic/klayout-tools/issues/2183
 [#2205]: https://github.com/2AMLogic/klayout-tools/pull/2205
 [#2217]: https://github.com/2AMLogic/klayout-tools/pull/2217
+[#5745]: https://github.com/2AMLogic/klayout-tools/issues/5745
 
 ### Post-layout simulation
 
