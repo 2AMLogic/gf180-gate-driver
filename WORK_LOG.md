@@ -8,6 +8,14 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-14
+
+- **PR #475**: sim: measure a Vbe/dVbe UVLO reference over 15 corners — 15/15 pass, 91 mV falling-trip spread
+- **Issue #457** (closed): Second UVLO reference study: measure a reference that does not track Vgs over the 15 corners (follow-up to decision record 0023)
+- **PR #453**: fix: render an ERROR record instead of crashing when no ronw draw converges
+- **Issue #446** (closed): bug: ronw mismatch runner crashes with TypeError instead of writing an ERROR record when no draw converges
+- **PR #455**: docs: roadmap as of 2026-11-13
+
 ### 2026-11-13
 
 - **PR #445**: fix: report a skipped reference cross-check instead of a 0.00 residual
