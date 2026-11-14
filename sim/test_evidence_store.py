@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import http.server
 import json
+import os
 import socket
 import subprocess
 import tempfile
@@ -134,12 +135,31 @@ class Writer(Base):
                 self.assert_nothing_committed()
 
     def test_existing_manifest_or_summary_is_never_overwritten(self):
-        self.mpath.parent.mkdir(parents=True)
-        self.mpath.write_text("{}")
-        with self.assertRaises(es.StoreError):
-            self.store_files()
-        self.assertEqual(self.mpath.read_text(), "{}")
-        self.assertEqual(self.store, {})  # refused before any put
+        """Both committed paths are refused up front, dangling symlinks included.
+
+        This covers the one guard every store path shares
+        (``store_manifest_only``), so it stands for ``signoff_store`` too --
+        which is why that suite no longer carries a copy of this test.
+        A *dangling symlink* is the case a hand-written ``Path.exists()``
+        guard gets wrong: ``exists()`` is ``False`` on one, yet
+        ``open(p, "x")`` still raises ``FileExistsError``, so the collision
+        would only surface after every ``klt artifact put`` had run.
+        """
+        for path in (self.mpath, self.summary):
+            for kind in ("regular file", "dangling symlink"):
+                with self.subTest(path=path.name, kind=kind):
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == "regular file":
+                        path.write_text("{}")
+                    else:
+                        path.symlink_to(self.root / "nonexistent")
+                        self.assertFalse(path.exists())  # ...and yet:
+                        self.assertTrue(os.path.lexists(path))
+                    with self.assertRaisesRegex(es.StoreError,
+                                                "already exists; refusing to overwrite"):
+                        self.store_files()
+                    self.assertEqual(self.store, {})  # refused before any put
+                    path.unlink()
 
     def test_nothing_but_empty_files_is_refused(self):
         self.files = [(self.stage / "corners/r1/empty.log", "sim/b/corners/r1/empty.log")]
