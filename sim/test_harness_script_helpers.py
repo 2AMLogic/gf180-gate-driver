@@ -38,6 +38,8 @@ from unittest import mock
 SIM_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SIM_DIR))
 
+import mismatch_body_fixture as fixture  # noqa: E402
+
 from harness import campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import script_helpers  # noqa: E402
@@ -174,6 +176,105 @@ class TestCampaignGlue(unittest.TestCase):
             script_helpers.claim_progress_detail(Result(), "m"), campaign.fmt(1.5, 10)
         )
         self.assertEqual(script_helpers.claim_progress_detail(Result(), "other"), "no data")
+
+
+class _WorstCaseOutcome:
+    """A `PointOutcome` stand-in: canned draws and control value per name."""
+
+    def __init__(self, values: dict, controls: dict | None = None):
+        self._values = values
+        self._controls = controls or {}
+
+    def values(self, name):
+        return self._values.get(name, [])
+
+    def control_value(self, name):
+        return self._controls.get(name)
+
+
+class TestWorstAcrossPoints(unittest.TestCase):
+    """`worst_across_points` -- the per-node worst case across a campaign.
+
+    Was a byte-identical 14-line loop in the `indrv` and `taper` runners until
+    issue #465 hoisted it here; the record rows it feeds are pinned
+    byte-for-byte by the goldens in `sim/testdata/mismatch_record_body/`.
+    """
+
+    def test_reduces_max_over_every_outcome(self):
+        outcomes = [
+            _WorstCaseOutcome({"a": [1.0, 5.5]}, {"a": 4.0}),
+            _WorstCaseOutcome({"a": [6.1, 2.0]}, {"a": 4.5}),
+        ]
+        (worst,) = script_helpers.worst_across_points(outcomes, ("a",), 6.0)
+        self.assertEqual(worst.name, "a")
+        self.assertEqual(worst.mc_worst, 6.1)
+        self.assertEqual(worst.ctrl_worst, 4.5)
+        self.assertAlmostEqual(worst.delta, 1.6)
+        # Above the ceiling, so the margin is negative.
+        self.assertAlmostEqual(worst.margin, -0.1)
+
+    def test_name_with_no_converged_draw_is_omitted(self):
+        # `b` has a control value but no draw anywhere: no worst case to report.
+        outcomes = [_WorstCaseOutcome({"a": [1.0]}, {"a": 1.0, "b": 2.0})]
+        got = script_helpers.worst_across_points(outcomes, ("a", "b"), 6.0)
+        self.assertEqual([worst.name for worst in got], ["a"])
+
+    def test_no_outcomes_yields_no_rows(self):
+        self.assertEqual(script_helpers.worst_across_points([], ("a",), 6.0), [])
+
+    def test_name_with_no_control_leaves_ctrl_worst_and_delta_none(self):
+        (worst,) = script_helpers.worst_across_points(
+            [_WorstCaseOutcome({"a": [5.0]})], ("a",), 6.0
+        )
+        self.assertIsNone(worst.ctrl_worst)
+        self.assertIsNone(worst.delta)
+        self.assertAlmostEqual(worst.margin, 1.0)
+
+    def test_rows_follow_the_order_of_the_names_argument(self):
+        outcomes = [_WorstCaseOutcome({"a": [1.0], "b": [2.0]})]
+        got = script_helpers.worst_across_points(outcomes, ("b", "a"), 6.0)
+        self.assertEqual([worst.name for worst in got], ["b", "a"])
+
+    def test_field_order_is_the_one_the_record_rows_unpack(self):
+        # Both runners unpack the row positionally, so the field order is part
+        # of the contract, not an implementation detail.
+        (row,) = script_helpers.worst_across_points(
+            [_WorstCaseOutcome({"a": [5.0]}, {"a": 4.0})], ("a",), 6.0
+        )
+        name, ctrl_worst, mc_worst, delta, margin = row
+        self.assertEqual((name, ctrl_worst, mc_worst), ("a", 4.0, 5.0))
+        self.assertAlmostEqual(delta, 1.0)
+        self.assertAlmostEqual(margin, 1.0)
+
+
+class TestRatifiedSpecValues(unittest.TestCase):
+    """The ratified values shared by the `indrv` and `taper` campaigns have
+    exactly one home, and each runner reads it (issue #465, item 2).
+
+    Identity, not equality, is the assertion: a literal retyped back into a
+    runner would still compare equal today, and that is precisely the drift
+    being guarded. Two independent literals mean a decision record moving the
+    §2.3 ceiling or Exception 2's bound can reach one campaign and miss the
+    other, leaving two append-only records disagreeing about the same ratified
+    number with nothing in the tree flagging it.
+    """
+
+    def test_values_are_the_ratified_numbers(self):
+        self.assertEqual(script_helpers.GATE_CEILING_V, 6.0)
+        self.assertEqual(script_helpers.EXCEPTION2_BOUND_V, 0.175)
+        self.assertEqual(
+            script_helpers.TAPER_MEASUREMENTS,
+            ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v"),
+        )
+
+    def test_both_runners_read_the_shared_values(self):
+        for key in ("indrv", "taper"):
+            module = fixture.load_runner(key)
+            for name in ("GATE_CEILING_V", "EXCEPTION2_BOUND_V", "TAPER_MEASUREMENTS"):
+                with self.subTest(runner=key, constant=name):
+                    self.assertIs(
+                        getattr(module, name), getattr(script_helpers, name)
+                    )
 
 
 class TestRunNgspice(_TempDirCase):
