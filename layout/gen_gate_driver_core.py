@@ -131,6 +131,11 @@ L_NPLUS = (32, 0)  # Nplus -- gf180mcu's `tap_nplus` derivation input (klt
 # empirically (a first pass of this generator without L_NPLUS still extracted
 # every PMOS body onto its own anonymous net, unchanged).
 L_METAL1 = (34, 0)
+# Unused by this generator (only Metal2 carries pin labels, below) and kept
+# deliberately: this block transcribes klt's gf180mcu layer deck, and a
+# complete table is worth more than a complete-minus-one one -- a future
+# Metal1-labelled pin reads its number off here rather than re-deriving it.
+# Scoped out of removal by issue #454.
 L_METAL1_LABEL = (34, 10)
 L_VIA1 = (35, 0)
 L_METAL2 = (36, 0)
@@ -221,7 +226,11 @@ GUARD_RING_MARGIN_UM = 5.5  # PCOMP guard ring offset -- genuinely *outside*
 # interact with it at all since it draws bare Comp only -- see guard_ring().
 GUARD_RING_WIDTH_UM = 1.0  # PCOMP guard ring stroke width
 GUARD_RING_STROKE_COUNT = 4  # N/S/E/W rects guard_ring() draws (one Comp
-# "active" shape each, positioned entirely outside DNWELL_DRV).
+# "active" shape each, positioned entirely outside DNWELL_DRV).  Enforced
+# there, not merely documented here: DN.3 wants a *closed* PCOMP annulus, so
+# dropping a stroke -- e.g. to cut the ring for a signal crossing, which that
+# method's own docstring contemplates -- is a DRC failure and not a
+# simplification (issue #454).
 GUARD_RING_STRAP_WIDTH_UM = STUB_WIDTH_UM  # Metal1 strap along the ring's own
 # contacted N/S strokes -- same width as every other Metal1 stub/strap this
 # generator draws, wide enough to enclose CONTACT_SIZE_UM with margin.
@@ -1612,6 +1621,14 @@ class Interconnect:
             (x0, y0, x0 + w, y1),  # W
             (x1 - w, y0, x1, y1),  # E
         ]
+        if len(strokes) != GUARD_RING_STROKE_COUNT:
+            raise GenError(
+                f"guard ring built {len(strokes)} strokes, not "
+                f"GUARD_RING_STROKE_COUNT={GUARD_RING_STROKE_COUNT}: DN.3 needs "
+                "all four to merge into a closed PCOMP annulus around "
+                "DNWELL_DRV, and a ring short of one still draws, still passes "
+                "every geometry check here, and fails DRC as an open annulus"
+            )
         for rect in strokes:
             self.shapes.append(_rect(L_COMP, *rect, name="GUARD_RING_DRV"))
             self.shapes.append(

@@ -81,6 +81,28 @@ RISING_RANGE = (3.6, 4.2)
 HYST_TYP = 0.3
 RESPONSE_MAX_S = 500e-9
 
+# The Decision 4/5 paragraph every record of this claim opens its results
+# section with, rendered from the constants above instead of carrying a second
+# hand-typed copy of the same ratified figures (issue #454). The copy that
+# reaches append-only evidence is this one, so it is the copy that has to read
+# the block. Built at module scope -- not inline in build_record() -- so
+# sim/test_gen_requests.py can pin it against the committed record
+# byte-for-byte without composing a whole record.
+DR0001_TARGETS_PROSE = (
+    f"Decision record 0001 Decision 4: falling typ {FALLING_TYP:g}V / "
+    f"worst-case corner range {FALLING_RANGE[0]:g}-{FALLING_RANGE[1]:g}V; "
+    f"rising typ {RISING_TYP:g}V / worst-case corner range "
+    f"{RISING_RANGE[0]:g}-{RISING_RANGE[1]:g}V; hysteresis typ "
+    f"{HYST_TYP * 1e3:g}mV (no stated worst-case *range* for hysteresis, so "
+    "it is reported but not scored, matching the convention "
+    "`sim/device-mv-fet/run_device_mv_fet.py` uses for Cgg/Cgd/Ron). "
+    f"Decision 5: response time < {RESPONSE_MAX_S * 1e9:g}ns, scored at every "
+    "corner. Each point's verdict is **PASS** only if falling AND rising both "
+    "land inside their stated worst-case range AND response time is under "
+    f"{RESPONSE_MAX_S * 1e9:g}ns; a single measurement outside its bound fails "
+    "that corner."
+)
+
 # Response-time step deck: from a voltage guaranteed above every measured
 # corner's rising threshold (issue #220's own PVT sweep found a worst case
 # of ~5.11V at ss/-40C) down to one guaranteed below every measured corner's
@@ -348,17 +370,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
 
     add("### Rising / falling trip voltage, hysteresis, response time")
     add("")
-    add(
-        "Decision record 0001 Decision 4: falling typ 3.6V / worst-case corner "
-        "range 3.3-3.9V; rising typ 3.9V / worst-case corner range 3.6-4.2V; "
-        "hysteresis typ 300mV (no stated worst-case *range* for hysteresis, so "
-        "it is reported but not scored, matching the convention "
-        "`sim/device-mv-fet/run_device_mv_fet.py` uses for Cgg/Cgd/Ron). "
-        "Decision 5: response time < 500ns, scored at every corner. Each "
-        "point's verdict is **PASS** only if falling AND rising both land "
-        "inside their stated worst-case range AND response time is under "
-        "500ns; a single measurement outside its bound fails that corner."
-    )
+    add(DR0001_TARGETS_PROSE)
     add("")
     add(
         "| corner | falling (V) | rising (V) | hysteresis (V) | response (ns) "
