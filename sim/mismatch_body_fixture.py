@@ -75,9 +75,27 @@ def _result(point, base, status="ok"):
     )
 
 
-def build_outcomes(module, scenario: str):
-    """Deterministic outcomes over the first four of the runner's PVT points."""
-    points = module.build_points()[:4]
+def points_by_corner_id(module, corner_ids):
+    """The runner's own PVT points with these corner ids, in the order given.
+
+    The default four-point subset below is the head of the grid, which does
+    not contain every corner a record's prose names -- a test that needs one
+    of those (the `indrv` binding corner, issue #447) selects points by id
+    rather than hardcoding a `PvtPoint`.
+    """
+    by_id = {point.corner_id: point for point in module.build_points()}
+    return [by_id[corner_id] for corner_id in corner_ids]
+
+
+def build_outcomes(module, scenario: str, points=None):
+    """Deterministic outcomes over the first four of the runner's PVT points.
+
+    `points` overrides that selection with an explicit point list (see
+    `points_by_corner_id`); the per-point values stay a function of position,
+    so a given list always renders the same numbers.
+    """
+    if points is None:
+        points = module.build_points()[:4]
     outcomes = []
     for index, point in enumerate(points):
         base = 3.0 + 0.5 * index
@@ -210,6 +228,52 @@ def render_without_reference(key: str, smoke: bool = False) -> str:
         body, verdict = module.build_record_body(
             "20260102-030405-abcdef0", STAMP, PDK, NGSPICE, TB,
             build_outcomes(module, "clean"), 5, 123.0, SimpleNamespace(smoke=smoke),
+        )
+    finally:
+        module.PointOutcome.reference_delta = original_delta
+        harness_runner.effective_reltol = original_reltol
+    return f"verdict={verdict}\n{body}"
+
+
+def _partial_reference(module, compared):
+    """Patch `reference_delta` to return `None` outside the `compared` ids.
+
+    The complement of `_no_reference`: it leaves the real comparison in place
+    wherever a reference log *was* found, so the render exercises the
+    `0 < compared < total` path (#447) with genuine residuals at the points it
+    kept, not a synthetic number.
+    """
+    original = module.PointOutcome.reference_delta
+
+    def reference_delta(self, *args, **kwargs):
+        if self.corner_id not in compared:
+            return None
+        return original(self, *args, **kwargs)
+
+    module.PointOutcome.reference_delta = reference_delta
+    return original
+
+
+def render_with_partial_reference(
+    key: str, compared, *, smoke: bool = False, corners=None
+) -> str:
+    """`render(key, "clean", smoke)` with a reference at only some points.
+
+    `compared` is the set of corner ids that have one; `corners` overrides the
+    default four-point subset (see `points_by_corner_id`). Every other point
+    renders an `n/a` row, so the record must disclose that its residual covers
+    part of the grid only.
+    """
+    module = load_runner(key)
+    points = None if corners is None else points_by_corner_id(module, corners)
+    original_reltol = harness_runner.effective_reltol
+    harness_runner.effective_reltol = lambda tb: ("1e-4", "harness default")
+    original_delta = _partial_reference(module, frozenset(compared))
+    try:
+        body, verdict = module.build_record_body(
+            "20260102-030405-abcdef0", STAMP, PDK, NGSPICE, TB,
+            build_outcomes(module, "clean", points), 5, 123.0,
+            SimpleNamespace(smoke=smoke),
         )
     finally:
         module.PointOutcome.reference_delta = original_delta
