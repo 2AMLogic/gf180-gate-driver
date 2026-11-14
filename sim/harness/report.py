@@ -786,13 +786,6 @@ def write_corner_log(
     return path
 
 
-def write_device_corner_log(
-    corners_dir: Path, record: str, cid: str, header: str, log: str
-) -> Path:
-    """Device-testbench spelling of :func:`write_corner_log`."""
-    return write_corner_log(corners_dir, record, cid, header, log)
-
-
 def write_device_netlist_snapshot(snapshot_dir: Path, record: str, deck: Path) -> Path:
     """Freeze ``deck`` as ``netlist-snapshots/<record-id>.spice``.
 

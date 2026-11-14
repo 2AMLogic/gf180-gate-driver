@@ -48,16 +48,13 @@ from __future__ import annotations
 
 import sys
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+from harness import campaign as harness_campaign  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
-from harness import evidence_store as harness_evidence_store  # noqa: E402
-from harness import report as harness_report  # noqa: E402
-from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
@@ -440,58 +437,68 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
     return "\n".join(lines), verdicts
 
 
-def main() -> int:
-    pdk = harness_pdk.find_pdk()
-    root = harness_pdk.REPO_ROOT
-    ngspice = ngspice_version()
-    harness_evidence_store.preflight_or_exit(root)
-    git = harness_report.git_provenance(root)
-    record = harness_report.allocate_record_id(root, HERE / "records", git=git)
-    stage = harness_evidence_store.stage_dir(root, HERE.name, record)
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+def _run_point(
+    pdk: harness_pdk.Pdk, section: str, temp_c: float
+) -> tuple[str, str, dict]:
+    """One grid point: *two* decks, filed as a single corner log.
 
-    print(f"record {record}: {len(SECTIONS) * len(TEMPS)} corner points")
-    results: dict[tuple[str, float], dict] = {}
-    for section in SECTIONS:
-        for temp in TEMPS:
-            cid = f"{section}_{temp:g}c_nosupply"
+    This runner is why `campaign.run_device_main` takes a `run_point` hook
+    rather than one deck plus a control block: the hysteresis claim and the
+    response-time claim need different stimuli (a slow triangle wave vs. a
+    1 ns `VDD_DRV` step, see the module docstring), so a grid point is two
+    ngspice runs whose raw output is concatenated into one log. The
+    concatenation stays here rather than in the shared driver.
+    """
+    hyst_log = _run_corner(_hysteresis_deck(), pdk, section, temp_c, "hysteresis")
+    hyst = extract_hysteresis(hyst_log)
 
-            hyst_log = _run_corner(_hysteresis_deck(), pdk, section, temp, "hysteresis")
-            hyst = extract_hysteresis(hyst_log)
+    resp_log = _run_corner(_response_deck(), pdk, section, temp_c, "response")
+    resp = extract_response(resp_log, hyst["falling_v"])
 
-            resp_log = _run_corner(_response_deck(), pdk, section, temp, "response")
-            resp = extract_response(resp_log, hyst["falling_v"])
-
-            combined_log = (
-                "==== hysteresis (triangle-wave) deck ====\n"
-                + hyst_log
-                + "\n\n==== response-time (step) deck ====\n"
-                + resp_log
-            )
-            harness_report.write_device_corner_log(
-                stage / "corners",
-                record,
-                cid,
-                harness_report.device_log_header(pdk, DUT, section, temp, record, stamp, ngspice),
-                combined_log,
-            )
-            results[(section, temp)] = {"hysteresis": hyst, "response": resp}
-            print(
-                f"  {cid}: falling={_fmt(hyst['falling_v'])} rising={_fmt(hyst['rising_v'])} "
-                f"hyst={_fmt(hyst['hysteresis_v'])} "
-                f"response={_fmt(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
-            )
-
-    harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, DUT)
-    body, verdicts = build_record(record, stamp, pdk, ngspice, results)
-    path = HERE / "records" / f"{record}.md"
-    manifest = harness_evidence_store.commit_run_or_exit(
-        stage, repo_root=root, bench=HERE.name, rid=record, record_text=body, record_path=path
+    combined_log = (
+        "==== hysteresis (triangle-wave) deck ====\n"
+        + hyst_log
+        + "\n\n==== response-time (step) deck ====\n"
+        + resp_log
     )
-    print(f"wrote {path} (evidence manifest {manifest})")
+    return (
+        f"{section}_{temp_c:g}c_nosupply",
+        combined_log,
+        {"hysteresis": hyst, "response": resp},
+    )
+
+
+def _progress_detail(cid: str, extracted: dict) -> str:
+    """The per-point progress line: both trip points, hysteresis, response."""
+    hyst, resp = extracted["hysteresis"], extracted["response"]
+    return (
+        f"falling={_fmt(hyst['falling_v'])} rising={_fmt(hyst['rising_v'])} "
+        f"hyst={_fmt(hyst['hysteresis_v'])} "
+        f"response={_fmt(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
+    )
+
+
+def _summarize(verdicts: dict) -> list[str]:
+    """The closing line: how many of the grid's corners did not pass."""
     n_fail = sum(1 for v in verdicts.values() if v["overall"] != "PASS")
-    print(f"verdicts: {n_fail}/{len(verdicts)} corners failing")
-    return 0
+    return [f"verdicts: {n_fail}/{len(verdicts)} corners failing"]
+
+
+def main() -> int:
+    return harness_campaign.run_device_main(
+        here=HERE,
+        repo_root=harness_pdk.REPO_ROOT,
+        # Unlike the other two device runners this experiment composes its
+        # decks in a temp dir per point (`_run_corner`); what a record freezes
+        # as its netlist snapshot is the DUT itself.
+        deck=DUT,
+        process_corners=SECTIONS,
+        temperatures_c=TEMPS,
+        run_point=_run_point,
+        build_record_body=build_record,
+        summarize=_summarize,
+        progress_detail=_progress_detail,
+    )
 
 
 if __name__ == "__main__":

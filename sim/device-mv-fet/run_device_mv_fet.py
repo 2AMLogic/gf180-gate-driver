@@ -28,17 +28,14 @@ from __future__ import annotations
 
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
+from harness import campaign as harness_campaign  # noqa: E402
 from harness import corners as harness_corners  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
-from harness import evidence_store as harness_evidence_store  # noqa: E402
-from harness import report as harness_report  # noqa: E402
-from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fmt as _fmt  # noqa: E402
@@ -52,6 +49,10 @@ from harness.script_helpers import run_corner_deck as _run_corner_deck  # noqa: 
 # these five names skew every device family this experiment exercises.
 SECTIONS = ["typical", "ff", "ss", "fs", "sf"]
 TEMPS = [-40.0, 27.0, 125.0]
+
+#: The deck this experiment runs at every grid point, and freezes as each
+#: record's netlist snapshot.
+DECK = HERE / "testbench" / "tb_device_mv_fet.spice"
 
 # Constant-current threshold criterion, linear region (Vds = 50 mV).
 # Matches the criterion 2AMLogic/gf180-bandgap's device-mos-vth experiment
@@ -477,45 +478,31 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
     return "\n".join(lines), verdicts
 
 
-def main() -> int:
-    pdk = harness_pdk.find_pdk()
-    root = harness_pdk.REPO_ROOT
-    ngspice = ngspice_version()
-    harness_evidence_store.preflight_or_exit(root)
-    git = harness_report.git_provenance(root)
-    record = harness_report.allocate_record_id(root, HERE / "records", git=git)
-    stage = harness_evidence_store.stage_dir(root, HERE.name, record)
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
-    deck = HERE / "testbench" / "tb_device_mv_fet.spice"
+def _run_point(
+    pdk: harness_pdk.Pdk, section: str, temp_c: float
+) -> tuple[str, str, dict]:
+    """One grid point: run the deck at `(section, temp_c)` and parse it."""
+    log = _run_corner(DECK, pdk, section, temp_c)
+    return harness_corners.device_corner_id(section, temp_c), log, extract(log)
 
-    print(f"record {record}: {len(SECTIONS) * len(TEMPS)} corner points")
-    results: dict[tuple[str, float], dict] = {}
-    for section in SECTIONS:
-        for temp in TEMPS:
-            cid = harness_corners.device_corner_id(section, temp)
-            log = _run_corner(deck, pdk, section, temp)
-            harness_report.write_device_corner_log(
-                stage / "corners",
-                record,
-                cid,
-                harness_report.device_log_header(
-                    pdk, deck, section, temp, record, stamp, ngspice
-                ),
-                log,
-            )
-            results[(section, temp)] = extract(log)
-            print(f"  {cid}: ok")
 
-    harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, deck)
-    body, verdicts = build_record(record, stamp, pdk, ngspice, results)
-    path = HERE / "records" / f"{record}.md"
-    manifest = harness_evidence_store.commit_run_or_exit(
-        stage, repo_root=root, bench=HERE.name, rid=record, record_text=body, record_path=path
-    )
-    print(f"wrote {path} (evidence manifest {manifest})")
+def _summarize(verdicts: dict[str, dict[str, str]]) -> list[str]:
+    """The closing line: how many quantity/device combinations did not pass."""
     n_fail = sum(1 for d in verdicts.values() for v in d.values() if v != "PASS")
-    print(f"verdicts: {n_fail} failing quantity/device combinations")
-    return 0
+    return [f"verdicts: {n_fail} failing quantity/device combinations"]
+
+
+def main() -> int:
+    return harness_campaign.run_device_main(
+        here=HERE,
+        repo_root=harness_pdk.REPO_ROOT,
+        deck=DECK,
+        process_corners=SECTIONS,
+        temperatures_c=TEMPS,
+        run_point=_run_point,
+        build_record_body=build_record,
+        summarize=_summarize,
+    )
 
 
 if __name__ == "__main__":
