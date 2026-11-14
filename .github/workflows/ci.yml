@@ -21,6 +21,7 @@ name: CI
 # | klt request generators reproduce their JSON   | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
 # | `layout/common/test_signoff_store.py`         | python3      | `test` (here)  |
+# | `layout/common/test_control_verdict.py`       | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
 # Deliberate exclusion: actually *running* the PVT sweep needs ngspice and
@@ -212,6 +213,17 @@ jobs:
         # stdlib arithmetic, no klt, no PDK, no GDS, so it belongs on this
         # same PDK-free runner.
         run: python3 layout/common/test_power_array_folded.py
+
+      - name: Negative-control verdict unit tests
+        # layout/common/test_control_verdict.py pins the shared pass/fail
+        # epilogue the four layout/ negative controls now return through
+        # (issue #468): every FAIL: line plus the caller's invalidation
+        # sentence go to stderr and exit 1, the caller's ok: line goes to
+        # stdout and exits 0, and the two streams never mix. The controls
+        # themselves need klt + the PDK, so the half that decides whether a
+        # sibling signoff is evidence at all is only checkable here; pure
+        # stdlib, no klt/PDK/GDS, so it belongs on this PDK-free runner.
+        run: python3 layout/common/test_control_verdict.py
 
       - name: Signoff-store unit tests
         # layout/common/test_signoff_store.py pins the fail-closed path of the
