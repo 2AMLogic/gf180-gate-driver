@@ -56,8 +56,7 @@ _None._
 
 ## Proposed (Architect / Hermit)
 
-- **#441**: Consolidate the two klt gen_requests.py generators: UVLO copy duplicates the process table and request envelope and is outside the reproduction test *(hermit)*
-- **#442**: Mismatch campaigns report a 0.00 reference residual when no reference log was found: make the skipped cross-check explicit and drop the ronw script's inline copy of control_table_rows *(hermit)*
+_None._
 
 ## Epics
 
@@ -75,6 +74,6 @@ _None._
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
-| Architect / Hermit proposals | 2 |
+| Architect / Hermit proposals | 0 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
