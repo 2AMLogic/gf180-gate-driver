@@ -71,9 +71,11 @@ SOURCE_EXPERIMENT = "gate-driver-core-drive"
 REFERENCE_RECORD = "20260818-060517-673fcf0"
 
 #: The node under claim, and the ratified §2.3 thick-oxide DC gate ceiling
-#: its excursion is measured against.
+#: its excursion is measured against. The ceiling is a ratified spec value
+#: with one home (`harness/script_helpers.py`), shared with the other
+#: campaigns that measure against it; its provenance is recorded there.
 CLAIM_MEASUREMENT = "indrv_max_v"
-GATE_CEILING_V = 6.0
+GATE_CEILING_V = script_helpers.GATE_CEILING_V
 
 #: `spec/gate-driver.md` §5 Exception 3's ratified bound: <= 10 mV above the
 #: ceiling. Reported against, never adjusted here -- a bound change would
@@ -82,9 +84,11 @@ EXCEPTION3_BOUND_V = 0.010
 
 #: Exception 2's ratified bound on the output-stage taper nodes (decision
 #: record 0013), reported as secondary context for the `n1..n5` measurements
-#: this testbench already carries. Not this record's claim.
-EXCEPTION2_BOUND_V = 0.175
-TAPER_MEASUREMENTS = ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v")
+#: this testbench already carries. Not this record's claim. Both are ratified
+#: spec values with one home (`harness/script_helpers.py`), shared with
+#: `output-stage-taper-mismatch`, which claims them; provenance is there.
+EXCEPTION2_BOUND_V = script_helpers.EXCEPTION2_BOUND_V
+TAPER_MEASUREMENTS = script_helpers.TAPER_MEASUREMENTS
 
 #: The supply point the campaign runs at. Exception 3 exists **only** at the
 #: 6 V stretch rail: the ratified spec text records every nominal-tolerance
@@ -363,20 +367,9 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     add("")
     add("  | node | control worst (V) | MC worst (V) | Δ (mV) | worst margin (mV) | vs ≤ 175 mV bound |")
     add("  |---|---|---|---|---|---|")
-    for name in TAPER_MEASUREMENTS:
-        mc_worst = None
-        ctrl_worst = None
-        for outcome in outcomes:
-            values = outcome.values(name)
-            if values:
-                mc_worst = max(values) if mc_worst is None else max(mc_worst, max(values))
-            control = outcome.control_value(name)
-            if control is not None:
-                ctrl_worst = control if ctrl_worst is None else max(ctrl_worst, control)
-        if mc_worst is None:
-            continue
-        margin = GATE_CEILING_V - mc_worst
-        delta = mc_worst - ctrl_worst if ctrl_worst is not None else None
+    for name, ctrl_worst, mc_worst, delta, margin in script_helpers.worst_across_points(
+        outcomes, TAPER_MEASUREMENTS, GATE_CEILING_V
+    ):
         add(
             f"  | `x2.{name.split('_')[0]}` | {_fmt(ctrl_worst)} | {_fmt(mc_worst)} | "
             f"{_mv(delta)} | {_mv(margin)} | "
