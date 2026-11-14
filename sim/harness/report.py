@@ -711,18 +711,6 @@ def render_record(record: dict, experiment: str) -> str:
     return "\n".join(lines)
 
 
-def write_record(record: dict, experiment_dir: Path) -> Path:
-    """Write ``records/<record-id>.md``; never overwrite an existing record."""
-    out_dir = experiment_dir / RECORDS_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{record['record_id']}.md"
-    _refuse_if_exists(
-        path, f"{path} already exists; records are append-only -- mint a new record-id"
-    )
-    path.write_text(render_record(record, experiment_dir.name))
-    return path
-
-
 # --------------------------------------------------------------------------
 # Device-level (nosupply) evidence plumbing.
 #
@@ -733,8 +721,8 @@ def write_record(record: dict, experiment_dir: Path) -> Path:
 # own deck. What it shares with the grid-contract experiments is the
 # *evidence* plumbing: the corner-log comment header, where a corner log is
 # written, and freezing the deck as this record's netlist snapshot. Those
-# live here, next to `write_netlist_snapshot` / `write_record`, so the
-# evidence layout `sim/README.md` ratifies has exactly one implementation.
+# live here, next to `write_netlist_snapshot`, so the evidence layout
+# `sim/README.md` ratifies has exactly one implementation.
 #
 # The `device_` naming follows `corners.device_corner_id`: it marks the
 # two-terminal, `nosupply` device-testbench flavour of the same convention.
