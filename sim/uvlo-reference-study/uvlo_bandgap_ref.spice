@@ -1,0 +1,121 @@
+* uvlo_bandgap_ref.spice -- CANDIDATE (issue #457): UVLO whose reference is a
+* Vbe/dVbe (bandgap-type) core on substrate PNPs, NOT a stack of Vgs.
+*
+* Study netlist only; design/netlist/uvlo.spice is NOT modified. Same .subckt uvlo
+* port list (VDD_DRV OUT GND_DRV). The comparator (MTAIL/MINP/MINN/MLOADP/MLOADN),
+* the two-inverter buffer (MPINV1/MNINV1, MPINV2/MNINV2) and MPD are copied
+* unchanged device-for-device from design/netlist/uvlo.spice; only MTAIL's GATE
+* moves (from the deleted diode-connected-NMOS node `nref` to the core's bias
+* node `nib`), the same kind of deliberate connection deviation the #412
+* candidate made. Everything else here replaces Rref/MREF (the single
+* diode-connected nfet_06v0 Vt reference) and re-values R1/R2/Rfb.
+*
+* Reference mechanism (borrowed from 2AMLogic/gf180-bandgap's core -- its
+* *mechanism and device choice*, not its 3.3 V cell; see the issue's
+* "Verified corrections"): three-terminal vertical substrate PNPs
+* pnp_05p00x05p00 (c b e), collector and base on GND_DRV, emitter fed from
+* above by a pfet_06v0 mirror. Vbe is set by junction physics (Is, Eg), not by
+* Vt, so the reference does not track Vgs.
+*
+*   Leg A:  MP1 -> nvref --Rsa--> ne1 --> Q1 (m=1)     V(nvref) = Vbe1 + I*Rsa
+*   Leg B:  MP2 -> nvb   --Rsb--> nrp --Rp--> ne2 --> Q2 (m=8)
+*                                                      V(nvb)  = Vbe2 + I*(Rsb+Rp)
+*
+* The amplifier forces V(nvref) = V(nvb). With Rsa = Rsb and equal mirror
+* currents that gives I*Rp = Vbe1 - Vbe2 = (kT/q)*ln(8) (PTAT), hence
+*
+*   Vref = V(nvref) = Vbe1 + (Rsa/Rp)*(kT/q)*ln(8)      [CTAT + K*PTAT]
+*
+* Rsa/Rp = 275k/27k = 10.19 is the first-order zero-TC ratio for this device:
+* dVbe/dT = (Vbe - Eg/q)/T - xti*(kT/q)/T = (0.700 - 1.17)/300 - 3*0.02585/300
+* = -1.83 mV/K, and d(dVbe)/dT = ln(8)*k/q = +0.179 mV/K, so K = 1.83/0.179.
+* Target I = (kT/q)*ln(8)/Rp = 53.8 mV / 27k = 2.0 uA and Vref = 0.700 +
+* 10.19*0.0538 = 1.25 V. Raising the sense nodes by the SAME Rsa in both legs
+* (so the PTAT equation above is unchanged) is what puts the amplifier's input
+* common mode at Vref rather than at Vbe -- an nfet_06v0 input pair cannot run
+* at a 0.7 V common mode with Vt ~ 0.75 V.
+*
+* Startup: a Vbe/dVbe core has a degenerate zero-current state (I = 0 also
+* satisfies V(nvref) = V(nvb)). Rdet/MSENSE/MKICK break it: when the core is
+* dead, nvref is low, MSENSE is off, Rdet pulls ndet to VDD_DRV and MKICK pulls
+* the mirror gate nfb to GND_DRV, which forces current into the legs. MKICK is
+* load-bearing, and its failure direction is the UNSAFE one: measured at 27 C
+* with MKICK deleted and the core initialised dead, the core stays dead
+* (nvref = 0.117 V at VDD_DRV = 2 V, 0.373 V at 5 V), ndiv > nvref, and
+* `lockout` stays LOW -- i.e. the UVLO releases OUT at 2 V. With MKICK present
+* the same adverse initial condition recovers to nvref = 1.225 V and `lockout`
+* is correctly asserted. See sim/uvlo-reference-study/README.md "Startup and the
+* zero-current state".
+*
+* Resistors are ideal R elements, as in design/netlist/uvlo.spice and
+* uvlo_stacked_ref.spice -- so the res_* corner sections in the request do not
+* spread them, and only the Rsa/Rp RATIO (which tracks) sets the PTAT gain.
+*
+*.subckt uvlo VDD_DRV OUT GND_DRV  (kept FLAT like design/netlist/uvlo.spice so the testbench can probe v(lockout))
+*
+* ---- Vbe/dVbe reference core ------------------------------------------------
+XMP1 nvref nfb VDD_DRV VDD_DRV pfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP2 nvb nfb VDD_DRV VDD_DRV pfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMP3 nib nfb VDD_DRV VDD_DRV pfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+Rsa nvref ne1 275k m=1
+XQ1 GND_DRV GND_DRV ne1 pnp_05p00x05p00 m=1
+Rsb nvb nrp 275k m=1
+Rp nrp ne2 27k m=1
+XQ2 GND_DRV GND_DRV ne2 pnp_05p00x05p00 m=8
+XMNIB nib nib GND_DRV GND_DRV nfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+*
+* ---- loop amplifier (nfet_06v0 input pair, pfet_06v0 mirror load) -----------
+* MAMP1's gate is nvb and MAMP2's gate is nvref: nvb rising pulls nd1 down, the
+* pfet load mirror pushes nfb up, and the mirror current falls. Negative loop.
+XMAMP1 nd1 nvb nats GND_DRV nfet_06v0 L=2u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMAMP2 nfb nvref nats GND_DRV nfet_06v0 L=2u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMALP1 nd1 nd1 VDD_DRV VDD_DRV pfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMALP2 nfb nd1 VDD_DRV VDD_DRV pfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMATAIL nats nib GND_DRV GND_DRV nfet_06v0 L=2u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XCC VDD_DRV nfb cap_mim_2f0_m4m5_noshield c_width=40u c_length=40u m=1
+*
+* ---- startup (breaks the degenerate zero-current state) ---------------------
+Rdet VDD_DRV ndet 20000k m=1
+XMSENSE ndet nvref GND_DRV GND_DRV nfet_06v0 L=2u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMKICK nfb ndet GND_DRV GND_DRV nfet_06v0 L=2u W=2u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+*
+* ---- divider + hysteresis (re-valued for Vref = 1.25 V, gain 0.33) ---------
+R1 VDD_DRV ndiv 960k m=1
+R2 ndiv GND_DRV 450k m=1
+Rfb uvlo_ok ndiv 50000k m=1
+*
+* ---- comparator / buffer / pulldown: copied from design/netlist/uvlo.spice --
+* (MTAIL's gate is nib, the core bias node, instead of the deleted nref; MINN's
+*  gate is nvref, the Vbe/dVbe reference, instead of the deleted nref.)
+XMTAIL ntail nib GND_DRV GND_DRV nfet_06v0 L=0.7u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINP ncompp ndiv ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMINN ncompn nvref ntail GND_DRV nfet_06v0 L=0.7u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADP ncompp ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMLOADN ncompn ncompp VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=15u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV1 lockout ncompn VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV1 lockout ncompn GND_DRV GND_DRV nfet_06v0 L=0.7u W=5u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPINV2 uvlo_ok lockout VDD_DRV VDD_DRV pfet_06v0 L=0.55u W=20u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMNINV2 uvlo_ok lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u'
++ pd='2*int((nf+1)/2) * (W/nf + 0.18u)' ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=1
+XMPD OUT lockout GND_DRV GND_DRV nfet_06v0 L=0.7u W=10u nf=1 ad='int((nf+1)/2) * W/nf * 0.18u' as='int((nf+2)/2) * W/nf * 0.18u' pd='2*int((nf+1)/2) * (W/nf + 0.18u)'
++ ps='2*int((nf+2)/2) * (W/nf + 0.18u)' nrd='0.18u / W' nrs='0.18u / W' sa=0 sb=0 sd=0 m=800
+**.ends
