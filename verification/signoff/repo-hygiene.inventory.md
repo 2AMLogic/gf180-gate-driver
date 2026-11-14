@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:a21c8825ac5e1fa711074f8bb0d5bd834d5e81674d7f06de991a00adb1058db2` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -336,3 +336,28 @@ Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #456 (2026-11-14)
+
+One listed file changed on the issue #456 branch (`feature/issue-456`, on top
+of `origin/main` at `cbf0cd4`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): the "Extracted post-layout
+  DUT netlists are in sync with their reports" step's two `mk_extracted_dut.py
+  --check` invocations now point at the two extraction reports issue #456
+  promoted from the current GDS (`20261114-194101-cbf0cd4.extract.json` and
+  `20261114-194121-cbf0cd4.pex-extract.json`) instead of the 2026-08-26 pair.
+  Both `--check` re-derivations pass byte-for-byte against the regenerated
+  committed netlists. No job, step, trigger, permission or pin moved — the
+  `lint`, `test` and harness self-test jobs and the signoff job's grader pin
+  are unchanged, so every finding above still holds. CI was read, not observed
+  to pass here.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE` and
+`spec/gate-driver.md` are untouched by this branch, so those findings still
+hold. Recorded but **not** pinned here: `layout/lvs/mk_extracted_dut.py` and
+the regenerated netlists/reports themselves — none is listed in this inventory
+and none carries a hash in it. The extraction re-run and both oxide-safety
+simulation runs happened for the change itself, not as part of this audit; no
+additional simulation was run for this re-audit.

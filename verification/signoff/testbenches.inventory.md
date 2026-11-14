@@ -71,14 +71,21 @@ Audit findings for table A:
   line except the trailing `.end`.
 - The report's primary record
   (`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`)
-  ran against `layout/lvs/gate_driver_core.extracted-rc.spice`, whose live
-  sha256 (`6f0c9b8e...db97e`) equals the one the record states. **Both that
-  record and the no-RC cross-check record
-  (`...records/20260826-063405-a7dcce1.md`, DUT hash equal to the live
-  `layout/lvs/gate_driver_core.extracted.spice`) state they were taken
-  against a dirty working tree and are "not citable as a clean-tree
-  result".** This inventory attests that the testbenches and invocations
-  exist and run, not that those records are clean-tree results.
+  ran against `layout/lvs/gate_driver_core.extracted-rc.spice`, whose sha256
+  then (`6f0c9b8e...db97e`) equaled the one the record states — **that
+  equality is historical, not live**: issue #456 (2026-11-14) regenerated
+  both extracted netlists from the current GDS, so the live
+  `extracted-rc.spice` is `5e695d12...d50c` and the live
+  `extracted.spice` is `21fe85db...ffca`. The DUT hashes the 2026-08-26
+  drive records state describe the pre-#456 files; the current DUTs are
+  covered by the issue #456 oxide-safety records
+  (`20261114-194502-55af608` no-RC, `20261114-202350-bb5cab0` RC — each
+  stating the live hash it ran) and, for the drive suite, by item 7's
+  `klt pex` report over the current GDS. **Both 2026-08-26 drive records
+  additionally state they were taken against a dirty working tree and are
+  "not citable as a clean-tree result"**; the #456 replacements were taken
+  clean. This inventory attests that the testbenches and invocations
+  exist and run, not that any record is a clean-tree result.
 - Executed in this audit (single corner, nothing recorded, `--no-write`):
   `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout
   --dut layout/lvs/gate_driver_core.extracted-rc.spice --corner-set tt
@@ -113,3 +120,33 @@ disk and are listed above.
 
 The harness entry point `sim/run_corners.py` (sha256
 `sha256:9f9b8199b5b20e974c715cbab0f4736394017809ba58604bf35ae683e41f5140`).
+
+## Re-audit for issue #456 (2026-11-14)
+
+No listed manifest, runner or testbench file changed; the audit findings
+above were re-read against the issue #456 branch (`feature/issue-456`, on
+top of `origin/main` at `cbf0cd4`) and updated where they had gone stale:
+
+- The "Audit findings for table A" bullet asserting the live
+  `extracted-rc.spice` hash is reworded: issue #456 regenerated both
+  extracted DUT netlists from the current GDS (klt
+  `0.9.2.dev1029+g76f47afa48f1`, extraction deck content hash
+  `sha256:c3f2cce4…`, up from the 0.3.0-era `sha256:79e71a1e…` the
+  committed netlist headers state), so the 2026-08-26 drive records' DUT
+  hashes are historical. Device and parasitic populations are unchanged
+  (2044 devices, same per-model tally; 6128 R / 295 C), and the
+  level-shifter-oxide-safety-postlayout facet was re-run on the current
+  DUTs (records `20261114-194502-55af608` and `20261114-202350-bb5cab0`,
+  clean tree, ngspice-47, corner-for-corner verdicts identical to the
+  superseded pair).
+- `sim/level-shifter-oxide-safety-postlayout/testbench/tb.json` is
+  byte-identical (its pin above still holds), as is every other hashed
+  file in the tables; the extracted netlists are named by this inventory
+  as existing files but are not `sha256:`-pinned here, so no row hash
+  moved.
+- Executed in this re-audit: `python3 sim/check_records.py`,
+  `npm run lint`, and the two `mk_extracted_dut.py --check` re-derivations
+  CI runs. The cold-start invocation of section A was not re-executed;
+  `python3 sim/run_corners.py --list` exits 0. No simulation was run for
+  this audit beyond the facet re-run recorded above, which happened for
+  the change itself.
