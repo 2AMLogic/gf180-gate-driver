@@ -1,0 +1,122 @@
+# Work Log Archive — 2026-08
+
+Sections moved byte-for-byte from [WORK_LOG.md](../WORK_LOG.md) by `loom-daemon work-docs archive`.
+
+### 2026-08-26
+
+- **Issue #226** (closed): UVLO addition causes an un-excepted nominal-rail ipeak_source_a miss at ss_-40c_vlogic2p97v-vdrv4p50v (spec §3)
+- **Issue #223** (closed): [Parent #219] 3A-4: docs/chipalooza/challenge-5-proposal.md for the gate driver
+- **Issue #222** (closed): [Parent #219] 3A-3: post-layout PVT re-verification of the complete gate-driver block
+- **Issue #221** (closed): [Parent #219] 3A-2: extend layout/ to the complete gate-driver block (add UVLO), DRC-clean + LVS-matched
+- **Issue #220** (closed): [Parent #219] 3A-1: UVLO sub-cell design + full-block schematic PVT verification
+- **Issue #219** (closed): [Epic #542] 3A — gf180-gate-driver maturation + Challenge #5 brief
+
+### 2026-08-21
+
+- **Issue #216** (closed): Add Monte Carlo local-mismatch evidence for spec/low-side-power-switch.md's Ron·W table
+- **Issue #211** (closed): Monte Carlo local-mismatch campaigns for spec/gate-driver.md Sec.5 Exceptions 1 and 2
+
+### 2026-08-17
+
+- **Issue #122** (closed): Guard decision: ask-tier git-clean-fd substring still fires on backtick-quoted example text inside a $(cat <<EOF …) --body heredoc
+- **PR #131**: fix(guard): recognize escaped $(/backtick openers nested in a live heredoc body as inert (git-clean-fd ask tier)
+- **Issue #104** (closed): T1 gap: physical layout for gate-driver block (checklist item 2)
+- **PR #128**: feat(layout): generate gate_driver_core GDS from its netlist via klt
+
+### 2026-08-16
+
+- **Issue #112** (closed): Guard decision: git-clean-fd still false-asks on an escaped $(...) body with a ;-separated segment inside a double-quoted --body
+- **PR #119**: fix(guard): delimit escaped double-quoted flag values the way bash does (#112)
+- **Issue #98** (closed): T1 gap: capture a top-level gate-driver schematic instantiating level_shifter + output_stage (checklist item 1)
+- **PR #116**: feat(design): capture gate_driver_core top cell wiring level shifter to output stage
+- **Issue #106** (closed): Guard: BSD sed -i '' target-parsing bug causes systematic false worktree-write-confinement DENY on macOS
+- **PR #117**: fix: resolve real file target for BSD sed -i '' in-place edits in the Bash write guard
+- **Issue #97** (closed): Decompose the T1 re-read's failing items (#62) into dispatchable issues
+- **Issue #110** (closed): Guard: BSD sed -i '' (macOS two-arg form) misparsed as write target by extract_write_targets(), false worktree-write-confinement DENY
+- **Issue #101** (closed): T1 gap: aggregate a block-level characterization report against spec §3 (checklist item 8)
+- **PR #108**: docs: aggregate block-level characterization report against spec §3
+- **Issue #96** (closed): Guard-hook adversarial checklist (builder.md) missing a 4th boundary shape: command-substitution embedding
+- **PR #103**: docs(builder): add command-substitution boundary shape to guard-hook adversarial checklist
+- **Issue #102** (closed): perm test - delete me
+- **Issue #90** (closed): Guard decision: ask-tier git-clean-fd pattern matches on substring in ANY command text, not just actual invocations
+- **PR #92**: fix(guard): treat zero recognized git-clean-fd invocations as allow
+- **Issue #89** (closed): Consolidate append-only write guard in report.py; write_device_netlist_snapshot silently skips it
+- **PR #91**: refactor(sim): dedup append-only exists-guard across evidence writers
+- **Issue #83** (closed): Dedup _git(): near-identical git subprocess wrapper in report.py and evidence_lint.py
+- **PR #87**: refactor(sim): dedup _git() git subprocess wrapper
+- **Issue #82** (closed): CI 'Hook regression suites' step doesn't run test-guard-heredoc-interpreter-masking.sh (guards today's #68 fix)
+- **PR #86**: ci: run test-guard-heredoc-interpreter-masking.sh in Hook regression suites
+- **Issue #79** (closed): Remove unused check:all npm script: byte-identical duplicate of check:ci
+- **PR #81**: chore: remove unused check:all npm script
+
+### 2026-08-15
+
+- **Issue #74** (closed): Process pattern: guard-hook regex/scan changes repeatedly ship without adversarial boundary tests
+- **PR #75**: docs(builder): require adversarial boundary tests for guard-hook regex/scan changes
+- **Issue #58** (closed): Guard decision: catastrophic:rm false-denies heredoc test fixtures mentioning a dangerous-looking string as literal text
+- **PR #60**: fix(guard): mask literal-delimiter heredoc bodies before catastrophic rm scan
+- **Issue #68** (closed): Guard decision: worktree-write-confinement false-denies a quoted heredoc body containing a Python '>=' comparison
+- **PR #73**: fix(guard): mask non-shell interpreter heredoc bodies in write-target scan
+- **PR #71**: chore: remove dead klayout_dir property in sim/harness/pdk.py
+- **Issue #70** (closed): Remove dead klayout_dir property in sim/harness/pdk.py
+- **PR #66**: fix(guard): mask heredoc/echo prose from ASK-tier git-clean-fd scan (#41)
+- **Issue #41** (closed): Guard decision: git-clean-fd ask-tier scan false-positives on prose mentioning the phrase outside a flag value
+- **Issue #62** (closed): T1/bronze checklist re-read against current evidence (2026-08-15)
+- **PR #64**: chore: remove unused OC_RATIOS constant in run_device_mv_fet.py
+- **Issue #61** (closed): Remove unused OC_RATIOS constant in run_device_mv_fet.py
+- **Issue #56** (closed): Guard decision: stash-scope:main-checkout false-asks on --body prose containing bash '\''-escaped apostrophes
+- **PR #57**: fix(guard): make strip_literal_text() single-quote masking BSQ-aware
+- **Issue #51** (closed): Guard decision: rm-scope-outside-repo blocks clearing a stale GitHub App installation-token cache
+- **PR #53**: feat: add invalidate-cache subcommand to github-app-token.sh
+- **Issue #48** (closed): Dedup _fmt(): identical scalar-formatter in cli.py and report.py
+- **PR #49**: fix(guide): reorder WORK_PLAN.md label queries to run immediately before commit
+- **Issue #44** (closed): Guide's WORK_PLAN.md 'PRs Awaiting Review' section missed an already-open PR
+- **PR #47**: refactor: remove duplicate _fmt helper from cli.py, use report._fmt
+- **Issue #45** (closed): Remove duplicate _fmt helper in cli.py: identical to report._fmt
+- **PR #42**: fix: strip leaked worktree sch_path lines from committed netlists
+- **Issue #39** (closed): Strip leaked local worktree paths from committed design netlists
+- **PR #38**: chore(sim): remove dead deck/log fields on PointResult
+- **Issue #36** (closed): Remove dead PointResult.deck/.log fields in sim/harness/runner.py
+- **PR #33**: chore(sim): remove dead spec_window helper in run_device_mv_fet.py
+- **Issue #32** (closed): Remove dead spec_window helper in run_device_mv_fet.py
+- **Issue #34** (closed): Remove dead spec_window helper in run_device_mv_fet.py
+- **PR #30**: chore(sim): remove dead _interp_y helper in run_device_mv_fet.py
+- **Issue #29** (closed): Remove dead _interp_y helper in run_device_mv_fet.py
+
+### 2026-08-12
+
+- **PR #27**: fix(guard): restore PR #19/#20 fixes dropped by Loom surface resync
+- **Issue #25** (closed): Regression: guard-destructive-generic.sh resync (c7ba31d) silently reverted PR #19 and #20 fixes
+- **PR #26**: docs: narrow gate-driver overvoltage claim for output-stage taper-node ceiling excursion
+- **Issue #24** (closed): Resolve output-stage §2.3 gate-ceiling shortfall at the 6V stretch rail (decision record 0004)
+- **PR #23**: feat: capture and size the low-side output stage (closes #6)
+- **Issue #6** (closed): Capture and size the low-side output stage to the spec's drive targets
+
+### 2026-08-11
+
+- **Issue #21** (closed): Guard decision: confirm stash-scope:worktree-collision ASK on git stash pop from linked worktree
+- **Issue #16** (closed): Guard decision: confirm worktree-write-confinement DENY on unscoped write to main checkout
+
+### 2026-08-08
+
+- **PR #19**: guard: auto-allow git clean -fd scoped to own worktree's sim/**
+- **Issue #15** (closed): Guard decision: allowlist scoped 'git clean -fd' on sim output dirs within own worktree
+- **PR #20**: fix(guard): resolve quoted worktree-scoped write targets in guard-destructive-generic.sh
+- **Issue #17** (closed): Guard decision: worktree-write-confinement-unresolved-var false positive on properly $WORKTREE_ABS-scoped writes
+- **PR #18**: docs(spec): scope oxide-safety claim to a documented pre-driver exception
+- **Issue #13** (closed): level_shifter pre-driver inverter overshoots 3.63V thin-oxide ceiling at VDD_LOGIC=+10%
+- **PR #14**: Capture cascode/clamped level shifter, prove the 3.63V thin-oxide ceiling (partial)
+- **Issue #7** (closed): Capture the cascode/clamped level shifter and prove the 3.63 V thin-oxide ceiling
+- **PR #12**: sim: characterize gf180mcu medium-voltage FETs against PDK elec-specs
+- **Issue #5** (closed): Characterize the medium-voltage devices against the PDK's published electrical specs
+- **PR #11**: chore: remove dead pdk_available() helper
+- **Issue #10** (closed): Remove dead code: pdk_available() in sim/harness/pdk.py
+- **PR #9**: feat: bootstrap the two-rail ngspice PVT sim harness from gf180-bandgap
+- **Issue #3** (closed): Bootstrap the sim harness, PDK environment, and evidence CI from gf180-bandgap
+- **PR #8**: docs(spec): add decision record for block interface and UVLO parameters
+- **Issue #4** (closed): Spec gap: UVLO is in scope with no parameters, and the block has no defined interface
+
+### 2026-08-05
+
+- **PR #2**: docs: ratify gate-driver target spec with decision records
+- **Issue #1** (closed): Ratify the target spec
