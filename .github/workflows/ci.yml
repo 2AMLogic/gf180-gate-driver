@@ -20,6 +20,7 @@ name: CI
 # | `layout/test_gen_gate_driver_core.py`         | python3      | `test` (here)  |
 # | klt request generators reproduce their JSON   | python3      | `test` (here)  |
 # | `layout/common/test_power_array_folded.py`    | python3      | `test` (here)  |
+# | `layout/common/test_klt_report.py`            | python3      | `test` (here)  |
 # | `layout/common/test_signoff_store.py`         | python3      | `test` (here)  |
 # | `.loom/hooks/tests/*.sh` regression suites     | bash         | `test` (here)  |
 #
@@ -212,6 +213,20 @@ jobs:
         # stdlib arithmetic, no klt, no PDK, no GDS, so it belongs on this
         # same PDK-free runner.
         run: python3 layout/common/test_power_array_folded.py
+
+      - name: klt report-runner unit tests
+        # layout/common/test_klt_report.py pins the shared `klt` runner every
+        # layout/ signoff script goes through (issue #472): BOTH legs of
+        # run_klt_report are checked against the caller's ok_codes, and there
+        # is one copy of the failure block. The `--format text` leg's exit
+        # code used to be discarded while its stdout was written straight into
+        # append-only signoff evidence -- so a failed text render could land
+        # bytes in a record that signoff_store's fail-closed contract (the
+        # step below) exists to keep out, and nothing anywhere would say so.
+        # A two-case /bin/sh stub plays the binary, so the real subprocess
+        # path runs with no klt, no PDK and no GDS, and nothing is written
+        # outside a temp dir -- it belongs on this PDK-free runner.
+        run: python3 layout/common/test_klt_report.py
 
       - name: Signoff-store unit tests
         # layout/common/test_signoff_store.py pins the fail-closed path of the
