@@ -136,7 +136,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LAYOUT_DIR = os.path.dirname(HERE)
 sys.path.insert(0, LAYOUT_DIR)
 
-from gen_gate_driver_core import GenError, _klt  # noqa: E402  (path set above)
+from gen_gate_driver_core import (  # noqa: E402  (path set above)
+    GenError,
+    _hbar,
+    _klt,
+    _ports_by_role,
+    _vbar,
+)
 
 #: Same default as gen_gate_driver_core.py / check_gate_driver_core.py — the
 #: 5-metal gf180mcu Option-D build this repo's own layout flow targets.
@@ -213,22 +219,6 @@ def _mirror_y(x: float, y: float, direction_deg: int) -> tuple[float, float, int
     return x, -y, _DIRECTION_MIRROR_Y[direction_deg]
 
 
-def _ports_by_role(report: dict) -> dict[str, dict]:
-    """Map a ``mos_array`` report's ``U0_S``/``U0_D``/``U0_G`` ports to s/d/g."""
-    roles: dict[str, dict] = {}
-    for port in report.get("ports", []):
-        suffix = port["name"].rsplit("_", 1)[-1].lower()
-        if suffix in ("s", "d", "g"):
-            roles[suffix] = port
-    missing = {"s", "d", "g"} - set(roles)
-    if missing:
-        raise FoldError(
-            f"row report for {report.get('cell_name')!r} is missing port(s) "
-            f"{sorted(missing)}"
-        )
-    return roles
-
-
 def row_offset_y(row_report: dict, gap_um: float) -> float:
     """Y-offset for row1 (``mirror_y``-oriented) placed above row0 (offset 0).
 
@@ -255,7 +245,7 @@ def row_pads(
     """
     if orientation not in ("none", "mirror_y"):
         raise FoldError(f"unsupported row orientation {orientation!r}")
-    roles = _ports_by_role(report)
+    roles = _ports_by_role(report, error_cls=FoldError)
     out: dict[str, tuple[float, float, int, float, dict]] = {}
     for role, port in roles.items():
         x, y, direction = port["x_um"], port["y_um"], port["direction_deg"]
@@ -263,20 +253,6 @@ def row_pads(
             x, y, direction = _mirror_y(x, y, direction)
         out[role] = (x, y + offset_y, direction, port["width_um"], port["layer"])
     return out
-
-
-def _hbar(layer: list[int], x0: float, x1: float, y: float, width: float) -> dict:
-    return {
-        "layer": layer,
-        "rect_um": [min(x0, x1), y - width / 2.0, max(x0, x1), y + width / 2.0],
-    }
-
-
-def _vbar(layer: list[int], x: float, y0: float, y1: float, width: float) -> dict:
-    return {
-        "layer": layer,
-        "rect_um": [x - width / 2.0, min(y0, y1), x + width / 2.0, max(y0, y1)],
-    }
 
 
 def build_tie_shapes(
@@ -338,12 +314,12 @@ def build_tie_shapes(
 
     shapes = [
         _hbar(layer, trunk_x_left, sx0, sy0, sw0),
-        _vbar(layer, trunk_x_left, sy0, sy1, max(sw0, sw1)),
+        _vbar(layer, sy0, sy1, trunk_x_left, max(sw0, sw1)),
         _hbar(layer, trunk_x_left, sx1, sy1, sw1),
         _hbar(layer, dx0, trunk_x_right, dy0, dw0),
-        _vbar(layer, trunk_x_right, dy0, dy1, max(dw0, dw1)),
+        _vbar(layer, dy0, dy1, trunk_x_right, max(dw0, dw1)),
         _hbar(layer, dx1, trunk_x_right, dy1, dw1),
-        _vbar(layer, gx0, gy0, gy1, max(gw0, gw1)),
+        _vbar(layer, gy0, gy1, gx0, max(gw0, gw1)),
     ]
     return shapes, row0, row1, offset_y
 
@@ -424,7 +400,7 @@ def generate(
             "-o",
             gds_path,
         )
-        roles = _ports_by_role(report)
+        roles = _ports_by_role(report, error_cls=FoldError)
         return {
             "gds_path": gds_path,
             "cell_name": cell_name,
