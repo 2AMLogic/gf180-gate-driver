@@ -917,8 +917,16 @@ def generate_resistor_cells(
 # --------------------------------------------------------------------------- #
 
 
-def _ports_by_role(report: dict) -> dict[str, dict]:
-    """Map a ``mos_array`` report's ``U0_S``/``U0_D``/``U0_G`` ports to s/d/g."""
+def _ports_by_role(
+    report: dict, *, error_cls: type[GenError] = GenError
+) -> dict[str, dict]:
+    """Map a ``mos_array`` report's ``U0_S``/``U0_D``/``U0_G`` ports to s/d/g.
+
+    ``error_cls`` is the exception raised when a role is absent -- any
+    :class:`GenError` subclass, so a module reusing this primitive keeps its
+    own error identity (``layout/common/power_array_folded.py`` passes its
+    ``FoldError``) while a ``except GenError`` caller is unaffected either way.
+    """
     roles = {}
     for port in report.get("ports", []):
         suffix = port["name"].rsplit("_", 1)[-1].lower()
@@ -926,7 +934,7 @@ def _ports_by_role(report: dict) -> dict[str, dict]:
             roles[suffix] = port
     missing = {"s", "d", "g"} - set(roles)
     if missing:
-        raise GenError(
+        raise error_cls(
             f"generator report for {report.get('cell_name')} is missing "
             f"port(s) {sorted(missing)}"
         )

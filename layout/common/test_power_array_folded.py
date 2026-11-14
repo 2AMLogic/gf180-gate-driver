@@ -212,7 +212,12 @@ class BuildTieShapesTest(unittest.TestCase):
             [4.93, 9.28, 6.39, 9.7],        # right trunk -> D1 stub
             [2.36, 4.25, 2.78, 8.67],       # direct G0<->G1 tie box
         ]
-        got_rects = [[round(v, 4) for v in shape["rect_um"]] for shape in shapes]
+        # Compared verbatim, with no per-element round() here: the production
+        # helpers delegate to gen_gate_driver_core._rect, which quantizes every
+        # coordinate itself. An exact compare is also what catches a transposed
+        # argument at an _hbar/_vbar call site, which a tolerant compare could
+        # mask.
+        got_rects = [shape["rect_um"] for shape in shapes]
         self.assertEqual(got_rects, expected_rects)
 
         # row0/row1 pads returned alongside the shapes match row_pads()'s own
