@@ -393,8 +393,10 @@ correction re-run.
 
 ## Facets in this repo: cold-start invocation and PDK pin (issue #22 item 9)
 
-Every experiment directory under `sim/` uses one of two entry points, and
-every record it produces pins the exact PDK build it ran against — this is
+Every experiment directory under `sim/` uses one of three entry points (the
+`run_corners.py` harness, a dedicated runner script, or — for the schematic
+reference study — `klt sim`), and every record or committed envelope it
+produces pins the exact PDK build it ran against — this is
 the per-facet index the [T1 checklist](https://github.com/2AMLogic/gf180-gate-driver/issues/22)
 "item 9" acceptance criterion asks for, confirming the convention already
 documented above and in [`sim/harness/README.md`](harness/README.md) is
@@ -405,6 +407,7 @@ actually followed by every facet, not just described in the abstract.
 | `smoke-mv-inverter` | `python3 sim/run_corners.py smoke-mv-inverter` | none — harness self-test |
 | `gate-driver-core-drive` | `python3 sim/run_corners.py gate-driver-core-drive` | `spec/gate-driver.md` §3, §2.3 |
 | `gate-driver-core-drive-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §3, §2.3 |
+| `gate-driver-core-drive-with-uvlo` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo` | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
 | `gate-driver-core-drive-with-uvlo-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); Challenge #5 rails via a temporary `tb.json` `rails`/`stretch`/`checks` override, see decision record 0019 | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
 | `output-stage-drive` | `python3 sim/run_corners.py output-stage-drive` | `spec/gate-driver.md` §3 |
 | `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
@@ -413,10 +416,18 @@ actually followed by every facet, not just described in the abstract.
 | `low-side-power-switch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch/run_low_side_power_switch.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py low-side-power-switch` runs only a representative subset) | `spec/low-side-power-switch.md` §2.1 |
 | `gate-driver-indrv-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/gate-driver-core-drive/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 3, §2.3 |
 | `low-side-power-switch-ronw-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/low-side-power-switch/`'s testbench verbatim) | `spec/low-side-power-switch.md` §2.1, §2.2 |
+| `uvlo-trip-verification` | `PDK_ROOT=... PDK=gf180mcuD sim/uvlo-trip-verification/run_uvlo_trip.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py uvlo-trip-verification` runs only a small representative subset for `--list`/`--check-env` discovery) | `spec/gate-driver.md` §5; decision record 0001 Decisions 4-5 |
+| `level-shifter-inb-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/level-shifter-inb-mismatch/run_inb_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/level-shifter-oxide-safety/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 1; decision records 0003/0015 |
+| `output-stage-taper-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/output-stage-taper-mismatch/run_output_stage_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/output-stage-drive/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 2; decision record 0013 |
+| `uvlo-reference-study` | `klt sim` on `sim/uvlo-reference-study/klt/request-trip.json` (issue #412 study) / `request-bandgap-trip.json` (issue #457 study), run from `sim/uvlo-reference-study/klt/` — full command lines in that directory's [README](uvlo-reference-study/README.md) Reproduce sections; **not** driven by `sim/run_corners.py` and so not discoverable via `--list` | none — evidence-only schematic reference studies for decision records 0018/0023 (issues #412, #457); `spec/` untouched |
 
-All eleven entries resolve the PDK the same way (`sim/harness/README.md`'s
-`GF180_PDK_PATH` → `PDK_ROOT`/`PDK` → `sim/pdk.local.json` → `sim/pdk.json` →
-built-in search-root order); `sim/pdk.json` commits this repo's default
+All sixteen entries (as of 2026-11-14) run against the same PDK variant, but
+they resolve it through two paths: the `run_corners.py` and dedicated-runner
+facets through `sim/harness/README.md`'s `GF180_PDK_PATH` → `PDK_ROOT`/`PDK` →
+`sim/pdk.local.json` → `sim/pdk.json` → built-in search-root order (the
+dedicated scripts read the resolved `PDK_ROOT`/`PDK` from the environment per
+their own module docstrings), and the `klt sim`-driven `uvlo-reference-study`
+through `klt`'s own PDK search; `sim/pdk.json` commits this repo's default
 variant (`gf180mcuD`), and `sim/env.sh` exports the resolved path/variant to
 an interactive shell. That is the *prospective* pin (which variant a fresh
 clone should install); the *retrospective* pin — which exact `open_pdks`

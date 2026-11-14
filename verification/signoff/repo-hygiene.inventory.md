@@ -17,7 +17,7 @@ harness and evidence formats valid.
 
 | requirement | artifact | sha256 |
 |---|---|---|
-| README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
+| README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
 | CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
@@ -28,9 +28,9 @@ re-audit of the links):
 | document | sha256 |
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
-| `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
+| `sim/README.md` | `sha256:9c8dbfbff89fbec76cb087a21e57aaca2febefe323c25310e4a2f7dbb5adf732` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
+| `layout/README.md` | `sha256:e130d11a50df42428f9764380852082e2efbefdcffb4439d336ff7f700662f65` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -50,10 +50,9 @@ re-audit of the links):
   "validate committed evidence" from "generate new evidence", covers
   netlisting, schematic simulation, layout generation, DRC/LVS/extraction/ERC,
   no-RC versus RC post-layout runs, and the dedicated characterization and
-  Monte Carlo scripts, and links the documents hashed above. It discloses that
-  `sim/README.md`'s facet table omits four on-disk experiments (the complete
-  list is `testbenches.inventory.md`) and the layout-regeneration
-  byte-identity limitation recorded in `verification/signoff/README.md`.
+  Monte Carlo scripts, and links the documents hashed above. It discloses the
+  layout-regeneration byte-identity limitation recorded in
+  `verification/signoff/README.md`.
 - **License**: `LICENSE` is the Apache License 2.0 text, matching the README's
   license statement.
 - **CI**: `.github/workflows/ci.yml` defines `lint` (runs
@@ -79,9 +78,7 @@ re-audit of the links):
   linked project documents, not exercised.
 - **Known limitations the README repeats**: the layout generator's
   byte-identical regeneration claim did not hold on the 2026-10-08 audit
-  (see `verification/signoff/README.md`); `layout/README.md`'s "Post-layout
-  simulation" status row is stale against the committed complete-block
-  post-layout records (not edited by this issue); cited post-layout records
+  (see `verification/signoff/README.md`); cited post-layout records
   state they were taken on a dirty working tree; the audit host has
   ngspice-42 while the primary record states ngspice-46.
 
@@ -336,3 +333,38 @@ Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #458 (2026-11-14)
+
+Three listed files changed on the issue #458 branch (`feature/issue-458`, on
+top of `origin/main` at `cbf0cd4`) and were re-read against the findings
+above; their hashes are refreshed in the tables:
+
+- `README.md` (**read** the diff): removes both workarounds this audit's
+  findings recorded — the sentence disclosing that `sim/README.md`'s facet
+  table omits four on-disk experiments (the table now lists all sixteen) and
+  the parenthesis calling `layout/README.md`'s "Post-layout simulation" status
+  row stale (the row now states the committed complete-block evidence, the
+  pre-#362 extraction it ran against and the re-run's owner, issue #456).
+  Reproduction commands are unchanged.
+- `sim/README.md` (**read** the diff): the "Facets in this repo" table gains
+  the five missing experiment rows (`gate-driver-core-drive-with-uvlo`,
+  `uvlo-trip-verification`, `level-shifter-inb-mismatch`,
+  `output-stage-taper-mismatch`, `uvlo-reference-study`) and the entry-count
+  sentence is corrected to the new count, date-stamped. Reproduction commands
+  are unchanged.
+- `layout/README.md` (**read** the diff): the "Post-layout simulation" status
+  row now states the committed complete-block records, the committed
+  pre-#362-extraction DUTs they ran against, the primary record's dirty-tree
+  provenance and the outstanding re-run's owner (issue #456); the
+  "### Post-layout simulation" section note's #222 citation is updated to
+  #456 and its substantive claim (nothing below the note has been
+  re-verified against the current `gate_driver_core.gds`) is unchanged.
+  Reproduction commands are unchanged.
+
+This re-audit also corrected the two known-gap statements above that the same
+edits close — the Reproduction finding's facet-omission disclosure and the
+"Known limitations" bullet's stale-status-row clause — which is why this
+inventory's own hash moved and its downstream pins are refreshed. The other
+listed files are unchanged. No simulation, netlisting or layout flow was run
+for this re-audit.

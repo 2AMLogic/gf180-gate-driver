@@ -49,7 +49,7 @@ reference, including its bias-resistor network) — not just the first two.
 | DRC | **clean under the current deck (#362).** `status: clean`, 0 violations, klt `0.7.1.dev2599+geaf26f00df36`, deck hash `sha256:0eb6df1b…` (34 layers), report [`20261024-090822-de97a29`](drc/reports/gate_driver_core/20261024-090822-de97a29.drc.json). This is the curated deck's verdict only: the `_MV` rule columns (`DF.6_MV`, `DV.*`, `NW.*_MV`, …) are `unmodeled_rules`, so it is **not** a medium-voltage signoff ([triage](drc/triage_sab_implant.md), [DRC](#drc-klt-drc)) |
 | LVS-clean | yes — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins, **1 warning-only finding below (unrelated to body ties)** |
 | Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 1769 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 664 PMOS, the deck's global substrate identity for the 1105 NMOS). `klt lvs`'s `device.body_unverified` finding is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for how the two grounds now compare — revised by issue #221) |
-| Post-layout simulation | **pending re-verification against this GDS (issue #222)** — the committed PVT-grid records under `sim/gate-driver-core-drive-postlayout/` were extracted from the pre-#221 (level_shifter + output_stage only) GDS; re-running them against the uvlo-extended extracted netlist is explicitly the next slice of #219, not this issue's scope. Issue #362 regenerated the GDS under the current klt, whose `klt gen` cells differ in size and carry their own implants and body taps, so the extracted parasitics are no longer the pre-#221 ones either: that re-run is still pending, still owed to #222, and was **not** done by #362. [Below](#post-layout-simulation) still describes that pre-#221 evidence as what it is |
+| Post-layout simulation | committed complete-block PVT-grid evidence, **taken against a pre-#362 extraction — not re-verified against this GDS**. Four records under [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/) ran against the committed [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) (no-RC) and [`.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) (RC, the primary record) extractions — still the committed files, hashing to exactly what those records state (RC `sha256:6f0c9b8e…db97e`) — but they pre-date the current `gate_driver_core.gds` (`sha256:15fa5b64…bf4a`) that #362 regenerated under the current klt, whose `klt gen` cells differ in size and carry their own implants and body taps. The primary record was taken on a **dirty working tree** and is not citable as a clean-tree result. Regenerating the extraction from this GDS and re-running is owned by [issue #456](https://github.com/2AMLogic/gf180-gate-driver/issues/456) (open), not the closed #222. (The older [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/) grid was extracted from the pre-#221, pre-uvlo GDS.) [Below](#post-layout-simulation) describes the evidence the committed records cover as what it is |
 
 The LVS verdict is real (it has a committed negative control, below), and the
 old DRC verdict was real *for the rules that deck shipped*, but neither is a
@@ -863,10 +863,15 @@ is actually installed, per the pinning section above.
 ### Post-layout simulation
 
 **This section describes evidence recorded against the pre-#221 GDS**
-(`level_shifter` + `output_stage` only, no `uvlo`) — re-running it against
-the issue #221-extended, uvlo-and-resistor-bearing extracted netlist is
-explicitly the next slice of epic #219 (issue #222), not this issue's own
-scope. Nothing below this note has been re-verified against the current
+(`level_shifter` + `output_stage` only, no `uvlo`). Re-running it against the
+issue #221-extended, uvlo-and-resistor-bearing extraction — which is still
+the committed `lvs/gate_driver_core.extracted*.spice`, itself older than the
+current `gate_driver_core.gds` (#362) — is what the committed complete-block
+records under
+[`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/)
+did; regenerating the extraction from the current GDS and re-running is
+owned by [issue #456](https://github.com/2AMLogic/gf180-gate-driver/issues/456).
+Nothing below this note has been re-verified against the current
 `gate_driver_core.gds`.
 
 The LVS-extracted netlist is turned into a simulatable DUT by
