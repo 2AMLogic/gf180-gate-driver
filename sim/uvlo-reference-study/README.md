@@ -382,7 +382,7 @@ Stated so a reader does not have to infer them:
   ~8% of the trip point. **Mismatch, not process corners, is the next
   measurement this candidate needs** — and it is the one that could still
   overturn the positive result above.
-- **The 4-terminal `pnp_05p00x05p00` is a vertical substrate PNP**, so its
+- **The 3-terminal `pnp_05p00x05p00` is a vertical substrate PNP**, so its
   collector is the substrate. Both its base and collector are tied to
   `GND_DRV`. In a block whose point is the 5 V/6 V devices, substrate current
   injection into a shared well is not modelled by this deck.
