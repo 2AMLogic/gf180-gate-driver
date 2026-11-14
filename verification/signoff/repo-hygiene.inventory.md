@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
+| `layout/README.md` | `sha256:804c874da776619d5ef65182fba6d99e543ba1ad230da39c5da59518348fde2d` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -336,3 +336,31 @@ Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #470 (2026-11-14)
+
+One listed file changed on the issue #470 branch (`feature/issue-470`, on top
+of `origin/main` at `cbf0cd4`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the Supply-island ERC section's
+  "Latest report" line now cites the fresh envelope `20261114-193042-cbf0cd4`
+  (the one item 11 pins) instead of the unpinned `20260921-155739`, the GDS
+  hash it quotes is corrected from the pre-#362 `54f02626…` to the committed
+  `15fa5b64…`, and a "Tool-drift history of this verdict" paragraph is added
+  stating what klt ≥ 0.9 made of the pre-#470 committed ERC envelope and how
+  the `substrate_gnd_logic` `well_boxes` correction (#470) restores the
+  `erc_status: clean` verdict under the current build. Every reproduction
+  command in the section is unchanged, so the Reproduction finding still
+  holds; the "Post-layout simulation" status row this audit already disclosed
+  as stale is untouched (issue #458 owns it).
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. Recorded but **not** pinned here:
+`layout/erc-supply-spec.json` (its `well_boxes` correction and `_comment`
+provenance are issue #470's own deliverable) and the fresh ERC envelope and
+negative-control manifests, which item 11 pins through
+`verification/signoff/manifest.json` instead. The ERC re-run and the
+negative-control run happened for the change itself, not as part of this
+audit; no simulation or netlisting was run.
