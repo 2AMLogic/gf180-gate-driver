@@ -7,6 +7,10 @@ contract (some non-zero codes are successful runs, e.g. "violations found").
 Keeping it here means a runner cannot drift from its siblings (e.g. ignore the
 resolved ``klt`` binary).
 
+Every run -- single-format or both legs of a report -- is checked by the one
+:func:`_raise_if_bad` below, so there is a single definition of "klt failed"
+in the repo (issue #472).
+
 This module deliberately **writes nothing**. Where the bytes go -- the artifact
 store or the committed ``reports/`` tree -- is each caller's decision
 (``signoff_store``, issue #348, ``layout/README.md`` "Stored vs committed
@@ -40,7 +44,9 @@ from typing import NamedTuple
 class KltRunError(Exception):
     """``klt`` exited with a code outside the tool's success contract.
 
-    The failure block has already been printed to stderr.
+    The failure block has already been printed to stderr. The exception's
+    argument is the klt subcommand (``argv[1]``), not the failing leg -- the
+    stderr block names the leg.
     """
 
 
@@ -52,30 +58,57 @@ class KltReport(NamedTuple):
     payload: dict
 
 
+def _raise_if_bad(
+    argv: Sequence[str],
+    proc: subprocess.CompletedProcess[str],
+    ok_codes: Sequence[int],
+    *,
+    leg: str = "",
+) -> None:
+    """Print klt's failure block and raise on an exit outside ``ok_codes``.
+
+    The single definition of "klt failed" for this module: both entry points
+    call it, so neither the message nor the raise can drift (issue #472).
+    ``leg`` names which format failed for a multi-format run
+    (``"--format text"``); it is empty for a single-format :func:`run_klt`,
+    which has only one leg to name.
+    """
+    if proc.returncode in ok_codes:
+        return
+    label = str(argv[1])
+    print(proc.stdout, file=sys.stdout)
+    print(proc.stderr, file=sys.stderr)
+    failed = f"klt {label} {leg}".rstrip()
+    print(f"error: {failed} failed (exit {proc.returncode})", file=sys.stderr)
+    raise KltRunError(label)
+
+
 def run_klt(
-    cwd: Path, argv: Sequence[str], ok_codes: Sequence[int] = (0,)
+    cwd: Path, argv: Sequence[str], *, ok_codes: Sequence[int] = (0,)
 ) -> subprocess.CompletedProcess[str]:
     """Run ``argv`` from ``cwd``; print a failure block and raise on a bad exit."""
     proc = subprocess.run(
         list(argv), cwd=cwd, capture_output=True, text=True, check=False
     )
-    if proc.returncode not in ok_codes:
-        label = str(argv[1])
-        print(proc.stdout, file=sys.stdout)
-        print(proc.stderr, file=sys.stderr)
-        print(f"error: klt {label} failed (exit {proc.returncode})", file=sys.stderr)
-        raise KltRunError(label)
+    _raise_if_bad(argv, proc, ok_codes)
     return proc
 
 
 def run_klt_report(
-    cwd: Path, argv: Sequence[str], *, ok_codes: Sequence[int]
+    cwd: Path, argv: Sequence[str], *, ok_codes: Sequence[int] = (0,)
 ) -> KltReport:
     """Run ``argv`` as json then text; return both outputs and the parsed payload.
 
     ``argv`` is the full command without ``--format`` (``[klt, "drc", ...]``).
-    Both formats are run before the exit code is checked; a json run outside
-    ``ok_codes`` prints the failure block and raises :class:`KltRunError`.
+    Both formats are run before either exit code is checked, and **both** are
+    then checked against ``ok_codes`` -- json first, so a json failure reports
+    the same block it always has. A leg outside ``ok_codes`` prints that leg's
+    failure block and raises :class:`KltRunError`.
+
+    The text leg is checked because its stdout is what callers write into
+    append-only signoff evidence: a failed render must not reach a record that
+    ``signoff_store``'s fail-closed contract would otherwise protect
+    (issue #472).
     """
     json_proc = subprocess.run(
         [*argv, "--format", "json"], cwd=cwd, capture_output=True, text=True, check=False
@@ -83,13 +116,8 @@ def run_klt_report(
     text_proc = subprocess.run(
         [*argv, "--format", "text"], cwd=cwd, capture_output=True, text=True, check=False
     )
-    if json_proc.returncode not in ok_codes:
-        print(json_proc.stdout, file=sys.stdout)
-        print(json_proc.stderr, file=sys.stderr)
-        print(
-            f"error: klt {argv[1]} failed (exit {json_proc.returncode})", file=sys.stderr
-        )
-        raise KltRunError(argv[1])
+    _raise_if_bad(argv, json_proc, ok_codes, leg="--format json")
+    _raise_if_bad(argv, text_proc, ok_codes, leg="--format text")
     return KltReport(
         json=json_proc.stdout,
         text=text_proc.stdout,
