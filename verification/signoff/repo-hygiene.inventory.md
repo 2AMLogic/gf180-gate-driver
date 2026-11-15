@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:2cd6415bee0e035643f44f3f343fc9e2ac81a2135dfa43643b91af5b19a5dea8` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -336,3 +336,31 @@ Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #451 (2026-11-15)
+
+One listed file changed on the issue #451 branch (`feature/issue-451`, on top
+of `origin/main` at `0f25e3c`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `Negative-control
+  klt-binary unit tests` step to `test`, running
+  `layout/test_negative_control_klt_binary.py` (stdlib unittest;
+  `klt_report.run_klt` is stubbed and `layout/build/` is redirected to a temp
+  dir, so no `klt` runs, no PDK is read and nothing is written into the tree --
+  the step belongs on the PDK-free runner), plus the matching row in the job
+  table in the file's header comment. `lint`, the harness self-test and the
+  `signoff` job -- including the grader pin -- are unchanged, and no existing
+  `test` step moved, so the CI finding still holds. CI was read, not observed
+  to pass here.
+
+The other listed files are unchanged. Recorded but **not** pinned here: the
+new `layout/test_negative_control_klt_binary.py` and the two negative-control
+runners it exercises (`layout/drc/deck_negative_control.py`,
+`layout/ground_rail_negative_control.py`) -- none is listed in this inventory
+and none carries a hash in it. Both changes exist because the negative
+controls invoked a hardcoded `"klt"` argv instead of the binary
+`klt_env.require_klt()` resolved, so a control could draw its fixture with a
+different `klt` than the one its own guard approved (issue #451); they now
+route through `klt_report.run_klt` with the resolved binary threaded down.
+No simulation, netlisting or layout flow was run for this re-audit.
