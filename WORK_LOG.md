@@ -8,8 +8,19 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-15
+
+- **PR #466**: refactor: read DR-0001 typ targets and the guard-ring stroke count from their constants
+- **Issue #454** (closed): Wire up (or retire) four declared-but-unread constants; DR-0001 typ targets are typed twice
+
 ### 2026-11-14
 
+- **PR #476**: refactor: share evidence_store's staging core and fail-closed epilogue across signoff_store and cli
+- **Issue #469** (closed): Share evidence_store's staging core and fail-closed epilogue: signoff_store's copied manifest guard drifted to .exists(), epilogue has 3 copies
+- **PR #474**: refactor: share the per-node worst-case reduction and three ratified spec values
+- **Issue #465** (closed): Dedupe the taper-node worst-case loop and three ratified constants shared by the indrv and taper mismatch runners
+- **PR #452**: fix: disclose partial reference coverage in indrv's ngspice-version finding
+- **Issue #447** (closed): indrv mismatch runner's ngspice-version Finding is emitted from a partial reference cross-check without disclosing coverage
 - **PR #475**: sim: measure a Vbe/dVbe UVLO reference over 15 corners — 15/15 pass, 91 mV falling-trip spread
 - **Issue #457** (closed): Second UVLO reference study: measure a reference that does not track Vgs over the 15 corners (follow-up to decision record 0023)
 - **PR #453**: fix: render an ERROR record instead of crashing when no ronw draw converges
