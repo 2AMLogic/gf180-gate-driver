@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
-| `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
+| `sim/harness/README.md` | `sha256:674399cc52256eda447b8412b7659c11997b1f75e11665f236b76214ff310190` |
 | `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -336,3 +336,41 @@ Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #450 (2026-11-15)
+
+One listed file changed on the issue #450 branch (`feature/issue-450`, on top
+of `origin/main` at `0f25e3c`) and was re-read against the findings above; its
+hash is refreshed in the tables:
+
+- `sim/harness/README.md` (**read** the diff): adds one section, "The
+  device-runner driver: `campaign.run_device_main`", before "`klt sim`
+  requests: `harness/klt_request.py`", documenting the shared `main()` the
+  three device-characterization runners now call -- what the driver owns, the
+  `run_point` / `build_record_body` / `summarize` hooks, the optional
+  `corner_key` and `progress_detail` hooks, and that a dirty input tree is
+  disclosed by every runner using the driver. The Quick start, Prerequisites,
+  PVT grid, testbench-authoring, "What a run writes", Monte Carlo and xschem
+  sections are untouched (the diff is a single pure insertion), so every
+  reproduction command this inventory's Reproduction finding relies on is
+  unchanged. Each claim in the new section was checked against the code it
+  documents: the driver's signature and hook defaults (`campaign.py`), the
+  `report.write_corner_log` + `report.device_log_header` pair it names, and
+  the three runners' calls (including `low-side-power-switch`'s
+  `corner_key=lambda c: c.name` and `uvlo-trip-verification`'s two-decks-per
+  point `_progress_detail`).
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE` and
+`spec/gate-driver.md` are untouched by this branch, so those findings still
+hold. Recorded but **not** pinned here: `campaign.run_device_main` itself, the
+deletion of `report.write_device_corner_log`, the three migrated runners
+(`sim/device-mv-fet`, `sim/low-side-power-switch`,
+`sim/uvlo-trip-verification`) and the new driver tests in
+`sim/test_harness_campaign.py` -- none is listed in this inventory and none
+carries a hash in it.
+
+The edit exists because the three device-characterization runners each carried
+a near-identical copy of the same `main()` that had drifted -- only one of the
+three disclosed a dirty input tree, and the driver is now the one place that
+decision gets made (issue #450). No simulation, netlisting or layout flow was
+run for this re-audit.
