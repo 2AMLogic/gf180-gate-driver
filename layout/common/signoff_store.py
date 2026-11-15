@@ -51,10 +51,7 @@ STAGE_ROOT = Path("layout") / "build" / "evidence"
 
 def stage_dir(repo_root: Path, bench: str, rid: str) -> Path:
     """Fresh git-ignored scratch dir for one run (``layout/build/`` is ignored)."""
-    es.manifest_path(repo_root, bench, rid)  # validates bench and rid
-    path = repo_root / STAGE_ROOT / bench / rid
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return es.stage_dir(repo_root, bench, rid, root=STAGE_ROOT)
 
 
 def new_record_id(repo_root: Path, bench: str, reports_dir: Path,
@@ -76,7 +73,14 @@ def new_record_id(repo_root: Path, bench: str, reports_dir: Path,
 
 
 def preflight_or_exit(repo_root: Path = REPO_ROOT) -> None:
-    """Refuse to start a run whose outputs could not be stored."""
+    """Refuse to start a run whose outputs could not be stored.
+
+    A pass-through to :func:`evidence_store.preflight_or_exit` that adds only
+    the ``REPO_ROOT`` default, kept so a ``layout/`` runner reaches the whole
+    store through one facade rather than importing ``evidence_store`` for this
+    one call. The preflight itself is not signoff-specific -- it checks the
+    broker and ``klt``, which both halves share.
+    """
     es.preflight_or_exit(repo_root)
 
 
@@ -88,16 +92,16 @@ def store(stage: Path, *, repo_root: Path, bench: str, rid: str,
     (``layout/lvs/reports/<block>``); each manifest ``name`` is that prefix plus
     the staged relative path. Raises :class:`StoreError` on any failure, with
     nothing installed.
+
+    The refuse-if-exists / put / install-manifest core is
+    :func:`evidence_store.store_manifest_only` -- the same code ``store_files``
+    runs, so "fail closed, as in ``evidence_store``" is a call here and cannot
+    drift from it. There is no ``also_refuse``: a signoff run commits only the
+    manifest, so the manifest is the only path to guard.
     """
-    mpath = es.manifest_path(repo_root, bench, rid)
-    if mpath.exists():
-        raise StoreError(f"{mpath.relative_to(repo_root)} already exists; refusing "
-                         "to overwrite evidence")
     files = es.stage_files(stage, name_prefix)
-    if not files:
-        raise StoreError("nothing staged to store")
-    manifest, _empty = (put or es.put_files)(files, repo_root)
-    es.install_manifest(manifest, mpath)
+    mpath, _manifest, _empty = es.store_manifest_only(
+        files, repo_root=repo_root, bench=bench, rid=rid, put=put)
     return mpath
 
 
@@ -108,6 +112,5 @@ def store_or_exit(stage: Path, *, repo_root: Path, bench: str, rid: str,
         return store(stage, repo_root=repo_root, bench=bench, rid=rid,
                      name_prefix=name_prefix, put=put)
     except StoreError as exc:
-        print(f"SIGNOFF OUTPUT NOT STORED -- nothing committed (fail closed): {exc}\n"
-              f"staged bytes kept in {stage}", file=sys.stderr)
+        print(es.not_stored_message(exc, stage, subject="SIGNOFF OUTPUT"), file=sys.stderr)
         raise SystemExit(EXIT_NOT_STORED) from None

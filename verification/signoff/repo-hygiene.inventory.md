@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:2cd6415bee0e035643f44f3f343fc9e2ac81a2135dfa43643b91af5b19a5dea8` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7793805aae77c60948aed9551286639a3abc6183e566467ade10a78e47aa8e1b` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
+| `layout/README.md` | `sha256:5c09806018e5f45367d65fe8c6e2ad91e80dfb56e80ce1de68835cef671cb0e9` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -337,6 +337,73 @@ table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
 simulation, netlisting or layout flow was run for this re-audit.
 
+## Re-audit for issue #470 (2026-11-14)
+
+One listed file changed on the issue #470 branch (`feature/issue-470`, on top
+of `origin/main` at `cbf0cd4`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the Supply-island ERC section's
+  "Latest report" line now cites the fresh envelope `20261114-193042-cbf0cd4`
+  (the one item 11 pins) instead of the unpinned `20260921-155739`, the GDS
+  hash it quotes is corrected from the pre-#362 `54f02626…` to the committed
+  `15fa5b64…`, and a "Tool-drift history of this verdict" paragraph is added
+  stating what klt ≥ 0.9 made of the pre-#470 committed ERC envelope and how
+  the `substrate_gnd_logic` `well_boxes` correction (#470) restores the
+  `erc_status: clean` verdict under the current build. A review-feedback fix
+  on this branch (PR #488) also corrects that section's report-producer
+  paragraph: it now names the repinned envelope's actual producing build
+  (`klt 0.9.2.dev1029+g76f47afa48f1`, git rev `76f47afa48f1`) instead of the
+  superseded `0.5.0`/`b15edf5e` one, gives the reproduction command in the
+  `uvx --from`/scratch-venv form, and drops the stale "PATH-installed pin
+  predates `--deck`" sentence — so the section's reproduction command *did*
+  change; the Reproduction finding itself (the root README's
+  validate-vs-generate command structure) is untouched and still holds. The
+  "Post-layout simulation" status row this audit already disclosed
+  as stale is untouched (issue #458 owns it).
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. Recorded but **not** pinned here:
+`layout/erc-supply-spec.json` (its `well_boxes` correction and `_comment`
+provenance are issue #470's own deliverable) and the fresh ERC envelope and
+negative-control manifests, which item 11 pins through
+`verification/signoff/manifest.json` instead. The ERC re-run and the
+negative-control run happened for the change itself, not as part of this
+audit; no simulation or netlisting was run.
+
+## Re-audit for issue #463 (2026-11-15)
+
+Two listed files changed on the issue #463 branch (`feature/issue-463`, on
+top of `origin/main` at `f4f0cb4`) and were re-read against the findings
+above; their hashes are refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): the `signoff` job gains a
+  "Layout provenance freshness" step running the new stdlib-only
+  `layout/test_check_layout_provenance.py` and
+  `layout/check_layout_provenance.py` beside the existing checker regression
+  tests. The job's charter (CI keeps the harness and evidence formats valid)
+  is extended, not changed -- the new step is a freshness check of the same
+  class as the signoff re-grading already in the job, and it needs no klt
+  generation install and no PDK. No other job or step moves.
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the klt
+  install (#190)" section gains a closing block recording the
+  generated-layout drift class (#463): klt >= 0.9.2 renames generated
+  sub-cells, so byte-equality against the committed GDS is not the
+  reproducibility test on a drifted host (the same-klt comparison is); T1
+  item 2's live claim rests on the criterion's documented-provenance arm;
+  `check_layout_provenance.py` re-hashes the three recorded pins in CI with
+  an advisory klt-version arm; and the upstream filing
+  (klayout-tools#5808) is linked. The DRC/LVS status sections and the
+  reproduction instructions the audit findings rest on are untouched.
+
+The other listed files are unchanged, so those findings still hold. As with
+the #470 re-audit, the envelope, manifest item 10 and tier-report citation
+pins are refreshed for the new inventory bytes. No simulation, netlisting,
+layout flow or generator re-run happened as part of this audit; the same-klt
+generator comparison the refreshed `generator.sha256` pin rests on was run
+into scratch directories outside the tree.
+
 ## Re-audit for issue #451 (2026-11-15)
 
 One listed file changed on the issue #451 branch (`feature/issue-451`, on top
@@ -349,14 +416,17 @@ hash is refreshed in the table:
   `klt_report.run_klt` is stubbed and `layout/build/` is redirected to a temp
   dir, so no `klt` runs, no PDK is read and nothing is written into the tree --
   the step belongs on the PDK-free runner), plus the matching row in the job
-  table in the file's header comment. `lint`, the harness self-test and the
-  `signoff` job -- including the grader pin -- are unchanged, and no existing
-  `test` step moved, so the CI finding still holds. CI was read, not observed
-  to pass here.
+  table in the file's header comment. The PR's own diff leaves `lint`, the
+  harness self-test and the `signoff` job -- including the grader pin --
+  unchanged, and no existing `test` step moves, so the CI finding still holds.
+  The refreshed row pins the post-merge union of this PR's step with #463's
+  `Layout provenance freshness` step in the `signoff` job (documented by its
+  own re-audit above), so the merged tree is what is pinned. CI was read, not
+  observed to pass here.
 
-The other listed files are unchanged. Recorded but **not** pinned here: the
-new `layout/test_negative_control_klt_binary.py` and the two negative-control
-runners it exercises (`layout/drc/deck_negative_control.py`,
+The other listed files are unchanged by this branch. Recorded but **not**
+pinned here: the new `layout/test_negative_control_klt_binary.py` and the two
+negative-control runners it exercises (`layout/drc/deck_negative_control.py`,
 `layout/ground_rail_negative_control.py`) -- none is listed in this inventory
 and none carries a hash in it. Both changes exist because the negative
 controls invoked a hardcoded `"klt"` argv instead of the binary
