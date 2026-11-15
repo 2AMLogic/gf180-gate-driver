@@ -355,6 +355,22 @@ jobs:
         # rule, compound item 11, inventory listed hashes. No klt needed.
         run: python3 verification/signoff/test_check_tier_report.py
 
+      - name: Layout provenance freshness
+        # layout/gate_driver_core.provenance.json pins the sha256 of the
+        # committed GDS, its source netlist and its generator -- the
+        # documented-provenance arm T1 item 2's live attestation rests on
+        # (issue #463). Nothing re-checked those hashes against the live
+        # tree before, so a generator edit merging without a provenance
+        # refresh went unnoticed (exactly what PR #466's merge did to
+        # generator.sha256). Stdlib-only, like the checker tests above: no
+        # generation klt, no KLayout, no PDK. The klt-version arm is
+        # advisory and self-skips here -- this runner's klt is for grading
+        # only and cannot generate layout, and per #470 the host tool
+        # moving ahead of committed evidence is the normal condition.
+        run: |
+          python3 layout/test_check_layout_provenance.py
+          python3 layout/check_layout_provenance.py
+
       - name: Re-grade the committed block manifest
         # Exit 3 from the re-run means "rendered successfully with honestly
         # unmet items" -- tiers below T1 are this block's real state, not a

@@ -71,20 +71,31 @@ SOURCE_EXPERIMENT = "gate-driver-core-drive"
 REFERENCE_RECORD = "20260818-060517-673fcf0"
 
 #: The node under claim, and the ratified §2.3 thick-oxide DC gate ceiling
-#: its excursion is measured against.
+#: its excursion is measured against. The ceiling is a ratified spec value
+#: with one home (`harness/script_helpers.py`), shared with the other
+#: campaigns that measure against it; its provenance is recorded there.
 CLAIM_MEASUREMENT = "indrv_max_v"
-GATE_CEILING_V = 6.0
+GATE_CEILING_V = script_helpers.GATE_CEILING_V
 
 #: `spec/gate-driver.md` §5 Exception 3's ratified bound: <= 10 mV above the
 #: ceiling. Reported against, never adjusted here -- a bound change would
 #: need its own decision record (CLAUDE.md).
 EXCEPTION3_BOUND_V = 0.010
 
+#: The binding corner: the worst-margin point of the grid, and the single
+#: point a `--smoke` run visits. Named verbatim in the ngspice-version
+#: finding's prose, which may only make a claim about it when the reference
+#: cross-check actually reached it (#447) -- hence a constant rather than two
+#: literals that can drift apart.
+BINDING_CORNER_ID = "ss_125c_vlogic3p30v-vdrv6p00v"
+
 #: Exception 2's ratified bound on the output-stage taper nodes (decision
 #: record 0013), reported as secondary context for the `n1..n5` measurements
-#: this testbench already carries. Not this record's claim.
-EXCEPTION2_BOUND_V = 0.175
-TAPER_MEASUREMENTS = ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v")
+#: this testbench already carries. Not this record's claim. Both are ratified
+#: spec values with one home (`harness/script_helpers.py`), shared with
+#: `output-stage-taper-mismatch`, which claims them; provenance is there.
+EXCEPTION2_BOUND_V = script_helpers.EXCEPTION2_BOUND_V
+TAPER_MEASUREMENTS = script_helpers.TAPER_MEASUREMENTS
 
 #: The supply point the campaign runs at. Exception 3 exists **only** at the
 #: 6 V stretch rail: the ratified spec text records every nominal-tolerance
@@ -111,7 +122,6 @@ BASELINE_LOG_NOTE = (
 )
 
 #: Record-table formatters, shared with every other mismatch campaign.
-_fmt = campaign.fmt
 _mv = campaign.mv
 
 
@@ -212,18 +222,10 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped_note = campaign.dropped_note(drawn, converged, "—")
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
-        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's own "
-        f"`.lib fets_mm` per-instance mismatch model "
-        f"(`delvto = mis_vth·sw_stat_mismatch`, "
-        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` drawn "
-        f"from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
-        f"1/√(W_eff·L_eff)) — i.e. **1 σ per-device draws, not a 3 σ corner "
-        f"pull**; the reported σ below is the sample standard deviation of "
-        f"the measured node voltage over the draws, and the reported worst "
-        f"case is the observed maximum, not a fitted quantile. "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "—")
+        + " the reported σ below is the sample standard deviation of "
+        "the measured node voltage over the draws, and the reported worst "
+        "case is the observed maximum, not a fitted quantile. "
         + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "—")
     )
     add("- **Result**:")
@@ -309,7 +311,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         control = outcome.control_value(CLAIM_MEASUREMENT)
         used = f"{len(values)}/{len(outcome.samples)}"
         if not values:
-            add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | no data | | | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -320,8 +322,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         if worst_overall is None or hi > worst_overall[1]:
             worst_overall = (outcome, hi, margin)
         add(
-            f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | {_fmt(mean)} | "
-            f"{sigma * 1e3:.4f} | {_fmt(lo)} | {_fmt(hi)} | {_mv(margin)} | "
+            f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | {campaign.sigfig(mean)} | "
+            f"{sigma * 1e3:.4f} | {campaign.sigfig(lo)} | {campaign.sigfig(hi)} | {_mv(margin)} | "
             f"{_mv(delta)} | {'PASS' if within else '**FAIL**'} |"
         )
     add("")
@@ -363,22 +365,11 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     add("")
     add("  | node | control worst (V) | MC worst (V) | Δ (mV) | worst margin (mV) | vs ≤ 175 mV bound |")
     add("  |---|---|---|---|---|---|")
-    for name in TAPER_MEASUREMENTS:
-        mc_worst = None
-        ctrl_worst = None
-        for outcome in outcomes:
-            values = outcome.values(name)
-            if values:
-                mc_worst = max(values) if mc_worst is None else max(mc_worst, max(values))
-            control = outcome.control_value(name)
-            if control is not None:
-                ctrl_worst = control if ctrl_worst is None else max(ctrl_worst, control)
-        if mc_worst is None:
-            continue
-        margin = GATE_CEILING_V - mc_worst
-        delta = mc_worst - ctrl_worst if ctrl_worst is not None else None
+    for name, ctrl_worst, mc_worst, delta, margin in script_helpers.worst_across_points(
+        outcomes, TAPER_MEASUREMENTS, GATE_CEILING_V
+    ):
         add(
-            f"  | `x2.{name.split('_')[0]}` | {_fmt(ctrl_worst)} | {_fmt(mc_worst)} | "
+            f"  | `x2.{name.split('_')[0]}` | {campaign.sigfig(ctrl_worst)} | {campaign.sigfig(mc_worst)} | "
             f"{_mv(delta)} | {_mv(margin)} | "
             f"{'PASS' if margin >= -EXCEPTION2_BOUND_V else '**FAIL**'} |"
         )
@@ -397,7 +388,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"{converged} converged local-mismatch draws (of {drawn} run) "
             f"spanning the full "
             f"process × temperature grid at the 6 V stretch rail, the worst "
-            f"observed `IN_DRV` peak is **{_fmt(hi)} V "
+            f"observed `IN_DRV` peak is **{campaign.sigfig(hi)} V "
             f"(margin {_mv(margin)} mV)** at `{outcome.corner_id}`, inside "
             f"`spec/gate-driver.md` §5 Exception 3's ratified ≤ 10 mV bound "
             f"(margin ≥ −10.000 mV) with "
@@ -454,7 +445,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"  - **Worst draw vs. its own control**: the largest single-sample "
         f"excursion above the mismatch-off deck at the same PVT point is "
         f"{excursion}; the mismatch-off deck's own worst point is "
-        f"{_fmt(stats['worst_control'])} V."
+        f"{campaign.sigfig(stats['worst_control'])} V."
     )
     add(
         f"  - **Worst draw vs. the ratified bound**: "
@@ -501,19 +492,38 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         add("  ### Finding: the ngspice version change moves this node more than mismatch does")
         add("")
         sigma_ratio = worst_ref_delta / max(stats["sigma_max"], 1e-12)
+        # Every figure in this paragraph is arithmetic on `worst_ref_delta`, so
+        # when the cross-check reached only some of the grid they are all
+        # subset figures. Scope the residual where it is stated, scope the
+        # conclusion drawn from it, and close the paragraph with `ref_note`'s
+        # coverage disclosure -- otherwise the section reads as a grid-wide
+        # result that the sample behind it does not support (#447). All three
+        # are empty/unchanged for a complete cross-check, so a fully compared
+        # run's prose does not move.
+        partial_ref = ref_compared < len(outcomes)
+        if partial_ref:
+            worst_point = (
+                "at the only point it could compare" if ref_compared == 1
+                else f"at the worst of the {ref_compared} points it could compare"
+            )
+            conclusion_scope = " at the points it compared"
+        else:
+            worst_point = "at the worst point"
+            conclusion_scope = ""
         add(
             f"  The committed corner-matrix record `{REFERENCE_RECORD}` was taken "
             f"under **ngspice-46**; this campaign ran under "
             f"**{ngspice.split(':')[0].strip()}**. The zero-sigma control — the "
             f"*same deck*, mismatch off — differs from that record by up to "
-            f"**{worst_ref_delta * 1e6:.0f} µV** at the worst point. That is "
+            f"**{worst_ref_delta * 1e6:.0f} µV** {worst_point}. That is "
             f"**{sigma_ratio:.1f}×** the largest per-point mismatch σ this campaign "
             f"measured ({stats['sigma_max'] * 1e6:.0f} µV) and "
             f"{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.1f} % of Exception 3's "
             f"entire ≤ 10 mV bound. **The simulator version change is a larger "
-            f"perturbation of this measurement than local device mismatch is** — "
+            f"perturbation of this measurement than local device mismatch is**"
+            f"{conclusion_scope} — "
             f"which is the single most useful thing this campaign found, and it is "
-            f"not a circuit result."
+            f"not a circuit result.{ref_note}"
         )
         add("")
         add(
@@ -527,11 +537,43 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             "a tool-fidelity finding, not absorbed into the circuit claim."
         )
         add("")
+        # The binding-corner clause names one corner and points the reader at
+        # its row in the control table. A partial cross-check can leave that
+        # row `n/a` -- the corner was never compared -- and the clause would
+        # then assert a reproduction nothing measured, citing a row that does
+        # not support it. Emit it only when that corner's own delta exists;
+        # otherwise say plainly that it was not compared (#447). A run that
+        # does not visit the corner at all has no row to contradict and keeps
+        # the original wording: the full PVT grid always contains it, and a
+        # `--smoke` run visits it and nothing else.
+        binding_outcome = next(
+            (o for o in outcomes if o.corner_id == BINDING_CORNER_ID), None
+        )
+        if (
+            binding_outcome is None
+            or binding_outcome.reference_delta(CLAIM_MEASUREMENT) is not None
+        ):
+            binding_lead = "It does not threaten Exception 3's bound."
+            binding_clause = (
+                f"and at the binding corner "
+                f"`{BINDING_CORNER_ID}` the control reproduces the reference "
+                f"record to well under a microvolt (see the control table above). "
+            )
+        else:
+            # The "does not threaten" claim rests on the binding corner being
+            # clean, so it cannot be made when that corner was never compared.
+            binding_lead = "It is not shown to threaten Exception 3's bound."
+            binding_clause = (
+                f"and the binding corner `{BINDING_CORNER_ID}` is **not** among "
+                f"the points this cross-check could compare — its row in the "
+                f"control table above is `n/a`, so this record makes no claim "
+                f"about the residue there. "
+            )
         add(
-            f"  **It does not threaten Exception 3's bound.** The residue is "
-            f"largest at points with wide margin, and at the binding corner "
-            f"`ss_125c_vlogic3p30v-vdrv6p00v` the control reproduces the reference "
-            f"record to well under a microvolt (see the control table above). "
+            f"  **{binding_lead}** The residue "
+            f"{'it did measure ' if partial_ref else ''}is "
+            f"largest at points with wide margin, "
+            f"{binding_clause}"
             f"But it does mean the −2.66 mV figure decision records 0014/0006 "
             f"quote carries a simulator-version uncertainty of order ±1 mV that no "
             f"prior record stated — comfortably inside the ≤ 10 mV bound, and a "
@@ -708,7 +750,7 @@ def main(argv=None) -> int:
         outcome_cls=PointOutcome,
         build_points=build_points,
         build_record_body=build_record_body,
-        smoke_corner_id="ss_125c_vlogic3p30v-vdrv6p00v",
+        smoke_corner_id=BINDING_CORNER_ID,
         progress_detail=_progress_detail,
         corner_width=45,
         worst_sample=lambda outcome: outcome.worst(CLAIM_MEASUREMENT),

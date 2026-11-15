@@ -1,9 +1,10 @@
 """Helpers shared by the standalone ``sim/*/run_*.py`` experiment scripts.
 
 These scripts drive ngspice directly rather than through ``runner``, and each
-used to carry its own byte-identical copy of these functions. ``fmt`` keeps
-4 digits (``campaign.fmt`` defaults to 6) so recorded evidence formatting does
-not change.
+used to carry its own byte-identical copy of these functions. ``fixed``
+renders a value with a fixed number of decimal places (``campaign.sigfig``
+renders ``digits`` significant figures and passes non-floats through) so
+recorded evidence formatting does not change.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import subprocess
 import tempfile
 from collections.abc import Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 from . import campaign
 from . import corners as harness_corners
@@ -22,8 +24,33 @@ from . import runner as harness_runner
 
 SIM_DIR = Path(__file__).resolve().parent.parent
 
+# --- ratified spec values ---------------------------------------------------
+#
+# These are not script-local tuning knobs: they are ratified
+# `spec/gate-driver.md` values, reported against and never adjusted here -- a
+# change to any of them would need its own decision record (CLAUDE.md).
+#
+# They have one home because two campaigns measure the same nodes against the
+# same bound. Declared independently in each runner (as they were until issue
+# #465), a decision record that moved one could be applied to one runner and
+# missed in the other, and the two campaigns' append-only records would then
+# disagree about the same ratified number with nothing in the tree flagging it.
 
-def fmt(value, digits: int = 4) -> str:
+#: The ratified §2.3 thick-oxide DC gate ceiling that the gate-node excursions
+#: in this family are measured against.
+GATE_CEILING_V = 6.0
+
+#: `spec/gate-driver.md` §5 Exception 2's ratified bound: <= 175 mV above the
+#: ceiling (decision record 0013).
+EXCEPTION2_BOUND_V = 0.175
+
+#: The five output-stage taper nodes Exception 2 is scoped to -- the claim
+#: measurements of `output-stage-taper-mismatch`, and secondary context that
+#: `gate-driver-indrv-mismatch`'s reused testbench already carries.
+TAPER_MEASUREMENTS = ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v")
+
+
+def fixed(value, digits: int = 4) -> str:
     if value is None:
         return "n/a"
     return f"{value:.{digits}f}"
@@ -198,6 +225,57 @@ def build_points(
     )
 
 
+class NodeWorstCase(NamedTuple):
+    """One node's worst case across a whole campaign, unformatted.
+
+    `delta` is the mismatch spread's reach beyond the control (MC worst minus
+    control worst); `margin` is the headroom left under the ceiling, negative
+    when the node went above it.
+    """
+
+    name: str
+    ctrl_worst: float | None
+    mc_worst: float
+    delta: float | None
+    margin: float
+
+
+def worst_across_points(outcomes, names, ceiling: float) -> list[NodeWorstCase]:
+    """Each name's worst (highest) control and Monte Carlo value over every
+    draw at every PVT point, with the two derived numbers a record row needs.
+
+    A name with no converged draw anywhere is omitted -- there is no worst
+    case to report for it. `ctrl_worst`, and so `delta`, is `None` for a name
+    that has Monte Carlo values but no control value at any point.
+
+    Formats nothing: each campaign emits its own row from these numbers, since
+    the columns and the node naming differ between them.
+    """
+    worst: list[NodeWorstCase] = []
+    for name in names:
+        mc_worst = None
+        ctrl_worst = None
+        for outcome in outcomes:
+            values = outcome.values(name)
+            if values:
+                mc_worst = max(values) if mc_worst is None else max(mc_worst, max(values))
+            control = outcome.control_value(name)
+            if control is not None:
+                ctrl_worst = control if ctrl_worst is None else max(ctrl_worst, control)
+        if mc_worst is None:
+            continue
+        worst.append(
+            NodeWorstCase(
+                name=name,
+                ctrl_worst=ctrl_worst,
+                mc_worst=mc_worst,
+                delta=mc_worst - ctrl_worst if ctrl_worst is not None else None,
+                margin=ceiling - mc_worst,
+            )
+        )
+    return worst
+
+
 def claim_sigma_summary(outcomes, measurement: str) -> str:
     """`campaign.point_sigma_summary` over one named claim measurement."""
     return campaign.point_sigma_summary(
@@ -236,7 +314,7 @@ def claim_progress_detail(result, measurement: str) -> str:
     """Progress-line detail for one point: the claim measurement to 10 digits,
     or the point's message when it produced none."""
     value = result.measurements.get(measurement)
-    return campaign.fmt(value, 10) if value is not None else result.message
+    return campaign.sigfig(value, 10) if value is not None else result.message
 
 
 def delta_vs_reference(value: float | None, reference: float | None) -> float | None:

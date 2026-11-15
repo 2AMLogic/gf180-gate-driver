@@ -34,6 +34,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 SIM_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SIM_DIR))
@@ -307,19 +308,19 @@ class PointSigmaSummaryTests(unittest.TestCase):
 
 
 class FormatterTests(unittest.TestCase):
-    """`fmt`/`mv` set the literal text of every recorded record table."""
+    """`sigfig`/`mv` set the literal text of every recorded record table."""
 
-    def test_fmt_is_six_significant_figures_by_default(self):
-        self.assertEqual(campaign.fmt(6.002661234), "6.00266")
+    def test_sigfig_is_six_significant_figures_by_default(self):
+        self.assertEqual(campaign.sigfig(6.002661234), "6.00266")
 
-    def test_fmt_honors_a_wider_digit_count(self):
-        self.assertEqual(campaign.fmt(6.002661234, 10), "6.002661234")
+    def test_sigfig_honors_a_wider_digit_count(self):
+        self.assertEqual(campaign.sigfig(6.002661234, 10), "6.002661234")
 
-    def test_fmt_switches_to_exponent_form_for_small_magnitudes(self):
-        self.assertEqual(campaign.fmt(1.2345e-06), "1.234500e-06")
+    def test_sigfig_switches_to_exponent_form_for_small_magnitudes(self):
+        self.assertEqual(campaign.sigfig(1.2345e-06), "1.234500e-06")
 
-    def test_fmt_reports_a_missing_value_as_na(self):
-        self.assertEqual(campaign.fmt(None), "n/a")
+    def test_sigfig_reports_a_missing_value_as_na(self):
+        self.assertEqual(campaign.sigfig(None), "n/a")
 
     def test_mv_is_a_signed_millivolt_string_to_three_decimals(self):
         self.assertEqual(campaign.mv(0.0355), "+35.500")
@@ -485,12 +486,12 @@ class RecordBodyGoldenTests(unittest.TestCase):
                         )
 
     def test_ronw_runner_scenarios_match_their_goldens(self):
-        # "error" is omitted deliberately: this runner's narrative dereferences
-        # a worst-excursion tuple that is `None` when no draw converged, which
-        # it does on `origin/main` too -- a pre-existing defect, out of #442's
-        # scope and tracked in #446. Add `ronw-error.md` and drop this comment
-        # when that lands.
-        for scenario, smoke in (("mixed", False), ("clean", False), ("mixed", True)):
+        for scenario, smoke in (
+            ("mixed", False),
+            ("clean", False),
+            ("error", False),
+            ("mixed", True),
+        ):
             name = f"ronw-{scenario}{'-smoke' if smoke else ''}.md"
             with self.subTest(golden=name):
                 self.assertEqual(
@@ -505,6 +506,65 @@ class RecordBodyGoldenTests(unittest.TestCase):
         self.assertNotIn("| n/a |", body)
         self.assertIn("cross-checked against the committed corner-matrix", body)
         self.assertNotIn("was **not performed**", body)
+
+
+class RonwNoConvergedDrawTests(unittest.TestCase):
+    """What the `ronw` runner writes when the Monte Carlo campaign produced
+    nothing to report (issue #446).
+
+    `build_record_body` used to raise `TypeError` here: the verdict block
+    handled the zero-converged-draw state, but the narrative below it
+    dereferenced the same `None` worst-excursion tuple unconditionally. The
+    `error` scenario in `test_ronw_runner_scenarios_match_their_goldens` pins
+    the whole record; these tests pin the specific claims it must *not* make,
+    and the one state the goldens cannot reach.
+    """
+
+    def test_a_smoke_run_with_no_converged_draw_still_renders(self):
+        # The crash was independent of `--smoke`, so both paths are covered;
+        # only the non-smoke body has a committed golden, matching the
+        # siblings' golden sets.
+        body = fixture.render_ronw("error", True)
+        self.assertTrue(body.startswith("verdict=ERROR"))
+        self.assertIn("**this campaign cannot answer it**", body)
+
+    def test_it_does_not_assert_a_conclusion_it_cannot_support(self):
+        body = fixture.render_ronw("error", False)
+        self.assertNotIn("already absorbs the measured local-mismatch spread", body)
+        self.assertNotIn("does **not** narrow it", body)
+        self.assertIn("neither supports nor contradicts", body)
+
+    def test_it_reports_no_measurement_rather_than_a_zero_one(self):
+        body = fixture.render_ronw("error", False)
+        # Context tables: a fabricated `0.000 mΩ·mm` / `0.000 %` excursion is
+        # indistinguishable from a measured zero excursion.
+        self.assertNotIn("| 0.000 | 0.000 % |", body)
+        self.assertEqual(5, len([
+            line for line in body.splitlines()
+            if line.rstrip().endswith("| no data | |")
+        ]))
+        # Sigma: likewise `0.000–0.000 mΩ·mm`.
+        self.assertNotIn("0.000\u20130.000", body)
+        self.assertIn("\u03c3 on this row is n/a", body)
+
+    def test_one_converged_draw_per_point_reports_sigma_as_absent(self):
+        # Reachable without the crash and not covered by any fixture scenario:
+        # a worst excursion exists, so the measured narrative renders, but no
+        # point has the two draws a standard deviation needs. `sigma_lo`/`hi`
+        # defaulted to 0.0, so the record claimed a measured zero spread.
+        module = fixture.load_ronw()
+        outcomes = [
+            module.PointOutcome(o.point, o.baseline, o.controls, o.samples[:1])
+            for o in fixture.build_ronw_outcomes(module, "clean")
+        ]
+        body, verdict, _ = module.build_record_body(
+            "20260102-030405-abcdef0", fixture.STAMP, fixture.PDK, fixture.NGSPICE,
+            outcomes, 1, 123.0, SimpleNamespace(smoke=False),
+        )
+        self.assertNotEqual("ERROR", verdict)
+        self.assertIn("the answer is in the numbers above", body)
+        self.assertNotIn("0.000\u20130.000 m\u03a9\u00b7mm", body)
+        self.assertIn("\u03c3 on this row is n/a", body)
 
 
 class SkippedReferenceCrossCheckTests(unittest.TestCase):
@@ -574,6 +634,124 @@ class SkippedReferenceCrossCheckTests(unittest.TestCase):
             "moves this node more than mismatch does",
             fixture.render("indrv", "clean", False),
         )
+
+
+class PartialReferenceCrossCheckTests(unittest.TestCase):
+    """What the `indrv` record writes when the cross-check reached *some* points.
+
+    Issue #442 closed the `compared == 0` end: a cross-check that never ran no
+    longer reports a residual. `0 < compared < total` still took the measured
+    branch, so the ngspice-version Finding section restated a subset residual,
+    the arithmetic derived from it, and a hardcoded claim about the binding
+    corner -- all with no coverage disclosure of its own, and the binding-corner
+    sentence citing a control-table row that read `n/a` (issue #447).
+
+    `SkippedReferenceCrossCheckTests` above covers the two ends; these pin the
+    middle, which is the only case where the section is built from an
+    incomplete sample.
+    """
+
+    FINDING = "### Finding: the ngspice version change moves this node more than mismatch does"
+    NEXT_SECTION = "### What the open PDK does and does not model"
+
+    def setUp(self):
+        self.module = fixture.load_runner("indrv")
+        self.binding = self.module.BINDING_CORNER_ID
+        # The fixture's default four-point subset is the head of the grid and
+        # does not contain the binding corner, so the prose about it could
+        # never be exercised. Swap the fourth point for it.
+        self.corners = [
+            point.corner_id for point in self.module.build_points()[:3]
+        ] + [self.binding]
+
+    def finding_section(self, body):
+        """Just the ngspice-version Finding section, so an assertion about its
+        own disclosure cannot be satisfied by the Overall verdict line's."""
+        self.assertIn(self.FINDING, body)
+        start = body.index(self.FINDING)
+        return body[start:body.index(self.NEXT_SECTION, start)]
+
+    def render(self, compared):
+        return fixture.render_with_partial_reference(
+            "indrv", compared, corners=self.corners
+        )
+
+    def test_the_finding_section_discloses_its_own_partial_coverage(self):
+        body = self.render({self.corners[0]})
+        self.assertEqual(body.count("| n/a |"), 3)
+        section = self.finding_section(body)
+        # The residual is stated, and the coverage it covers with it -- the
+        # Overall line's copy is not enough, because this section restates the
+        # residual and derives further figures from it.
+        self.assertIn("covers 1 of 4 PVT points only", section)
+        self.assertIn("were not cross-checked", section)
+        # ...and the figures derived from that subset are scoped, not grid-wide.
+        self.assertNotIn("at the worst point", section)
+        self.assertIn("at the only point it could compare", section)
+        self.assertIn(
+            "than local device mismatch is** at the points it compared", section
+        )
+
+    def test_the_binding_corner_claim_is_dropped_when_it_was_not_compared(self):
+        section = self.finding_section(self.render({self.corners[0]}))
+        # The dropped sentence cited a row that reads `n/a`: the parenthetical
+        # pointed the reader at evidence that does not exist.
+        self.assertNotIn("reproduces the reference record", section)
+        self.assertNotIn("see the control table above", section)
+        self.assertIn(f"`{self.binding}` is **not** among", section)
+        self.assertIn("makes no claim about the residue there", section)
+        # The claim that rested on that corner being clean goes with it.
+        self.assertNotIn("**It does not threaten Exception 3's bound.**", section)
+        self.assertIn("**It is not shown to threaten Exception 3's bound.**", section)
+
+    def test_the_binding_corner_claim_survives_when_it_was_compared(self):
+        # Partial coverage alone must not drop the sentence -- only the binding
+        # corner's own `n/a` row does.
+        section = self.finding_section(self.render({self.corners[0], self.binding}))
+        self.assertIn(
+            f"at the binding corner `{self.binding}` the control reproduces the "
+            f"reference record to well under a microvolt (see the control table "
+            f"above).",
+            section,
+        )
+        self.assertIn("**It does not threaten Exception 3's bound.**", section)
+        # ...and the coverage disclosure and scoping are still there.
+        self.assertIn("covers 2 of 4 PVT points only", section)
+        self.assertIn("at the worst of the 2 points it could compare", section)
+
+    def test_a_partial_cross_check_does_not_read_pass(self):
+        # `reference_anomaly` fires on any uncompared point; this pins that a
+        # partial run keeps failing rather than being talked into a pass by the
+        # new disclosure (#442's guarantee).
+        self.assertTrue(self.render({self.corners[0]}).startswith("verdict=FAIL"))
+
+    def test_a_fully_compared_run_is_unchanged(self):
+        # The disclosure, the scope qualifiers and the binding-corner guard are
+        # all no-ops at full coverage: `render` is byte-pinned by the committed
+        # goldens, and the same must hold for an explicit all-compared render.
+        body = self.render(self.corners)
+        self.assertNotIn("| n/a |", body)
+        section = self.finding_section(body)
+        self.assertIn("at the worst point", section)
+        self.assertNotIn("PVT points only", section)
+        self.assertNotIn("it could compare", section)
+        self.assertNotIn("at the points it compared", section)
+        self.assertIn("**It does not threaten Exception 3's bound.**", section)
+        self.assertIn("see the control table above", section)
+
+    def test_a_smoke_run_at_the_binding_corner_is_complete_not_partial(self):
+        # A `--smoke` run visits the binding corner and nothing else, so it is
+        # either fully compared or fully skipped -- never partial. Neither end
+        # may pick up the partial wording.
+        smoke = fixture.render_with_partial_reference(
+            "indrv", {self.binding}, smoke=True, corners=[self.binding]
+        )
+        self.assertNotIn("| n/a |", smoke)
+        self.assertNotIn("PVT points only", smoke)
+        self.assertIn("at the worst point", self.finding_section(smoke))
+        skipped = fixture.render_without_reference("indrv", smoke=True)
+        self.assertNotIn("PVT points only", skipped)
+        self.assertIn("the committed-reference cross-check did not run", skipped)
 
 
 class RecordSectionHelperTests(unittest.TestCase):

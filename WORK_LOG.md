@@ -8,6 +8,29 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-15
+
+- **PR #495**: signoff: check layout provenance hashes in CI; rest T1 item-2 attestation on the documented-provenance arm
+- **Issue #463** (closed): T1 item-2 GDS reproducibility attestation no longer holds under the host klt (0.9.2 renames generated sub-cells)
+- **Issue #470** (closed): bug: erc_negative_control's deck-clean arm grades 'violations' on main under klt 0.9.2 — the ERC control fails closed
+- **PR #488**: fix(erc): stop the substrate tie's asserted band from welding GND to the 3.3 V Nwell well
+- **PR #466**: refactor: read DR-0001 typ targets and the guard-ring stroke count from their constants
+- **Issue #454** (closed): Wire up (or retire) four declared-but-unread constants; DR-0001 typ targets are typed twice
+
+### 2026-11-14
+
+- **PR #476**: refactor: share evidence_store's staging core and fail-closed epilogue across signoff_store and cli
+- **Issue #469** (closed): Share evidence_store's staging core and fail-closed epilogue: signoff_store's copied manifest guard drifted to .exists(), epilogue has 3 copies
+- **PR #474**: refactor: share the per-node worst-case reduction and three ratified spec values
+- **Issue #465** (closed): Dedupe the taper-node worst-case loop and three ratified constants shared by the indrv and taper mismatch runners
+- **PR #452**: fix: disclose partial reference coverage in indrv's ngspice-version finding
+- **Issue #447** (closed): indrv mismatch runner's ngspice-version Finding is emitted from a partial reference cross-check without disclosing coverage
+- **PR #475**: sim: measure a Vbe/dVbe UVLO reference over 15 corners — 15/15 pass, 91 mV falling-trip spread
+- **Issue #457** (closed): Second UVLO reference study: measure a reference that does not track Vgs over the 15 corners (follow-up to decision record 0023)
+- **PR #453**: fix: render an ERROR record instead of crashing when no ronw draw converges
+- **Issue #446** (closed): bug: ronw mismatch runner crashes with TypeError instead of writing an ERROR record when no draw converges
+- **PR #455**: docs: roadmap as of 2026-11-13
+
 ### 2026-11-13
 
 - **PR #445**: fix: report a skipped reference cross-check instead of a 0.00 residual
@@ -230,8 +253,4 @@ Maintained automatically by the Guide role's document maintenance phase.
 - **PR #240**: feat(signoff): grade this block's T1 state via a klt signoff manifest
 - **Issue #238** (closed): T1 item 11 (power delivery, structural): no klt erc supply spec or report in this repo
 - **PR #241**: feat(layout): add klt erc supply spec and item-11 ERC evidence
-
-### 2026-09-15
-
-- **Issue #237** (closed): Champion: Merge-Risk Hold Digest
 

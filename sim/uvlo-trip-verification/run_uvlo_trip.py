@@ -59,7 +59,7 @@ from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
@@ -80,6 +80,28 @@ RISING_TYP = 3.9
 RISING_RANGE = (3.6, 4.2)
 HYST_TYP = 0.3
 RESPONSE_MAX_S = 500e-9
+
+# The Decision 4/5 paragraph every record of this claim opens its results
+# section with, rendered from the constants above instead of carrying a second
+# hand-typed copy of the same ratified figures (issue #454). The copy that
+# reaches append-only evidence is this one, so it is the copy that has to read
+# the block. Built at module scope -- not inline in build_record() -- so
+# sim/test_gen_requests.py can pin it against the committed record
+# byte-for-byte without composing a whole record.
+DR0001_TARGETS_PROSE = (
+    f"Decision record 0001 Decision 4: falling typ {FALLING_TYP:g}V / "
+    f"worst-case corner range {FALLING_RANGE[0]:g}-{FALLING_RANGE[1]:g}V; "
+    f"rising typ {RISING_TYP:g}V / worst-case corner range "
+    f"{RISING_RANGE[0]:g}-{RISING_RANGE[1]:g}V; hysteresis typ "
+    f"{HYST_TYP * 1e3:g}mV (no stated worst-case *range* for hysteresis, so "
+    "it is reported but not scored, matching the convention "
+    "`sim/device-mv-fet/run_device_mv_fet.py` uses for Cgg/Cgd/Ron). "
+    f"Decision 5: response time < {RESPONSE_MAX_S * 1e9:g}ns, scored at every "
+    "corner. Each point's verdict is **PASS** only if falling AND rising both "
+    "land inside their stated worst-case range AND response time is under "
+    f"{RESPONSE_MAX_S * 1e9:g}ns; a single measurement outside its bound fails "
+    "that corner."
+)
 
 # Response-time step deck: from a voltage guaranteed above every measured
 # corner's rising threshold (issue #220's own PVT sweep found a worst case
@@ -348,17 +370,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
 
     add("### Rising / falling trip voltage, hysteresis, response time")
     add("")
-    add(
-        "Decision record 0001 Decision 4: falling typ 3.6V / worst-case corner "
-        "range 3.3-3.9V; rising typ 3.9V / worst-case corner range 3.6-4.2V; "
-        "hysteresis typ 300mV (no stated worst-case *range* for hysteresis, so "
-        "it is reported but not scored, matching the convention "
-        "`sim/device-mv-fet/run_device_mv_fet.py` uses for Cgg/Cgd/Ron). "
-        "Decision 5: response time < 500ns, scored at every corner. Each "
-        "point's verdict is **PASS** only if falling AND rising both land "
-        "inside their stated worst-case range AND response time is under "
-        "500ns; a single measurement outside its bound fails that corner."
-    )
+    add(DR0001_TARGETS_PROSE)
     add("")
     add(
         "| corner | falling (V) | rising (V) | hysteresis (V) | response (ns) "
@@ -388,9 +400,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
             if overall == "PASS":
                 n_pass += 1
             cid = f"{section}_{temp:g}c_nosupply"
-            resp_ns = _fmt(rs * 1e9 if rs is not None else None, 1)
+            resp_ns = fixed(rs * 1e9 if rs is not None else None, 1)
             add(
-                f"| `{cid}` | {_fmt(fv)} | {_fmt(rv)} | {_fmt(hy)} | {resp_ns} "
+                f"| `{cid}` | {fixed(fv)} | {fixed(rv)} | {fixed(hy)} | {resp_ns} "
                 f"| {v_f} | {v_r} | {v_t} | {overall} |"
             )
     add("")
@@ -477,9 +489,9 @@ def main() -> int:
             )
             results[(section, temp)] = {"hysteresis": hyst, "response": resp}
             print(
-                f"  {cid}: falling={_fmt(hyst['falling_v'])} rising={_fmt(hyst['rising_v'])} "
-                f"hyst={_fmt(hyst['hysteresis_v'])} "
-                f"response={_fmt(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
+                f"  {cid}: falling={fixed(hyst['falling_v'])} rising={fixed(hyst['rising_v'])} "
+                f"hyst={fixed(hyst['hysteresis_v'])} "
+                f"response={fixed(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
             )
 
     harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, DUT)

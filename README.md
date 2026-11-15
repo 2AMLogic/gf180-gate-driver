@@ -83,9 +83,6 @@ seat; no measured silicon.** What is committed, and what it does not show:
 - **Layout** (`layout/`): `gate_driver_core.gds`, `status: match` LVS (2044/2044 devices) **within a stated deck scope**. DRC is `clean` under the current 34-layer
   deck (#362; 1513 real violations on the previous GDS, #358, [triaged](layout/drc/triage_sab_implant.md) and fixed). The deck
   models no `_MV` rules, so this is not a medium-voltage signoff. Not a tapeout signoff. See [`layout/README.md`](layout/README.md).
-  (That file's "Post-layout simulation" status row predates the committed
-  complete-block post-layout records and is stale; the `sim/` records are
-  the evidence.)
 - **Open items**: UVLO trip points are wider than the originally budgeted
   band and `ss_-40c` stays locked out above the -10 % low-line floor (decision
   records 0018, 0019; an open finding, not narrowed to pass); the two bounded
@@ -159,10 +156,7 @@ is a large job -- run it deliberately, not as a casual check.
    campaigns. The per-facet cold-start index is the **"Facets in this repo"**
    table in [`sim/README.md`](sim/README.md); the runner, testbench and
    PVT-grid details are in [`sim/harness/README.md`](sim/harness/README.md).
-   That table currently lists eleven facets and **omits**
-   `gate-driver-core-drive-with-uvlo`, `uvlo-trip-verification`,
-   `level-shifter-inb-mismatch` and `output-stage-taper-mismatch`; the
-   complete directory-by-directory list, with each testbench hash and
+   The complete directory-by-directory list, with each testbench hash and
    invocation, is
    [`verification/signoff/testbenches.inventory.md`](verification/signoff/testbenches.inventory.md).
 
