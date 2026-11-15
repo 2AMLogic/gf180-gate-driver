@@ -606,7 +606,7 @@ def run_mismatch_main(
 # --------------------------------------------------------------------------
 
 
-def fmt(value, digits: int = 6) -> str:
+def sigfig(value, digits: int = 6) -> str:
     """A measurement for a record table: `n/a`, or `digits` significant figures."""
     if value is None:
         return "n/a"
@@ -702,7 +702,7 @@ def control_table_rows(
     `probe(outcome)` returns `(node, value, delta)`: the node name (or `None`
     for a single-node claim, which drops that column), the control value and
     its delta against the reference record. `value_fmt(value)` renders the
-    control cell (default `fmt(value, 10)`) and `delta_fmt` is the format spec
+    control cell (default `sigfig(value, 10)`) and `delta_fmt` is the format spec
     applied to the delta once scaled to micro-units -- a campaign whose unit
     needs different precision passes its own rather than keeping a private
     copy of this loop.
@@ -715,7 +715,7 @@ def control_table_rows(
     """
     if value_fmt is None:
         def value_fmt(value):
-            return fmt(value, 10)
+            return sigfig(value, 10)
 
     rows = []
     control_ok = True
@@ -899,7 +899,7 @@ __all__ = [
     "convention_tail",
     "dropped_note",
     "error_verdict_line",
-    "fmt",
+    "sigfig",
     "links_lines",
     "log_header",
     "mv",

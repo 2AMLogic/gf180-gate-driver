@@ -95,7 +95,6 @@ BASE_SEED = 20260225
 DEFAULT_SAMPLES = 200
 
 #: Record-table formatters, shared with every other mismatch campaign.
-_fmt = campaign.fmt
 _mv = campaign.mv
 
 
@@ -302,7 +301,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         )
         used = f"{len(values)}/{len(outcome.samples)}"
         if not values:
-            add(f"  | `{outcome.corner_id}` | {used} | `{control_node}` | {_fmt(control_value)} | no data | | | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | `{control_node}` | {campaign.sigfig(control_value)} | no data | | | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -315,8 +314,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             worst_overall = (outcome, hi, margin, hi_node)
         add(
             f"  | `{outcome.corner_id}` | {used} | `{control_node}` | "
-            f"{_fmt(control_value)} | {_fmt(mean)} | {sigma * 1e3:.4f} | "
-            f"{_fmt(hi)} | `{hi_node}` | {_mv(margin)} | {_mv(delta)} | "
+            f"{campaign.sigfig(control_value)} | {campaign.sigfig(mean)} | {sigma * 1e3:.4f} | "
+            f"{campaign.sigfig(hi)} | `{hi_node}` | {_mv(margin)} | {_mv(delta)} | "
             f"{'PASS' if within else '**FAIL**'} |"
         )
     add("")
@@ -330,7 +329,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         outcomes, TAPER_MEASUREMENTS, GATE_CEILING_V
     ):
         add(
-            f"  | `{name.split('_')[0]}` | {_fmt(ctrl_worst)} | {_fmt(mc_worst)} | "
+            f"  | `{name.split('_')[0]}` | {campaign.sigfig(ctrl_worst)} | {campaign.sigfig(mc_worst)} | "
             f"{_mv(delta)} | {_mv(margin)} |"
         )
     add("")
@@ -366,7 +365,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"{converged} converged local-mismatch draws (of {drawn} run) "
             f"spanning the full process × temperature grid at the 6 V "
             f"stretch rail, the worst observed taper-node peak is "
-            f"**{_fmt(hi)} V (margin {_mv(margin)} mV)** at `{outcome.corner_id}` "
+            f"**{campaign.sigfig(hi)} V (margin {_mv(margin)} mV)** at `{outcome.corner_id}` "
             f"(node `{hi_node}`), inside `spec/gate-driver.md` §5 "
             f"Exception 2's ratified ≤ 175 mV bound (margin ≥ "
             f"−175.000 mV) with {_mv(margin + EXCEPTION2_BOUND_V)} mV of "
@@ -474,7 +473,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
 
 def _progress_detail(result) -> str:
     worst = worst_taper(result.measurements)
-    return f"{worst[0]}={_fmt(worst[1], 10)}" if worst is not None else result.message
+    return f"{worst[0]}={campaign.sigfig(worst[1], 10)}" if worst is not None else result.message
 
 
 def _worst_sample(outcome):
