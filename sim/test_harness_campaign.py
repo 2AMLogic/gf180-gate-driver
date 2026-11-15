@@ -29,6 +29,7 @@ draws) that decision record 0017 ratifies.
 
 from __future__ import annotations
 
+import ast
 import datetime as _dt
 import sys
 import tempfile
@@ -506,6 +507,34 @@ class RecordBodyGoldenTests(unittest.TestCase):
         self.assertNotIn("| n/a |", body)
         self.assertIn("cross-checked against the committed corner-matrix", body)
         self.assertNotIn("was **not performed**", body)
+
+    def test_indrv_item1_re_types_none_of_the_mismatch_families(self):
+        # Source-level guard (issue #464): the goldens compare *output*, so an
+        # edit that re-typed a family name as a literal in the item-1 record
+        # paragraph would render identical bytes and still pass them --
+        # silently restoring the second source of truth the interpolation
+        # removes. Locate the add() call by `ast` so this does not rot when
+        # the file shifts; read the families as the runner sees them, through
+        # its own `mc_mod` import.
+        path = SIM_DIR / "gate-driver-indrv-mismatch" / "run_indrv_mismatch.py"
+        source = path.read_text()
+        tree = ast.parse(source)
+        calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and getattr(node.func, "id", "") == "add"
+            and node.args
+            and "MOSFET local mismatch" in (ast.get_source_segment(source, node.args[0]) or "")
+        ]
+        self.assertEqual(len(calls), 1, "could not locate the item-1 add() call")
+        segment = ast.get_source_segment(source, calls[0])
+        for family in fixture.load_runner("indrv").mc_mod.MISMATCH_FAMILIES:
+            self.assertNotIn(
+                f"`{family}`", segment,
+                f"{family!r} is hard-coded in the item-1 record paragraph; "
+                "interpolate harness.montecarlo.MISMATCH_FAMILIES instead so the "
+                "record prose cannot drift from the families a run perturbs.",
+            )
 
 
 class RonwNoConvergedDrawTests(unittest.TestCase):

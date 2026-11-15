@@ -612,8 +612,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     add(
         "  1. **MOSFET local mismatch: shipped, and usable unchanged.** "
         "`sm141064.ngspice`'s `.lib fets_mm` section defines subcircuit "
-        "wrappers named `nfet_03v3`, `pfet_03v3`, `nfet_05v0`, `nfet_06v0`, "
-        "`pfet_05v0`, `pfet_06v0` whose MOS instance line carries "
+        f"wrappers named {', '.join(f'`{n}`' for n in mc_mod.MISMATCH_FAMILIES)}"
+        " whose MOS instance line carries "
         "`delvto='mis_vth*sw_stat_mismatch'` and "
         "`mulu0='1-mis_k*sw_stat_mismatch'`, with `mis_vth`/`mis_k` drawn "
         "**per subcircuit instance** from `agauss(0, var, 1)` and `var` "
