@@ -1,9 +1,10 @@
 """Helpers shared by the standalone ``sim/*/run_*.py`` experiment scripts.
 
 These scripts drive ngspice directly rather than through ``runner``, and each
-used to carry its own byte-identical copy of these functions. ``fmt`` keeps
-4 digits (``campaign.fmt`` defaults to 6) so recorded evidence formatting does
-not change.
+used to carry its own byte-identical copy of these functions. ``fixed``
+renders a value with a fixed number of decimal places (``campaign.sigfig``
+renders ``digits`` significant figures and passes non-floats through) so
+recorded evidence formatting does not change.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ EXCEPTION2_BOUND_V = 0.175
 TAPER_MEASUREMENTS = ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v")
 
 
-def fmt(value, digits: int = 4) -> str:
+def fixed(value, digits: int = 4) -> str:
     if value is None:
         return "n/a"
     return f"{value:.{digits}f}"
@@ -313,7 +314,7 @@ def claim_progress_detail(result, measurement: str) -> str:
     """Progress-line detail for one point: the claim measurement to 10 digits,
     or the point's message when it produced none."""
     value = result.measurements.get(measurement)
-    return campaign.fmt(value, 10) if value is not None else result.message
+    return campaign.sigfig(value, 10) if value is not None else result.message
 
 
 def delta_vs_reference(value: float | None, reference: float | None) -> float | None:

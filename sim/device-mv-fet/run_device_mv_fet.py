@@ -41,7 +41,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
 from harness.script_helpers import run_corner_deck as _run_corner_deck  # noqa: E402
@@ -341,8 +341,8 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         verdicts[suf]["vt"] = verdict
         add(
             f"| `{suf}` | `{spec['model']}` | {spec['w']:g}/{spec['l']:g} | "
-            f"{_fmt(lo)} / {_fmt(typ)} / {_fmt(hi)} | {_fmt(typ_val)} | "
-            f"{verdict} | {_fmt(lo_sim)} .. {_fmt(hi_sim)} |"
+            f"{fixed(lo)} / {fixed(typ)} / {fixed(hi)} | {fixed(typ_val)} | "
+            f"{verdict} | {fixed(lo_sim)} .. {fixed(hi_sim)} |"
         )
     add("")
 
@@ -368,8 +368,8 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         verdict = _range_verdict(typ_val, lo, hi)
         verdicts[suf]["idsat"] = verdict
         add(
-            f"| `{suf}` | {_fmt(lo, 1)} / {_fmt(typ, 1)} / {_fmt(hi, 1)} | "
-            f"{_fmt(typ_val, 1)} | {verdict} | {_fmt(lo_sim, 1)} .. {_fmt(hi_sim, 1)} |"
+            f"| `{suf}` | {fixed(lo, 1)} / {fixed(typ, 1)} / {fixed(hi, 1)} | "
+            f"{fixed(typ_val, 1)} | {verdict} | {fixed(lo_sim, 1)} .. {fixed(hi_sim, 1)} |"
         )
     add("")
 
@@ -395,8 +395,8 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         verdict = _range_verdict(val_27, lo, hi)
         verdicts[suf]["ioff"] = verdict
         add(
-            f"| `{suf}` | {_fmt(lo, 2)} / {_fmt(typ, 2)} / {_fmt(hi, 2)} | "
-            f"{_fmt(val_27, 2)} | {verdict} | {_fmt(lo_sim, 2)} .. {_fmt(hi_sim, 2)} |"
+            f"| `{suf}` | {fixed(lo, 2)} / {fixed(typ, 2)} / {fixed(hi, 2)} | "
+            f"{fixed(val_27, 2)} | {verdict} | {fixed(lo_sim, 2)} .. {fixed(hi_sim, 2)} |"
         )
     add("")
     add(
@@ -427,9 +427,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
         cgg_typ = results[("typical", 27.0)]["cgg_f"][suf]
         cgd_typ = results[("typical", 27.0)]["cgd_f"][suf]
         add(
-            f"| `{suf}` | {_fmt(cgg_typ, 3)} | {_fmt(min(cgg_vals), 3)} .. "
-            f"{_fmt(max(cgg_vals), 3)} | {_fmt(cgd_typ, 3)} | "
-            f"{_fmt(min(cgd_vals), 3)} .. {_fmt(max(cgd_vals), 3)} |"
+            f"| `{suf}` | {fixed(cgg_typ, 3)} | {fixed(min(cgg_vals), 3)} .. "
+            f"{fixed(max(cgg_vals), 3)} | {fixed(cgd_typ, 3)} | "
+            f"{fixed(min(cgd_vals), 3)} .. {fixed(max(cgd_vals), 3)} |"
         )
     add("")
 
@@ -451,7 +451,7 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
     for suf in DEVICE_ORDER:
         ron = results[("typical", 27.0)]["oc"][suf]["ron_ohm"]
         add(
-            f"| `{suf}` | {_fmt(ron[75], 1)} | {_fmt(ron[90], 1)} | {_fmt(ron[100], 1)} |"
+            f"| `{suf}` | {fixed(ron[75], 1)} | {fixed(ron[90], 1)} | {fixed(ron[100], 1)} |"
         )
     add("")
 
