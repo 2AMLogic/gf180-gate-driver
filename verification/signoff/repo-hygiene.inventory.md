@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:79664293ea6c9736ee1687e0673c51de72d870400fbbaec6d899135e1a987247` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:e3e9eee80e52a0eefdb667f7d452da6cea44e8853d3b0dc6f1706d16e675205a` |
+| `layout/README.md` | `sha256:5c09806018e5f45367d65fe8c6e2ad91e80dfb56e80ce1de68835cef671cb0e9` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -371,3 +371,35 @@ negative-control manifests, which item 11 pins through
 `verification/signoff/manifest.json` instead. The ERC re-run and the
 negative-control run happened for the change itself, not as part of this
 audit; no simulation or netlisting was run.
+
+## Re-audit for issue #463 (2026-11-15)
+
+Two listed files changed on the issue #463 branch (`feature/issue-463`, on
+top of `origin/main` at `f4f0cb4`) and were re-read against the findings
+above; their hashes are refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): the `signoff` job gains a
+  "Layout provenance freshness" step running the new stdlib-only
+  `layout/test_check_layout_provenance.py` and
+  `layout/check_layout_provenance.py` beside the existing checker regression
+  tests. The job's charter (CI keeps the harness and evidence formats valid)
+  is extended, not changed -- the new step is a freshness check of the same
+  class as the signoff re-grading already in the job, and it needs no klt
+  generation install and no PDK. No other job or step moves.
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the klt
+  install (#190)" section gains a closing block recording the
+  generated-layout drift class (#463): klt >= 0.9.2 renames generated
+  sub-cells, so byte-equality against the committed GDS is not the
+  reproducibility test on a drifted host (the same-klt comparison is); T1
+  item 2's live claim rests on the criterion's documented-provenance arm;
+  `check_layout_provenance.py` re-hashes the three recorded pins in CI with
+  an advisory klt-version arm; and the upstream filing
+  (klayout-tools#5808) is linked. The DRC/LVS status sections and the
+  reproduction instructions the audit findings rest on are untouched.
+
+The other listed files are unchanged, so those findings still hold. As with
+the #470 re-audit, the envelope, manifest item 10 and tier-report citation
+pins are refreshed for the new inventory bytes. No simulation, netlisting,
+layout flow or generator re-run happened as part of this audit; the same-klt
+generator comparison the refreshed `generator.sha256` pin rests on was run
+into scratch directories outside the tree.
