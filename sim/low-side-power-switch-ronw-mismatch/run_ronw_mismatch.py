@@ -77,7 +77,7 @@ from harness import pdk as harness_pdk  # noqa: E402
 from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import PointResult, ngspice_version  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
 import run_low_side_power_switch as base  # noqa: E402
@@ -396,25 +396,11 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         else f" All {drawn} draws converged; none is excluded."
     )
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch samples "
-        f"total.{dropped_note} Distribution source: the gf180mcu PDK's own "
-        "`.lib fets_mm` per-instance mismatch model "
-        "(`delvto = mis_vth·sw_stat_mismatch`, "
-        "`mulu0 = 1 − mis_k·sw_stat_mismatch`, `mis_vth`/`mis_k` drawn from "
-        "`agauss(0, σ, 1)`, σ scaled Pelgrom-style by 1/√(W_eff·L_eff)) -- "
-        "**1 σ per-device draws, not a 3 σ corner pull**; reported σ is the "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
+        + " reported σ is the "
         "sample standard deviation over the draws, reported worst case is "
-        "the observed maximum, not a fitted quantile. `sw_stat_global = 0` "
-        "throughout -- the deterministic `.LIB` process corner remains the "
-        f"sole global-skew axis. Seeds: `seed = {BASE_SEED} + point_index × "
-        f"{mc_mod.SEED_STRIDE} + sample`, point_index in the grid order "
-        "tabulated below. Every PVT point carries a **deterministic negative "
-        "control** in three legs: a plain mismatch-off deck, plus two "
-        "`sw_stat_mismatch = 0` decks at two different seeds -- all three "
-        "must agree bit-for-bit, and are additionally compared against the "
-        f"committed corner-matrix record `{REFERENCE_RECORD}`."
+        "the observed maximum, not a fitted quantile. "
+        + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "--")
     )
     add("- **Result**:")
     add("")
@@ -448,7 +434,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     rows, control_ok, worst_ref_delta, ref_compared = campaign.control_table_rows(
         outcomes,
         lambda o: (None, o.control_value(primary_name), o.reference_delta(primary_name)),
-        value_fmt=lambda value: _fmt(value, 6),
+        value_fmt=lambda value: fixed(value, 6),
         delta_fmt="+.3f",
     )
     lines.extend(rows)
@@ -501,7 +487,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         control = outcome.control_value(primary_name)
         used = f"{len(values)}/{len(outcome.samples)}"
         if not values or control is None:
-            add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | {fixed(control)} | no data | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -511,8 +497,8 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         if worst_excursion is None or excursion > worst_excursion[1]:
             worst_excursion = (outcome, excursion, hi)
         add(
-            f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | {_fmt(mean)} | "
-            f"{sigma * 1e3:.3f} | {_fmt(hi)} | {excursion * 1e3:.3f} | {pct_window:.3f} % |"
+            f"  | `{outcome.corner_id}` | {used} | {fixed(control)} | {fixed(mean)} | "
+            f"{sigma * 1e3:.3f} | {fixed(hi)} | {excursion * 1e3:.3f} | {pct_window:.3f} % |"
         )
     add("")
 
@@ -685,7 +671,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
             f"excursion above any PVT point's own deterministic control is "
             f"**{excursion * 1e3:.3f} mΩ·mm** ({excursion_pct:.3f} % of the "
             f"window's {window_width:.4f} Ω·mm width), at `{outcome.corner_id}` "
-            f"(worst observed draw {_fmt(hi)} Ω·mm) -- "
+            f"(worst observed draw {fixed(hi)} Ω·mm) -- "
             f"{'below' if not material else 'at or above'} the "
             f"{MATERIALITY_PCT_OF_WINDOW:g} %-of-window materiality "
             f"threshold ({step_text}). **{'No' if not material else 'A'} new "

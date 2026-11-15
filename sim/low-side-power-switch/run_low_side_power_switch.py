@@ -74,7 +74,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import column as _column  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import run_corner_deck as _run_corner_deck  # noqa: E402
 
@@ -364,10 +364,10 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, list[str]]:
             vals = _grid(results, lambda r, v=vgs, d=dev: r["ron_w_ohmmm"][d][v])
             add(
                 f"| {vgs:g} V ({labels[vgs]}) "
-                f"| {_fmt(results[('tt', -40.0)]['ron_w_ohmmm'][dev][vgs])} "
-                f"| {_fmt(results[('tt', 27.0)]['ron_w_ohmmm'][dev][vgs])} "
-                f"| {_fmt(results[('tt', 125.0)]['ron_w_ohmmm'][dev][vgs])} "
-                f"| {_fmt(min(vals))} .. {_fmt(max(vals))} |"
+                f"| {fixed(results[('tt', -40.0)]['ron_w_ohmmm'][dev][vgs])} "
+                f"| {fixed(results[('tt', 27.0)]['ron_w_ohmmm'][dev][vgs])} "
+                f"| {fixed(results[('tt', 125.0)]['ron_w_ohmmm'][dev][vgs])} "
+                f"| {fixed(min(vals))} .. {fixed(max(vals))} |"
             )
         add("")
 
@@ -450,8 +450,8 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, list[str]]:
             )
         add(
             f"| {temp:g} °C | {DR0008_N06_TYPICAL[6.0][temp]:.4f} "
-            f"| {lo_ref:.4f} | **{_fmt(here)}** | {hi_ref:.4f} "
-            f"| **{_fmt(res[4.2])}** | **{_fmt(res[3.6])}** "
+            f"| {lo_ref:.4f} | **{fixed(here)}** | {hi_ref:.4f} "
+            f"| **{fixed(res[4.2])}** | **{fixed(res[3.6])}** "
             f"| {'yes' if inside else 'NO'} |"
         )
     add("")
@@ -460,9 +460,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, list[str]]:
         "\"Context\", typical corner, un-sourced to any `sim/` record) put "
         "`nmos_6p0` at `Vgs` 5 V ≈ 2.25 Ω·mm and at `Vgs` 3.6 V ≈ 2.83 Ω·mm. "
         "This record measures "
-        f"**{_fmt(results[('tt', 27.0)]['ron_w_ohmmm']['n06'][5.0])} Ω·mm** "
+        f"**{fixed(results[('tt', 27.0)]['ron_w_ohmmm']['n06'][5.0])} Ω·mm** "
         "and "
-        f"**{_fmt(results[('tt', 27.0)]['ron_w_ohmmm']['n06'][3.6])} Ω·mm** "
+        f"**{fixed(results[('tt', 27.0)]['ron_w_ohmmm']['n06'][3.6])} Ω·mm** "
         "at those exact points, `tt`/27 °C — the first purpose-built "
         "measurement of them in this repo, and the first time the spot-check "
         "can be compared like-for-like rather than by interpolation."
@@ -497,10 +497,10 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, list[str]]:
                 f"diode Vf at {target} A not resolved at every grid point"
             )
         add(
-            f"| {target:g} A | {_fmt(results[('tt', -40.0)]['fb_vf_v'][target])} V "
-            f"| {_fmt(results[('tt', 27.0)]['fb_vf_v'][target])} V "
-            f"| {_fmt(results[('tt', 125.0)]['fb_vf_v'][target])} V "
-            f"| {_fmt(min(vals))} .. {_fmt(max(vals))} V |"
+            f"| {target:g} A | {fixed(results[('tt', -40.0)]['fb_vf_v'][target])} V "
+            f"| {fixed(results[('tt', 27.0)]['fb_vf_v'][target])} V "
+            f"| {fixed(results[('tt', 125.0)]['fb_vf_v'][target])} V "
+            f"| {fixed(min(vals))} .. {fixed(max(vals))} V |"
         )
     add("")
     add(
