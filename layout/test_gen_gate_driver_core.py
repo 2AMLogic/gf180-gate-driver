@@ -78,6 +78,10 @@ from check_gate_driver_core import (  # noqa: E402  (path set above)
     routed_nets,
 )
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
+    GUARD_RING_MARGIN_UM,
+    GUARD_RING_STROKE_COUNT,
+    GUARD_RING_WIDTH_UM,
+    L_COMP,
     L_METAL1,
     L_NPLUS,
     L_PPLUS,
@@ -915,6 +919,91 @@ class MimReferenceCapacitanceTest(unittest.TestCase):
         series = single / 4.0
         self.assertGreater(series, 12e-15)
         self.assertLess(series, 14e-15)
+
+
+class GuardRingStrokeCountTest(unittest.TestCase):
+    """``guard_ring()`` draws ``GUARD_RING_STROKE_COUNT`` Comp strokes (#454).
+
+    DN.3 is a connectivity rule -- the DNWELL has to sit inside the *hole* of a
+    closed PCOMP annulus -- so the stroke count is what makes the ring a ring.
+    Nothing asserted it: the ``strokes`` list is a four-element literal, and a
+    ring drawn three-sided would still produce legal-looking geometry, still
+    pass every check in this suite, and fail DRC only as an open annulus, long
+    after the generator reported success. ``GUARD_RING_STROKE_COUNT`` carried
+    that number as a comment wearing a constant's clothes; it is now checked in
+    ``guard_ring()``, and this is the test that the drawn output agrees with it.
+    """
+
+    @staticmethod
+    def _ring():
+        """Run ``guard_ring()`` over one MV device; return the drawn shapes."""
+        obj = Interconnect.__new__(Interconnect)
+        obj.shapes = []
+        obj._landings = {}
+        obj.substrate_net = "GND_LOGIC"
+        obj.left_rail_x = {"GND_LOGIC": -10.0}
+        obj.jumper_y = {}
+        obj.north_edge_y = 0.0
+        mv = type("D", (), {"is_mv": True})()
+        obj.placements = [
+            type("P", (), {"device": mv, "x0": 0.0, "y0": 0.0, "x1": 20.0, "y1": 10.0})()
+        ]
+        Interconnect.guard_ring(obj)
+        return obj.shapes
+
+    def _comp_strokes(self, shapes):
+        return [
+            shape
+            for shape in shapes
+            if shape["layer"] == list(L_COMP) and shape.get("name") == "GUARD_RING_DRV"
+        ]
+
+    def test_ring_draws_exactly_the_documented_number_of_comp_strokes(self):
+        strokes = self._comp_strokes(self._ring())
+        self.assertEqual(len(strokes), GUARD_RING_STROKE_COUNT)
+
+    def test_each_stroke_is_paired_with_its_own_pplus(self):
+        """Comp alone is not PCOMP -- every stroke needs its Pplus twin."""
+        shapes = self._ring()
+        pplus = [
+            shape
+            for shape in shapes
+            if shape["layer"] == list(L_PPLUS) and shape.get("name") == "GUARD_RING_DRV"
+        ]
+        self.assertEqual(len(pplus), GUARD_RING_STROKE_COUNT)
+
+    def test_the_four_strokes_close_around_the_mv_group(self):
+        """The strokes' union encloses the group's bbox with the stated margin.
+
+        A count on its own would pass for four coincident rectangles, so this
+        pins that they are the N/S/E/W of one annulus: the ring's outer extent
+        sits ``GUARD_RING_MARGIN_UM + GUARD_RING_WIDTH_UM`` outside the MV
+        bbox, and its hole still contains that bbox.
+        """
+        strokes = [s["rect_um"] for s in self._comp_strokes(self._ring())]
+        offset = GUARD_RING_MARGIN_UM + GUARD_RING_WIDTH_UM
+        self.assertAlmostEqual(min(r[0] for r in strokes), 0.0 - offset, places=4)
+        self.assertAlmostEqual(min(r[1] for r in strokes), 0.0 - offset, places=4)
+        self.assertAlmostEqual(max(r[2] for r in strokes), 20.0 + offset, places=4)
+        self.assertAlmostEqual(max(r[3] for r in strokes), 10.0 + offset, places=4)
+
+        # The hole: every stroke lies outside the MV bbox it surrounds.
+        for x0, y0, x1, y1 in strokes:
+            outside = x1 <= 0.0 or x0 >= 20.0 or y1 <= 0.0 or y0 >= 10.0
+            self.assertTrue(
+                outside,
+                f"stroke {(x0, y0, x1, y1)} overlaps the MV group bbox it rings",
+            )
+
+    def test_a_ring_without_mv_devices_draws_nothing(self):
+        obj = Interconnect.__new__(Interconnect)
+        obj.shapes = []
+        lv = type("D", (), {"is_mv": False})()
+        obj.placements = [
+            type("P", (), {"device": lv, "x0": 0.0, "y0": 0.0, "x1": 1.0, "y1": 1.0})()
+        ]
+        Interconnect.guard_ring(obj)
+        self.assertEqual(obj.shapes, [])
 
 
 if __name__ == "__main__":
