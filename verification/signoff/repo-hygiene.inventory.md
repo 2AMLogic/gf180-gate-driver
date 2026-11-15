@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e54bdd124bc45e19baa9996252e41de1ac9a4460fe93a8d07773c3c3bb216850` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e09a8617e0b743f371be7a0322475dc29a8138bf12c42f0bbe6e1dea193593dc` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:62c0849311b0452ab758c4ceb9437fd30c6c5b027a0f07566cc8047a6718166a` |
+| `layout/README.md` | `sha256:6a63d7f0a5c92d1df455d43984f42bc926332d4a96669aeaac81725082efe200` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -335,4 +335,40 @@ the relocated test asserts.
 Both edits exist because the UVLO request generator duplicated the process
 table and request envelope of the item-5 core-drive generator and was the one
 generator outside the reproduction test added for issue #424 (issue #441). No
+simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #468 (2026-11-15)
+
+Two listed files changed on the issue #468 branch (`feature/issue-468`, on top
+of `origin/main` at `0f25e3c`) and were re-read against the findings above;
+their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the `test` job's coverage
+  comment gains one row (`layout/common/test_control_verdict.py`) and the job
+  gains one step, `Negative-control verdict unit tests`, running
+  `python3 layout/common/test_control_verdict.py` on the same PDK-free runner
+  (pure stdlib; the controls themselves need klt + the PDK). No job, trigger,
+  permission, concurrency setting or other step moved; `lint` (with the
+  evidence-record and append-only checks), the harness self-test steps and the
+  `signoff` job are unchanged, so the CI finding still holds. CI was read,
+  not observed to pass here.
+- `layout/README.md` (**read** the diff): adds two lines to the `common/`
+  part of the directory tree, listing `common/control_verdict.py` (the one
+  pass/fail epilogue all four negative controls now return through) and
+  `common/test_control_verdict.py` (its unit tests, PDK-free CI). The Status
+  and Regenerating sections and every reproduction command are untouched, so
+  the listing the Reproduction finding relies on stays accurate.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE` and
+`spec/gate-driver.md` are untouched by this branch, so those findings still
+hold. Recorded but **not** pinned here: the new
+`layout/common/control_verdict.py` and `layout/common/test_control_verdict.py`
+and the four negative controls now returning through the shared epilogue
+(`layout/drc/deck_negative_control.py`, `layout/erc/erc_negative_control.py`,
+`layout/ground_rail_negative_control.py`,
+`layout/lvs/lvs_negative_control.py`) -- none is listed in this inventory and
+none carries a hash in it.
+
+Both edits exist because the four layout negative controls each carried their
+own copy of the pass/fail epilogue and could drift apart (issue #468). No
 simulation, netlisting or layout flow was run for this re-audit.
