@@ -104,10 +104,10 @@ class _TempDirCase(unittest.TestCase):
 
 
 class TestFormattingAndLogParsing(unittest.TestCase):
-    def test_fmt_four_digits_and_none(self):
-        self.assertEqual(script_helpers.fmt(1.23456789), "1.2346")
-        self.assertEqual(script_helpers.fmt(1.23456789, 6), "1.234568")
-        self.assertEqual(script_helpers.fmt(None), "n/a")
+    def test_fixed_four_digits_and_none(self):
+        self.assertEqual(script_helpers.fixed(1.23456789), "1.2346")
+        self.assertEqual(script_helpers.fixed(1.23456789, 6), "1.234568")
+        self.assertEqual(script_helpers.fixed(None), "n/a")
 
     def test_parse_dc_tables_and_column(self):
         tables = script_helpers.parse_dc_tables(LOG)
@@ -173,7 +173,7 @@ class TestCampaignGlue(unittest.TestCase):
                 self.message = "no data"
 
         self.assertEqual(
-            script_helpers.claim_progress_detail(Result(), "m"), campaign.fmt(1.5, 10)
+            script_helpers.claim_progress_detail(Result(), "m"), campaign.sigfig(1.5, 10)
         )
         self.assertEqual(script_helpers.claim_progress_detail(Result(), "other"), "no data")
 
