@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:e130d11a50df42428f9764380852082e2efbefdcffb4439d336ff7f700662f65` |
+| `layout/README.md` | `sha256:3c1b3889e252e0a86c4d4a2e3e8acbf40069b6d0020a1a103eec439bc7f2d749` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -368,3 +368,38 @@ edits close — the Reproduction finding's facet-omission disclosure and the
 inventory's own hash moved and its downstream pins are refreshed. The other
 listed files are unchanged. No simulation, netlisting or layout flow was run
 for this re-audit.
+
+## Re-audit for issue #470 (2026-11-14)
+
+One listed file changed on the issue #470 branch (`feature/issue-470`, on top
+of `origin/main` at `cbf0cd4`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the Supply-island ERC section's
+  "Latest report" line now cites the fresh envelope `20261114-193042-cbf0cd4`
+  (the one item 11 pins) instead of the unpinned `20260921-155739`, the GDS
+  hash it quotes is corrected from the pre-#362 `54f02626…` to the committed
+  `15fa5b64…`, and a "Tool-drift history of this verdict" paragraph is added
+  stating what klt ≥ 0.9 made of the pre-#470 committed ERC envelope and how
+  the `substrate_gnd_logic` `well_boxes` correction (#470) restores the
+  `erc_status: clean` verdict under the current build. A review-feedback fix
+  on this branch (PR #488) also corrects that section's report-producer
+  paragraph: it now names the repinned envelope's actual producing build
+  (`klt 0.9.2.dev1029+g76f47afa48f1`, git rev `76f47afa48f1`) instead of the
+  superseded `0.5.0`/`b15edf5e` one, gives the reproduction command in the
+  `uvx --from`/scratch-venv form, and drops the stale "PATH-installed pin
+  predates `--deck`" sentence — so the section's reproduction command *did*
+  change; the Reproduction finding itself (the root README's
+  validate-vs-generate command structure) is untouched and still holds. The
+  "Post-layout simulation" status row this audit already disclosed
+  as stale is untouched (issue #458 owns it).
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. Recorded but **not** pinned here:
+`layout/erc-supply-spec.json` (its `well_boxes` correction and `_comment`
+provenance are issue #470's own deliverable) and the fresh ERC envelope and
+negative-control manifests, which item 11 pins through
+`verification/signoff/manifest.json` instead. The ERC re-run and the
+negative-control run happened for the change itself, not as part of this
+audit; no simulation or netlisting was run.

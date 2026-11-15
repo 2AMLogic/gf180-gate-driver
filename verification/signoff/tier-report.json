@@ -622,7 +622,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:a0707a10c09c564e48f43b247e08733473a6db6d85d8be5074cd4753edd3ad66",
+        "content_hash": "sha256:09600de652cec9591522119f2210cd3f7566ab48553427faa717ebf2c95f1075",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -631,7 +631,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:a0707a10c09c564e48f43b247e08733473a6db6d85d8be5074cd4753edd3ad66",
+          "content_hash": "sha256:09600de652cec9591522119f2210cd3f7566ab48553427faa717ebf2c95f1075",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"
@@ -652,7 +652,7 @@
       "reason": null,
       "graded_by_build": true,
       "citation": {
-        "file": "layout/erc/reports/gate_driver_core/20261024-090832-de97a29.erc.json",
+        "file": "layout/erc/reports/gate_driver_core/20261114-193042-cbf0cd4.erc.json",
         "command": null,
         "kind": "erc",
         "check_status": "not_checked",
@@ -661,7 +661,7 @@
         "exit_status": 0,
         "parts": [
           {
-            "file": "layout/erc/reports/gate_driver_core/20261024-090832-de97a29.erc.json",
+            "file": "layout/erc/reports/gate_driver_core/20261114-193042-cbf0cd4.erc.json",
             "command": null,
             "kind": "erc",
             "check_status": "not_checked",
