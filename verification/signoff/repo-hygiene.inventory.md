@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:1142f2042b5802f9b363dc831d4274f49556621e0712be52cca265caab8a61c9` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:79664293ea6c9736ee1687e0673c51de72d870400fbbaec6d899135e1a987247` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:6f622750bfd680c81b634d622648bd7f7f14435fbe57e2e96b43b98e9758df9e` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:5c09806018e5f45367d65fe8c6e2ad91e80dfb56e80ce1de68835cef671cb0e9` |
+| `layout/README.md` | `sha256:0f6ded12b56dc834acd95bbc1c4e944f3da0d4d1fb295b4a663106c408ac1163` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -403,3 +403,33 @@ pins are refreshed for the new inventory bytes. No simulation, netlisting,
 layout flow or generator re-run happened as part of this audit; the same-klt
 generator comparison the refreshed `generator.sha256` pin rests on was run
 into scratch directories outside the tree.
+
+## Re-audit for issue #486 (2026-11-15)
+
+Two listed files changed on the issue #486 branch (`feature/issue-486`, on
+top of `origin/main` at `3c79c07`) and were re-read against the findings
+above; their hashes are refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the
+  klt install (#190)" section gains a paragraph noting that the report
+  runners (`drc/run_drc.py`, `lvs/run_lvs.py`, `lvs/run_pex_extract.py`,
+  `erc/run_erc.py`, and `verification/signoff/check_tier_report.py`)
+  accept `--klt <path>`, so a `uvx --from` or scratch-venv klt build can
+  be passed directly instead of going through a PATH pin. Documentation
+  only — the audit findings (block description, spec table, links, status
+  sections) are untouched and still hold.
+- `.github/workflows/ci.yml` (**read** the diff): the `test` job gains a
+  "klt_env resolver + runner --klt plumbing unit tests" step running the
+  new stdlib-only `layout/common/test_klt_env.py` (the
+  `klt_env.require_klt` resolver contract plus the `--klt` argparse
+  plumbing of the three report runners that gained the flag, issue #486),
+  and the file's self-check table gains the matching row. The job's
+  charter is extended, not changed — the new step is the same class as the
+  existing PDK-free unit-test steps — and no other job or step moves. The
+  **CI** finding above (what the workflow checks) still holds; it now
+  covers one more PDK-free test.
+
+The other listed files are unchanged, so those findings still hold. As with
+the #463 re-audit, the envelope, manifest item 10 and tier-report citation
+pins are refreshed for the new inventory bytes. No simulation, netlisting,
+layout flow or generator re-run happened as part of this audit.

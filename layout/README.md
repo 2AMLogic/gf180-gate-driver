@@ -597,6 +597,17 @@ Pin the install to a specific revision rather than letting it float:
 uv tool install --from "git+https://github.com/2AMLogic/klayout-tools@<rev>" klayout-tools
 ```
 
+Every report runner also accepts the build directly, without a `PATH` pin:
+[`drc/run_drc.py`](drc/run_drc.py), [`lvs/run_lvs.py`](lvs/run_lvs.py),
+[`lvs/run_pex_extract.py`](lvs/run_pex_extract.py) and
+[`erc/run_erc.py`](erc/run_erc.py) each take `--klt <path>`, as does
+[`verification/signoff/check_tier_report.py`](../verification/signoff/check_tier_report.py).
+Reproduce a pinned build into a throwaway environment — `uvx --from
+"git+https://github.com/2AMLogic/klayout-tools@<rev>" klt …` for a one-off,
+or a scratch `uv venv` from the same source for a series of runs — and pass
+its `bin/klt` to the runner, so the command that produced a report names
+the exact build.
+
 The reports linked below (`20260818-082605-cf3a1c7` DRC,
 `20260818-082329-cf3a1c7` LVS) were produced against
 `klt 0.2.0` / `klayout 0.30.10` / deck content hash
