@@ -396,25 +396,11 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
         else f" All {drawn} draws converged; none is excluded."
     )
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch samples "
-        f"total.{dropped_note} Distribution source: the gf180mcu PDK's own "
-        "`.lib fets_mm` per-instance mismatch model "
-        "(`delvto = mis_vth·sw_stat_mismatch`, "
-        "`mulu0 = 1 − mis_k·sw_stat_mismatch`, `mis_vth`/`mis_k` drawn from "
-        "`agauss(0, σ, 1)`, σ scaled Pelgrom-style by 1/√(W_eff·L_eff)) -- "
-        "**1 σ per-device draws, not a 3 σ corner pull**; reported σ is the "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
+        + " reported σ is the "
         "sample standard deviation over the draws, reported worst case is "
-        "the observed maximum, not a fitted quantile. `sw_stat_global = 0` "
-        "throughout -- the deterministic `.LIB` process corner remains the "
-        f"sole global-skew axis. Seeds: `seed = {BASE_SEED} + point_index × "
-        f"{mc_mod.SEED_STRIDE} + sample`, point_index in the grid order "
-        "tabulated below. Every PVT point carries a **deterministic negative "
-        "control** in three legs: a plain mismatch-off deck, plus two "
-        "`sw_stat_mismatch = 0` decks at two different seeds -- all three "
-        "must agree bit-for-bit, and are additionally compared against the "
-        f"committed corner-matrix record `{REFERENCE_RECORD}`."
+        "the observed maximum, not a fitted quantile. "
+        + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "--")
     )
     add("- **Result**:")
     add("")

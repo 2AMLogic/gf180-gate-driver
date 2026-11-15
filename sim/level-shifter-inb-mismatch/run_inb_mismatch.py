@@ -217,23 +217,15 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped_note = campaign.dropped_note(drawn, converged, "--")
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
-        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's "
-        f"own `.lib fets_mm` per-instance mismatch model "
-        f"(`delvto = mis_vth·sw_stat_mismatch`, "
-        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` "
-        f"drawn from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
-        f"1/√(W_eff·L_eff)) -- i.e. **1 σ per-device draws, not a "
-        f"3 σ corner pull**; `nfet_03v3`/`pfet_03v3` (the pre-driver "
-        f"inverter's own thin-oxide devices) carry both threshold *and* β "
-        f"mismatch (`par_k` 0.007008 / 0.002833) per decision record 0017 -- "
-        f"the fuller mismatch model this repo's thick-oxide 5 V/6 V families "
-        f"do not all get. The reported σ below is the sample standard "
-        f"deviation of `inb`'s measured peak over the draws, and the "
-        f"reported worst case is the observed maximum, not a fitted "
-        f"quantile. "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
+        + " `nfet_03v3`/`pfet_03v3` (the pre-driver "
+        "inverter's own thin-oxide devices) carry both threshold *and* β "
+        "mismatch (`par_k` 0.007008 / 0.002833) per decision record 0017 -- "
+        "the fuller mismatch model this repo's thick-oxide 5 V/6 V families "
+        "do not all get. The reported σ below is the sample standard "
+        "deviation of `inb`'s measured peak over the draws, and the "
+        "reported worst case is the observed maximum, not a fitted "
+        "quantile. "
         + campaign.convention_tail(
             BASE_SEED,
             SOURCE_EXPERIMENT,
