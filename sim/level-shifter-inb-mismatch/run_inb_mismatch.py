@@ -94,7 +94,6 @@ BASE_SEED = 20260304
 DEFAULT_SAMPLES = 200
 
 #: Record-table formatters, shared with every other mismatch campaign.
-_fmt = campaign.fmt
 _mv = campaign.mv
 
 #: Un-prefixed `meas tran mq6 ...` line ngspice prints for free (no `print`
@@ -287,7 +286,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         control = outcome.control_value(CLAIM_MEASUREMENT)
         used = f"{len(values)}/{len(outcome.samples)}"
         if not values:
-            add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | no data | | | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -298,8 +297,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         if worst_overall is None or hi > worst_overall[1]:
             worst_overall = (outcome, hi, over_rail)
         add(
-            f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | {_fmt(mean)} | "
-            f"{sigma * 1e3:.4f} | {_fmt(lo)} | {_fmt(hi)} | {_mv(over_rail)} | "
+            f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | {campaign.sigfig(mean)} | "
+            f"{sigma * 1e3:.4f} | {campaign.sigfig(lo)} | {campaign.sigfig(hi)} | {_mv(over_rail)} | "
             f"{_mv(delta)} | {'PASS' if within else '**FAIL**'} |"
         )
     add("")
@@ -332,7 +331,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"{converged} converged local-mismatch draws (of {drawn} run) "
             f"spanning the full process × temperature grid at the "
             f"`vlogic3p63v-vdrv5p50v` tied point, the worst observed `inb` "
-            f"peak is **{_fmt(hi)} V ({_mv(over_rail)} mV over "
+            f"peak is **{campaign.sigfig(hi)} V ({_mv(over_rail)} mV over "
             f"`VDD_LOGIC`)** at `{outcome.corner_id}`, inside "
             f"`spec/gate-driver.md` §5 Exception 1's ratified ≤ 40 mV bound "
             f"with {_mv(EXCEPTION1_BOUND_V - over_rail)} mV of the bound "

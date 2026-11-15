@@ -59,7 +59,7 @@ from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
@@ -400,9 +400,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
             if overall == "PASS":
                 n_pass += 1
             cid = f"{section}_{temp:g}c_nosupply"
-            resp_ns = _fmt(rs * 1e9 if rs is not None else None, 1)
+            resp_ns = fixed(rs * 1e9 if rs is not None else None, 1)
             add(
-                f"| `{cid}` | {_fmt(fv)} | {_fmt(rv)} | {_fmt(hy)} | {resp_ns} "
+                f"| `{cid}` | {fixed(fv)} | {fixed(rv)} | {fixed(hy)} | {resp_ns} "
                 f"| {v_f} | {v_r} | {v_t} | {overall} |"
             )
     add("")
@@ -489,9 +489,9 @@ def main() -> int:
             )
             results[(section, temp)] = {"hysteresis": hyst, "response": resp}
             print(
-                f"  {cid}: falling={_fmt(hyst['falling_v'])} rising={_fmt(hyst['rising_v'])} "
-                f"hyst={_fmt(hyst['hysteresis_v'])} "
-                f"response={_fmt(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
+                f"  {cid}: falling={fixed(hyst['falling_v'])} rising={fixed(hyst['rising_v'])} "
+                f"hyst={fixed(hyst['hysteresis_v'])} "
+                f"response={fixed(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
             )
 
     harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, DUT)
