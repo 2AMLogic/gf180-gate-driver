@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:baf258e6e92a363a7890499ab936e77bb23cf3231d09efaa83489f29898aae33` |
+| `layout/README.md` | `sha256:b3150491d59a1a5e976d28f245a99be4110c2835068a0f378e38ac90f5377f53` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -435,3 +435,32 @@ pins are refreshed for the new inventory bytes. No simulation, netlisting,
 layout flow or generator re-run happened as part of this audit; the same-klt
 generator comparison the refreshed `generator.sha256` pin rests on was run
 into scratch directories outside the tree.
+
+## Re-audit for issue #492 (2026-11-15)
+
+One listed file changed on the issue #492 branch (`feature/issue-492`, on top
+of `origin/main` at `ec0ee77`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the klt
+  install (#190)" section's pinned-install recipe is restated in the
+  throwaway-environment form the ERC section already uses
+  (`uvx --from "git+https://github.com/2AMLogic/klayout-tools@<rev>" klt …`,
+  or a scratch `uv venv` from the same pinned source) instead of a bare
+  `uv tool install --from` into the host's shared tool paths — a
+  host-mutating step agents working on this repo are not permitted to run —
+  and the before-trusting-a-re-run sentence now names both
+  `provenance.deck.content_hash` and `provenance.klt_version`. The
+  section's point (pin the revision; a content-hash mismatch means the deck
+  build moved, not the layout), the klayout-tools#1149/#1154 history and
+  the `sha256:6a323622…` reference triple are unchanged, and line 576's
+  bare-install mention survives only as the drift hazard it always was.
+  `verification/signoff/README.md` (mentioned in prose above, not pinned in
+  the hash table) also gained a sentence directing shared-host grading
+  installs into a throwaway venv or `uvx` — no cascade cost. No findings
+  change.
+
+The other listed files are unchanged, so those findings still hold. The
+envelope, manifest item 10 and tier-report citation pins are refreshed for
+the new inventory bytes. No simulation, netlisting, layout flow or generator
+re-run happened as part of this audit.
