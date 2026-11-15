@@ -61,13 +61,22 @@ class SignoffStore(unittest.TestCase):
         self.assertEqual(cm.exception.code, ss.EXIT_NOT_STORED)
         self.assertFalse(self.mpath.exists())
 
-    def test_never_overwrites_a_manifest(self):
+    def test_manifest_guard_is_shared_not_copied(self):
+        """A dangling symlink at the manifest path is refused *before* any put.
+
+        The plain overwrite case lives once, in
+        ``sim/test_evidence_store.py`` -- this suite used to carry a copy of
+        it, which is exactly how the two guards drifted unnoticed. What is
+        signoff-specific, and asserted here, is that ``store`` reaches the
+        shared guard at all: a hand-written ``mpath.exists()`` would be
+        ``False`` on a dangling symlink and would put every file first.
+        """
         self.mpath.parent.mkdir(parents=True)
-        self.mpath.write_text("{}")
-        with self.assertRaises(ss.StoreError):
+        self.mpath.symlink_to(self.root / "nonexistent")
+        self.assertFalse(self.mpath.exists())  # ...and yet it is a collision
+        with self.assertRaisesRegex(ss.StoreError, "already exists; refusing to overwrite"):
             self.store_run()
-        self.assertEqual(self.mpath.read_text(), "{}")
-        self.assertEqual(self.store, {})
+        self.assertEqual(self.store, {})  # refused before any put
 
     def test_preflight_without_broker_exits(self):
         import os
