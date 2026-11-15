@@ -223,18 +223,10 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped_note = campaign.dropped_note(drawn, converged, "—")
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
-        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's own "
-        f"`.lib fets_mm` per-instance mismatch model "
-        f"(`delvto = mis_vth·sw_stat_mismatch`, "
-        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` drawn "
-        f"from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
-        f"1/√(W_eff·L_eff)) — i.e. **1 σ per-device draws, not a 3 σ corner "
-        f"pull**; the reported σ below is the sample standard deviation of "
-        f"the measured node voltage over the draws, and the reported worst "
-        f"case is the observed maximum, not a fitted quantile. "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "—")
+        + " the reported σ below is the sample standard deviation of "
+        "the measured node voltage over the draws, and the reported worst "
+        "case is the observed maximum, not a fitted quantile. "
         + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "—")
     )
     add("- **Result**:")

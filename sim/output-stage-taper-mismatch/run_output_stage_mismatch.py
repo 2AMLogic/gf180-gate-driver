@@ -216,22 +216,14 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped_note = campaign.dropped_note(drawn, converged, "--")
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
-        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's "
-        f"own `.lib fets_mm` per-instance mismatch model "
-        f"(`delvto = mis_vth·sw_stat_mismatch`, "
-        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` "
-        f"drawn from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
-        f"1/√(W_eff·L_eff)) -- i.e. **1 σ per-device draws, not a "
-        f"3 σ corner pull**; the reported σ below is the sample "
-        f"standard deviation of the measured worst-taper-node voltage over "
-        f"the draws, and the reported worst case is the observed maximum, "
-        f"not a fitted quantile. `nfet_06v0`/`pfet_06v0` -- the only device "
-        f"families in `design/output_stage.sch` (spec §2.5) -- carry "
-        f"threshold mismatch only (`par_k = 0.0000`, no β mismatch), per "
-        f"decision record 0017. "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
+        + " the reported σ below is the sample "
+        "standard deviation of the measured worst-taper-node voltage over "
+        "the draws, and the reported worst case is the observed maximum, "
+        "not a fitted quantile. `nfet_06v0`/`pfet_06v0` -- the only device "
+        "families in `design/output_stage.sch` (spec §2.5) -- carry "
+        "threshold mismatch only (`par_k = 0.0000`, no β mismatch), per "
+        "decision record 0017. "
         + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "--")
     )
     add("- **Result**:")
