@@ -629,7 +629,13 @@ against the committed GDS is *not* the reproducibility test on a drifted
 host; the same-klt comparison is (that is how the #454 generator edit,
 merged as PR #466, was confirmed GDS-neutral, and why
 `provenance.generator.sha256` was refreshed rather than the GDS
-regenerated). T1 item 2's live claim therefore rests on the ratified
+regenerated). Refreshed again for the #467 generator refactor (PR #478,
+2026-11-15, issue #502): regenerated from pre-#478 main (`d46e492`) and
+from main (`89390e0`) under the same host `klt 0.9.3.dev3+gd5d57daf9a14`,
+both into scratch directories — `cmp`: identical, both outputs hash
+`736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` — so
+the refactor is GDS-neutral and the pin moved to the post-#467 generator
+(`940c04d4…`) with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
 in CI's PDK-free signoff job) re-hashes the three recorded pins — `layout`,

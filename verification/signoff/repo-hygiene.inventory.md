@@ -29,8 +29,8 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:76dbafcc4e918a1fb3118f1bf0c2f9864731ba6d0f6fd7bd16a7bd638622f18a` |
+| `sim/harness/README.md` | `sha256:a8038d3738e5899cab8d934312895dac9689a9e87083bda3580b406d32103106` |
+| `layout/README.md` | `sha256:2630c00e777d869d30db7e55c612d11f5cbaf7474053afbda9644b3e63bd9e62` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -485,3 +485,78 @@ the findings above; its hash is refreshed in the table:
 All other listed hashes were re-computed against the merged tree and match
 the tables. No simulation, netlisting or layout flow was run for this
 re-audit.
+## Re-audit for issue #479 (2026-11-15)
+
+One listed file changed on the issue #479 branch (`feature/issue-479`,
+authored on top of `origin/main` at `5f0632d`, since merged forward) and was
+re-read against the findings above; its hash is refreshed in the table:
+
+- `sim/harness/README.md` (**read** the diff): renames one helper in the
+  campaign API bullet list — `fmt` is now `sigfig` — because
+  `sim/harness/campaign.py`'s significant-figures formatter and
+  `sim/harness/script_helpers.py`'s fixed-decimal formatter both exported the
+  name `fmt` (issue #479); the two behaviours are kept, only the names moved.
+  The Quick start, Prerequisites, PVT grid, testbench-authoring, "What a run
+  writes", Monte Carlo and xschem sections are untouched, so every
+  reproduction command this inventory's Reproduction finding relies on is
+  unchanged.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. The renamed helpers are recorded but
+**not** pinned here: `sim/harness/campaign.py`,
+`sim/harness/script_helpers.py` and the seven bench runners that call them
+carry no hash in this inventory. No simulation, netlisting or layout flow was
+run for this re-audit; the rename is a pure name change with byte-identical
+formatter output, verified by the harness test suites and an old-vs-new
+equivalence battery on the PR (210 calls, 0 mismatches).
+
+## Re-audit for issue #502 (2026-11-15)
+
+One listed file changed on the issue #502 branch (`feature/issue-502`, on
+top of `origin/main` at `89390e0`) and was re-read against the findings
+above; its hash is refreshed in the table:
+
+- `layout/README.md` (**read** the diff): the "Generated layout drifts the
+  same way, and #463 made it checked" paragraph gains a dated same-klt
+  comparison record for the #467 generator refactor (merged as PR #478):
+  regeneration from pre-#478 main (`d46e492`) and from main (`89390e0`)
+  under one host `klt 0.9.3.dev3+gd5d57daf9a14` produced byte-identical
+  GDS output (`cmp`: identical, both `736c92bb…`), so the refactor is
+  GDS-neutral and `gate_driver_core.provenance.json`'s `generator.sha256`
+  moved to the post-#467 generator with the committed GDS untouched
+  (issue #502). The DRC/LVS status sections and the reproduction
+  instructions the audit findings rest on are untouched.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. As with the #463 re-audit, the
+envelope, manifest item 10 and tier-report citation pins are refreshed for
+the new inventory bytes. No simulation, netlisting, layout flow or
+generator re-run happened as part of this audit; the same-klt generator
+comparison summarized above was run into scratch directories outside the
+tree and is recorded in `layout/README.md` and the issue #502 commit.
+
+## Re-audit for the PR #498 second merge (2026-11-15)
+
+`origin/main` moved again after the first PR #498 conflict-resolution merge
+above, and this second merge brings the issue #479 and issue #502 re-audit
+sections (and their hash-table refreshes) into this inventory from main.
+The merged tree was re-checked against the findings above:
+
+- `sim/harness/README.md`: main's issue #479 `fmt` -> `sigfig` rename is
+  the version this merge brings in; the branch never touched that file, so
+  the table row is main's refreshed hash, re-computed against the merged
+  tree and matching.
+- `layout/README.md` (**read** both diffs): main's issue #502 same-klt
+  comparison paragraph and this branch's "Reproducibility" `--klt <path>`
+  paragraph are different sections of the file, so the merge carries each
+  side's change in full; the table row is re-computed against the combined
+  file and refreshed.
+- `.github/workflows/ci.yml` did not change on the main side of this
+  second merge — the merged file is exactly this branch's version, and the
+  #486 re-audit above describes it unchanged.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
