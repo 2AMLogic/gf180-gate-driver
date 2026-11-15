@@ -122,7 +122,6 @@ BASELINE_LOG_NOTE = (
 )
 
 #: Record-table formatters, shared with every other mismatch campaign.
-_fmt = campaign.fmt
 _mv = campaign.mv
 
 
@@ -223,18 +222,10 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     converged = sum(len(o.ok) for o in outcomes)
     dropped_note = campaign.dropped_note(drawn, converged, "—")
     add(
-        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
-        f"(intra-die), N = {n_samples} independent draws per PVT point, "
-        f"{len(outcomes)} PVT point(s), {drawn} mismatch "
-        f"samples total.{dropped_note} Distribution source: the gf180mcu PDK's own "
-        f"`.lib fets_mm` per-instance mismatch model "
-        f"(`delvto = mis_vth·sw_stat_mismatch`, "
-        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` drawn "
-        f"from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
-        f"1/√(W_eff·L_eff)) — i.e. **1 σ per-device draws, not a 3 σ corner "
-        f"pull**; the reported σ below is the sample standard deviation of "
-        f"the measured node voltage over the draws, and the reported worst "
-        f"case is the observed maximum, not a fitted quantile. "
+        campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "—")
+        + " the reported σ below is the sample standard deviation of "
+        "the measured node voltage over the draws, and the reported worst "
+        "case is the observed maximum, not a fitted quantile. "
         + campaign.convention_tail(BASE_SEED, SOURCE_EXPERIMENT, REFERENCE_RECORD, "—")
     )
     add("- **Result**:")
@@ -320,7 +311,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         control = outcome.control_value(CLAIM_MEASUREMENT)
         used = f"{len(values)}/{len(outcome.samples)}"
         if not values:
-            add(f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | no data | | | | | | |")
+            add(f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | no data | | | | | | |")
             continue
         mean = statistics.fmean(values)
         sigma = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -331,8 +322,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         if worst_overall is None or hi > worst_overall[1]:
             worst_overall = (outcome, hi, margin)
         add(
-            f"  | `{outcome.corner_id}` | {used} | {_fmt(control)} | {_fmt(mean)} | "
-            f"{sigma * 1e3:.4f} | {_fmt(lo)} | {_fmt(hi)} | {_mv(margin)} | "
+            f"  | `{outcome.corner_id}` | {used} | {campaign.sigfig(control)} | {campaign.sigfig(mean)} | "
+            f"{sigma * 1e3:.4f} | {campaign.sigfig(lo)} | {campaign.sigfig(hi)} | {_mv(margin)} | "
             f"{_mv(delta)} | {'PASS' if within else '**FAIL**'} |"
         )
     add("")
@@ -378,7 +369,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         outcomes, TAPER_MEASUREMENTS, GATE_CEILING_V
     ):
         add(
-            f"  | `x2.{name.split('_')[0]}` | {_fmt(ctrl_worst)} | {_fmt(mc_worst)} | "
+            f"  | `x2.{name.split('_')[0]}` | {campaign.sigfig(ctrl_worst)} | {campaign.sigfig(mc_worst)} | "
             f"{_mv(delta)} | {_mv(margin)} | "
             f"{'PASS' if margin >= -EXCEPTION2_BOUND_V else '**FAIL**'} |"
         )
@@ -397,7 +388,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"{converged} converged local-mismatch draws (of {drawn} run) "
             f"spanning the full "
             f"process × temperature grid at the 6 V stretch rail, the worst "
-            f"observed `IN_DRV` peak is **{_fmt(hi)} V "
+            f"observed `IN_DRV` peak is **{campaign.sigfig(hi)} V "
             f"(margin {_mv(margin)} mV)** at `{outcome.corner_id}`, inside "
             f"`spec/gate-driver.md` §5 Exception 3's ratified ≤ 10 mV bound "
             f"(margin ≥ −10.000 mV) with "
@@ -454,7 +445,7 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"  - **Worst draw vs. its own control**: the largest single-sample "
         f"excursion above the mismatch-off deck at the same PVT point is "
         f"{excursion}; the mismatch-off deck's own worst point is "
-        f"{_fmt(stats['worst_control'])} V."
+        f"{campaign.sigfig(stats['worst_control'])} V."
     )
     add(
         f"  - **Worst draw vs. the ratified bound**: "

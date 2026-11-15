@@ -308,19 +308,19 @@ class PointSigmaSummaryTests(unittest.TestCase):
 
 
 class FormatterTests(unittest.TestCase):
-    """`fmt`/`mv` set the literal text of every recorded record table."""
+    """`sigfig`/`mv` set the literal text of every recorded record table."""
 
-    def test_fmt_is_six_significant_figures_by_default(self):
-        self.assertEqual(campaign.fmt(6.002661234), "6.00266")
+    def test_sigfig_is_six_significant_figures_by_default(self):
+        self.assertEqual(campaign.sigfig(6.002661234), "6.00266")
 
-    def test_fmt_honors_a_wider_digit_count(self):
-        self.assertEqual(campaign.fmt(6.002661234, 10), "6.002661234")
+    def test_sigfig_honors_a_wider_digit_count(self):
+        self.assertEqual(campaign.sigfig(6.002661234, 10), "6.002661234")
 
-    def test_fmt_switches_to_exponent_form_for_small_magnitudes(self):
-        self.assertEqual(campaign.fmt(1.2345e-06), "1.234500e-06")
+    def test_sigfig_switches_to_exponent_form_for_small_magnitudes(self):
+        self.assertEqual(campaign.sigfig(1.2345e-06), "1.234500e-06")
 
-    def test_fmt_reports_a_missing_value_as_na(self):
-        self.assertEqual(campaign.fmt(None), "n/a")
+    def test_sigfig_reports_a_missing_value_as_na(self):
+        self.assertEqual(campaign.sigfig(None), "n/a")
 
     def test_mv_is_a_signed_millivolt_string_to_three_decimals(self):
         self.assertEqual(campaign.mv(0.0355), "+35.500")
