@@ -106,10 +106,10 @@ Dedicated runners take the PDK from the environment
 (`PDK_ROOT=... PDK=gf180mcuD`, or `source sim/env.sh`) per their own module
 docstrings. No runner in this table was executed in this audit.
 
-`sim/README.md`'s "Facets in this repo" table lists eleven facets and omits
-`gate-driver-core-drive-with-uvlo`, `uvlo-trip-verification`,
-`level-shifter-inb-mismatch` and `output-stage-taper-mismatch`, which exist on
-disk and are listed above.
+`sim/README.md`'s "Facets in this repo" table lists all sixteen experiment
+directories under `sim/` (as of 2026-11-14), including `uvlo-reference-study`,
+which is a `klt sim` schematic study with no testbench manifest and is
+therefore not rowed in the tables above.
 
 The harness entry point `sim/run_corners.py` (sha256
 `sha256:9f9b8199b5b20e974c715cbab0f4736394017809ba58604bf35ae683e41f5140`).
