@@ -374,11 +374,9 @@ def run(args: argparse.Namespace) -> int:
                 record_path=record_path,
             )
         except evidence_store.StoreError as exc:
-            print(
-                f"EVIDENCE NOT STORED -- nothing committed (fail closed): {exc}\n"
-                f"staged bytes kept in {stage}",
-                file=sys.stderr,
-            )
+            # Same epilogue as ``commit_run_or_exit``; this ``main()`` returns a
+            # status rather than raising ``SystemExit``, so it prints and returns.
+            print(evidence_store.not_stored_message(exc, stage), file=sys.stderr)
             return evidence_store.EXIT_NOT_STORED
         print()
         print(f"record    : {record_path}")
