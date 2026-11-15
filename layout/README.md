@@ -869,15 +869,14 @@ python3 layout/erc/run_erc.py layout/gate_driver_core.gds
 ```
 
 The committed report was produced by
-`klt 0.5.0+gb15edf5e3a2e.dirty` (klayout-tools at git rev `b15edf5e`, the
-recorded revision where `--deck` device-marker auto-detection ships;
-reproduce the build with `uv tool install --from
-"git+https://github.com/2AMLogic/klayout-tools@b15edf5e"` or a scratch
-`uv venv`, and/or pass `--klt <path>` to the runner). The PATH-installed
-pin (`0.5.0+g2b1e55e51bb8.dirty` at the time of this report) predates
-`--deck` — before trusting a re-run, diff the report's
+`klt 0.9.2.dev1029+g76f47afa48f1` (klayout-tools at git rev
+`76f47afa48f1`; reproduce that build with `uvx --from
+"git+https://github.com/2AMLogic/klayout-tools@76f47afa48f1" klt …` or a
+scratch `uv venv` from the same source, and/or pass `--klt <path>` to the
+runner). Before trusting a re-run, diff the report's
 `provenance.deck.content_hash` and `provenance.klt_version` against what
-is actually installed, per the pinning section above.
+is actually installed, per the pinning section above — a PATH-installed
+`klt` is not necessarily the build named here.
 
 [#2183]: https://github.com/2AMLogic/klayout-tools/issues/2183
 [#2205]: https://github.com/2AMLogic/klayout-tools/pull/2205

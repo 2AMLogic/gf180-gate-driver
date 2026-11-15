@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:c7364e64721184a28c4857aaa684c432d810845491c095c93731ec5d9ea91242` |
 | `sim/harness/README.md` | `sha256:620e74b19d0bee9a5895dcb86fd48c923d913ae1d80a1d5705add7943a225edb` |
-| `layout/README.md` | `sha256:804c874da776619d5ef65182fba6d99e543ba1ad230da39c5da59518348fde2d` |
+| `layout/README.md` | `sha256:e3e9eee80e52a0eefdb667f7d452da6cea44e8853d3b0dc6f1706d16e675205a` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -350,9 +350,16 @@ hash is refreshed in the table:
   `15fa5b64…`, and a "Tool-drift history of this verdict" paragraph is added
   stating what klt ≥ 0.9 made of the pre-#470 committed ERC envelope and how
   the `substrate_gnd_logic` `well_boxes` correction (#470) restores the
-  `erc_status: clean` verdict under the current build. Every reproduction
-  command in the section is unchanged, so the Reproduction finding still
-  holds; the "Post-layout simulation" status row this audit already disclosed
+  `erc_status: clean` verdict under the current build. A review-feedback fix
+  on this branch (PR #488) also corrects that section's report-producer
+  paragraph: it now names the repinned envelope's actual producing build
+  (`klt 0.9.2.dev1029+g76f47afa48f1`, git rev `76f47afa48f1`) instead of the
+  superseded `0.5.0`/`b15edf5e` one, gives the reproduction command in the
+  `uvx --from`/scratch-venv form, and drops the stale "PATH-installed pin
+  predates `--deck`" sentence — so the section's reproduction command *did*
+  change; the Reproduction finding itself (the root README's
+  validate-vs-generate command structure) is untouched and still holds. The
+  "Post-layout simulation" status row this audit already disclosed
   as stale is untouched (issue #458 owns it).
 
 The other listed files are unchanged; in particular `README.md`, `LICENSE`,
