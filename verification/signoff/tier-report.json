@@ -75,7 +75,7 @@
           },
           "content_hash": "sha256:15fa5b64581549a8c46e60f0f7b444bbb0af77a5e98365ee5c655ca3730bf4aa",
           "input_verified": true,
-          "summary": "T1 item 2 (layout): layout/gate_driver_core.gds, the same bytes the item 3, 4 and 11 citations pin. Live basis is documented provenance (layout/gate_driver_core.provenance.json: layout, source netlist and generator sha256 values all match the live tree; generator.sha256 refreshed to the post-#466 generator, whose edit is GDS-neutral by the same-klt comparison recorded in issue #463) -- re-checked mechanically since #463 by layout/check_layout_provenance.py in CI's signoff job. Historical observation (as of issue #362, 2026-10-24): re-running layout/gen_gate_driver_core.py with klt 0.7.1.dev2599+geaf26f00df36 into a scratch directory reproduced the committed bytes exactly (cmp: identical); the earlier GDS recorded klt 0.3.0+gc27f7eccf49c on a dirty tree and did not reproduce under later klt builds. Byte-equality is not expected to reproduce under klt >= 0.9.2, which renames generated sub-cells (issue #463); the ratified criterion is an or, and the live claim rests on its documented-provenance arm. The grader hashes the GDS only.",
+          "summary": "T1 item 2 (layout): layout/gate_driver_core.gds, the same bytes the item 3, 4 and 11 citations pin. Live basis is documented provenance (layout/gate_driver_core.provenance.json: layout, source netlist and generator sha256 values all match the live tree; generator.sha256 refreshed to the post-#467 generator (PR #478), whose edit is GDS-neutral by the same-klt comparison recorded in issue #502) -- re-checked mechanically since #463 by layout/check_layout_provenance.py in CI's signoff job. Historical observation (as of issue #362, 2026-10-24): re-running layout/gen_gate_driver_core.py with klt 0.7.1.dev2599+geaf26f00df36 into a scratch directory reproduced the committed bytes exactly (cmp: identical); the earlier GDS recorded klt 0.3.0+gc27f7eccf49c on a dirty tree and did not reproduce under later klt builds. Byte-equality is not expected to reproduce under klt >= 0.9.2, which renames generated sub-cells (issue #463); the ratified criterion is an or, and the live claim rests on its documented-provenance arm. The grader hashes the GDS only.",
           "source": "layout/gate_driver_core.gds"
         }
       }
@@ -591,7 +591,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:26b6c571b5808488d600b62564ba8861a23206b7ad78a4c34fd177920f3c4f8e",
+        "content_hash": "sha256:6430c34e90ec193ae7fdcff7986ed649873e970108b004464d8897c4f856c6c9",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -600,7 +600,7 @@
             "path": "verification/signoff/testbenches.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:26b6c571b5808488d600b62564ba8861a23206b7ad78a4c34fd177920f3c4f8e",
+          "content_hash": "sha256:6430c34e90ec193ae7fdcff7986ed649873e970108b004464d8897c4f856c6c9",
           "input_verified": true,
           "summary": "T1 item 9 (testbenches shipped): inventory of every sim/ experiment with its testbench manifest and cold-start invocation, scoped as stated in the inventory; PDK variant pinned in sim/pdk.json, PDK revision recorded per record (open_pdks c6d73a35) not machine-pinned. One invocation was executed (primary post-layout testbench, tt/27C, 4 of 4 points PASS, --no-write); the rest were checked by file existence and harness --list only. The cited post-layout records state they were taken on a dirty tree. The grader hashes the inventory only and runs nothing.",
           "source": "verification/signoff/testbenches.inventory.md"
@@ -622,7 +622,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:dc19132850304d08364c663de5447144bbb3a9c968541c39ef373eddf8ad3904",
+        "content_hash": "sha256:00a627c80727a304cdbce7167448bf2c3c756a07b81e216ad97963d1bb43eece",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -631,7 +631,7 @@
             "path": "verification/signoff/repo-hygiene.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:dc19132850304d08364c663de5447144bbb3a9c968541c39ef373eddf8ad3904",
+          "content_hash": "sha256:00a627c80727a304cdbce7167448bf2c3c756a07b81e216ad97963d1bb43eece",
           "input_verified": true,
           "summary": "T1 item 10 (repo hygiene): audited inventory binding README.md (what the block is, spec section 3 target/stretch table, reproduction instructions), LICENSE (Apache-2.0), spec/gate-driver.md and .github/workflows/ci.yml by sha256. The audit read these files and executed only lightweight checks (run_corners.py --check-env/--list, check_records.py, README link existence); no simulation, netlisting or layout flow was re-run and CI was read, not observed. The grader hashes the inventory only; it does not read the README or run CI.",
           "source": "verification/signoff/repo-hygiene.inventory.md"
