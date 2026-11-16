@@ -71,14 +71,19 @@ SOURCE_EXPERIMENT = "level-shifter-oxide-safety"
 REFERENCE_RECORD = "20260818-071216-5260603"
 
 #: The node under claim (aliased to the already-computed `mq6`, see the
-#: module docstring) and the rail its excursion is measured above.
+#: module docstring) and the rail its excursion is measured above. The rail
+#: is a ratified spec value with one home (`harness/script_helpers.py`),
+#: shared with the other campaigns that measure against it; its provenance is
+#: recorded there.
 CLAIM_MEASUREMENT = "vinb_max_v"
 INB_ALIAS_EXPR = "mq6"
-VDD_LOGIC_V = 3.63  # the vlogic3p63v corner this exception is scoped to
+VDD_LOGIC_V = script_helpers.VDD_LOGIC_V
 
 #: `spec/gate-driver.md` §5 Exception 1's ratified bound: <= 40 mV above
-#: VDD_LOGIC (decision record 0015). Reported against, never adjusted here.
-EXCEPTION1_BOUND_V = 0.040
+#: VDD_LOGIC (decision record 0015). A ratified spec value with one home
+#: (`harness/script_helpers.py`), shared with the campaigns that measure
+#: against it; its provenance is recorded there.
+EXCEPTION1_BOUND_V = script_helpers.EXCEPTION1_BOUND_V
 
 #: Exception 1 exists only at the vlogic3p63v (+10%) corner, tied to
 #: vdrv5p50v (this testbench's two-rail sweep-together convention -- see

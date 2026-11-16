@@ -78,9 +78,10 @@ CLAIM_MEASUREMENT = "indrv_max_v"
 GATE_CEILING_V = script_helpers.GATE_CEILING_V
 
 #: `spec/gate-driver.md` §5 Exception 3's ratified bound: <= 10 mV above the
-#: ceiling. Reported against, never adjusted here -- a bound change would
-#: need its own decision record (CLAUDE.md).
-EXCEPTION3_BOUND_V = 0.010
+#: ceiling. A ratified spec value with one home (`harness/script_helpers.py`),
+#: shared with the other campaigns that measure against it; its provenance is
+#: recorded there.
+EXCEPTION3_BOUND_V = script_helpers.EXCEPTION3_BOUND_V
 
 #: The binding corner: the worst-margin point of the grid, and the single
 #: point a `--smoke` run visits. Named verbatim in the ngspice-version
