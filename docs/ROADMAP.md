@@ -5,7 +5,7 @@ rail, 6 V stretch) on the gf180mcu open PDK, and the first block in its family
 to exercise the medium-voltage devices with klayout-tools (`klt`), xschem and
 ngspice.
 
-Status as of 2026-11-13, `main` @ `4013fd1`.
+Status as of 2026-11-16, `main` @ `3a4ee5a`.
 
 Live label state is in [`WORK_PLAN.md`](../WORK_PLAN.md). The verdict of record is
 [`verification/signoff/tier-report.json`](../verification/signoff/tier-report.json), which wins over this file.
@@ -48,37 +48,20 @@ Since tracker #370 was filed, item 6 moved to `met` and items 5 and 7 from `no_e
 
 Can start today; each is one PR.
 
-1. **Ron·W mismatch runner writes an ERROR record when no draw converges**
-   (#446). Done when the `error` fixture scenario renders a complete record and
-   its golden is committed, as the three sibling runners already do.
-2. **indrv mismatch runner discloses partial reference coverage** (#447). Done
-   when a partial cross-check (`0 < compared < total`) no longer emits the
-   ngspice-version Finding without stating its coverage, with a fixture test.
-3. **Regenerate the extracted netlists from the current GDS and re-run the
-   oxide-safety post-layout facet.** `layout/lvs/gate_driver_core.extracted.spice`
+1. **Regenerate the extracted netlists from the current GDS and re-run the
+   oxide-safety post-layout facet** (#456). `layout/lvs/gate_driver_core.extracted.spice`
    and `.extracted-rc.spice` were last committed on 2026-08-26; the GDS changed
    on 2026-10-24 (#362). The `klt pex` report covers the drive suite on the
    current GDS, but `sim/level-shifter-oxide-safety-postlayout/` has no record
    on it. Done when both netlists are regenerated with
    `layout/lvs/run_pex_extract.py` and a new append-only record exists for
-   that facet (no-RC and RC). No issue yet.
-4. **Second UVLO reference study: a reference that does not track `Vgs`.**
-   Decision record 0023's stated follow-up. Schematic-only candidate under
-   `sim/uvlo-reference-study/`, same ramp, bounds and 15 corners as decision
-   record 0018. Done when the envelope and a per-corner table are committed and
-   the README states pass count, trip spread, worst-case rising trip against
-   the 4.50 V floor, and supply current. No change to `design/`. No issue yet.
-5. **Complete the reproduction index.** `sim/README.md`'s facet table omits
-   four on-disk experiments, and `layout/README.md`'s "Post-layout simulation"
-   status row is stale; both are disclosed as known gaps in the root README.
-   Done when both are corrected, the root README's disclosure is removed, and
-   the item-10 inventory, envelope, manifest and tier report are refreshed so
-   `npm run signoff:check` passes. No issue yet.
+   that facet (no-RC and RC).
 
 ## Next
 
-- **Attribute the one layout-induced item-7 failure.** After Now 3: run
-  stretch ss / 27 C on the schematic, the no-RC extraction and the RC
+- **Attribute the one layout-induced item-7 failure.** After the extracted
+  netlists are regenerated from the current GDS (#456): run stretch ss /
+  27 C on the schematic, the no-RC extraction and the RC
   extraction, and split the 1.71 % sink-current loss between wiring RC and
   the schematic's ideal bias resistors against the layout's 271 `ppolyf_u`
   units (item 7 note (b), "not checked"). Done when a committed note names the
@@ -87,10 +70,14 @@ Can start today; each is one PR.
   filed as klayout-tools#4630, now closed. Done when a `klt pex` run with a
   build containing that fix is committed as a new append-only report and the
   item-7 note records whether the reference side is populated.
-- **UVLO redesign.** After Now 4 produces a candidate that holds the trip band
-  over 15 corners: a decision record proposing the topology change, then
-  schematic, layout, DRC/LVS and post-layout re-verification. This is the only
-  route that closes decision record 0018 Finding 2 rather than bounding it.
+- **UVLO redesign.** The second reference study delivered a candidate that
+  holds the trip band over 15 corners (committed 2026-11-14,
+  `sim/uvlo-reference-study/`, envelope
+  `envelopes/20261114-38154c7-klt-sim-uvlo-bandgap-ref-trip.json`: 15 of 15
+  corners pass, 91 mV falling-trip spread, worst-case rising trip 3.988 V
+  clearing the 4.50 V floor): a decision record proposing the topology change,
+  then schematic, layout, DRC/LVS and post-layout re-verification. This is the
+  only route that closes decision record 0018 Finding 2 rather than bounding it.
 
 ## Later
 
