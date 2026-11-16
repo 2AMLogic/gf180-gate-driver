@@ -421,15 +421,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     )
     drawn = sum(len(o.samples) for o in outcomes)
     converged = sum(len(o.ok) for o in outcomes)
-    dropped = drawn - converged
-    dropped_note = (
-        f" **{dropped} of {drawn} draws did not converge and "
-        f"{'is' if dropped == 1 else 'are'} excluded from every statistic "
-        f"below** -- enumerated in \"Non-converged draws\", leaving "
-        f"{converged} in the distribution."
-        if dropped
-        else f" All {drawn} draws converged; none is excluded."
-    )
+    dropped_note = campaign.dropped_note(drawn, converged, "--")
     add(
         campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
         + " reported σ is the "
