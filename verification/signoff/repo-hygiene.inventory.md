@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:79664293ea6c9736ee1687e0673c51de72d870400fbbaec6d899135e1a987247` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:76ff9bdb558064294eec4adc0c658737de70c448c67d91f13749a624d4f4bc5b` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -560,6 +560,60 @@ The merged tree was re-checked against the findings above:
 - `.github/workflows/ci.yml`, `README.md`, `sim/README.md` did not change
   on the main side of this second merge beyond what the existing rows
   already name; re-computed against the merged tree and matching.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #472 / the PR #473 merge (2026-11-15)
+
+Two listed files changed — one by the issue #472 branch, one via the merge
+of `origin/main` into it (merge base `0f25e3c9`) — and were re-read against
+the findings above; their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the issue #472 branch adds
+  a `klt report-runner unit tests` step to `test`
+  (`python3 layout/common/test_klt_report.py`) and the matching row in the
+  header table — the shared `klt` runner every layout/ signoff script goes
+  through now has both legs checked against the caller's `ok_codes`, with one
+  copy of the failure block (issue #472). The merge carries main's side in
+  full: the signoff job's "Layout provenance freshness" step (the issue #463
+  re-audit above). The job's charter is extended with one more PDK-free
+  unit-test step of the same class as the existing ones; the CI finding above
+  (what the workflow checks) still holds and now covers one more PDK-free
+  test. CI was read, not observed to pass here.
+- `layout/README.md` (**read** the diff, via the merge): the issue #502
+  re-audit section above records the same-klt generator comparison paragraph
+  this merge brings in; the merged file's hash matches that section's table
+  row, and this branch made no edit of its own to the file.
+
+The other listed files are unchanged by the branch; the merge's updates to
+`README.md`, `sim/README.md` and `sim/harness/README.md` (the issue #479
+`fmt` -> `sigfig` rename) are the versions the existing table rows already
+name, re-computed against the merged tree and matching. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 third merge (2026-11-16)
+
+`origin/main` moved again after the second PR #462 conflict-resolution merge
+above (#473: the issue #472 `klt` report-runner refactor and its re-audit
+section), and this third merge brings that section and the ci.yml change
+into this inventory from main. The merged tree was re-checked against the
+findings above:
+
+- `.github/workflows/ci.yml` (**read** the diff): the merge brings main's
+  issue #472 side in full — the `klt report-runner unit tests` step and its
+  header-table row; this branch has never touched the file, so the merged
+  file is main's version and the table row is re-computed against it and
+  refreshed.
+- `sim/harness/README.md`: main did not change the file on its side of this
+  merge; the merged file is still this branch's combined version (the #450
+  device-runner-driver section plus main's issue #479 `fmt` -> `sigfig`
+  rename) named by the second-merge section above; the row is re-computed
+  and matching.
+- `layout/README.md`, `README.md`, `sim/README.md` and the other listed
+  files are byte-identical in both parents of this merge; rows re-computed
+  and matching.
 
 All nine listed hashes were re-computed against the final merged tree and
 match the tables. The other findings are unchanged. No simulation,
