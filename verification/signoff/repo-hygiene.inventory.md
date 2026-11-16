@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
 | `sim/harness/README.md` | `sha256:f67f77a04c079729159987015e504ea58e39765c6e8caed8f9a8cc233f02f9cd` |
-| `layout/README.md` | `sha256:a846712d2f1c1ae8df870da604b90d1bd5d11a17322299c1f8d2277c05ddbae3` |
+| `layout/README.md` | `sha256:90f43ce4e38a4f5df5ce9c6868cec1a22d9d7245fb3e9b1c3eaaf512570ab69e` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -588,6 +588,40 @@ generator re-run happened as part of this audit; the same-klt generator
 comparison summarized above was run into scratch directories outside the
 tree and is recorded in `layout/README.md` and the issue #502 commit.
 
+## Re-audit for issue #492 (2026-11-15)
+
+One listed file changed on the issue #492 branch (`feature/issue-492`,
+authored on top of `origin/main` at `ec0ee77`) and was re-read against the
+findings above. Its hash is refreshed in the table for the **merged** bytes:
+this re-audit was re-derived while resolving the branch's merge with a main
+that had since taken #479 and #502, so the pinned `layout/README.md` is the
+merge of this branch's change with #502's same-klt comparison paragraph
+(recorded in the #502 re-audit above):
+
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the klt
+  install (#190)" section's pinned-install recipe is restated in the
+  throwaway-environment form the ERC section already uses
+  (`uvx --from "git+https://github.com/2AMLogic/klayout-tools@<rev>" klt …`,
+  or a scratch `uv venv` from the same pinned source) instead of a bare
+  `uv tool install --from` into the host's shared tool paths — a
+  host-mutating step agents working on this repo are not permitted to run —
+  and the before-trusting-a-re-run sentence now names both
+  `provenance.deck.content_hash` and `provenance.klt_version`. The
+  section's point (pin the revision; a content-hash mismatch means the deck
+  build moved, not the layout), the klayout-tools#1149/#1154 history and
+  the `sha256:6a323622…` reference triple are unchanged, and line 576's
+  bare-install mention survives only as the drift hazard it always was.
+  `verification/signoff/README.md` (mentioned in prose above, not pinned in
+  the hash table) also gained a sentence directing shared-host grading
+  installs into a throwaway venv or `uvx` — no cascade cost. No findings
+  change.
+
+The other listed files are unchanged relative to the merged tree
+(`sim/harness/README.md` carries #479's recorded rename and nothing from this
+branch), so those findings still hold. The envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes. No
+simulation, netlisting, layout flow or generator re-run happened as part of
+this audit.
 ## Re-audit for the PR #489 second merge (2026-11-15)
 
 `origin/main` moved again after the first PR #489 conflict-resolution merge
@@ -650,7 +684,10 @@ the findings above; their hashes are refreshed in the tables:
 - `layout/README.md` (**read** the diff, via the merge): the issue #502
   re-audit section above records the same-klt generator comparison paragraph
   this merge brings in; the merged file's hash matches that section's table
-  row, and this branch made no edit of its own to the file.
+  row, and this branch made no edit of its own to the file (as of this
+  merge — the issue #492 branch's own restate of the pinning recipe edits
+  the same file, recorded and pinned in the issue #492 re-audit above and
+  the second merge section below).
 
 The other listed files are unchanged by the branch; the merge's updates to
 `README.md`, `sim/README.md` and `sim/harness/README.md` (the issue #479
@@ -709,6 +746,38 @@ match the tables, including the refreshed `ci.yml` row. The other findings
 are unchanged. No simulation, netlisting or layout flow was run for this
 re-audit.
 
+## Re-audit for the issue #492 second merge (2026-11-16)
+
+`origin/main` moved again after the issue #492 re-audit above resolved this
+branch's first conflict-resolution merge — PR #473 (issue #472) landed on
+main carrying the `klt report-runner unit tests` step, and the PR #489
+record gained its third-merge section — so the four signoff cascade files
+(`repo-hygiene.inventory.md`, `repo-hygiene.generic.json`, `manifest.json`,
+`tier-report.json`) conflicted again. The merged tree was re-checked against
+the findings above:
+
+- `.github/workflows/ci.yml` changed on the main side only (this branch has
+  never edited it): the merged file is byte-identical to `origin/main`'s and
+  carries each side's history in full — the #456 report re-point and #472's
+  test step — so its table row already names the merged bytes; re-computed
+  against the final merged tree, it matches.
+- `layout/README.md` did not change on the main side of this merge: the
+  merged bytes are exactly the ones the issue #492 re-audit above pinned
+  (this branch's recipe restate merged with #502's same-klt paragraph), and
+  its row re-computed against the final merged tree matches. The issue #472
+  re-audit's "no edit of its own" claim above is scoped to that merge's
+  pre-#492 state.
+- `repo-hygiene.inventory.md` itself: both sides appended dated re-audit
+  sections and both are kept (this branch's issue #492 section and main's
+  second/third merge and issue #472 sections, all above); this section is
+  the only new prose on the branch side.
+
+The other listed files are unchanged by both sides of this merge; all nine
+listed hashes were re-computed against the final merged tree and match the
+tables. The other findings are unchanged. The envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes. No
+simulation, netlisting or layout flow was run for this re-audit.
+
 ## Re-audit for the PR #462 fourth merge (2026-11-16)
 
 `origin/main` moved again after the third PR #462 conflict-resolution merge
@@ -733,6 +802,39 @@ main. The merged tree was re-checked against the findings above:
   changes touch `WORK_LOG.md`, `sim/harness/script_helpers.py`,
   `sim/mc_to_yield.py` and their tests, and the LVS report set — none of
   them is listed in this inventory.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 fifth merge (2026-11-16)
+
+`origin/main` moved again after the fourth PR #462 conflict-resolution merge
+above — PR #503 (the issue #492 branch) landed on main carrying the issue
+#492 re-audit section and the issue #492 second-merge section above, with
+the throwaway-environment install recipe — and this fifth merge brings
+those sections and the change into this inventory from main. The merged
+tree was re-checked against the findings above:
+
+- `layout/README.md` (**read** the diff): the merge brings main's issue
+  #492 side in full — the "Reproducibility: pin the klt install (#190)"
+  section now restates the pinned-install recipe in the throwaway
+  `uvx --from` / scratch `uv venv` form instead of a bare
+  `uv tool install` into the host's shared tool paths, and the
+  before-trusting-a-re-run sentence names both
+  `provenance.deck.content_hash` and `provenance.klt_version`. This branch
+  has never touched the file, so the merged file is main's version and the
+  table row is re-computed against it and refreshed.
+- `sim/harness/README.md`: main did not change the file on its side of this
+  merge; the merged file is still this branch's combined version (the #450
+  device-runner-driver section plus main's issue #479 `fmt` -> `sigfig`
+  rename) named by the second-merge section above; the row stays this
+  branch's hash and matches the live file (main's pre-merge row named
+  main's driver-less bytes and does not apply to the merged tree).
+- `README.md`, `LICENSE`, `spec/gate-driver.md`, `.github/workflows/ci.yml`,
+  `design/README.md`, `sim/README.md` and
+  `design/gate-driver-characterization.md` are byte-identical in both
+  parents of this merge; rows re-computed and matching.
 
 All nine listed hashes were re-computed against the final merged tree and
 match the tables. The other findings are unchanged. No simulation,
