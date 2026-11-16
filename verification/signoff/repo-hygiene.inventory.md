@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:923bee26b5f658a81bde15bd37ed1afcbd67f14f18d6a95bd83780fd63098063` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7256f033dd29160fe3863f0c2a3e1a12eeec8baa56a9c8fb0ef00533739cfba9` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -551,3 +551,56 @@ The merged tree was re-checked against the findings above:
 All nine listed hashes were re-computed against the final merged tree and
 match the tables. The other findings are unchanged. No simulation,
 netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #472 / the PR #473 merge (2026-11-15)
+
+Two listed files changed — one by the issue #472 branch, one via the merge
+of `origin/main` into it (merge base `0f25e3c9`) — and were re-read against
+the findings above; their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the issue #472 branch adds
+  a `klt report-runner unit tests` step to `test`
+  (`python3 layout/common/test_klt_report.py`) and the matching row in the
+  header table — the shared `klt` runner every layout/ signoff script goes
+  through now has both legs checked against the caller's `ok_codes`, with one
+  copy of the failure block (issue #472). The merge carries main's side in
+  full: the signoff job's "Layout provenance freshness" step (the issue #463
+  re-audit above). The job's charter is extended with one more PDK-free
+  unit-test step of the same class as the existing ones; the CI finding above
+  (what the workflow checks) still holds and now covers one more PDK-free
+  test. CI was read, not observed to pass here.
+- `layout/README.md` (**read** the diff, via the merge): the issue #502
+  re-audit section above records the same-klt generator comparison paragraph
+  this merge brings in; the merged file's hash matches that section's table
+  row, and this branch made no edit of its own to the file.
+
+The other listed files are unchanged by the branch; the merge's updates to
+`README.md`, `sim/README.md` and `sim/harness/README.md` (the issue #479
+`fmt` -> `sigfig` rename) are the versions the existing table rows already
+name, re-computed against the merged tree and matching. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #489 third merge (2026-11-16)
+
+`origin/main` moved again after the PR #489 second merge above — PR #473
+(issue #472) landed on main carrying the `klt report-runner unit tests`
+step — so the second-merge section's statement that `ci.yml` did not change
+on the main side held for that merge but does not hold for this one, and
+the merged `.github/workflows/ci.yml` was re-read (**read** both diffs
+against the merge base `5c051fd`): it now carries each side's change in
+full — the "Extracted post-layout DUT netlists are in sync with their
+reports" step's two `mk_extracted_dut.py --check` invocations re-pointed at
+the 20261114 reports (the #456 re-audit above) on the branch side, and the
+`klt report-runner unit tests` step plus its header-table row
+(`layout/common/test_klt_report.py`, issue #472) on the main side. Nothing
+else moved: no job, trigger, permission or pin changed on either side, and
+the new step is one more PDK-free unit test of the same class as the
+existing ones, so the findings above still hold and the CI table row is
+re-pinned for the merged bytes (the hash above supersedes both the second
+PR #489 merge's value and main's pre-merge value). CI was read, not
+observed to pass here.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables, including the refreshed `ci.yml` row. The other findings
+are unchanged. No simulation, netlisting or layout flow was run for this
+re-audit.
