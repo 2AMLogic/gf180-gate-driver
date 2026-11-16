@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #522**: sim: guard mismatch runners' bound prose against re-typed f-string literals
+- **Issue #520** (closed): No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it)
 - **PR #519**: sim: interpolate Exception 1/2/3 bound literals in mismatch runners' emitted record prose
 - **PR #501**: refactor: render indrv record prose family names from MISMATCH_FAMILIES
 - **Issue #509** (closed): Three mismatch runners still state Exception 1/2/3's ratified bounds as literals in emitted record prose (32 sites)

@@ -32,7 +32,6 @@ Human-approved issues ready for implementation (`loom:issue`).
 - **#508**: ronw mismatch runner hand-rolls campaign.dropped_note, the last inline copy in the family
 - **#515**: Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
 - **#516**: sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree'
-- **#520**: No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it)
 
 ## In Progress
 
@@ -71,7 +70,6 @@ Issues carrying `loom:curated`.
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)*
 - **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)*
 - **#516**: sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree' *(curated)*
-- **#520**: No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -89,11 +87,11 @@ _None._
 | Operator merge-risk holds | 1 |
 | Very important | 1 |
 | Important | 2 |
-| Ready (`loom:issue`) | 4 |
+| Ready (`loom:issue`) | 3 |
 | In Progress (`loom:building`) | 7 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 1 |
-| Curated | 10 |
+| Curated | 9 |
 | Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
