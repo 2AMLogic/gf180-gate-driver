@@ -30,7 +30,6 @@ Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a h
 Human-approved issues ready for implementation (`loom:issue`).
 
 - **#508**: ronw mismatch runner hand-rolls campaign.dropped_note, the last inline copy in the family
-- **#515**: Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
 - **#516**: sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree'
 
 ## In Progress
@@ -39,11 +38,11 @@ Issues currently being built (`loom:building`).
 
 - **#450**: Share one device-runner driver in harness/campaign.py: three hand-rolled main() copies and a dead write_device_corner_log alias
 - **#451**: Route the two hand-rolled klt draw calls through klt_report.run_klt: both ignore the resolved klt binary
-- **#468**: Share the negative-control pass/fail epilogue: 4 copies in layout/, already drifted in loop placement
 - **#480**: Promote the generator's private _klt out of gen_gate_driver_core.py: 14 call sites in 3 modules reach it by private name, bypassing klt_env
 - **#486**: run_lvs.py and run_pex_extract.py have no --klt flag, so pinning a klt build for an extraction is PATH-only
 - **#499**: run_tests.py: flush the per-module == header so it labels its module in captured output
 - **#500**: Reconcile docs/ROADMAP.md "Now" list: four of five items are complete
+- **#515**: Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
 
 ## PRs Awaiting Review
 
@@ -87,7 +86,7 @@ _None._
 | Operator merge-risk holds | 1 |
 | Very important | 1 |
 | Important | 2 |
-| Ready (`loom:issue`) | 3 |
+| Ready (`loom:issue`) | 2 |
 | In Progress (`loom:building`) | 7 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 1 |
