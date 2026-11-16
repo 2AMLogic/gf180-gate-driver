@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #529**: sim: hoist the ngspice .control preamble into script_helpers (pins num_threads=1 everywhere)
+- **Issue #515** (closed): Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
 - **PR #461**: refactor(layout): draw both negative-control fixtures with the resolved klt
 - **Issue #451** (closed): Route the two hand-rolled klt draw calls through klt_report.run_klt: both ignore the resolved klt binary
 - **PR #526**: fix: exempt run evidence manifests from the sim harness dirty-tree check
