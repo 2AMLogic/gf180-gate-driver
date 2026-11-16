@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #471**: refactor(layout): share the negative-control pass/fail epilogue across the four controls
+- **Issue #468** (closed): Share the negative-control pass/fail epilogue: 4 copies in layout/, already drifted in loop placement
 - **PR #522**: sim: guard mismatch runners' bound prose against re-typed f-string literals
 - **Issue #520** (closed): No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it)
 - **PR #519**: sim: interpolate Exception 1/2/3 bound literals in mismatch runners' emitted record prose
