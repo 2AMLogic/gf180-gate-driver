@@ -391,8 +391,9 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"process × temperature grid at the 6 V stretch rail, the worst "
             f"observed `IN_DRV` peak is **{campaign.sigfig(hi)} V "
             f"(margin {_mv(margin)} mV)** at `{outcome.corner_id}`, inside "
-            f"`spec/gate-driver.md` §5 Exception 3's ratified ≤ 10 mV bound "
-            f"(margin ≥ −10.000 mV) with "
+            f"`spec/gate-driver.md` §5 Exception 3's ratified "
+            f"≤ {EXCEPTION3_BOUND_V * 1000:.0f} mV bound "
+            f"(margin ≥ −{EXCEPTION3_BOUND_V * 1000:.3f} mV) with "
             f"{_mv(margin + EXCEPTION3_BOUND_V)} mV of the bound still unspent. "
             f"The three-leg deterministic negative control holds at "
             f"{'every' if control_ok else '**not every**'} PVT point "
@@ -430,7 +431,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         f"slow corners; smallest at `tt`/`fs`, where the node barely moves at "
         f"all). Even the largest is well under the −2.66 mV excursion the "
         f"ratified exception already concedes, and ~"
-        f"{stats['sigma_max'] / EXCEPTION3_BOUND_V * 100:.0f} % of its ≤ 10 mV "
+        f"{stats['sigma_max'] / EXCEPTION3_BOUND_V * 100:.0f} % of its "
+        f"≤ {EXCEPTION3_BOUND_V * 1000:.0f} mV "
         f"bound."
     )
     if stats["worst_delta"] > 0.0:
@@ -450,8 +452,9 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
     )
     add(
         f"  - **Worst draw vs. the ratified bound**: "
-        f"{_mv(stats['worst_margin'])} mV of margin against the ≤ 10 mV "
-        f"bound's −10.000 mV, leaving "
+        f"{_mv(stats['worst_margin'])} mV of margin against the "
+        f"≤ {EXCEPTION3_BOUND_V * 1000:.0f} mV "
+        f"bound's −{EXCEPTION3_BOUND_V * 1000:.3f} mV, leaving "
         f"{_mv(stats['worst_margin'] + EXCEPTION3_BOUND_V)} mV unspent — so "
         f"the bound absorbs the measured mismatch spread with "
         f"{abs((stats['worst_margin'] + EXCEPTION3_BOUND_V) / max(stats['sigma_max'], 1e-12)):.1f}σ "
@@ -520,7 +523,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"**{sigma_ratio:.1f}×** the largest per-point mismatch σ this campaign "
             f"measured ({stats['sigma_max'] * 1e6:.0f} µV) and "
             f"{worst_ref_delta / EXCEPTION3_BOUND_V * 100:.1f} % of Exception 3's "
-            f"entire ≤ 10 mV bound. **The simulator version change is a larger "
+            f"entire ≤ {EXCEPTION3_BOUND_V * 1000:.0f} mV bound. "
+            f"**The simulator version change is a larger "
             f"perturbation of this measurement than local device mismatch is**"
             f"{conclusion_scope} — "
             f"which is the single most useful thing this campaign found, and it is "
@@ -577,7 +581,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"{binding_clause}"
             f"But it does mean the −2.66 mV figure decision records 0014/0006 "
             f"quote carries a simulator-version uncertainty of order ±1 mV that no "
-            f"prior record stated — comfortably inside the ≤ 10 mV bound, and a "
+            f"prior record stated — comfortably inside the "
+            f"≤ {EXCEPTION3_BOUND_V * 1000:.0f} mV bound, and a "
             f"further reason not to narrow that bound toward the measured value."
         )
         add("")
