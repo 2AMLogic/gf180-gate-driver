@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:6f622750bfd680c81b634d622648bd7f7f14435fbe57e2e96b43b98e9758df9e` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:1420f15f9989b3b6245bd4d743399332f78548824a47cdfd892f51d2dc6568c5` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -560,3 +560,51 @@ The merged tree was re-checked against the findings above:
 All nine listed hashes were re-computed against the final merged tree and
 match the tables. The other findings are unchanged. No simulation,
 netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #472 / the PR #473 merge (2026-11-15)
+
+Two listed files changed — one by the issue #472 branch, one via the merge
+of `origin/main` into it (merge base `0f25e3c9`) — and were re-read against
+the findings above; their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the issue #472 branch adds
+  a `klt report-runner unit tests` step to `test`
+  (`python3 layout/common/test_klt_report.py`) and the matching row in the
+  header table — the shared `klt` runner every layout/ signoff script goes
+  through now has both legs checked against the caller's `ok_codes`, with one
+  copy of the failure block (issue #472). The merge carries main's side in
+  full: the signoff job's "Layout provenance freshness" step (the issue #463
+  re-audit above). The job's charter is extended with one more PDK-free
+  unit-test step of the same class as the existing ones; the CI finding above
+  (what the workflow checks) still holds and now covers one more PDK-free
+  test. CI was read, not observed to pass here.
+- `layout/README.md` (**read** the diff, via the merge): the issue #502
+  re-audit section above records the same-klt generator comparison paragraph
+  this merge brings in; the merged file's hash matches that section's table
+  row, and this branch made no edit of its own to the file.
+
+The other listed files are unchanged by the branch; the merge's updates to
+`README.md`, `sim/README.md` and `sim/harness/README.md` (the issue #479
+`fmt` -> `sigfig` rename) are the versions the existing table rows already
+name, re-computed against the merged tree and matching. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #498 third merge (2026-11-16)
+
+One listed file changed in the merge of `origin/main` into
+`feature/issue-486` (PR #498's conflict resolution) and was re-read against
+the findings above; its hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** both diffs against the merge base
+  `5c051fd`): both sides had edited it this time — this branch's
+  `klt_env resolver + runner --klt plumbing unit tests` step (the #486
+  re-audit above) and main's `klt report-runner unit tests` step (the
+  #472/#473 merge re-audit above) are additions of the same class, and the
+  merge carries each side's change in full; the table row is re-computed
+  against the combined file and refreshed. Nothing else moved, so every
+  finding above still holds. CI was read, not observed to pass here.
+
+All other listed hashes were re-computed against the merged tree and match
+the tables. As with the #502 re-audit, the envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes. No
+simulation, netlisting or layout flow was run for this re-audit.
