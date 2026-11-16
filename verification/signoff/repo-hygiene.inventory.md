@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:a8038d3738e5899cab8d934312895dac9689a9e87083bda3580b406d32103106` |
+| `sim/harness/README.md` | `sha256:b19c7b337f4313454b33975143985f0efc9a63fa5e2cb08ce80183592887f592` |
 | `layout/README.md` | `sha256:1c7c8869d5e086fc429ed45ff8cd4e7ac84c7a99bde1394ce2457bbc02f83a4d` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -908,3 +908,34 @@ inventory. The envelope, manifest item 10 and tier-report citation pins are
 refreshed for the new inventory bytes, and the report is re-rendered with
 the pinned grader (`879d39ba`). No simulation, netlisting, layout flow or
 generator re-run happened as part of this re-audit.
+
+## Re-audit for issue #515 (2026-11-16)
+
+One listed file changed on the issue #515 branch (`feature/issue-515`, on top
+of `origin/main` at `57cf193`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `sim/harness/README.md` (**read** the diff): adds one paragraph to the
+  section documenting that the harness pins every ngspice invocation to a
+  single thread, stating where the standalone `sim/*/run_*.py` experiments
+  that bypass `compose_deck()` now get the same pin — from
+  `harness/script_helpers.control_preamble()`, the one home for the
+  `num_threads=1` setting plus the `width`/`height`/`numdgt` batch-table
+  sizing, which `run_corner_deck()` inserts into every staged
+  `control.spice` and self-staging scripts call directly, because a
+  hand-typed per-script copy had already drifted into omitting the pin once
+  (issue #515). The paragraph is documentation of an already-recorded
+  behavior and adds no new reproduction command; the Quick start,
+  Prerequisites, PVT grid, testbench-authoring, "What a run writes", Monte
+  Carlo and xschem sections are untouched, so every reproduction command
+  this inventory's Reproduction finding relies on is unchanged, and no
+  README-content, spec-table or CI finding moves.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. The hoisted preamble's code home and
+its callers — `sim/harness/script_helpers.py`, the bench runners it now
+serves and `sim/test_harness_script_helpers.py` — are recorded but **not**
+pinned here: none is listed in this inventory. No simulation, netlisting or
+layout flow was run for this re-audit. The envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes.
