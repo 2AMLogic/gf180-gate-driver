@@ -170,6 +170,39 @@ def corner_shim(
     return "\n".join(lines) + "\n"
 
 
+def control_preamble() -> str:
+    """The four ``set`` lines every ``.control`` block this module stages or
+    a run script composes opens with, each newline-terminated.
+
+    ``set num_threads=1`` is issue #146's pin (sim/harness/README.md): a
+    locally built, OpenMP-enabled ngspice reads its own ``spinit`` for a
+    default thread count, which is pure oversubscription underneath any
+    parallel sweep -- measured at ~2000x slower for byte-identical results.
+    The ``width``/``height``/``numdgt`` trio sizes the batch-mode ASCII
+    tables the run scripts parse (one header, wide rows, 10 digits).
+
+    ``runner.compose_deck`` emits the pin on every generated deck, and
+    ``run_corner_deck`` inserts this preamble into every staged
+    ``control.spice`` -- the convention has one home, so a script cannot
+    forget it (issue #515: device-mv-fet's hand-typed copy had already
+    drifted into omitting the pin)."""
+    return (
+        "set num_threads=1\n"
+        "set width = 512\n"
+        "set height = 100000\n"
+        "set numdgt = 10\n"
+    )
+
+
+def _with_control_preamble(control: str) -> str:
+    """`control` with `control_preamble()` inserted right after its leading
+    ``.control`` line; `ValueError` when it does not start with one."""
+    head, _, rest = control.partition("\n")
+    if head.strip() != ".control":
+        raise ValueError(f"control must start with a '.control' line, got {head!r}")
+    return f"{head}\n{control_preamble()}{rest}"
+
+
 _NGSPICE_ERROR_RE = re.compile(r"^\s*(Error|ERROR|fatal)", re.MULTILINE)
 
 
@@ -214,16 +247,20 @@ def run_corner_deck(
 
     In a fresh temp dir (named with `prefix`) writes ``corner.spice``
     (`corner_shim`), ``control.spice`` (`control`, the caller's ``.control``
-    block) and a wrapper deck that ``.include``s both around `deck`'s text,
-    then calls `run_ngspice` (raises `RuntimeError` as it does; `label` names
-    the point)."""
+    block with `control_preamble()` inserted after its ``.control`` line --
+    issue #146's `num_threads=1` pin and the batch-table sizing come from
+    the harness, not the caller) and a wrapper deck that ``.include``s both
+    around `deck`'s text, then calls `run_ngspice` (raises `RuntimeError`
+    as it does; `label` names the point)."""
     with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
         work = Path(tmp)
         (work / "corner.spice").write_text(
             corner_shim(pdk, sections, temp_c, script=script, extra_lines=extra_lines),
             encoding="utf-8",
         )
-        (work / "control.spice").write_text(control, encoding="utf-8")
+        (work / "control.spice").write_text(
+            _with_control_preamble(control), encoding="utf-8"
+        )
         (work / deck.name).write_text(
             '.include "corner.spice"\n'
             + deck.read_text(encoding="utf-8")
