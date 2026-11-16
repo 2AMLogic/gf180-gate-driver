@@ -10,6 +10,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #519**: sim: interpolate Exception 1/2/3 bound literals in mismatch runners' emitted record prose
+- **PR #501**: refactor: render indrv record prose family names from MISMATCH_FAMILIES
+- **Issue #509** (closed): Three mismatch runners still state Exception 1/2/3's ratified bounds as literals in emitted record prose (32 sites)
+- **Issue #464** (closed): Wire up montecarlo.py's MISMATCH_FAMILIES into the record prose that re-types the same six wrapper names
 - **PR #507**: sim: bind mc_to_yield and the runners to script_helpers' ratified bounds
 - **PR #504**: refactor: route ronw mismatch record body through shared campaign helpers
 - **PR #503**: docs: restate the pinned-klt recipe in throwaway-environment form
