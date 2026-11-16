@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #461**: refactor(layout): draw both negative-control fixtures with the resolved klt
+- **Issue #451** (closed): Route the two hand-rolled klt draw calls through klt_report.run_klt: both ignore the resolved klt binary
 - **PR #526**: fix: exempt run evidence manifests from the sim harness dirty-tree check
 - **Issue #516** (closed): sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree'
 - **PR #525**: fix: call campaign.dropped_note instead of the last inline copy
