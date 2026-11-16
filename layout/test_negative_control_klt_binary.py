@@ -68,7 +68,7 @@ class ResolvedKltBinaryTest(unittest.TestCase):
         """Call ``module.main()`` with ``klt draw`` stubbed; return (rc, argv)."""
         seen = []
 
-        def fake_run_klt(cwd, argv, ok_codes=(0,)):
+        def fake_run_klt(cwd, argv, *, ok_codes=(0,)):
             seen.append(list(argv))
             raise klt_report.KltRunError("draw")
 
