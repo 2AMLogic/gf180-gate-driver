@@ -13,6 +13,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from harness import script_helpers
+
 import mc_to_yield as m
 
 
@@ -71,6 +73,70 @@ class ConvertTest(unittest.TestCase):
         first = doc["measurements"][0]
         self.assertEqual(first["limits"], {"max": 6.01})
         self.assertEqual(first["seeds"], {"first": 10, "last": 12, "n": 3})
+
+    def test_inb_limit_is_the_committed_3p67(self):
+        """Exception 1's limit, unpinned by any test until issue #477."""
+        path = self.dir / "samples-vlogic3p63v_tt_27c.csv"
+        path.write_text(
+            "sample,seed,sw_stat_mismatch,status,vinb_max_v\n"
+            "0,10,1,ok,3.641\n",
+        )
+        doc = m.build_sample_set("level-shifter-inb-mismatch", self.dir)
+        self.assertEqual(doc["measurements"][0]["limits"], {"max": 3.67})
+
+    def test_taper_limit_is_the_committed_6p175(self):
+        """Exception 2's limit, unpinned by any test until issue #477."""
+        path = self.dir / "samples-ss_125c.csv"
+        path.write_text(
+            "sample,seed,sw_stat_mismatch,status,"
+            "n1_max_v,n2_max_v,n3_max_v,n4_max_v,n5_max_v\n"
+            "0,10,1,ok,6.2,6.2,6.2,6.2,6.2\n",
+        )
+        doc = m.build_sample_set("output-stage-taper-mismatch", self.dir)
+        self.assertEqual(doc["measurements"][0]["limits"], {"max": 6.175})
+
+    def test_limits_and_spec_rows_are_the_committed_ratified_values(self):
+        """All three `spec_row` strings and limits, byte-exact against the
+        committed evidence (`verification/signoff/yield/*.samples.json`): a
+        loose `:g` interpolation would render the ceiling as `6`, not `6.0`,
+        and this pin is what would catch it (issue #477)."""
+        expected = {
+            "gate-driver-indrv-mismatch": (
+                6.01,
+                "spec/gate-driver.md section 5, Exception 3 "
+                "(IN_DRV <= 10 mV over the 6.0 V gate ceiling)",
+            ),
+            "level-shifter-inb-mismatch": (
+                3.67,
+                "spec/gate-driver.md section 5, Exception 1 "
+                "(inb <= 40 mV over VDD_LOGIC = 3.63 V)",
+            ),
+            "output-stage-taper-mismatch": (
+                6.175,
+                "spec/gate-driver.md section 5, Exception 2 "
+                "(taper nodes n1..n5 <= 175 mV over the 6.0 V gate ceiling)",
+            ),
+        }
+        for campaign, (limit, spec_row) in expected.items():
+            spec = m.CAMPAIGNS[campaign]
+            with self.subTest(campaign=campaign):
+                self.assertEqual(spec["max"], limit)
+                self.assertEqual(spec["spec_row"], spec_row)
+
+    def test_bounds_are_read_from_the_shared_home_not_retyped(self):
+        """Identity, not equality: a literal retyped back into this module
+        would still compare equal today -- that is the drift issue #477
+        guards (same assertion shape as
+        test_harness_script_helpers.TestRatifiedSpecValues)."""
+        for name in (
+            "GATE_CEILING_V",
+            "VDD_LOGIC_V",
+            "EXCEPTION1_BOUND_V",
+            "EXCEPTION2_BOUND_V",
+            "EXCEPTION3_BOUND_V",
+        ):
+            with self.subTest(constant=name):
+                self.assertIs(getattr(m, name), getattr(script_helpers, name))
 
     def test_missing_column_and_unknown_campaign_are_errors(self):
         path = self.dir / "samples-p.csv"

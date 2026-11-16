@@ -10,6 +10,15 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-15
 
+- **PR #494**: refactor: rename the two colliding sim-harness fmt() formatters to fixed() and sigfig()
+- **Issue #479** (closed): Disambiguate the two sim-harness fmt() helpers: one name, two incompatible number formats
+- **PR #496**: refactor(sim): share the mismatch Statistical-convention head via campaign.convention_head and route ronw through convention_tail
+- **Issue #460** (closed): Share the mismatch Statistical-convention head (4 copies) and route ronw through convention_tail: its inline tail drops the control's defining property
+- **PR #478**: refactor: route power_array_folded's shape helpers through the generator's
+- **Issue #467** (closed): power_array_folded keeps three duplicate copies of the generator's shape helpers: one drops _rect's rounding, and _vbar's argument order is swapped
+- **PR #493**: fix: make npm test run the tracked test suite instead of printing the sim catalogue
+- **Issue #482** (closed): Make npm test run the test suite, or remove it: it runs sim/run_corners.py --list and exits 0 having run zero tests
+- **PR #490**: docs: complete the sim facet table and restate the post-layout status row against committed evidence
 - **PR #495**: signoff: check layout provenance hashes in CI; rest T1 item-2 attestation on the documented-provenance arm
 - **Issue #463** (closed): T1 item-2 GDS reproducibility attestation no longer holds under the host klt (0.9.2 renames generated sub-cells)
 - **Issue #470** (closed): bug: erc_negative_control's deck-clean arm grades 'violations' on main under klt 0.9.2 — the ERC control fails closed
