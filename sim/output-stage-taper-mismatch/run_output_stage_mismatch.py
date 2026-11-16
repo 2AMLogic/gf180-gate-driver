@@ -359,8 +359,9 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
             f"stretch rail, the worst observed taper-node peak is "
             f"**{campaign.sigfig(hi)} V (margin {_mv(margin)} mV)** at `{outcome.corner_id}` "
             f"(node `{hi_node}`), inside `spec/gate-driver.md` §5 "
-            f"Exception 2's ratified ≤ 175 mV bound (margin ≥ "
-            f"−175.000 mV) with {_mv(margin + EXCEPTION2_BOUND_V)} mV of "
+            f"Exception 2's ratified ≤ {EXCEPTION2_BOUND_V * 1000:.0f} mV "
+            f"bound (margin ≥ "
+            f"−{EXCEPTION2_BOUND_V * 1000:.3f} mV) with {_mv(margin + EXCEPTION2_BOUND_V)} mV of "
             f"the bound still unspent. The three-leg deterministic negative "
             f"control holds at {'every' if control_ok else '**not every**'} "
             f"PVT point (baseline = seed-A control = seed-B control, "
@@ -398,7 +399,8 @@ def build_record_body(record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall
         outcome, hi, margin, hi_node = worst_overall
         add(
             f"  - **Worst draw vs. the ratified bound**: {_mv(margin)} mV of "
-            f"margin against the ≤ 175 mV bound's −175.000 mV, "
+            f"margin against the ≤ {EXCEPTION2_BOUND_V * 1000:.0f} mV "
+            f"bound's −{EXCEPTION2_BOUND_V * 1000:.3f} mV, "
             f"leaving {_mv(margin + EXCEPTION2_BOUND_V)} mV unspent."
         )
     add(

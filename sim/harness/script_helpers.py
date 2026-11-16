@@ -35,14 +35,32 @@ SIM_DIR = Path(__file__).resolve().parent.parent
 # #465), a decision record that moved one could be applied to one runner and
 # missed in the other, and the two campaigns' append-only records would then
 # disagree about the same ratified number with nothing in the tree flagging it.
+# Since issue #477 the criterion is met by a consumer that is not a runner
+# either: `sim/mc_to_yield.py` converts the campaigns' Monte Carlo CSVs into
+# `klt yield` sample sets against the same bounds, feeding the append-only,
+# manifest-hashed evidence under `verification/signoff/yield/`.
 
 #: The ratified §2.3 thick-oxide DC gate ceiling that the gate-node excursions
 #: in this family are measured against.
 GATE_CEILING_V = 6.0
 
+#: The `vlogic3p63v` supply corner Exception 1 is scoped to -- the rail the
+#: level shifter's pre-driver inverter output `inb` is measured above, not the
+#: ceiling.
+VDD_LOGIC_V = 3.63
+
+#: `spec/gate-driver.md` §5 Exception 1's ratified bound: <= 40 mV above
+#: VDD_LOGIC (decision record 0015). Reported against, never adjusted here.
+EXCEPTION1_BOUND_V = 0.040
+
 #: `spec/gate-driver.md` §5 Exception 2's ratified bound: <= 175 mV above the
 #: ceiling (decision record 0013).
 EXCEPTION2_BOUND_V = 0.175
+
+#: `spec/gate-driver.md` §5 Exception 3's ratified bound: <= 10 mV above the
+#: ceiling. Reported against, never adjusted here -- a bound change would
+#: need its own decision record (CLAUDE.md).
+EXCEPTION3_BOUND_V = 0.010
 
 #: The five output-stage taper nodes Exception 2 is scoped to -- the claim
 #: measurements of `output-stage-taper-mismatch`, and secondary context that

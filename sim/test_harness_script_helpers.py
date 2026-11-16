@@ -248,33 +248,70 @@ class TestWorstAcrossPoints(unittest.TestCase):
 
 
 class TestRatifiedSpecValues(unittest.TestCase):
-    """The ratified values shared by the `indrv` and `taper` campaigns have
-    exactly one home, and each runner reads it (issue #465, item 2).
+    """The ratified values shared by the mismatch campaigns -- and, since
+    issue #477, by the yield converter (`sim/mc_to_yield.py`, whose
+    `verification/signoff/yield/` output is append-only and manifest-hashed)
+    -- have exactly one home, and every consumer reads it.
 
     Identity, not equality, is the assertion: a literal retyped back into a
-    runner would still compare equal today, and that is precisely the drift
+    consumer would still compare equal today, and that is precisely the drift
     being guarded. Two independent literals mean a decision record moving the
-    §2.3 ceiling or Exception 2's bound can reach one campaign and miss the
-    other, leaving two append-only records disagreeing about the same ratified
+    §2.3 ceiling or an exception bound can reach one campaign and miss
+    another, leaving append-only records disagreeing about the same ratified
     number with nothing in the tree flagging it.
     """
 
     def test_values_are_the_ratified_numbers(self):
         self.assertEqual(script_helpers.GATE_CEILING_V, 6.0)
+        self.assertEqual(script_helpers.VDD_LOGIC_V, 3.63)
+        self.assertEqual(script_helpers.EXCEPTION1_BOUND_V, 0.040)
         self.assertEqual(script_helpers.EXCEPTION2_BOUND_V, 0.175)
+        self.assertEqual(script_helpers.EXCEPTION3_BOUND_V, 0.010)
         self.assertEqual(
             script_helpers.TAPER_MEASUREMENTS,
             ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v"),
         )
 
     def test_both_runners_read_the_shared_values(self):
-        for key in ("indrv", "taper"):
+        shared = {
+            "indrv": (
+                "GATE_CEILING_V",
+                "EXCEPTION2_BOUND_V",
+                "TAPER_MEASUREMENTS",
+                "EXCEPTION3_BOUND_V",
+            ),
+            "inb": (
+                "EXCEPTION1_BOUND_V",
+                "VDD_LOGIC_V",
+            ),
+            "taper": (
+                "GATE_CEILING_V",
+                "EXCEPTION2_BOUND_V",
+                "TAPER_MEASUREMENTS",
+            ),
+        }
+        for key, names in shared.items():
             module = fixture.load_runner(key)
-            for name in ("GATE_CEILING_V", "EXCEPTION2_BOUND_V", "TAPER_MEASUREMENTS"):
+            for name in names:
                 with self.subTest(runner=key, constant=name):
                     self.assertIs(
                         getattr(module, name), getattr(script_helpers, name)
                     )
+
+    def test_yield_converter_reads_the_shared_values(self):
+        import mc_to_yield
+
+        for name in (
+            "GATE_CEILING_V",
+            "VDD_LOGIC_V",
+            "EXCEPTION1_BOUND_V",
+            "EXCEPTION2_BOUND_V",
+            "EXCEPTION3_BOUND_V",
+        ):
+            with self.subTest(constant=name):
+                self.assertIs(
+                    getattr(mc_to_yield, name), getattr(script_helpers, name)
+                )
 
 
 class TestRunNgspice(_TempDirCase):

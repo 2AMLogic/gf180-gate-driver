@@ -335,6 +335,41 @@ def write_logs(corners_dir: Path, record: str, stamp, pdk, ngspice, outcome: Poi
 # --------------------------------------------------------------------------
 
 
+def _context_window_rows(
+    outcomes: list[PointOutcome], device_key: str, add, skip_vgs: float | None = None
+) -> None:
+    """Rows of a context `Ron·W` table for one device, worst case per Vgs.
+
+    Shared by the two context tables in `build_record_body` (`nfet_06v0` at
+    the non-primary Vgs points, and the `pfet_06v0` table); local to this
+    runner because the table is keyed on this record's per-device
+    `RATIFIED_WINDOW_OHMMM` / `VGS_POINTS` shape, which no sibling has.
+    """
+    for _suf, vgs in sorted(base.VGS_POINTS, key=lambda p: -p[1]):
+        if skip_vgs is not None and vgs == skip_vgs:
+            continue
+        name = f"ronw_{device_key}_{vgs:g}"
+        lo_w, hi_w = RATIFIED_WINDOW_OHMMM[device_key][vgs]
+        width_w = hi_w - lo_w
+        worst_exc = None
+        for outcome in outcomes:
+            values = outcome.values(name)
+            control = outcome.control_value(name)
+            if values and control is not None:
+                excursion = max(0.0, max(values) - control)
+                worst_exc = excursion if worst_exc is None else max(worst_exc, excursion)
+        if worst_exc is None:
+            # No converged draw at any PVT point for this row: report that,
+            # rather than formatting the 0.0 initialiser as a measurement --
+            # same convention as the primary table's `no data` cell above.
+            add(f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | no data | |")
+        else:
+            add(
+                f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
+                f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
+            )
+
+
 def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome], n_samples, wall, args):
     lines: list[str] = []
     add = lines.append
@@ -386,15 +421,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     )
     drawn = sum(len(o.samples) for o in outcomes)
     converged = sum(len(o.ok) for o in outcomes)
-    dropped = drawn - converged
-    dropped_note = (
-        f" **{dropped} of {drawn} draws did not converge and "
-        f"{'is' if dropped == 1 else 'are'} excluded from every statistic "
-        f"below** -- enumerated in \"Non-converged draws\", leaving "
-        f"{converged} in the distribution."
-        if dropped
-        else f" All {drawn} draws converged; none is excluded."
-    )
+    dropped_note = campaign.dropped_note(drawn, converged, "--")
     add(
         campaign.convention_head(n_samples, len(outcomes), drawn, dropped_note, "--")
         + " reported σ is the "
@@ -525,32 +552,17 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     min_same_corner_step = min(same_corner_gaps) if same_corner_gaps else None
 
     # --- non-converged draws ---
-    add("  ### Non-converged draws")
-    add("")
-    bad = [
-        (outcome, mc, result)
-        for outcome in outcomes
-        for mc, result in outcome.samples
-        if result.status != "ok"
-    ]
-    if not bad:
-        add(f"  None -- all {drawn} mismatch draws completed and every one is in the statistics above.")
-    else:
-        add(
-            f"  **{len(bad)} of {drawn} draws** did not complete and "
-            f"{'is' if len(bad) == 1 else 'are'} excluded from every statistic "
-            "in this record. Listed here rather than dropped silently, per "
-            "decision record 0017's convention -- each is reproducible from "
-            "the seed below."
+    lines.extend(
+        campaign.non_converged_section(
+            outcomes,
+            drawn,
+            "--",
+            ". Listed here rather than dropped silently, per decision "
+            "record 0017's convention -- each is reproducible from the "
+            "seed below.",
+            "",
         )
-        add("")
-        add("  | PVT point | sample | seed | ngspice message |")
-        add("  |---|---|---|---|")
-        for outcome, mc, result in bad:
-            message = " ".join(result.message.split())[:180]
-            add(f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | `{message}` |")
-        add("")
-    add("")
+    )
 
     # --- context: n06 at the other two Vgs points ---
     add("  ### `nfet_06v0` `Ron·W` at the other two `Vgs` points (context, not the primary claim)")
@@ -570,29 +582,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     add("")
     add("  | `Vgs` | ratified window (Ω·mm) | window width (Ω·mm) | worst excursion (mΩ·mm) | excursion, % of window |")
     add("  |---|---|---|---|---|")
-    for _suf, vgs in sorted(base.VGS_POINTS, key=lambda p: -p[1]):
-        if vgs == PRIMARY_VGS:
-            continue
-        name = f"ronw_{PRIMARY_DEV}_{vgs:g}"
-        lo_w, hi_w = RATIFIED_WINDOW_OHMMM[PRIMARY_DEV][vgs]
-        width_w = hi_w - lo_w
-        worst_exc = None
-        for outcome in outcomes:
-            values = outcome.values(name)
-            control = outcome.control_value(name)
-            if values and control is not None:
-                excursion = max(0.0, max(values) - control)
-                worst_exc = excursion if worst_exc is None else max(worst_exc, excursion)
-        if worst_exc is None:
-            # No converged draw at any PVT point for this row: report that,
-            # rather than formatting the 0.0 initialiser as a measurement --
-            # same convention as the primary table's `no data` cell above.
-            add(f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | no data | |")
-        else:
-            add(
-                f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
-                f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
-            )
+    _context_window_rows(outcomes, PRIMARY_DEV, add, skip_vgs=PRIMARY_VGS)
     add("")
 
     # --- context: p06 (not the switch) ---
@@ -600,27 +590,7 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     add("")
     add("  | `|Vgs|` | ratified window (Ω·mm) | window width (Ω·mm) | worst excursion (mΩ·mm) | excursion, % of window |")
     add("  |---|---|---|---|---|")
-    for _suf, vgs in sorted(base.VGS_POINTS, key=lambda p: -p[1]):
-        name = f"ronw_p06_{vgs:g}"
-        lo_w, hi_w = RATIFIED_WINDOW_OHMMM["p06"][vgs]
-        width_w = hi_w - lo_w
-        worst_exc = None
-        for outcome in outcomes:
-            values = outcome.values(name)
-            control = outcome.control_value(name)
-            if values and control is not None:
-                excursion = max(0.0, max(values) - control)
-                worst_exc = excursion if worst_exc is None else max(worst_exc, excursion)
-        if worst_exc is None:
-            # No converged draw at any PVT point for this row: report that,
-            # rather than formatting the 0.0 initialiser as a measurement --
-            # same convention as the primary table's `no data` cell above.
-            add(f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | no data | |")
-        else:
-            add(
-                f"  | {vgs:g} V | {lo_w:.4f} .. {hi_w:.4f} | {width_w:.4f} | "
-                f"{worst_exc * 1e3:.3f} | {worst_exc / width_w * 100 if width_w else 0.0:.3f} % |"
-            )
+    _context_window_rows(outcomes, "p06", add)
     add("")
 
     # --- verdict ---
@@ -649,12 +619,12 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
 
     if worst_excursion is None:
         verdict = "ERROR"
-        add("  - **Overall: ERROR** -- no Monte Carlo sample completed.")
+        add(campaign.error_verdict_line("--"))
     else:
         outcome, excursion, hi = worst_excursion
         excursion_pct = excursion / window_width * 100 if window_width else 0.0
         material = excursion_pct >= MATERIALITY_PCT_OF_WINDOW
-        verdict = "PASS" if (not material and control_ok and not anomalies) else "FAIL"
+        verdict = campaign.verdict_for(not material, control_ok, not anomalies)
         step_text = (
             f"for scale, the smallest same-corner temperature-to-temperature "
             f"step already present in the deterministic grid is "
@@ -823,18 +793,16 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
     )
     add(f"  - Reference corner matrix: `sim/{SOURCE_EXPERIMENT}/records/{REFERENCE_RECORD}.md`")
     add(f"  - PDK: {pdk.variant} ({pdk.path}), ngspice {ngspice}")
-    add(f"- **Timestamp / author**: {stamp:%Y-%m-%dT%H:%M:%SZ}, agent-builder (issue #216)")
-    add(
-        "- **Supersedes**: (none -- first Monte Carlo / local-mismatch record "
-        "for `spec/low-side-power-switch.md`)"
-    )
-    add("")
-    if args.smoke:
-        add(
-            "> **NOTE**: produced by a `--smoke` run -- a deliberately thin "
-            "sample set for pipeline debugging, not evidence."
+    lines.extend(
+        campaign.trailer_lines(
+            stamp,
+            216,
+            "(none -- first Monte Carlo / local-mismatch record for "
+            "`spec/low-side-power-switch.md`)",
+            args.smoke,
+            "--",
         )
-        add("")
+    )
 
     return "\n".join(lines), verdict, anomalies
 
