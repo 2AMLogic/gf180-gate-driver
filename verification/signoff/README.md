@@ -423,6 +423,12 @@ pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@879d39bad82
 pip install 'jsonschema>=4.0'
 ```
 
+On a shared host with provisioned tool paths (e.g. a fleet worker), run that
+install inside a throwaway `uv venv` — or skip the install entirely with
+`uvx --from "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e" klt signoff …` — rather than installing into the host's
+shared tool paths; the bare `pip install` above is for an ephemeral CI runner
+or an already-isolated virtualenv.
+
 ## Grader pin move, 21b0cc1d to 3a75c3ae (issue #288)
 
 Rendered first with the unchanged manifest and compared with the committed
