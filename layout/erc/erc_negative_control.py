@@ -86,6 +86,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import control_verdict  # noqa: E402
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
 import signoff_store  # noqa: E402
@@ -300,25 +301,21 @@ def main() -> int:
                 f"for {PHANTOM_NET}: {phantom['erc_findings']!r}"
             )
 
-    for failure in failures:
-        print(f"FAIL: {failure}", file=sys.stderr)
-    if failures:
-        print(
+    return control_verdict.control_verdict(
+        failures,
+        invalidates=(
             "klt erc did not rule as it must on the known-good/known-bad set "
             "-- the block's own 'erc_status: clean' report is not evidence "
-            "until this is explained.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(
-        "ok: dropping the deck re-reports the klayout-tools#2183 "
-        "erc.supply_short between VDD_DRV and GND_DRV, a phantom fifth "
-        "supply fires erc.unconnected_net, and the unperturbed deck arm "
-        "stays clean -- the block's own 'erc_status: clean' verdict is a "
-        "real verdict"
+            "until this is explained."
+        ),
+        confirms=(
+            "ok: dropping the deck re-reports the klayout-tools#2183 "
+            "erc.supply_short between VDD_DRV and GND_DRV, a phantom fifth "
+            "supply fires erc.unconnected_net, and the unperturbed deck arm "
+            "stays clean -- the block's own 'erc_status: clean' verdict is a "
+            "real verdict"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":

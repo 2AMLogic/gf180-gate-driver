@@ -41,6 +41,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import control_verdict  # noqa: E402
 import klt_env  # noqa: E402
 import klt_report  # noqa: E402
 import signoff_store  # noqa: E402
@@ -150,23 +151,19 @@ def main() -> int:
             f"expected {total} reference devices after the drop, got "
             f"{payload['counts']['devices']['reference']}"
         )
-    if failures:
-        for failure in failures:
-            print(f"FAIL: {failure}", file=sys.stderr)
-        print(
+    return control_verdict.control_verdict(
+        failures,
+        invalidates=(
             "The comparator did not notice a missing device -- a "
             "'status: match' report produced this way is not evidence until "
-            "this is explained.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(
-        f"ok: dropping one of {total + 1} reference devices flips the verdict "
-        "to 'mismatch' with a device.unmatched finding -- 'status: match' on "
-        "the block is a real verdict"
+            "this is explained."
+        ),
+        confirms=(
+            f"ok: dropping one of {total + 1} reference devices flips the verdict "
+            "to 'mismatch' with a device.unmatched finding -- 'status: match' on "
+            "the block is a real verdict"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":

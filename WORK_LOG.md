@@ -8,8 +8,32 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-16
+
+- **PR #471**: refactor(layout): share the negative-control pass/fail epilogue across the four controls
+- **Issue #468** (closed): Share the negative-control pass/fail epilogue: 4 copies in layout/, already drifted in loop placement
+- **PR #522**: sim: guard mismatch runners' bound prose against re-typed f-string literals
+- **Issue #520** (closed): No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it)
+- **PR #519**: sim: interpolate Exception 1/2/3 bound literals in mismatch runners' emitted record prose
+- **PR #501**: refactor: render indrv record prose family names from MISMATCH_FAMILIES
+- **Issue #509** (closed): Three mismatch runners still state Exception 1/2/3's ratified bounds as literals in emitted record prose (32 sites)
+- **Issue #464** (closed): Wire up montecarlo.py's MISMATCH_FAMILIES into the record prose that re-types the same six wrapper names
+- **PR #507**: sim: bind mc_to_yield and the runners to script_helpers' ratified bounds
+- **PR #504**: refactor: route ronw mismatch record body through shared campaign helpers
+- **PR #503**: docs: restate the pinned-klt recipe in throwaway-environment form
+- **PR #489**: fix(lvs): regenerate both extracted DUTs from the current GDS and re-run the oxide-safety facet
+- **PR #473**: refactor(layout): check both klt report legs through one failure block
+- **Issue #492** (closed): layout/README.md pinning section tells agents to run `uv tool install`, which the fleet host rules forbid
+- **Issue #477** (closed): sim/mc_to_yield.py re-types the ratified gate ceiling and both exception bounds now that script_helpers.py is their one home
+- **Issue #472** (closed): Collapse run_klt_report onto run_klt: duplicated failure block, and the --format text leg's exit code is discarded into committed evidence
+- **Issue #459** (closed): ronw mismatch runner keeps two inline copies the shared campaign helpers already cover (ERROR verdict line, context-table loop)
+- **Issue #456** (closed): Regenerate the extracted netlists from the current GDS and re-run the oxide-safety post-layout facet
+
 ### 2026-11-15
 
+- **PR #506**: signoff: refresh generator.sha256 pin for the post-#478 generator; record the same-klt GDS comparison
+- **PR #484**: refactor(sim): drop unused write_record() record writer from report.py
+- **Issue #449** (closed): Remove sim/harness/report.py write_record(): dead bootstrap path that bypasses the evidence store
 - **PR #494**: refactor: rename the two colliding sim-harness fmt() formatters to fixed() and sigfig()
 - **Issue #479** (closed): Disambiguate the two sim-harness fmt() helpers: one name, two incompatible number formats
 - **PR #496**: refactor(sim): share the mismatch Statistical-convention head via campaign.convention_head and route ronw through convention_tail
