@@ -56,7 +56,7 @@ sys.path.insert(0, str(HERE.parent))
 from harness import campaign as harness_campaign  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
-from harness.script_helpers import fmt as _fmt  # noqa: E402
+from harness.script_helpers import fixed  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
@@ -397,9 +397,9 @@ def build_record(record, stamp, pdk, ngspice, results) -> tuple[str, dict]:
             if overall == "PASS":
                 n_pass += 1
             cid = f"{section}_{temp:g}c_nosupply"
-            resp_ns = _fmt(rs * 1e9 if rs is not None else None, 1)
+            resp_ns = fixed(rs * 1e9 if rs is not None else None, 1)
             add(
-                f"| `{cid}` | {_fmt(fv)} | {_fmt(rv)} | {_fmt(hy)} | {resp_ns} "
+                f"| `{cid}` | {fixed(fv)} | {fixed(rv)} | {fixed(hy)} | {resp_ns} "
                 f"| {v_f} | {v_r} | {v_t} | {overall} |"
             )
     add("")

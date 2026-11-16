@@ -710,7 +710,7 @@ def run_device_main(
 # --------------------------------------------------------------------------
 
 
-def fmt(value, digits: int = 6) -> str:
+def sigfig(value, digits: int = 6) -> str:
     """A measurement for a record table: `n/a`, or `digits` significant figures."""
     if value is None:
         return "n/a"
@@ -768,6 +768,34 @@ def dropped_note(drawn: int, converged: int, dash: str) -> str:
     )
 
 
+def convention_head(
+    n_samples: int,
+    n_points: int,
+    drawn: int,
+    dropped_note: str,
+    dash: str,
+) -> str:
+    """The opening of every mismatch record's `Statistical convention` bullet:
+    the Monte Carlo framing and the gf180mcu `.lib fets_mm` per-instance
+    mismatch model it draws from, through the 1 σ (not a 3 σ corner pull)
+    clause. That model description is a PDK fact, not an experiment fact, so
+    it is shared; the per-experiment prose that follows -- which device
+    families carry β mismatch, which node's σ is reported -- stays with the
+    runner, as does the `convention_tail` that closes the bullet."""
+    return (
+        f"- **Statistical convention**: Monte Carlo **local device mismatch** "
+        f"(intra-die), N = {n_samples} independent draws per PVT point, "
+        f"{n_points} PVT point(s), {drawn} mismatch samples "
+        f"total.{dropped_note} Distribution source: the gf180mcu PDK's own "
+        f"`.lib fets_mm` per-instance mismatch model "
+        f"(`delvto = mis_vth·sw_stat_mismatch`, "
+        f"`mulu0 = 1 − mis_k·sw_stat_mismatch`, with `mis_vth`/`mis_k` drawn "
+        f"from `agauss(0, σ, 1)` and σ scaled Pelgrom-style by "
+        f"1/√(W_eff·L_eff)) {dash} i.e. **1 σ per-device draws, not a "
+        f"3 σ corner pull**;"
+    )
+
+
 def convention_tail(
     base_seed: int,
     source_experiment: str,
@@ -806,7 +834,7 @@ def control_table_rows(
     `probe(outcome)` returns `(node, value, delta)`: the node name (or `None`
     for a single-node claim, which drops that column), the control value and
     its delta against the reference record. `value_fmt(value)` renders the
-    control cell (default `fmt(value, 10)`) and `delta_fmt` is the format spec
+    control cell (default `sigfig(value, 10)`) and `delta_fmt` is the format spec
     applied to the delta once scaled to micro-units -- a campaign whose unit
     needs different precision passes its own rather than keeping a private
     copy of this loop.
@@ -819,7 +847,7 @@ def control_table_rows(
     """
     if value_fmt is None:
         def value_fmt(value):
-            return fmt(value, 10)
+            return sigfig(value, 10)
 
     rows = []
     control_ok = True
@@ -1000,10 +1028,11 @@ __all__ = [
     "PointOutcome",
     "baseline_log_header",
     "control_table_rows",
+    "convention_head",
     "convention_tail",
     "dropped_note",
     "error_verdict_line",
-    "fmt",
+    "sigfig",
     "links_lines",
     "log_header",
     "mv",

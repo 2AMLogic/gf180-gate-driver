@@ -11,8 +11,7 @@
         "path": "verification/signoff/repo-hygiene.inventory.md",
         "scope": "repo"
       },
-      "content_hash": "sha256:7e14b2038845f925e89cb723fa5b37879412caacc2979b9cbe9b0d728fa2c540"
-
+      "content_hash": "sha256:c8204c3b2f7ca359f655f7cfa7687813e6bb73f0f318b1e94a90351e67f967fb"
     }
   }
 }

@@ -461,7 +461,7 @@ campaign.write_log(
   `controls_agree`, `control_matches_baseline`). Subclass it for the
   claim-specific reductions; pass the subclass as `outcome_cls`.
 - `write_sample_csv` / `write_log` / `baseline_log_header` / `log_header`
-  write the committed artefacts, and `fmt` / `mv` / `point_sigma_summary`
+  write the committed artefacts, and `sigfig` / `mv` / `point_sigma_summary`
   format the record tables. These emit **append-only evidence**, so their
   literal output is pinned by `sim/test_harness_campaign.py`.
 
