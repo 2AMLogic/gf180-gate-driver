@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:7256f033dd29160fe3863f0c2a3e1a12eeec8baa56a9c8fb0ef00533739cfba9` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:b271fe5d72b4dea72a11e33fb0f2bdb320ce3420aacab52d055798473fc9a62d` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -604,3 +604,24 @@ All nine listed hashes were re-computed against the final merged tree and
 match the tables, including the refreshed `ci.yml` row. The other findings
 are unchanged. No simulation, netlisting or layout flow was run for this
 re-audit.
+
+## Re-audit for issue #499 (2026-11-16)
+
+One listed file changed on the issue #499 branch (`feature/issue-499`, on top
+of `origin/main` at `e498a877`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds one
+  `python3 scripts/tests/test_run_tests.py` line to the existing
+  `Evidence-store and manifest-check unit tests` step of `test` (and names it
+  in that step's comment) — the regression test for the `run_tests.py`
+  per-module `==` header flush (issue #499), required by lint step 5/5's
+  every-tracked-test-run-by-CI check. `lint`, the harness self-test and the
+  `signoff` job are unchanged, so the CI finding still holds; the new step
+  line was observed passing locally (`npm test` 16/16 modules after this
+  re-audit's pin cascade; CI itself was read, not observed).
+
+The other listed files are unchanged for #499. As with the #368 re-audit,
+the envelope, manifest item 10 and tier-report citation pins are refreshed
+for the new inventory bytes. No simulation, netlisting or layout flow was
+run for this re-audit.

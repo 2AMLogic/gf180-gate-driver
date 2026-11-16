@@ -172,10 +172,13 @@ jobs:
         # sim/test_evidence_store.py and scripts/tests/ pin the fail-closed
         # evidence writer (fake klt, local fake broker), the manifest-aware
         # record lint and the manifest schema / committed-bytes guard
-        # (issue #333). Stdlib only; no klt, no broker, no PDK.
+        # (issue #333); scripts/tests/test_run_tests.py pins the per-module
+        # == header flush of run_tests.py itself (issue #499).
+        # Stdlib only; no klt, no broker, no PDK.
         run: |
           python3 sim/test_evidence_store.py
           python3 scripts/tests/test_check_artifact_manifests.py
+          python3 scripts/tests/test_run_tests.py
 
       - name: klt request-generator reproducibility tests
         # sim/test_gen_requests.py re-runs every sim/*/klt/ request generator in
