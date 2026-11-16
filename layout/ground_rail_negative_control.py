@@ -61,6 +61,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 
 import klt_env  # noqa: E402  (path set above)
+import klt_report  # noqa: E402  (path set above)
 from check_gate_driver_core import (  # noqa: E402  (path set above)
     ground_rail_isolation_verdict,
     routed_metal_components,
@@ -133,7 +134,7 @@ def main() -> int:
     try:
         isolated = _verdict("isolated", _ISOLATED_SHAPES)
         shorted = _verdict("shorted", _ISOLATED_SHAPES + _BRIDGE_SHAPES)
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

@@ -136,10 +136,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 LAYOUT_DIR = os.path.dirname(HERE)
 sys.path.insert(0, LAYOUT_DIR)
 
+import klt_report  # noqa: E402  (same directory as this module)
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     GenError,
     _hbar,
-    _klt,
     _ports_by_role,
     _vbar,
 )
@@ -388,17 +388,19 @@ def generate(
     if rows == 1:
         params = dict(base_params, fingers=per_row[0])
         gds_path = os.path.join(out_dir, f"{cell_name}.gds")
-        report = _klt(
-            "gen",
-            "mos_array",
-            "--pdk",
-            pdk,
-            "--params",
-            json.dumps(params),
-            "--cell-name",
-            cell_name,
-            "-o",
-            gds_path,
+        report = klt_report.run_klt_json(
+            [
+                "gen",
+                "mos_array",
+                "--pdk",
+                pdk,
+                "--params",
+                json.dumps(params),
+                "--cell-name",
+                cell_name,
+                "-o",
+                gds_path,
+            ]
         )
         roles = _ports_by_role(report, error_cls=FoldError)
         return {
@@ -422,17 +424,19 @@ def generate(
     row_params = dict(base_params, fingers=row_fingers)
     row_cell_name = f"{cell_name}_row"
     row_gds = os.path.join(out_dir, f"{row_cell_name}.gds")
-    row_report = _klt(
-        "gen",
-        "mos_array",
-        "--pdk",
-        pdk,
-        "--params",
-        json.dumps(row_params),
-        "--cell-name",
-        row_cell_name,
-        "-o",
-        row_gds,
+    row_report = klt_report.run_klt_json(
+        [
+            "gen",
+            "mos_array",
+            "--pdk",
+            pdk,
+            "--params",
+            json.dumps(row_params),
+            "--cell-name",
+            row_cell_name,
+            "-o",
+            row_gds,
+        ]
     )
 
     shapes, _row0_pads, _row1_pads, offset_y = build_tie_shapes(
@@ -440,14 +444,16 @@ def generate(
     )
     tie_cell_name = f"{cell_name}_tie"
     tie_gds = os.path.join(out_dir, f"{tie_cell_name}.gds")
-    tie_report = _klt(
-        "draw",
-        "--params",
-        json.dumps({"shapes": shapes}),
-        "--cell-name",
-        tie_cell_name,
-        "-o",
-        tie_gds,
+    tie_report = klt_report.run_klt_json(
+        [
+            "draw",
+            "--params",
+            json.dumps({"shapes": shapes}),
+            "--cell-name",
+            tie_cell_name,
+            "-o",
+            tie_gds,
+        ]
     )
 
     gds_path = os.path.join(out_dir, f"{cell_name}.gds")
@@ -489,7 +495,7 @@ def generate(
     compose_request_path = os.path.join(out_dir, f"{cell_name}.compose_request.json")
     with open(compose_request_path, "w", encoding="utf-8") as handle:
         json.dump(compose_request, handle, indent=2)
-    compose_report = _klt("gen-compose", compose_request_path)
+    compose_report = klt_report.run_klt_json(["gen-compose", compose_request_path])
 
     return {
         "gds_path": gds_path,
@@ -609,15 +615,17 @@ def check_fold_connectivity(
     -- expected, not a bug, and the module CLI skips this check automatically
     for a ``rows=1`` run.
     """
-    extraction = _klt(
-        "extract",
-        gds_path,
-        "--deck",
-        deck,
-        "--pdk",
-        pdk,
-        "--top",
-        cell_name,
+    extraction = klt_report.run_klt_json(
+        [
+            "extract",
+            gds_path,
+            "--deck",
+            deck,
+            "--pdk",
+            pdk,
+            "--top",
+            cell_name,
+        ]
     )
     return fold_connectivity_verdict(extraction, net_names, expected_fingers)
 
@@ -657,7 +665,7 @@ def main(argv: list[str] | None = None) -> int:
             out_dir=args.out_dir,
             cell_name=args.cell_name,
         )
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
@@ -682,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
             report["net_names"],
             args.fingers,
         )
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: connectivity check could not run: {exc}", file=sys.stderr)
         return 1
 
