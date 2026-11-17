@@ -10,6 +10,14 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-16
 
+- **PR #529**: sim: hoist the ngspice .control preamble into script_helpers (pins num_threads=1 everywhere)
+- **Issue #515** (closed): Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
+- **PR #461**: refactor(layout): draw both negative-control fixtures with the resolved klt
+- **Issue #451** (closed): Route the two hand-rolled klt draw calls through klt_report.run_klt: both ignore the resolved klt binary
+- **PR #526**: fix: exempt run evidence manifests from the sim harness dirty-tree check
+- **Issue #516** (closed): sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree'
+- **PR #525**: fix: call campaign.dropped_note instead of the last inline copy
+- **Issue #508** (closed): ronw mismatch runner hand-rolls campaign.dropped_note, the last inline copy in the family
 - **PR #471**: refactor(layout): share the negative-control pass/fail epilogue across the four controls
 - **Issue #468** (closed): Share the negative-control pass/fail epilogue: 4 copies in layout/, already drifted in loop placement
 - **PR #522**: sim: guard mismatch runners' bound prose against re-typed f-string literals

@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:d03ca3f5fce84882f73cfed8859b8522938c2934c295bdd4e134dec35aa6ec3b` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:767371ad518866585142d3a8040ba235b1fb7cfe551f5b9aea4ab2a8793f8b65` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:a8038d3738e5899cab8d934312895dac9689a9e87083bda3580b406d32103106` |
+| `sim/harness/README.md` | `sha256:b19c7b337f4313454b33975143985f0efc9a63fa5e2cb08ce80183592887f592` |
 | `layout/README.md` | `sha256:5b75a49d3e9705c0c2574c848fae848745f1a172ea2069e7bdc54969416ed7b4` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -497,6 +497,47 @@ layout flow or generator re-run happened as part of this audit; the same-klt
 generator comparison the refreshed `generator.sha256` pin rests on was run
 into scratch directories outside the tree.
 
+## Re-audit for issue #451 (2026-11-15)
+
+One listed file changed on the issue #451 branch (`feature/issue-451`, on top
+of `origin/main` at `0f25e3c`) and was re-read against the findings above; its
+hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `Negative-control
+  klt-binary unit tests` step to `test`, running
+  `layout/test_negative_control_klt_binary.py` (stdlib unittest;
+  `klt_report.run_klt` is stubbed and `layout/build/` is redirected to a temp
+  dir, so no `klt` runs, no PDK is read and nothing is written into the tree --
+  the step belongs on the PDK-free runner), plus the matching row in the job
+  table in the file's header comment. The PR's own diff leaves `lint`, the
+  harness self-test and the `signoff` job -- including the grader pin --
+  unchanged, and no existing `test` step moves, so the CI finding still holds.
+  The refreshed row pins the post-merge union of this PR's step with #463's
+  `Layout provenance freshness` step in the `signoff` job (documented by its
+  own re-audit above), so the merged tree is what is pinned. CI was read, not
+  observed to pass here.
+
+The other listed files are unchanged by this branch. Recorded but **not**
+pinned here: the new `layout/test_negative_control_klt_binary.py` and the two
+negative-control runners it exercises (`layout/drc/deck_negative_control.py`,
+`layout/ground_rail_negative_control.py`) -- none is listed in this inventory
+and none carries a hash in it. Both changes exist because the negative
+controls invoked a hardcoded `"klt"` argv instead of the binary
+`klt_env.require_klt()` resolved, so a control could draw its fixture with a
+different `klt` than the one its own guard approved (issue #451); they now
+route through `klt_report.run_klt` with the resolved binary threaded down.
+No simulation, netlisting or layout flow was run for this re-audit.
+
+Post-merge re-pin (2026-11-15): merging `origin/main` (`d46e492`, PRs #490/#493)
+into the issue #451 branch updated three of the rows above on the main side
+(`README.md`, `sim/README.md`, `layout/README.md`, re-audited by the issue #458
+section) and added its own re-audit section; the issue #451 rows are unchanged
+(`ci.yml` did not move on main, so the union row above still matches the merged
+`ci.yml` byte for byte). The merged inventory's own hash moved, so the pins
+downstream of it were refreshed to the merged bytes: `repo-hygiene.generic.json`
+`provenance.input.content_hash`, `manifest.json` item 10, and both occurrences
+in `tier-report.json`. No simulation, netlisting or layout flow was run for
+this re-pin.
 ## Re-audit for the PR #471 merge (2026-11-15)
 
 Two listed files changed in the merge of `origin/main` into
@@ -591,6 +632,19 @@ the new inventory bytes. No simulation, netlisting, layout flow or
 generator re-run happened as part of this audit; the same-klt generator
 comparison summarized above was run into scratch directories outside the
 tree and is recorded in `layout/README.md` and the issue #502 commit.
+
+Post-merge re-pin (2026-11-15): a further merge of `origin/main` (`5c051fd`,
+since `d46e492`: PRs #478/#484/#494/#496/#497/#506 and the intervening
+generator-refresh commit `0f715ff`) into the issue #451 branch appended the
+issue #479 and issue #502 re-audit sections above and moved two listed rows --
+`sim/harness/README.md` (#479's rename re-audit) and `layout/README.md`
+(#502's generator-comparison record). The issue #451 rows are unchanged; in
+particular `ci.yml` did not move on either side, so the union row above still
+matches the merged `ci.yml` byte for byte. The merged inventory's own hash
+moved again, so the pins downstream of it were refreshed to the merged bytes:
+`repo-hygiene.generic.json` `provenance.input.content_hash`, `manifest.json`
+item 10, and both occurrences in `tier-report.json`. No simulation,
+netlisting, layout flow or generator re-run happened as part of this re-pin.
 
 ## Re-audit for the second PR #471 merge (2026-11-15)
 
@@ -729,6 +783,32 @@ match the tables, including the refreshed `ci.yml` row. The other findings
 are unchanged. No simulation, netlisting or layout flow was run for this
 re-audit.
 
+Post-merge re-pin (2026-11-16): a third merge of `origin/main` (`e498a877`,
+since `5c051fd`: PR #473 -- issue #472's `klt report-runner unit tests` step
+and `klt_report.run_klt`'s keyword-only `ok_codes` -- and PR #489, issue
+#456's third conflict-resolution merge carrying the 20261114 extracted-DUT
+re-points, the oxide-safety record pair and the stored-evidence fix) into
+the issue #451 branch. The merged `.github/workflows/ci.yml` was re-read
+(**read** both diffs against the merge base `5c051fd`): it carries each
+side's change in full -- this branch's `Negative-control klt-binary unit
+tests` step plus its header-table row (re-aligned by one space to the
+table's column width in this merge), and main's `klt report-runner unit
+tests` step, its header-table row and the 20261114 `mk_extracted_dut.py
+--check` re-points. No job, trigger, permission or grader pin moved on
+either side, so the findings above still hold, and the CI table row is
+re-pinned for the merged union bytes (the hash above supersedes both this
+branch's `7793805a…` value and main's `7256f033…` value). Recorded but
+**not** pinned here: main's `layout/common/klt_report.py` keyword-only
+`ok_codes` refactor, matched in this merge by the one-character
+keyword-only fix to the `fake_run_klt` stub in
+`layout/test_negative_control_klt_binary.py` (neither file is listed in
+this inventory). All nine listed hashes were re-computed against the final
+merged tree and match the tables. The merged inventory's own hash moved
+again, so the pins downstream of it were refreshed to the merged bytes and
+the report re-rendered with the pinned grader (`879d39ba`):
+`repo-hygiene.generic.json` `provenance.input.content_hash`, `manifest.json`
+item 10, and both occurrences in `tier-report.json`. No simulation,
+netlisting, layout flow or generator re-run happened as part of this re-pin.
 ## Re-audit for the issue #492 second merge (2026-11-16)
 
 `origin/main` moved again after the issue #492 re-audit above resolved this
@@ -791,3 +871,112 @@ tree; the other listed rows are byte-identical to their pins, so those
 findings hold. The envelope, manifest item 10 and tier-report citation pins
 are refreshed for the new inventory bytes. No simulation, netlisting or
 layout flow was run for this re-audit.
+
+## Re-audit for the issue #451 fourth merge (2026-11-16)
+
+`origin/main` moved again after the issue #451 third-merge re-pin above —
+tip now `44ba942`, with PR #471's merge (the issue #468 control-verdict
+work), PR #525 (issue #508's `campaign.dropped_note` call fix) and the docs
+guide-update PRs among the new commits — and the four signoff cascade files
+(`repo-hygiene.inventory.md`, `repo-hygiene.generic.json`, `manifest.json`,
+`tier-report.json`) conflicted again. Two listed files changed in this merge
+of `origin/main` into `feature/issue-451` and were re-read against the
+findings above; their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** both diffs against the merge base
+  `e498a877`): both sides had edited it — this branch's `Negative-control
+  klt-binary unit tests` step plus its header-table row (the issue #451
+  re-audit above) and main's `Negative-control verdict unit tests` step for
+  `layout/common/test_control_verdict.py` plus its header-table row (the
+  issue #468 branch's, recorded in the third PR #471 merge re-audit above).
+  The merged file carries each side's change in full; no job, trigger,
+  permission, concurrency setting or grader pin moved, so the findings above
+  still hold. CI was read, not observed to pass here.
+- `layout/README.md`: changed on the main side only (this branch has not
+  edited it since the merge base) — the issue #468 `common/` listing
+  additions and the issue #492 throwaway-environment restate of the
+  pinned-install recipe, both already recorded in the re-audit sections
+  above. The merge takes main's side verbatim; re-computed against the
+  final merged tree, its table row matches.
+
+The other seven listed files are unchanged by both sides of this merge; all
+nine listed hashes were re-computed against the final merged tree and match
+the tables. The other findings are unchanged. Recorded but **not** pinned
+here: main's `layout/common/control_verdict.py` and its test, and issue
+#508's `sim/harness/campaign.py` refactor — none is listed in this
+inventory. The envelope, manifest item 10 and tier-report citation pins are
+refreshed for the new inventory bytes, and the report is re-rendered with
+the pinned grader (`879d39ba`). No simulation, netlisting, layout flow or
+generator re-run happened as part of this re-audit.
+
+## Re-audit for issue #515 (2026-11-16)
+
+One listed file changed on the issue #515 branch (`feature/issue-515`, on top
+of `origin/main` at `57cf193`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `sim/harness/README.md` (**read** the diff): adds one paragraph to the
+  section documenting that the harness pins every ngspice invocation to a
+  single thread, stating where the standalone `sim/*/run_*.py` experiments
+  that bypass `compose_deck()` now get the same pin — from
+  `harness/script_helpers.control_preamble()`, the one home for the
+  `num_threads=1` setting plus the `width`/`height`/`numdgt` batch-table
+  sizing, which `run_corner_deck()` inserts into every staged
+  `control.spice` and self-staging scripts call directly, because a
+  hand-typed per-script copy had already drifted into omitting the pin once
+  (issue #515). The paragraph is documentation of an already-recorded
+  behavior and adds no new reproduction command; the Quick start,
+  Prerequisites, PVT grid, testbench-authoring, "What a run writes", Monte
+  Carlo and xschem sections are untouched, so every reproduction command
+  this inventory's Reproduction finding relies on is unchanged, and no
+  README-content, spec-table or CI finding moves.
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE`,
+`spec/gate-driver.md` and `.github/workflows/ci.yml` are untouched by this
+branch, so those findings still hold. The hoisted preamble's code home and
+its callers — `sim/harness/script_helpers.py`, the bench runners it now
+serves and `sim/test_harness_script_helpers.py` — are recorded but **not**
+pinned here: none is listed in this inventory. No simulation, netlisting or
+layout flow was run for this re-audit. The envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes.
+
+## Re-audit for the PR #517 merge (2026-11-16)
+
+`origin/main` moved after this branch's inventory refresh, and the four
+signoff cascade files (`repo-hygiene.inventory.md`,
+`repo-hygiene.generic.json`, `manifest.json`, `tier-report.json`) plus
+`layout/ground_rail_negative_control.py` conflicted in the merge of
+`origin/main` (tip `9b45b29`) into `feature/issue-480`. The merged tree was
+re-checked against the findings above:
+
+- `sim/harness/README.md`: changed on the main side only — the issue #515
+  preamble-hoisting paragraph, recorded by the re-audit section above. The
+  merge takes main's side verbatim (re-hash matches), so that re-audit's
+  findings hold unchanged here.
+- `layout/README.md`: changed on the branch side only (the #480 same-klt
+  regeneration record in the drift paragraph, recorded in this PR's own
+  refresh); main has made no `layout/README.md` change since the merge base
+  `44ba942`, so the merged bytes are exactly the ones this PR's row already
+  pins — re-computed against the merged tree, it matches.
+- `.github/workflows/ci.yml`: changed on the main side only — #451's
+  `93fe90b` added the `Negative-control klt-binary unit tests` step and its
+  header-table row (the branch made no `ci.yml` change since the merge base
+  `44ba942`, so no side-by-side union was needed); the merge takes main's
+  side verbatim — re-computed against the merged tree, its row matches.
+- `layout/ground_rail_negative_control.py` (conflicted, **not** listed in
+  this inventory): both sides had edited `main()`'s try block — this PR
+  widened the catch to `(GenError, klt_report.KltRunError)` (the
+  `KltRunError` path is `check_gate_driver_core.routed_metal_components`),
+  and #451's merged form threads the `klt_env.require_klt()` binary down
+  into `_verdict(klt, …)`. The resolution keeps both: main's threaded-binary
+  calls plus this PR's widened catch.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. The merged inventory's
+own hash moved, so the pins downstream of it were refreshed to the merged
+bytes: `repo-hygiene.generic.json` `provenance.input.content_hash`,
+`manifest.json` item 10, and both occurrences in `tier-report.json`. No
+simulation, netlisting, layout flow or generator re-run happened as part of
+this re-audit; the generator the provenance pin attests (`4ce5b530…`) is
+byte-identical to the merged tree's (main made no generator change since
+the merge base).

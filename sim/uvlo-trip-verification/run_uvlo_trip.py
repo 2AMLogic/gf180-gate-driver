@@ -60,6 +60,7 @@ from harness import report as harness_report  # noqa: E402
 from harness.runner import ngspice_version  # noqa: E402
 from harness.script_helpers import first_crossing as _first_crossing  # noqa: E402
 from harness.script_helpers import fixed  # noqa: E402
+from harness.script_helpers import control_preamble as _control_preamble  # noqa: E402
 from harness.script_helpers import corner_shim as _corner_shim  # noqa: E402
 from harness.script_helpers import parse_dc_tables as _parse_dc_tables  # noqa: E402
 from harness.script_helpers import range_verdict as _range_verdict  # noqa: E402
@@ -147,8 +148,8 @@ def _hysteresis_deck() -> str:
         + _boundary_stimulus()
         + _dut_fragment()
         + "\n.control\n"
-        "set num_threads=1\n"
-        "tran 10n 40u\n"
+        + _control_preamble()
+        + "tran 10n 40u\n"
         "print v(VDD_DRV) v(ndiv) v(nref)\n"
         "print v(lockout) v(uvlo_ok) v(OUT)\n"
         "quit\n"
@@ -169,8 +170,8 @@ def _response_deck() -> str:
         + _boundary_stimulus()
         + _dut_fragment()
         + "\n.control\n"
-        "set num_threads=1\n"
-        "tran 0.05n 2000n\n"
+        + _control_preamble()
+        + "tran 0.05n 2000n\n"
         "print v(VDD_DRV) v(lockout) v(OUT)\n"
         "quit\n"
         ".endc\n"
