@@ -19,14 +19,17 @@ Ported from ``2AMLogic/gf180-bandgap``'s ``layout/drc/run_drc.py`` (CLAUDE.md:
 rather than reinventing it").
 
 Requires ``klt`` on ``PATH`` -- see ``layout/README.md`` for the pinned
-install.
+install; ``--klt <path>`` selects the binary directly, so a report can be
+produced from a specific pinned ``klt`` install without touching the
+``PATH`` pin.
 
 Usage (from the repo root):
 
     python3 layout/drc/run_drc.py layout/gate_driver_core.gds
 
-    # explicit fixture name / deck, if ever needed:
-    python3 layout/drc/run_drc.py <path/to.gds> --fixture <name> --deck gf180mcu
+    # explicit fixture name / deck / klt, if ever needed:
+    python3 layout/drc/run_drc.py <path/to.gds> --fixture <name> \\
+        --deck gf180mcu --klt /path/to/klt
 """
 
 from __future__ import annotations
@@ -45,7 +48,7 @@ import signoff_store  # noqa: E402
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("gds", type=Path, help="path to the GDS/OASIS file to check")
     parser.add_argument(
@@ -58,9 +61,17 @@ def main() -> int:
         action="store_true",
         help="store the json envelope too instead of committing it (negative controls)",
     )
-    args = parser.parse_args()
+    parser.add_argument(
+        "--klt",
+        help="path to the klt binary (default: 'klt' on PATH)",
+    )
+    return parser
 
-    klt = klt_env.require_klt()
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    klt = klt_env.require_klt(args.klt)
     signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)

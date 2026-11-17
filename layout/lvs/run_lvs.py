@@ -26,9 +26,18 @@ Ported and adapted from ``2AMLogic/gf180-bandgap``'s ``layout/lvs/run_lvs.py``
 top cell has no analog to that repo's ``--engine netgen`` cross-check need
 yet, so the engine selector is dropped rather than carried unused.
 
+Like ``run_drc.py``/``run_erc.py``, it accepts ``--klt <path>`` so a report
+can be produced from a specific pinned ``klt`` install without touching the
+``PATH`` pin -- see ``layout/README.md`` ("Reproducibility: pin the
+``klt`` install (#190)").
+
 Usage (from the repo root)::
 
     python3 layout/lvs/run_lvs.py layout/gate_driver_core.gds
+
+    # explicit block / deck / klt, if ever needed:
+    python3 layout/lvs/run_lvs.py <path/to.gds> --block <name> \\
+        --deck gf180mcu --klt /path/to/klt
 """
 
 from __future__ import annotations
@@ -87,13 +96,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=REFERENCE,
         help="reference netlist (regenerated before the run)",
     )
+    parser.add_argument(
+        "--klt",
+        help="path to the klt binary (default: 'klt' on PATH)",
+    )
     return parser
 
 
 def main() -> int:
     args = build_parser().parse_args()
 
-    klt = klt_env.require_klt()
+    klt = klt_env.require_klt(args.klt)
     signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)
