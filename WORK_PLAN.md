@@ -59,7 +59,6 @@ Issues carrying `loom:curated`.
 
 ## Proposed (Architect / Hermit)
 
-- **#483**: Route the ronw mismatch runner's private main() onto a shared campaign envelope: 46 of its 101 lines already exist in run_mismatch_main *(hermit)*
 - **#487**: Remove parse_netlist(): its MOS-only rationale no longer has a consumer *(hermit)* *(held)*
 
 ## Epics
@@ -78,6 +77,6 @@ _None._
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 3 |
-| Architect / Hermit proposals | 2 |
+| Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
