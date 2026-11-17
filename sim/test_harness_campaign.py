@@ -32,6 +32,7 @@ from __future__ import annotations
 import ast
 import contextlib
 import datetime as _dt
+import importlib.util
 import io
 import re
 import sys
@@ -1228,6 +1229,41 @@ class RunDeviceMainTests(unittest.TestCase):
 
     def test_a_completed_run_exits_zero(self):
         self.assertEqual(self._run().code, 0)
+
+
+class RunnerHookSmokeTests(unittest.TestCase):
+    """A real runner's `_progress_detail` -- the hook no stub ever reaches.
+
+    `RunDeviceMainTests` drives `run_device_main` with its own stub hooks, so
+    an unbound name inside a real runner's hook survives this suite green --
+    exactly the `_fmt` NameError the review of `7389332` caught in
+    `run_uvlo_trip.py`. Loading the uvlo runner by path (the
+    `test_gen_requests.py` pattern) and calling the hook pins the progress
+    line's literal bytes; the module is stdlib-only at import time, so this
+    stays PDK-free like the rest of the suite.
+    """
+
+    def test_uvlo_progress_line_pins_trip_points_hysteresis_and_response(self):
+        spec = importlib.util.spec_from_file_location(
+            "run_uvlo_trip_for_hook_test",
+            Path(__file__).resolve().parent / "uvlo-trip-verification" / "run_uvlo_trip.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(
+            module._progress_detail(
+                "sf_27c_nosupply",
+                {
+                    "hysteresis": {
+                        "falling_v": 4.1372,
+                        "rising_v": 4.4809,
+                        "hysteresis_v": 0.3437,
+                    },
+                    "response": {"response_s": 150.8e-9},
+                },
+            ),
+            "falling=4.1372 rising=4.4809 hyst=0.3437 response=150.8ns",
+        )
 
 
 if __name__ == "__main__":

@@ -485,9 +485,9 @@ def _progress_detail(cid: str, extracted: dict) -> str:
     """The per-point progress line: both trip points, hysteresis, response."""
     hyst, resp = extracted["hysteresis"], extracted["response"]
     return (
-        f"falling={_fmt(hyst['falling_v'])} rising={_fmt(hyst['rising_v'])} "
-        f"hyst={_fmt(hyst['hysteresis_v'])} "
-        f"response={_fmt(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
+        f"falling={fixed(hyst['falling_v'])} rising={fixed(hyst['rising_v'])} "
+        f"hyst={fixed(hyst['hysteresis_v'])} "
+        f"response={fixed(resp['response_s'] * 1e9 if resp['response_s'] is not None else None, 1)}ns"
     )
 
 
