@@ -10,6 +10,7 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-17
 
+- **PR #462**: refactor(sim): share one device-runner driver via campaign.run_device_main
 - **Issue #502** (closed): layout: provenance generator.sha256 stale after #478's generator refactor (signoff CI red on main)
 - **Issue #450** (closed): Share one device-runner driver in harness/campaign.py: three hand-rolled main() copies and a dead write_device_corner_log alias
 - **PR #535**: chore(loom): resync installed Loom to v0.19.1306
