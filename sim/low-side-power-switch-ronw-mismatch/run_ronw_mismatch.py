@@ -57,12 +57,10 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import statistics
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -76,7 +74,7 @@ from harness import montecarlo as mc_mod  # noqa: E402
 from harness import pdk as harness_pdk  # noqa: E402
 from harness import evidence_store as harness_evidence_store  # noqa: E402
 from harness import report as harness_report  # noqa: E402
-from harness.runner import PointResult, ngspice_version  # noqa: E402
+from harness.runner import PointResult  # noqa: E402
 from harness.script_helpers import fixed  # noqa: E402
 from harness import script_helpers  # noqa: E402
 
@@ -813,21 +811,16 @@ def build_record_body(record, stamp, pdk, ngspice, outcomes: list[PointOutcome],
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "-n", "--samples", type=int, default=DEFAULT_SAMPLES,
-        help=f"Monte Carlo draws per PVT point (default {DEFAULT_SAMPLES})",
+    run = campaign.start_run(
+        argv,
+        description=__doc__.splitlines()[0],
+        here=HERE,
+        repo_root=REPO_ROOT,
+        default_samples=DEFAULT_SAMPLES,
     )
-    parser.add_argument("-j", "--jobs", type=int, default=8, help="parallel ngspice runs")
-    parser.add_argument(
-        "--smoke", action="store_true",
-        help="3 draws at one corner only -- pipeline debugging, not evidence",
-    )
-    parser.add_argument("--no-write", action="store_true", help="run but record nothing (debugging)")
-    args = parser.parse_args(argv)
-
-    pdk = harness_pdk.find_pdk()
-    ngspice = ngspice_version()
+    args = run.args
+    pdk = run.pdk
+    ngspice = run.ngspice
 
     grid = GRID
     n_samples = args.samples
@@ -836,18 +829,6 @@ def main(argv=None) -> int:
         n_samples = 3
         selected = {i for i, (corner, temp) in enumerate(grid) if corner.name == "ss" and temp == 125.0}
 
-    if not args.no_write:
-        harness_evidence_store.preflight_or_exit(REPO_ROOT)
-    git = harness_report.git_provenance(REPO_ROOT)
-    record = harness_report.allocate_record_id(REPO_ROOT, HERE / harness_report.RECORDS_DIR, git=git)
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
-
-    if git["dirty"]:
-        print(
-            "warning: input tree (design/testbench/harness/docs) is dirty; "
-            f"record {record} will not be reproducible from commit {git['short']} alone"
-        )
-
     total = len(selected) * (n_samples + 3)
     print(f"experiment : {HERE.name}")
     print(f"testbench  : sim/{SOURCE_EXPERIMENT} (reused verbatim)")
@@ -855,7 +836,7 @@ def main(argv=None) -> int:
     print(f"ngspice    : {ngspice}")
     print(f"points     : {len(selected)} PVT x ({n_samples} draws + 1 baseline + 2 controls) = {total} runs")
     print(f"base seed  : {BASE_SEED}  (stride {mc_mod.SEED_STRIDE})")
-    print(f"record id  : {record}")
+    print(f"record id  : {run.record}")
     print()
 
     done = 0
@@ -885,7 +866,9 @@ def main(argv=None) -> int:
     print()
     print(f"completed in {wall / 60:.1f} min")
 
-    body, verdict, anomalies = build_record_body(record, stamp, pdk, ngspice, outcomes, n_samples, wall, args)
+    body, verdict, anomalies = build_record_body(
+        run.record, run.stamp, pdk, ngspice, outcomes, n_samples, wall, args
+    )
 
     if args.no_write:
         print()
@@ -893,26 +876,19 @@ def main(argv=None) -> int:
         print("evidence  : not recorded (--no-write)")
         return 0
 
-    stage = harness_evidence_store.stage_dir(REPO_ROOT, HERE.name, record)
+    stage = harness_evidence_store.stage_dir(REPO_ROOT, HERE.name, run.record)
     corners_dir = stage / harness_report.CORNERS_DIR
     for outcome in outcomes:
-        campaign.write_sample_csv(corners_dir, record, outcome, FLATTEN_NAMES)
-        write_logs(corners_dir, record, stamp, pdk, ngspice, outcome)
+        campaign.write_sample_csv(corners_dir, run.record, outcome, FLATTEN_NAMES)
+        write_logs(corners_dir, run.record, run.stamp, pdk, ngspice, outcome)
 
-    harness_report.write_device_netlist_snapshot(stage / "netlist-snapshots", record, DECK_PATH)
-    path = HERE / harness_report.RECORDS_DIR / f"{record}.md"
-    manifest = harness_evidence_store.commit_run_or_exit(
-        stage, repo_root=REPO_ROOT, bench=HERE.name, rid=record, record_text=body, record_path=path
+    harness_report.write_device_netlist_snapshot(
+        stage / harness_report.SNAPSHOT_DIR, run.record, DECK_PATH
     )
-    print(f"record    : {path}")
-    print(f"manifest  : {manifest}")
-    print(f"staged    : {stage}")
-    print(f"status    : {verdict}")
-    if anomalies:
-        print(f"anomalies : {len(anomalies)}")
-        for line in anomalies:
-            print(f"  - {line}")
-    return 0 if verdict == "PASS" else 1
+    return campaign.finish_run(
+        stage=stage, repo_root=REPO_ROOT, here=HERE, record=run.record,
+        body=body, verdict=verdict, anomalies=anomalies,
+    )
 
 
 if __name__ == "__main__":

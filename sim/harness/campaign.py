@@ -47,7 +47,7 @@ import csv
 import statistics
 import time
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any
+from typing import Any, NamedTuple
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
@@ -439,6 +439,143 @@ def write_outcome_logs(
 
 
 # --------------------------------------------------------------------------
+# Run envelope
+# --------------------------------------------------------------------------
+
+
+class RunContext(NamedTuple):
+    """What :func:`start_run` mints before a campaign loop starts.
+
+    `args` is the parsed `-n/-j/--smoke/--no-write` namespace, or `None`
+    for a driver without a CLI (the device-characterization runners take no
+    flags). `git` / `record` / `stamp` are the provenance triple every
+    record body and log banner needs.
+    """
+
+    args: argparse.Namespace | None
+    pdk: Pdk
+    ngspice: str
+    git: dict
+    record: str
+    stamp: datetime
+
+
+def start_run(
+    argv: Sequence[str] | None = None,
+    *,
+    parse_cli: bool = True,
+    description: str | None = None,
+    here: Path,
+    repo_root: Path,
+    default_samples: int | None = None,
+) -> RunContext:
+    """The shared head of a recorded run's `main()` (issue #483).
+
+    Parses the `-n/-j/--smoke/--no-write` flags every recorded run takes
+    (`parse_cli=False` skips this -- the device-characterization drivers
+    have no CLI), discovers the PDK and ngspice, runs the evidence-store
+    preflight unless `--no-write`, mints the record id from the tree's git
+    provenance, parses its stamp, and discloses a dirty input tree. The
+    campaign loop, its banner and the record body stay the caller's; the
+    tail is :func:`finish_run` / :func:`commit_run`.
+
+    The dirty-tree disclosure used to have three divergent answers: ronw
+    warned from its private `main()`, `run_device_main` warned from its own
+    copy, and `run_mismatch_main` never -- even though all of them read
+    `report.git_provenance()`. It lives here, so every recorded run using
+    the envelope says so in the same words. Emitting it everywhere is the
+    behaviour-preserving superset; whether the record *body* should also
+    carry `report.render_record`'s in-record disclosure is a separate call,
+    deliberately left to a follow-up.
+    """
+    if parse_cli:
+        parser = argparse.ArgumentParser(description=description)
+        parser.add_argument(
+            "-n", "--samples", type=int, default=default_samples,
+            help=f"Monte Carlo draws per PVT point (default {default_samples})",
+        )
+        parser.add_argument("-j", "--jobs", type=int, default=8, help="parallel ngspice runs")
+        parser.add_argument(
+            "--smoke", action="store_true",
+            help="3 draws at the binding corner only -- pipeline debugging, not evidence",
+        )
+        parser.add_argument(
+            "--no-write", action="store_true", help="run but record nothing (debugging)"
+        )
+        args = parser.parse_args(argv)
+    else:
+        args = None
+
+    pdk = harness_pdk.find_pdk()
+    ngspice = harness_runner.ngspice_version()
+
+    if args is None or not args.no_write:
+        evidence_store.preflight_or_exit(repo_root)
+    git = report.git_provenance(repo_root)
+    record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
+    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+
+    if git["dirty"]:
+        print(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {record} will not be reproducible from commit "
+            f"{git['short']} alone"
+        )
+
+    return RunContext(
+        args=args, pdk=pdk, ngspice=ngspice, git=git, record=record, stamp=stamp
+    )
+
+
+def commit_run(
+    *, stage: Path, repo_root: Path, here: Path, record: str, body: str
+) -> tuple[Path, Path]:
+    """The closing commit block shared by every recorded run.
+
+    Hands the staged evidence to :func:`evidence_store.commit_run_or_exit`
+    and returns the committed record's path and the manifest it produced.
+    """
+    path = here / report.RECORDS_DIR / f"{record}.md"
+    manifest = evidence_store.commit_run_or_exit(
+        stage, repo_root=repo_root, bench=here.name, rid=record,
+        record_text=body, record_path=path,
+    )
+    return path, manifest
+
+
+def finish_run(
+    *,
+    stage: Path,
+    repo_root: Path,
+    here: Path,
+    record: str,
+    body: str,
+    verdict: str,
+    anomalies: Sequence[str] = (),
+) -> int:
+    """The closing tail of a recorded run's `main()`: commit, then report.
+
+    Commits via :func:`commit_run`, prints the `record` / `manifest` /
+    `staged` / `status` block, then the optional `anomalies` list --
+    disclosed-but-not-fatal findings a run wants on the console (issue
+    #483: ronw was the only runner with that channel, as a private fork of
+    this block). Returns `0` iff the verdict is `PASS`.
+    """
+    path, manifest = commit_run(
+        stage=stage, repo_root=repo_root, here=here, record=record, body=body
+    )
+    print(f"record    : {path}")
+    print(f"manifest  : {manifest}")
+    print(f"staged    : {stage}")
+    print(f"status    : {verdict}")
+    if anomalies:
+        print(f"anomalies : {len(anomalies)}")
+        for line in anomalies:
+            print(f"  - {line}")
+    return 0 if verdict == "PASS" else 1
+
+
+# --------------------------------------------------------------------------
 # Command-line driver
 # --------------------------------------------------------------------------
 
@@ -470,9 +607,11 @@ def run_mismatch_main(
 ) -> int:
     """The `main()` shared by the testbench-driven mismatch campaigns.
 
-    Parses `-n/-j/--smoke/--no-write`, loads the PDK/ngspice/testbench, runs the
-    campaign over the PVT grid, and writes the record, netlist snapshot and raw
-    logs. The per-campaign parts are hooks:
+    The `-n/-j/--smoke/--no-write` parsing, the PDK/ngspice discovery, the
+    evidence-store preflight, the record-id minting and its stamp, the
+    dirty-tree disclosure, and the closing commit + report block are the
+    shared run envelope (:func:`start_run` / :func:`finish_run`, issue
+    #483). The per-campaign parts are hooks:
 
     * `smoke_corner_id` -- the one grid point a `--smoke` run keeps.
     * `progress_detail` / `corner_width` -- the trailing text and the corner
@@ -487,23 +626,16 @@ def run_mismatch_main(
     therefore every recorded seed -- is the point's position in *this* order. A
     `--smoke` run selects a subset of it without renumbering.
     """
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "-n", "--samples", type=int, default=default_samples,
-        help=f"Monte Carlo draws per PVT point (default {default_samples})",
+    run = start_run(
+        argv,
+        description=description,
+        here=here,
+        repo_root=repo_root,
+        default_samples=default_samples,
     )
-    parser.add_argument("-j", "--jobs", type=int, default=8, help="parallel ngspice runs")
-    parser.add_argument(
-        "--smoke", action="store_true",
-        help="3 draws at the binding corner only -- pipeline debugging, not evidence",
-    )
-    parser.add_argument(
-        "--no-write", action="store_true", help="run but record nothing (debugging)"
-    )
-    args = parser.parse_args(argv)
-
-    pdk = harness_pdk.find_pdk()
-    ngspice = harness_runner.ngspice_version()
+    args = run.args
+    pdk = run.pdk
+    ngspice = run.ngspice
     tb = tb_mod.load(sim_dir / source_experiment)
     if prepare_testbench is not None:
         prepare_testbench(tb)
@@ -516,12 +648,7 @@ def run_mismatch_main(
         selected = {i for i, p in enumerate(grid) if p.corner_id == smoke_corner_id}
     points = [p for i, p in enumerate(grid) if i in selected]
 
-    if not args.no_write:
-        evidence_store.preflight_or_exit(repo_root)
-    git = report.git_provenance(repo_root)
-    record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
-    workdir = sim_dir / ".work" / here.name / record
+    workdir = sim_dir / ".work" / here.name / run.record
     total = len(points) * (n_samples + 3)  # + baseline + 2 zero-sigma controls
 
     print(f"experiment : {here.name}")
@@ -534,7 +661,7 @@ def run_mismatch_main(
         f"+ 2 controls) = {total} runs"
     )
     print(f"base seed  : {base_seed}  (stride {mc_mod.SEED_STRIDE})")
-    print(f"record id  : {record}")
+    print(f"record id  : {run.record}")
     print()
 
     done = 0
@@ -580,7 +707,7 @@ def run_mismatch_main(
     print(f"completed {total - failed}/{total} runs in {wall / 60:.1f} min")
 
     body, verdict = build_record_body(
-        record, stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args
+        run.record, run.stamp, pdk, ngspice, tb, outcomes, n_samples, wall, args
     )
 
     if args.no_write:
@@ -589,27 +716,21 @@ def run_mismatch_main(
         print("evidence  : not recorded (--no-write)")
         return 0
 
-    stage = evidence_store.stage_dir(repo_root, here.name, record)
+    stage = evidence_store.stage_dir(repo_root, here.name, run.record)
     corners_dir = stage / report.CORNERS_DIR
     for outcome in outcomes:
         write_outcome_logs(
-            corners_dir, record, outcome, pdk, tb, stamp, ngspice,
+            corners_dir, run.record, outcome, pdk, tb, run.stamp, ngspice,
             source_experiment=source_experiment,
             worst=worst_sample(outcome),
             baseline_note_lines=baseline_note_lines,
         )
 
-    report.write_netlist_snapshot(tb, here, record, out_dir=stage / report.SNAPSHOT_DIR)
-    path = here / report.RECORDS_DIR / f"{record}.md"
-    manifest = evidence_store.commit_run_or_exit(
-        stage, repo_root=repo_root, bench=here.name, rid=record,
-        record_text=body, record_path=path,
+    report.write_netlist_snapshot(tb, here, run.record, out_dir=stage / report.SNAPSHOT_DIR)
+    return finish_run(
+        stage=stage, repo_root=repo_root, here=here, record=run.record,
+        body=body, verdict=verdict,
     )
-    print(f"record    : {path}")
-    print(f"manifest  : {manifest}")
-    print(f"staged    : {stage}")
-    print(f"status    : {verdict}")
-    return 0 if verdict == "PASS" else 1
 
 
 def run_device_main(
@@ -654,30 +775,21 @@ def run_device_main(
       handed back to `summarize`.
     * `summarize(summary)` -- the closing lines printed after the manifest.
 
-    A dirty input tree is disclosed for **every** runner using this driver.
-    Before #450 only `run_low_side_power_switch.py` said so, even though all
-    of them read `git_provenance()`; emitting it everywhere is the
-    behaviour-preserving superset, and this is the one place that decision
-    can be made once. Whether the record *body* should also carry
+    A dirty input tree is disclosed for **every** recorded run via
+    :func:`start_run` (issue #483). Before #450 only
+    `run_low_side_power_switch.py` said so, even though all of them read
+    `git_provenance()`; #450 gave this driver its own copy, and the shared
+    envelope is where that decision now lives for the mismatch campaigns
+    too. Whether the record *body* should also carry
     :func:`report.render_record`'s in-record disclosure is a separate call,
     deliberately left to a follow-up.
     """
-    pdk = harness_pdk.find_pdk()
-    ngspice = harness_runner.ngspice_version()
-    evidence_store.preflight_or_exit(repo_root)
-    git = report.git_provenance(repo_root)
-    record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
-    stage = evidence_store.stage_dir(repo_root, here.name, record)
-    stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+    run = start_run(here=here, repo_root=repo_root, parse_cli=False)
+    pdk = run.pdk
+    ngspice = run.ngspice
+    stage = evidence_store.stage_dir(repo_root, here.name, run.record)
 
-    if git["dirty"]:
-        print(
-            "warning: input tree (design/testbench/harness/docs) is dirty; "
-            f"record {record} will not be reproducible from commit "
-            f"{git['short']} alone"
-        )
-
-    print(f"record {record}: {len(process_corners) * len(temperatures_c)} corner points")
+    print(f"record {run.record}: {len(process_corners) * len(temperatures_c)} corner points")
     results: dict[tuple[str, float], dict] = {}
     for corner in process_corners:
         for temp in temperatures_c:
@@ -685,20 +797,18 @@ def run_device_main(
             name = corner_key(corner)
             report.write_corner_log(
                 stage / report.CORNERS_DIR,
-                record,
+                run.record,
                 cid,
-                report.device_log_header(pdk, deck, name, temp, record, stamp, ngspice),
+                report.device_log_header(pdk, deck, name, temp, run.record, run.stamp, ngspice),
                 log,
             )
             results[(name, temp)] = extracted
             print(f"  {cid}: {progress_detail(cid, extracted)}")
 
-    report.write_device_netlist_snapshot(stage / report.SNAPSHOT_DIR, record, deck)
-    body, summary = build_record_body(record, stamp, pdk, ngspice, results)
-    path = here / report.RECORDS_DIR / f"{record}.md"
-    manifest = evidence_store.commit_run_or_exit(
-        stage, repo_root=repo_root, bench=here.name, rid=record,
-        record_text=body, record_path=path,
+    report.write_device_netlist_snapshot(stage / report.SNAPSHOT_DIR, run.record, deck)
+    body, summary = build_record_body(run.record, run.stamp, pdk, ngspice, results)
+    path, manifest = commit_run(
+        stage=stage, repo_root=repo_root, here=here, record=run.record, body=body,
     )
     print(f"wrote {path} (evidence manifest {manifest})")
     for line in summarize(summary):
@@ -1027,6 +1137,7 @@ def trailer_lines(stamp, issue: int, supersedes: str, smoke: bool, dash: str) ->
 __all__ = [
     "CONTROL_SEED_OFFSET",
     "PointOutcome",
+    "RunContext",
     "baseline_log_header",
     "control_table_rows",
     "convention_head",
@@ -1042,10 +1153,13 @@ __all__ = [
     "pvt_axes_lines",
     "reference_anomaly",
     "reference_coverage_note",
+    "commit_run",
+    "finish_run",
     "run_device_main",
     "run_device_point_campaign",
     "run_mismatch_main",
     "run_point_campaign",
+    "start_run",
     "trailer_lines",
     "verdict_for",
     "write_log",

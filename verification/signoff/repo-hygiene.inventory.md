@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:464d81e2a258fd4dc3bacfff4f7ecef8eda1f95a501c30c408e1d6cc95fb6b1e` |
+| `sim/harness/README.md` | `sha256:a2451edf9825d4951cb4a81453e4715b1b7eb4e0619c96d93f106807a44babe6` |
 | `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -1486,3 +1486,35 @@ match the tables. The envelope, manifest item 10 and tier-report citation
 pins are refreshed for the final merged inventory bytes, and the report is
 re-rendered with the pinned grader (`879d39ba`). No simulation, netlisting,
 layout flow or generator re-run happened as part of this re-audit.
+
+## Re-audit for issue #483 (2026-11-17)
+
+One listed file changed on the issue #483 branch (`feature/issue-483`, on top
+of `origin/main` at `4b6f2b73`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `sim/harness/README.md` (**read** the diff): adds a "The run envelope:
+  `campaign.start_run` / `campaign.finish_run`" section documenting the shared
+  head/tail that every recorded run's `main()` now goes through (common
+  `-n/-j/--smoke/--no-write` flag parsing, PDK/ngspice discovery,
+  evidence-store preflight, record-id minting and stamp parsing for
+  `start_run`; `commit_run`, the printed `record`/`manifest`/`staged`/
+  `status` block, the `anomalies` list and the PASS-status return for
+  `finish_run`), and rewrites the dirty-tree disclosure paragraph: the
+  "record will not be reproducible" warning moved from the device-runner
+  driver's own copy (given by #450) into the shared envelope, so the mismatch
+  campaigns disclose it too. The envelope section documents the same
+  `sim/harness/campaign.py` this PR refactors; nothing outside that file's
+  documentation moved -- the facet-table omission disclosed above is in
+  `sim/README.md`, not here, and every reproduction command is untouched, so
+  the Reproduction finding still holds.
+
+The other listed files are unchanged; in particular `.github/workflows/ci.yml`
+is untouched by this branch, so the CI finding still holds. The PR's other
+three changed files (`sim/harness/campaign.py`,
+`sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py`,
+`sim/test_harness_campaign.py`) are not listed in this inventory and carry no
+hash here. The envelope, manifest item 10 and tier-report citation pins are
+refreshed for the new inventory bytes, and the report is re-rendered with the
+pinned grader (`879d39ba`). No simulation, netlisting or layout flow was run
+for this re-audit.

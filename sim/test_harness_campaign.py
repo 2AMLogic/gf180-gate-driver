@@ -989,6 +989,153 @@ class RecordSectionHelperTests(unittest.TestCase):
         self.assertIn("None -- all 1 mismatch draws completed", "\n".join(none))
 
 
+class RunEnvelopeTests(unittest.TestCase):
+    """The shared run envelope: `campaign.start_run` / `finish_run` (issue #483).
+
+    The head and tail every recorded run's `main()` shares: the
+    `-n/-j/--smoke/--no-write` parser, PDK/ngspice discovery, the
+    evidence-store preflight, the record-id mint + stamp parse, the
+    dirty-tree disclosure, the closing commit and the record/manifest/
+    staged/status report. PDK-free and ngspice-free like the rest of this
+    suite -- the outside world is stubbed exactly as `RunDeviceMainTests`
+    stubs it.
+    """
+
+    RECORD = "20260102-030405-abc1234"
+    MANIFEST = Path("sim/.evidence/manifests/fake-envelope/fake.json")
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.here = self.root / "sim" / "fake-envelope"
+        (self.here / "records").mkdir(parents=True)
+        self.stage = self.root / "stage"
+        self.stage.mkdir()
+
+        self.dirty = False
+        self.preflighted = []
+        self.committed = []
+
+        def _commit(stage, *, repo_root, bench, rid, record_text, record_path):
+            self.committed.append({
+                "stage": stage, "repo_root": repo_root, "bench": bench,
+                "rid": rid, "record_text": record_text, "record_path": record_path,
+            })
+            return self.MANIFEST
+
+        def _git(repo_root):
+            return {
+                "commit": "abc1234" + "0" * 33, "short": "abc1234",
+                "branch": "main", "dirty": self.dirty,
+            }
+
+        for module, name, replacement in (
+            (campaign.harness_pdk, "find_pdk", lambda: _PDK),
+            (campaign.harness_runner, "ngspice_version", lambda: _NGSPICE),
+            (campaign.evidence_store, "preflight_or_exit", self.preflighted.append),
+            (campaign.evidence_store, "commit_run_or_exit", _commit),
+            (campaign.report, "git_provenance", _git),
+            (campaign.report, "allocate_record_id", lambda *a, **k: self.RECORD),
+        ):
+            saved = getattr(module, name)
+            setattr(module, name, replacement)
+            self.addCleanup(setattr, module, name, saved)
+
+    def _start(self, *argv, **kwargs):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            run = campaign.start_run(
+                list(argv), here=self.here, repo_root=self.root, **kwargs
+            )
+        return run, buf.getvalue()
+
+    # -- the shared parser and the head ------------------------------------
+
+    def test_the_four_flags_are_parsed_and_the_preflight_runs(self):
+        run, _ = self._start("-n", "7", "--smoke")
+        self.assertEqual(run.args.samples, 7)
+        self.assertTrue(run.args.smoke)
+        self.assertFalse(run.args.no_write)
+        self.assertEqual(self.preflighted, [self.root])
+
+    def test_no_write_skips_the_preflight_but_still_mints_a_record_id(self):
+        run, _ = self._start("--no-write")
+        self.assertEqual(self.preflighted, [])
+        self.assertEqual(run.record, self.RECORD)
+
+    def test_a_driver_without_a_cli_gets_no_args_but_the_same_head(self):
+        # The device-characterization drivers take no flags; they get the
+        # same discovery/preflight/mint/disclosure head, with args=None.
+        run, _ = self._start(parse_cli=False)
+        self.assertIsNone(run.args)
+        self.assertEqual(self.preflighted, [self.root])
+        self.assertEqual((run.pdk, run.ngspice), (_PDK, _NGSPICE))
+
+    def test_the_stamp_is_parsed_from_the_record_id(self):
+        run, _ = self._start()
+        self.assertEqual(run.stamp, _STAMP)
+        self.assertEqual(run.git["short"], "abc1234")
+
+    # -- the dirty-tree disclosure ----------------------------------------
+
+    def test_a_dirty_input_tree_is_disclosed_by_the_envelope(self):
+        self.dirty = True
+        _, out = self._start()
+        self.assertIn(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {self.RECORD} will not be reproducible from commit "
+            "abc1234 alone\n",
+            out,
+        )
+
+    def test_a_clean_input_tree_prints_no_warning(self):
+        _, out = self._start()
+        self.assertNotIn("dirty", out)
+
+    # -- the closing tail --------------------------------------------------
+
+    def _finish(self, **kwargs):
+        params = dict(
+            stage=self.stage, repo_root=self.root, here=self.here,
+            record=self.RECORD, body="# body\n", verdict="PASS",
+        )
+        params.update(kwargs)
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = campaign.finish_run(**params)
+        return code, buf.getvalue()
+
+    def test_the_closing_block_commits_and_reports_the_four_lines(self):
+        code, out = self._finish()
+        self.assertEqual(code, 0)
+        self.assertEqual(len(self.committed), 1)
+        commit = self.committed[0]
+        self.assertEqual(commit["bench"], "fake-envelope")
+        self.assertEqual(commit["rid"], self.RECORD)
+        self.assertEqual(commit["record_text"], "# body\n")
+        self.assertEqual(commit["record_path"], self.here / "records" / f"{self.RECORD}.md")
+        self.assertEqual(out, (
+            f"record    : {self.here / 'records' / (self.RECORD + '.md')}\n"
+            f"manifest  : {self.MANIFEST}\n"
+            f"staged    : {self.stage}\n"
+            "status    : PASS\n"
+        ))
+
+    def test_a_failing_verdict_is_a_nonzero_exit(self):
+        code, out = self._finish(verdict="ERROR")
+        self.assertEqual(code, 1)
+        self.assertIn("status    : ERROR\n", out)
+
+    def test_supplied_anomalies_are_printed_after_the_status_line(self):
+        _, out = self._finish(verdict="PASS", anomalies=["one", "two"])
+        self.assertEqual(out.splitlines()[-3:], ["anomalies : 2", "  - one", "  - two"])
+
+    def test_no_anomalies_prints_no_anomaly_channel(self):
+        _, out = self._finish()
+        self.assertNotIn("anomalies", out)
+
+
 class RunDeviceMainTests(unittest.TestCase):
     """The device-characterization runners' shared `main()` (issue #450).
 
