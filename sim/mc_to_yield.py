@@ -44,35 +44,63 @@ import json
 import sys
 from pathlib import Path
 
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+
+from harness import script_helpers  # noqa: E402
+
 SCHEMA = "gf180-gate-driver/mc-sample-set/1"
 
 #: the `sample` cell of the deterministic control row (plain deck, mismatch off)
 BASELINE_SAMPLE = "baseline"
+
+#: The ratified bounds the three fixed-bound campaigns convert against -- one
+#: home (`harness/script_helpers.py`), read rather than restated here; the
+#: provenance comments and the home's criterion are recorded there. A change
+#: to any of them needs its own decision record (CLAUDE.md), and reaches this
+#: table through these names.
+EXCEPTION1_BOUND_V = script_helpers.EXCEPTION1_BOUND_V
+EXCEPTION2_BOUND_V = script_helpers.EXCEPTION2_BOUND_V
+EXCEPTION3_BOUND_V = script_helpers.EXCEPTION3_BOUND_V
+GATE_CEILING_V = script_helpers.GATE_CEILING_V
+VDD_LOGIC_V = script_helpers.VDD_LOGIC_V
 
 #: campaign -> the claim it backs. `columns` is one CSV column or several
 #: (the draw's value is the max of them: the worst of the node set the
 #: exception bounds); `max` is the ratified upper bound in `unit`.
 CAMPAIGNS: dict[str, dict] = {
     "gate-driver-indrv-mismatch": {
-        "spec_row": "spec/gate-driver.md section 5, Exception 3 (IN_DRV <= 10 mV over the 6.0 V gate ceiling)",
+        "spec_row": (
+            "spec/gate-driver.md section 5, Exception 3 "
+            f"(IN_DRV <= {EXCEPTION3_BOUND_V * 1000:.0f} mV over the "
+            f"{GATE_CEILING_V:.1f} V gate ceiling)"
+        ),
         "measurement": "indrv_max_v",
         "columns": ["indrv_max_v"],
         "unit": "V",
-        "max": 6.0 + 0.010,
+        "max": GATE_CEILING_V + EXCEPTION3_BOUND_V,
     },
     "level-shifter-inb-mismatch": {
-        "spec_row": "spec/gate-driver.md section 5, Exception 1 (inb <= 40 mV over VDD_LOGIC = 3.63 V)",
+        "spec_row": (
+            "spec/gate-driver.md section 5, Exception 1 "
+            f"(inb <= {EXCEPTION1_BOUND_V * 1000:.0f} mV over "
+            f"VDD_LOGIC = {VDD_LOGIC_V:.2f} V)"
+        ),
         "measurement": "vinb_max_v",
         "columns": ["vinb_max_v"],
         "unit": "V",
-        "max": 3.63 + 0.040,
+        "max": VDD_LOGIC_V + EXCEPTION1_BOUND_V,
     },
     "output-stage-taper-mismatch": {
-        "spec_row": "spec/gate-driver.md section 5, Exception 2 (taper nodes n1..n5 <= 175 mV over the 6.0 V gate ceiling)",
+        "spec_row": (
+            "spec/gate-driver.md section 5, Exception 2 "
+            f"(taper nodes n1..n5 <= {EXCEPTION2_BOUND_V * 1000:.0f} mV over "
+            f"the {GATE_CEILING_V:.1f} V gate ceiling)"
+        ),
         "measurement": "taper_max_v",
         "columns": [f"n{i}_max_v" for i in range(1, 6)],
         "unit": "V",
-        "max": 6.0 + 0.175,
+        "max": GATE_CEILING_V + EXCEPTION2_BOUND_V,
     },
 }
 

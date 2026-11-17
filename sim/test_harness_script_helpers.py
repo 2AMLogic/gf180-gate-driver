@@ -248,33 +248,70 @@ class TestWorstAcrossPoints(unittest.TestCase):
 
 
 class TestRatifiedSpecValues(unittest.TestCase):
-    """The ratified values shared by the `indrv` and `taper` campaigns have
-    exactly one home, and each runner reads it (issue #465, item 2).
+    """The ratified values shared by the mismatch campaigns -- and, since
+    issue #477, by the yield converter (`sim/mc_to_yield.py`, whose
+    `verification/signoff/yield/` output is append-only and manifest-hashed)
+    -- have exactly one home, and every consumer reads it.
 
     Identity, not equality, is the assertion: a literal retyped back into a
-    runner would still compare equal today, and that is precisely the drift
+    consumer would still compare equal today, and that is precisely the drift
     being guarded. Two independent literals mean a decision record moving the
-    §2.3 ceiling or Exception 2's bound can reach one campaign and miss the
-    other, leaving two append-only records disagreeing about the same ratified
+    §2.3 ceiling or an exception bound can reach one campaign and miss
+    another, leaving append-only records disagreeing about the same ratified
     number with nothing in the tree flagging it.
     """
 
     def test_values_are_the_ratified_numbers(self):
         self.assertEqual(script_helpers.GATE_CEILING_V, 6.0)
+        self.assertEqual(script_helpers.VDD_LOGIC_V, 3.63)
+        self.assertEqual(script_helpers.EXCEPTION1_BOUND_V, 0.040)
         self.assertEqual(script_helpers.EXCEPTION2_BOUND_V, 0.175)
+        self.assertEqual(script_helpers.EXCEPTION3_BOUND_V, 0.010)
         self.assertEqual(
             script_helpers.TAPER_MEASUREMENTS,
             ("n1_max_v", "n2_max_v", "n3_max_v", "n4_max_v", "n5_max_v"),
         )
 
     def test_both_runners_read_the_shared_values(self):
-        for key in ("indrv", "taper"):
+        shared = {
+            "indrv": (
+                "GATE_CEILING_V",
+                "EXCEPTION2_BOUND_V",
+                "TAPER_MEASUREMENTS",
+                "EXCEPTION3_BOUND_V",
+            ),
+            "inb": (
+                "EXCEPTION1_BOUND_V",
+                "VDD_LOGIC_V",
+            ),
+            "taper": (
+                "GATE_CEILING_V",
+                "EXCEPTION2_BOUND_V",
+                "TAPER_MEASUREMENTS",
+            ),
+        }
+        for key, names in shared.items():
             module = fixture.load_runner(key)
-            for name in ("GATE_CEILING_V", "EXCEPTION2_BOUND_V", "TAPER_MEASUREMENTS"):
+            for name in names:
                 with self.subTest(runner=key, constant=name):
                     self.assertIs(
                         getattr(module, name), getattr(script_helpers, name)
                     )
+
+    def test_yield_converter_reads_the_shared_values(self):
+        import mc_to_yield
+
+        for name in (
+            "GATE_CEILING_V",
+            "VDD_LOGIC_V",
+            "EXCEPTION1_BOUND_V",
+            "EXCEPTION2_BOUND_V",
+            "EXCEPTION3_BOUND_V",
+        ):
+            with self.subTest(constant=name):
+                self.assertIs(
+                    getattr(mc_to_yield, name), getattr(script_helpers, name)
+                )
 
 
 class TestRunNgspice(_TempDirCase):
@@ -325,11 +362,54 @@ class TestRunCornerDeck(_TempDirCase):
         self.assertEqual(set(files), {"corner.spice", "control.spice", "dut.spice"})
         self.assertIn(".temp 27", files["corner.spice"])
         self.assertIn(".options abstol=1e-12", files["corner.spice"])
-        self.assertEqual(files["control.spice"], ".control\nrun\n.endc")
+        self.assertEqual(
+            files["control.spice"],
+            ".control\n"
+            + script_helpers.control_preamble()
+            + "run\n.endc",
+        )
         self.assertEqual(
             files["dut.spice"],
             '.include "corner.spice"\n* dut\nR1 a b 1k\n.include "control.spice"\n.end\n',
         )
+
+    def test_staged_control_pins_num_threads_to_one(self):
+        # Issue #515: the staged control.spice carries issue #146's
+        # num_threads=1 pin even when the caller's block forgets it -- the
+        # pin has one home (control_preamble, like runner.compose_deck's
+        # emitted deck) instead of a hand-typed copy per run script.
+        staged = {}
+
+        def fake_run(work, deck_name, label):
+            staged["control.spice"] = (work / "control.spice").read_text()
+            return "log"
+
+        self.patch(mock.patch.object(script_helpers, "run_ngspice", fake_run))
+        deck = self.tmp_path / "dut.spice"
+        deck.write_text("* dut\nR1 a b 1k")
+        script_helpers.run_corner_deck(
+            deck, _RelativePdk(), ["typical"], 27.0,
+            script="run_x.py", control=".control\nrun\n.endc", label="tt @ 27 C",
+            prefix="x-",
+        )
+        self.assertIn("set num_threads=1", staged["control.spice"].splitlines())
+
+    def test_control_preamble_lines(self):
+        self.assertEqual(
+            script_helpers.control_preamble(),
+            "set num_threads=1\nset width = 512\n"
+            "set height = 100000\nset numdgt = 10\n",
+        )
+
+    def test_run_corner_deck_rejects_control_without_control_line(self):
+        deck = self.tmp_path / "dut.spice"
+        deck.write_text("* dut\nR1 a b 1k")
+        with self.assertRaisesRegex(ValueError, "'\\.control' line"):
+            script_helpers.run_corner_deck(
+                deck, _RelativePdk(), ["typical"], 27.0,
+                script="run_x.py", control="run\n.endc", label="tt @ 27 C",
+                prefix="x-",
+            )
 
 
 class TestFirstCrossing(unittest.TestCase):

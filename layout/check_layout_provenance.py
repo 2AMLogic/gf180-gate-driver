@@ -13,7 +13,14 @@ hashes the GDS alone. This script anchors the chain to the live tree instead:
    (``layout``, ``source_netlist``, ``generator``) and compare it with the
    recorded value. Any mismatch fails, naming the artifact that moved and
    the direction to repair it: either the tree changed without a provenance
-   refresh, or the tree is not the one attested.
+   refresh, or the tree is not the one attested. Since #528 a fourth arm
+   pins the generator's ``layout/common/`` import closure
+   (``generator_deps``): after PR #517 the generator's klt argv assembly
+   (``common/klt_report.py``) and binary resolution (``common/klt_env.py``)
+   live outside the pinned generator file, so those bytes co-determine the
+   committed GDS. The closure is *derived* from the live generator's own
+   imports rather than trusted from the record, so a generator that gains
+   or loses a common import fails here until the provenance record says so.
 2. **klt drift (advisory).** When a ``klt`` is on ``PATH``, compare the host
    ``klt --version`` with the recorded ``tools.klt_version``. Byte-equality
    against the committed GDS is *not* expected to hold under a different
@@ -38,6 +45,7 @@ Usage (repo root or anywhere beneath it)::
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import shutil
@@ -140,6 +148,136 @@ def check_pinned_inputs(provenance: dict, repo_root: Path = REPO_ROOT) -> list[s
     return failures
 
 
+def generator_common_imports(generator_path: Path) -> dict[str, Path]:
+    """The ``layout/common/`` import closure of ``generator_path``.
+
+    Absolute ``import X`` / ``from X import ...`` statements are kept when a
+    ``common/X.py`` exists beside the generator, and those files' own imports
+    are walked the same way (``klt_report`` imports ``klt_env``), so the
+    result is the transitive closure of local modules the generator's
+    execution reads: module name -> path, sorted by module name. A file that
+    does not parse contributes no imports; that cannot hide a drift, because
+    the generator's own bytes are pinned by the ``generator`` block and a
+    dependency's by its ``generator_deps`` entry.
+    """
+    common = generator_path.parent / "common"
+    closure: dict[str, Path] = {}
+    pending = [generator_path]
+    seen: set[Path] = set()
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            tree = ast.parse(current.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, ValueError):
+            continue
+        names: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names.append(node.module)
+        for name in names:
+            top = name.split(".")[0]
+            candidate = common / f"{top}.py"
+            if top not in closure and candidate.is_file():
+                closure[top] = candidate
+                pending.append(candidate)
+    return dict(sorted(closure.items()))
+
+
+def check_generator_deps(
+    provenance: dict, repo_root: Path = REPO_ROOT
+) -> tuple[list[str], list[str]]:
+    """Every ``layout/common/`` module the live generator imports is pinned.
+
+    #528: PR #517 moved the generator's klt invocation into
+    ``common/klt_report.py`` (argv assembly, ``cwd``, ``ok_codes``) and its
+    binary resolution into ``common/klt_env.py``, so an edit to either could
+    change what the generator runs while every recorded hash still matched.
+    The pinned set is derived from the live generator's imports and compared
+    with the record in both directions, so the gap cannot reopen by a
+    hand-listed record quietly going small.
+
+    Returns ``(failures, closure_module_names)`` -- the second element feeds
+    the anchor line so a pass names what was checked.
+    """
+    gen = provenance.get("generator")
+    rel = gen.get("path") if isinstance(gen, dict) else None
+    if not isinstance(rel, str) or not rel or Path(rel).is_absolute():
+        # Malformed/absolute/escaping generator path: the generator pin above
+        # already named it; there is nothing to walk.
+        return [], []
+    generator = repo_root / rel
+    try:
+        generator.resolve().relative_to(repo_root.resolve())
+    except ValueError:
+        return [], []
+    if not generator.is_file():
+        return [], []
+
+    live = generator_common_imports(generator)
+    failures: list[str] = []
+    recorded = provenance.get("generator_deps")
+    if recorded is None:
+        if live:
+            failures.append(
+                "generator_deps: provenance records no generator_deps while the live "
+                f"generator imports {', '.join(live)} from layout/common/ -- those "
+                "bytes co-determine the GDS (issue #528); refresh the record (a "
+                "GDS-neutral edit refreshes its pins with a same-klt comparison, "
+                "the PR #478/#517 pattern)"
+            )
+        return failures, list(live)
+    if not isinstance(recorded, list):
+        return ["generator_deps: records a non-list generator_deps block"], list(live)
+
+    pinned: dict[str, dict] = {}
+    for i, entry in enumerate(recorded):
+        if isinstance(entry, dict) and isinstance(entry.get("module"), str) and entry["module"]:
+            pinned[entry["module"]] = entry
+        else:
+            failures.append(f"generator_deps[{i}]: entry names no module")
+    for module, path in live.items():
+        rel_live = path.relative_to(repo_root).as_posix()
+        entry = pinned.get(module)
+        if entry is None:
+            failures.append(
+                f"generator_deps: the live generator imports {module} ({rel_live}) but "
+                "the record pins no hash for it -- an unpinned behavioural input, "
+                "the #528 gap"
+            )
+            continue
+        if entry.get("path") != rel_live:
+            failures.append(
+                f"generator_deps[{module}]: recorded path {entry.get('path')!r} is not "
+                f"the live import target {rel_live!r}"
+            )
+            continue
+        recorded_hash = entry.get("sha256")
+        if not isinstance(recorded_hash, str) or not recorded_hash:
+            failures.append(f"generator_deps[{module}]: records no sha256")
+            continue
+        actual = sha256_file(path)
+        if actual != recorded_hash.removeprefix("sha256:"):
+            failures.append(
+                f"generator_deps[{module}]: stale pin -- provenance records "
+                f"sha256:{recorded_hash.removeprefix('sha256:')} for {rel_live} but the "
+                f"live file is sha256:{actual}; either the module changed without a "
+                "provenance refresh (re-derive it, #463/#528) or restore the attested file"
+            )
+    for module in sorted(set(pinned) - set(live)):
+        failures.append(
+            f"generator_deps[{module}]: stale pin -- records "
+            f"{pinned[module].get('path')!r} but the live generator's layout/common/ "
+            "import closure does not include it (the import was removed, or the module "
+            "file is gone); refresh the record"
+        )
+    return failures, list(live)
+
+
 def klt_drift_advisory(provenance: dict, host_version: str | None) -> str | None:
     """The advisory sentence for a host klt differing from the recorded build."""
     recorded = (provenance.get("tools") or {}).get("klt_version")
@@ -178,7 +316,17 @@ def run_check(
         return 1, f"FAIL: cannot read provenance {provenance_path}: {exc}\n"
 
     failures = check_pinned_inputs(provenance, repo_root=repo_root)
-    lines.append(f"pin anchor     : {len(PINNED_INPUTS)} pinned input(s) checked (layout, source_netlist, generator)")
+    dep_failures, dep_names = check_generator_deps(provenance, repo_root=repo_root)
+    failures += dep_failures
+    dep_note = (
+        f" + {len(dep_names)} generator_deps module(s) ({', '.join(dep_names)})"
+        if dep_names
+        else " + 0 generator_deps module(s)"
+    )
+    lines.append(
+        f"pin anchor     : {len(PINNED_INPUTS)} pinned input(s) checked "
+        f"(layout, source_netlist, generator){dep_note}"
+    )
 
     try:
         host_version = klt_runner(klt)
