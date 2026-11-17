@@ -269,8 +269,20 @@
   },
   "generator": {
     "path": "layout/gen_gate_driver_core.py",
-    "sha256": "4ce5b530badde842bce7632ae5fc73180e178818e8b2006bb00a7754cfb0dbba"
+    "sha256": "2761d48e851ba4d1a69a54cc23d8bbcffd988b96b9845078ad2b2afad2cb4913"
   },
+  "generator_deps": [
+    {
+      "module": "klt_env",
+      "path": "layout/common/klt_env.py",
+      "sha256": "9d3344753ee84f09c3cf43ac01c4d55e2feb89b656fc1d1a07960347695df699"
+    },
+    {
+      "module": "klt_report",
+      "path": "layout/common/klt_report.py",
+      "sha256": "1b81a829918432f604f19c8549a3126fefbadd61f25fb3b826d582f6477ceb57"
+    }
+  ],
   "tools": {
     "klt_version": "klt 0.7.1.dev2599+geaf26f00df36",
     "pdk": {
