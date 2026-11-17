@@ -8,8 +8,16 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-17
+
+- **PR #533**: layout: pin the generator's layout/common/ import closure in provenance freshness
+- **PR #517**: refactor: share the single-format klt json driver via klt_report.run_klt_json
+- **Issue #528** (closed): layout: the provenance freshness check pins the generator but not its klt_report/klt_env dependencies
+- **Issue #480** (closed): Promote the generator's private _klt out of gen_gate_driver_core.py: 14 call sites in 3 modules reach it by private name, bypassing klt_env
+
 ### 2026-11-16
 
+- **PR #514**: chore(loom): resync installed Loom to v0.19.1302
 - **PR #529**: sim: hoist the ngspice .control preamble into script_helpers (pins num_threads=1 everywhere)
 - **Issue #515** (closed): Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
 - **PR #461**: refactor(layout): draw both negative-control fixtures with the resolved klt
