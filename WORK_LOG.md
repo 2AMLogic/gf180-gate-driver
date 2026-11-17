@@ -10,6 +10,13 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-17
 
+- **PR #535**: chore(loom): resync installed Loom to v0.19.1306
+- **PR #513**: fix: flush run_tests.py per-module headers so captured output stays labelled
+- **PR #512**: docs: reconcile ROADMAP Now list with completed work
+- **PR #498**: layout: add --klt flag to run_lvs, run_pex_extract and run_drc
+- **Issue #500** (closed): Reconcile docs/ROADMAP.md "Now" list: four of five items are complete
+- **Issue #499** (closed): run_tests.py: flush the per-module == header so it labels its module in captured output
+- **Issue #486** (closed): run_lvs.py and run_pex_extract.py have no --klt flag, so pinning a klt build for an extraction is PATH-only
 - **PR #533**: layout: pin the generator's layout/common/ import closure in provenance freshness
 - **PR #517**: refactor: share the single-format klt json driver via klt_report.run_klt_json
 - **Issue #528** (closed): layout: the provenance freshness check pins the generator but not its klt_report/klt_env dependencies
