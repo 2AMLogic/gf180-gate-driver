@@ -479,8 +479,9 @@ narrative (`build_record_body`).
 
 ### The run envelope: `campaign.start_run` / `campaign.finish_run`
 
-Around the campaign itself, every recorded run's `main()` shares a head and
-a tail (issue #483). `campaign.start_run(argv, description=..., here=...,
+Around the campaign itself, the mismatch campaigns' and device runners'
+`main()` share a head and a tail (issue #483).
+`campaign.start_run(argv, description=..., here=...,
 repo_root=..., default_samples=...)` parses the common
 `-n/-j/--smoke/--no-write` flags, discovers the PDK and ngspice, runs the
 evidence-store preflight (skipped under `--no-write`), mints the record id
@@ -496,6 +497,11 @@ returns `0` iff the verdict is `PASS`. `run_mismatch_main` above,
 `run_device_main` below, and the fourth mismatch runner
 (`sim/low-side-power-switch-ronw-mismatch`) all sit on this envelope, so
 "what does a run print, warn about, and commit" has one answer.
+`run_corners.py` (`harness/cli.py`) keeps its own head and tail -- its flag
+set is larger (testbench selection, corners, subset reason) and its
+`--no-write` must stay a preflight-free debugging run -- but it shares the
+dirty-input-tree disclosure (`campaign.disclose_dirty_tree`, issue #541),
+so a dirty tree is worded the same at every recorded-run entry point.
 
 ### The device-runner driver: `campaign.run_device_main`
 

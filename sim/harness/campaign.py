@@ -460,6 +460,23 @@ class RunContext(NamedTuple):
     stamp: datetime
 
 
+def disclose_dirty_tree(git: dict, record: str) -> None:
+    """The dirty-input-tree disclosure every recorded run prints (#541).
+
+    One copy of the warning: `start_run` prints it for the envelope's
+    drivers, and `harness/cli.py` (`run_corners.py`) — which keeps its own
+    head because its `--no-write` is offline debugging and must keep
+    skipping the evidence preflight — calls this so a dirty tree has the
+    same answer at every recorded-run entry point.
+    """
+    if git["dirty"]:
+        print(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {record} will not be reproducible from commit "
+            f"{git['short']} alone"
+        )
+
+
 def start_run(
     argv: Sequence[str] | None = None,
     *,
@@ -515,12 +532,7 @@ def start_run(
     record = report.allocate_record_id(repo_root, here / report.RECORDS_DIR, git=git)
     stamp = datetime.strptime(record[:15], "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
 
-    if git["dirty"]:
-        print(
-            "warning: input tree (design/testbench/harness/docs) is dirty; "
-            f"record {record} will not be reproducible from commit "
-            f"{git['short']} alone"
-        )
+    disclose_dirty_tree(git, record)
 
     return RunContext(
         args=args, pdk=pdk, ngspice=ngspice, git=git, record=record, stamp=stamp

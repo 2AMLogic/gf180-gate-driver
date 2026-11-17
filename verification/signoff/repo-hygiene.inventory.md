@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:a2451edf9825d4951cb4a81453e4715b1b7eb4e0619c96d93f106807a44babe6` |
+| `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
 | `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -1513,6 +1513,34 @@ The other listed files are unchanged; in particular `.github/workflows/ci.yml`
 is untouched by this branch, so the CI finding still holds. The PR's other
 three changed files (`sim/harness/campaign.py`,
 `sim/low-side-power-switch-ronw-mismatch/run_ronw_mismatch.py`,
+`sim/test_harness_campaign.py`) are not listed in this inventory and carry no
+hash here. The envelope, manifest item 10 and tier-report citation pins are
+refreshed for the new inventory bytes, and the report is re-rendered with the
+pinned grader (`879d39ba`). No simulation, netlisting or layout flow was run
+for this re-audit.
+
+## Re-audit for issue #541 (2026-11-17)
+
+One listed file changed on the issue #541 branch (`feature/issue-541`, on top
+of `origin/main` at `1848f6f3`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `sim/harness/README.md` (**read** the diff): in "The run envelope:
+  `campaign.start_run` / `campaign.finish_run`", narrows the "every recorded
+  run's `main()` shares a head and a tail" sentence to the mismatch campaigns
+  and device runners the envelope actually covers, and appends why
+  `run_corners.py` (`harness/cli.py`) keeps its own head and tail (larger
+  flag set; `--no-write` must stay a preflight-free debugging run) while
+  still sharing the dirty-input-tree disclosure through the new
+  `campaign.disclose_dirty_tree` helper (issue #541). The measured refutation
+  of routing `cli.py` onto `start_run` is recorded on that issue; the
+  envelope section's `start_run`/`finish_run` descriptions are unchanged, and
+  every reproduction command is untouched, so the Reproduction finding still
+  holds.
+
+The other listed files are unchanged; in particular `.github/workflows/ci.yml`
+is untouched by this branch, so the CI finding still holds. The PR's other
+changed files (`sim/harness/campaign.py`, `sim/harness/cli.py`,
 `sim/test_harness_campaign.py`) are not listed in this inventory and carry no
 hash here. The envelope, manifest item 10 and tier-report citation pins are
 refreshed for the new inventory bytes, and the report is re-rendered with the

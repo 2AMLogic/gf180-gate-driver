@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import HARNESS_VERSION, corners as corners_mod, evidence_store, report, runner, testbench as tb_mod
+from . import HARNESS_VERSION, campaign, corners as corners_mod, evidence_store, report, runner, testbench as tb_mod
 from .pdk import PdkNotFound, find_pdk
 from .runner import NgspiceMissing
 
@@ -260,6 +260,9 @@ def run(args: argparse.Namespace) -> int:
     # every record as taken against a dirty tree.
     git = report.git_provenance(REPO_ROOT)
     record_id = report.allocate_record_id(REPO_ROOT, records_dir, started, git=git)
+    # Issue #541: same dirty-tree disclosure the campaign envelope prints,
+    # via campaign.disclose_dirty_tree -- one wording for every recorded run.
+    campaign.disclose_dirty_tree(git, record_id)
     workdir = WORK_DIR / tb.experiment / record_id
     stage = None
     log_dir = None
