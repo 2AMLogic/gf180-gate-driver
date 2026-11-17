@@ -5,7 +5,7 @@ rail, 6 V stretch) on the gf180mcu open PDK, and the first block in its family
 to exercise the medium-voltage devices with klayout-tools (`klt`), xschem and
 ngspice.
 
-Status as of 2026-11-16, `main` @ `3a4ee5a`.
+Status as of 2026-11-17, `main` @ `02ad4bf`.
 
 Live label state is in [`WORK_PLAN.md`](../WORK_PLAN.md). The verdict of record is
 [`verification/signoff/tier-report.json`](../verification/signoff/tier-report.json), which wins over this file.
@@ -46,21 +46,21 @@ Since tracker #370 was filed, item 6 moved to `met` and items 5 and 7 from `no_e
 
 ## Now
 
-Can start today; each is one PR.
-
-1. **Regenerate the extracted netlists from the current GDS and re-run the
-   oxide-safety post-layout facet** (#456). `layout/lvs/gate_driver_core.extracted.spice`
-   and `.extracted-rc.spice` were last committed on 2026-08-26; the GDS changed
-   on 2026-10-24 (#362). The `klt pex` report covers the drive suite on the
-   current GDS, but `sim/level-shifter-oxide-safety-postlayout/` has no record
-   on it. Done when both netlists are regenerated with
-   `layout/lvs/run_pex_extract.py` and a new append-only record exists for
-   that facet (no-RC and RC).
+Nothing — as of this refresh, every "Now" item is complete. The last one
+(regenerate the extracted netlists from the current GDS and re-run the
+oxide-safety post-layout facet, #456) closed on 2026-11-16: PR #489
+regenerated both netlists from the current GDS and committed the facet's
+records, no-RC and RC
+(`sim/level-shifter-oxide-safety-postlayout/records/20261114-194502-55af608.md`
+and `20261114-202350-bb5cab0.md`). Choosing what enters "Now" next is Guide's
+/ the operator's planning cadence, not this edit's; unblocked candidates stay
+in `## Next` below.
 
 ## Next
 
-- **Attribute the one layout-induced item-7 failure.** After the extracted
-  netlists are regenerated from the current GDS (#456): run stretch ss /
+- **Attribute the one layout-induced item-7 failure.** The extracted netlists
+  are regenerated from the current GDS (#456, completed 2026-11-16 — records
+  `20261114-194502-55af608` and `20261114-202350-bb5cab0`): run stretch ss /
   27 C on the schematic, the no-RC extraction and the RC
   extraction, and split the 1.71 % sink-current loss between wiring RC and
   the schematic's ideal bias resistors against the layout's 271 `ppolyf_u`
