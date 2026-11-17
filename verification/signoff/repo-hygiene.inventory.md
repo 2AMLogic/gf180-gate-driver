@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:217aa32cc1f205b62922490a7a21f7df3d025772a481eb3ccc9dd87bb3a125de` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e132349c49a00226bc2ceba4af4df6d611822522f5059c464a70bfcd521d282c` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -979,6 +979,27 @@ match the tables, including the refreshed `ci.yml` row. The other findings
 are unchanged. No simulation, netlisting or layout flow was run for this
 re-audit.
 
+## Re-audit for issue #499 (2026-11-16)
+
+One listed file changed on the issue #499 branch (`feature/issue-499`, on top
+of `origin/main` at `e498a877`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds one
+  `python3 scripts/tests/test_run_tests.py` line to the existing
+  `Evidence-store and manifest-check unit tests` step of `test` (and names it
+  in that step's comment) — the regression test for the `run_tests.py`
+  per-module `==` header flush (issue #499), required by lint step 5/5's
+  every-tracked-test-run-by-CI check. `lint`, the harness self-test and the
+  `signoff` job are unchanged, so the CI finding still holds; the new step
+  line was observed passing locally (`npm test` 16/16 modules after this
+  re-audit's pin cascade; CI itself was read, not observed).
+
+The other listed files are unchanged for #499. As with the #368 re-audit,
+the envelope, manifest item 10 and tier-report citation pins are refreshed
+for the new inventory bytes. No simulation, netlisting or layout flow was
+run for this re-audit.
+
 Post-merge re-pin (2026-11-16): a third merge of `origin/main` (`e498a877`,
 since `5c051fd`: PR #473 -- issue #472's `klt report-runner unit tests` step
 and `klt_report.run_klt`'s keyword-only `ok_codes` -- and PR #489, issue
@@ -1368,3 +1389,100 @@ match the tables. The envelope, manifest item 10 and tier-report citation
 pins are refreshed for the final merged inventory bytes. No simulation,
 netlisting or layout flow was run for this re-audit.
 
+
+## Re-audit for the PR #513 merge (2026-11-17)
+
+`origin/main` moved past the issue #499 re-audit above (six more dated
+sections: the issue #492 second merge, the third PR #471 merge, the issue
+#451 fourth merge, issue #515, the PR #517 merge and issue #528), so the
+four signoff cascade files (`repo-hygiene.inventory.md`,
+`repo-hygiene.generic.json`, `manifest.json`, `tier-report.json`)
+conflicted while merging `origin/main` into the issue #499 branch
+(`feature/issue-499`, PR #513). The merged tree was re-checked against the
+findings above:
+
+- `.github/workflows/ci.yml` changed on **both** sides of this merge and
+  auto-merged to the union: this branch's
+  `python3 scripts/tests/test_run_tests.py` line in the
+  `Evidence-store and manifest-check unit tests` step (issue #499) plus
+  main's `Negative-control verdict unit tests` and
+  `Negative-control klt-binary unit tests` steps, their header-table rows
+  and the #528 provenance-freshness comment re-point. No job, trigger,
+  permission or grader pin moved on either side, so the findings above
+  still hold, and the CI table row is re-pinned for the merged union bytes
+  (the hash above supersedes this branch's `b271fe5d…` value and main's
+  `83d6cdd4…` value).
+- All nine listed hashes were re-computed against the final merged tree
+  and match the tables, including the refreshed `ci.yml` row. No other
+  listed file changed on either side of this merge.
+
+Both sides' appended re-audit sections are kept (this branch's issue #499
+section above and main's six sections above it), so the inventory bytes
+moved again; the envelope, manifest item 10 and tier-report citation pins
+are refreshed for the final merged inventory bytes. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the second PR #513 merge (2026-11-17)
+
+`origin/main` moved past the PR #513 merge above (tip now `d6d00b8`: the
+PR #512 merge carrying the issue #500 `--klt` flag work, plus the PR #498
+fourth merge re-audit section recorded above it), so the four signoff
+cascade files (`repo-hygiene.inventory.md`, `repo-hygiene.generic.json`,
+`manifest.json`, `tier-report.json`) conflicted again while merging
+`origin/main` into the issue #499 branch (`feature/issue-499`, PR #513).
+The merged tree was re-checked against the findings above:
+
+- `.github/workflows/ci.yml` changed on the main side of this merge (the
+  issue #500 `--klt` resolver/runner unit-test steps and their
+  header-table rows) and auto-merged with this branch's
+  `python3 scripts/tests/test_run_tests.py` line and comment in the
+  `Evidence-store and manifest-check unit tests` step (issue #499), kept
+  in full. No job, trigger, permission or grader pin moved on either
+  side, so the findings above still hold, and the CI table row is
+  re-pinned for the merged union bytes (the hash above supersedes both
+  this branch's `c011d4f0…` value and main's `217aa32c…` value).
+- `layout/README.md` changed on the main side only (this branch has never
+  touched it); the merge takes main's side verbatim and its table row
+  re-computes clean against the final merged tree.
+- All nine listed hashes were re-computed against the final merged tree
+  and match the tables, including the refreshed `ci.yml` row. No other
+  listed file changed on either side of this merge.
+
+Both sides' appended re-audit sections are kept in commit-time order
+(main's PR #498 fourth merge section at 04:34, then this branch's PR #513
+merge section at 04:42), so the inventory bytes moved again; the
+envelope, manifest item 10 and tier-report citation pins are refreshed
+for the final merged inventory bytes. The PR's own fix
+(`scripts/run_tests.py` per-module header flush and its regression test)
+is untouched by the merge: main never modified that file after the base.
+No simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 seventh merge (2026-11-17)
+
+`origin/main` moved again after the sixth PR #462 merge above (tip now
+`48f2be0b`: PR #513's two re-audit sections landing with `feature/issue-499`,
+the PR #535 installed-Loom resync to v0.19.1306, and the PR #536/#537
+docs-guide WORK_LOG/WORK_PLAN updates), so the four signoff cascade files
+(`repo-hygiene.inventory.md`, `repo-hygiene.generic.json`, `manifest.json`,
+`tier-report.json`) conflicted again. The merged tree was re-checked against
+the findings above:
+
+- `.github/workflows/ci.yml` changed on the main side only (the issue #499
+  `python3 scripts/tests/test_run_tests.py` line and its comment refresh in
+  the `Evidence-store and manifest-check unit tests` step); the merge takes
+  main's side verbatim and the CI table row is re-pinned for the merged
+  bytes. No job, trigger, permission or grader pin moved.
+- This branch's own side since the sixth merge is the review fix only:
+  `sim/uvlo-trip-verification/run_uvlo_trip.py` (`_fmt` -> `fixed`, four call
+  sites in `_progress_detail`) and a `RunnerHookSmokeTests` regression test in
+  `sim/test_harness_campaign.py`. Neither file is listed in this inventory;
+  the merged suite passes (85 tests).
+- Both sides' appended re-audit sections are kept in commit-time order (this
+  branch's sixth merge at 04:56, then main's PR #513 merge sections at
+  05:19/05:30).
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The envelope, manifest item 10 and tier-report citation
+pins are refreshed for the final merged inventory bytes, and the report is
+re-rendered with the pinned grader (`879d39ba`). No simulation, netlisting,
+layout flow or generator re-run happened as part of this re-audit.

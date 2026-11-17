@@ -35,7 +35,7 @@ def main():
         return 1
     failures = []
     for module in modules:
-        print(f"== {module}")
+        print(f"== {module}", flush=True)
         if subprocess.run([sys.executable, module]).returncode != 0:
             failures.append(module)
     passed = len(modules) - len(failures)
