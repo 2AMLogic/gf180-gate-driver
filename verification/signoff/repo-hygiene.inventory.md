@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:767371ad518866585142d3a8040ba235b1fb7cfe551f5b9aea4ab2a8793f8b65` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:83d6cdd459d59ba756b5a2e4d09c2f1cfc2d9b5477708039a208be58948733de` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
 | `sim/harness/README.md` | `sha256:b19c7b337f4313454b33975143985f0efc9a63fa5e2cb08ce80183592887f592` |
-| `layout/README.md` | `sha256:5b75a49d3e9705c0c2574c848fae848745f1a172ea2069e7bdc54969416ed7b4` |
+| `layout/README.md` | `sha256:82d1814ab5d62b3d31a876584f79075cdb5e68a9daa2beece363e8d4c98187c8` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -980,3 +980,44 @@ simulation, netlisting, layout flow or generator re-run happened as part of
 this re-audit; the generator the provenance pin attests (`4ce5b530…`) is
 byte-identical to the merged tree's (main made no generator change since
 the merge base).
+
+## Re-audit for issue #528 (2026-11-17)
+
+Two listed files changed on the issue #528 branch (`feature/issue-528`, on
+top of `origin/main` at `ab75e017`) and were re-read against the findings
+above; their hashes are refreshed in the tables:
+
+- `.github/workflows/ci.yml` (**read** the diff): the `signoff` job's
+  "Layout provenance freshness" step changes only in its explanatory
+  comment, which now records that the provenance record pins the
+  generator's `layout/common/` import closure (`generator_deps: klt_env,
+  klt_report`) beside the committed GDS, its source netlist and its
+  generator. No job, step or pin otherwise moves -- `lint`, the harness
+  self-test, the checker regression tests and the grader pin `879d39ba`
+  are unchanged -- so the CI finding still holds. CI was read, not
+  observed to pass here.
+- `layout/README.md` (**read** the diff): the "Reproducibility: pin the
+  klt install (#190)" section's drift paragraph gains the #528
+  provenance-deps refresh record: the generator edit that derives
+  `generator_deps` was measured GDS-neutral the same way as #480's
+  refactor (regenerated from main `ab75e017` and from the branch head
+  under the same host klt `0.9.3.dev234+g5ed4e55bffbd`, both into scratch
+  directories, all 41 GDS outputs byte-identical, the top cell again
+  hashing `736c92bb…`), so the generator pin moves to `2761d48e…` with the
+  committed GDS bytes untouched, `generator_deps` pins the two
+  `layout/common/` modules the #517 refactor made behavioural (`klt_env`
+  `9d33447…`, `klt_report` `1b81a82…`), and the set is derived from the
+  live generator's own imports (transitively) rather than trusted from the
+  record. The paragraph also records the #528 measurement that motivated
+  the change: all six commits that ever touched the two helpers changed
+  them without touching the GDS. The DRC/LVS/ERC status sections and the
+  reproduction instructions the audit findings rest on are untouched.
+
+The other listed files are unchanged by this branch, so those findings
+still hold. As with the #463 re-audit, the envelope, manifest item 10 and
+tier-report citation pins are refreshed for the new inventory bytes, and
+the report is re-rendered with the pinned grader (`879d39ba`). The
+same-klt generator comparison the refreshed pins rest on was run for the
+change itself (recorded in the README paragraph above), not as part of
+this audit; no simulation, netlisting or layout flow was run for this
+re-audit.
