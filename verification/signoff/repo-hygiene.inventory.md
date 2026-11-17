@@ -30,7 +30,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
 | `sim/harness/README.md` | `sha256:b19c7b337f4313454b33975143985f0efc9a63fa5e2cb08ce80183592887f592` |
-| `layout/README.md` | `sha256:1c7c8869d5e086fc429ed45ff8cd4e7ac84c7a99bde1394ce2457bbc02f83a4d` |
+| `layout/README.md` | `sha256:5b75a49d3e9705c0c2574c848fae848745f1a172ea2069e7bdc54969416ed7b4` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -939,3 +939,44 @@ serves and `sim/test_harness_script_helpers.py` — are recorded but **not**
 pinned here: none is listed in this inventory. No simulation, netlisting or
 layout flow was run for this re-audit. The envelope, manifest item 10 and
 tier-report citation pins are refreshed for the new inventory bytes.
+
+## Re-audit for the PR #517 merge (2026-11-16)
+
+`origin/main` moved after this branch's inventory refresh, and the four
+signoff cascade files (`repo-hygiene.inventory.md`,
+`repo-hygiene.generic.json`, `manifest.json`, `tier-report.json`) plus
+`layout/ground_rail_negative_control.py` conflicted in the merge of
+`origin/main` (tip `9b45b29`) into `feature/issue-480`. The merged tree was
+re-checked against the findings above:
+
+- `sim/harness/README.md`: changed on the main side only — the issue #515
+  preamble-hoisting paragraph, recorded by the re-audit section above. The
+  merge takes main's side verbatim (re-hash matches), so that re-audit's
+  findings hold unchanged here.
+- `layout/README.md`: changed on the branch side only (the #480 same-klt
+  regeneration record in the drift paragraph, recorded in this PR's own
+  refresh); main has made no `layout/README.md` change since the merge base
+  `44ba942`, so the merged bytes are exactly the ones this PR's row already
+  pins — re-computed against the merged tree, it matches.
+- `.github/workflows/ci.yml`: changed on the main side only — #451's
+  `93fe90b` added the `Negative-control klt-binary unit tests` step and its
+  header-table row (the branch made no `ci.yml` change since the merge base
+  `44ba942`, so no side-by-side union was needed); the merge takes main's
+  side verbatim — re-computed against the merged tree, its row matches.
+- `layout/ground_rail_negative_control.py` (conflicted, **not** listed in
+  this inventory): both sides had edited `main()`'s try block — this PR
+  widened the catch to `(GenError, klt_report.KltRunError)` (the
+  `KltRunError` path is `check_gate_driver_core.routed_metal_components`),
+  and #451's merged form threads the `klt_env.require_klt()` binary down
+  into `_verdict(klt, …)`. The resolution keeps both: main's threaded-binary
+  calls plus this PR's widened catch.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. The merged inventory's
+own hash moved, so the pins downstream of it were refreshed to the merged
+bytes: `repo-hygiene.generic.json` `provenance.input.content_hash`,
+`manifest.json` item 10, and both occurrences in `tier-report.json`. No
+simulation, netlisting, layout flow or generator re-run happened as part of
+this re-audit; the generator the provenance pin attests (`4ce5b530…`) is
+byte-identical to the merged tree's (main made no generator change since
+the merge base).

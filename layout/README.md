@@ -636,7 +636,17 @@ from main (`89390e0`) under the same host `klt 0.9.3.dev3+gd5d57daf9a14`,
 both into scratch directories — `cmp`: identical, both outputs hash
 `736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` — so
 the refactor is GDS-neutral and the pin moved to the post-#467 generator
-(`940c04d4…`) with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
+(`940c04d4…`) with the committed GDS bytes untouched. Refreshed again for
+the #480 `run_klt_json` refactor (PR #517, 2026-11-16): regenerated from
+pre-#480 main (`631da07`) and from the PR head (`c927dcc`) under the same
+host `klt 0.9.3.dev181+g2f281f0d605c`, both into scratch directories —
+all 41 GDS outputs (the 40 `build/*.gds` blocks + `gate_driver_core.gds`)
+byte-identical, the top cell again hashing
+`736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` (the
+compose-request/provenance JSONs differ only in scratch-dir paths, the
+`git` block, and the generator hash itself) — so the refactor is
+GDS-neutral and the pin moves to the post-#480 generator (`4ce5b530…`)
+with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
 in CI's PDK-free signoff job) re-hashes the three recorded pins — `layout`,

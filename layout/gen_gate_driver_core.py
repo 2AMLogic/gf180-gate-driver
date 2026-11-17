@@ -87,9 +87,13 @@ import json
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
+
+import klt_env  # noqa: E402  (path set above)
+import klt_report  # noqa: E402  (path set above)
 
 # --------------------------------------------------------------------------- #
 # Repo layout
@@ -823,31 +827,6 @@ def _passive_from_params(
 # --------------------------------------------------------------------------- #
 
 
-def _klt(*args: str) -> dict:
-    """Run one ``klt`` subcommand with ``--format json`` and return its response."""
-    exe = shutil.which("klt")
-    if exe is None:
-        raise GenError(
-            "klayout-tools ('klt') is not on PATH -- this repo's layout flow "
-            "requires it (see CLAUDE.md)"
-        )
-    proc = subprocess.run(
-        [exe, *args, "--format", "json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise GenError(
-            f"klt {' '.join(args[:2])} failed (exit {proc.returncode}):\n"
-            f"{proc.stderr.strip() or proc.stdout.strip()}"
-        )
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-        raise GenError(f"klt {' '.join(args[:2])} produced non-JSON output: {exc}") from exc
-
-
 def generate_device_cells(
     devices: list[Device], out_dir: str, pdk: str
 ) -> dict[str, dict]:
@@ -867,17 +846,19 @@ def generate_device_cells(
             "gate_contact": True,
         }
         gds_path = os.path.join(out_dir, f"{device.name}.gds")
-        report = _klt(
-            "gen",
-            "mos_array",
-            "--pdk",
-            pdk,
-            "--params",
-            json.dumps(params),
-            "--cell-name",
-            device.name,
-            "-o",
-            gds_path,
+        report = klt_report.run_klt_json(
+            [
+                "gen",
+                "mos_array",
+                "--pdk",
+                pdk,
+                "--params",
+                json.dumps(params),
+                "--cell-name",
+                device.name,
+                "-o",
+                gds_path,
+            ]
         )
         reports[device.name] = report
     return reports
@@ -905,17 +886,19 @@ def generate_resistor_cells(
             "flavor": "generic",
         }
         gds_path = os.path.join(out_dir, f"{resistor.name}.gds")
-        report = _klt(
-            "gen",
-            "res_array",
-            "--pdk",
-            pdk,
-            "--params",
-            json.dumps(params),
-            "--cell-name",
-            resistor.name,
-            "-o",
-            gds_path,
+        report = klt_report.run_klt_json(
+            [
+                "gen",
+                "res_array",
+                "--pdk",
+                pdk,
+                "--params",
+                json.dumps(params),
+                "--cell-name",
+                resistor.name,
+                "-o",
+                gds_path,
+            ]
         )
         reports[resistor.name] = report
     return reports
@@ -965,7 +948,9 @@ def native_tap_pads(report: dict) -> list[tuple[float, float, float, float]]:
     gds_path = report.get("gds_path")
     if not gds_path:
         return []
-    comps = _klt("components", gds_path, "--conductors", json.dumps([{"name": "m1", "layer": [34, 0]}]))
+    comps = klt_report.run_klt_json(
+        ["components", gds_path, "--conductors", json.dumps([{"name": "m1", "layer": [34, 0]}])]
+    )
     ports = [(p["x_um"], p["y_um"]) for p in report.get("ports", [])]
     pads = []
     for comp in comps.get("components", []):
@@ -2200,7 +2185,7 @@ def compose(
     request_path = os.path.join(out_dir, "gen-compose-request.json")
     with open(request_path, "w", encoding="utf-8") as handle:
         json.dump(request, handle, indent=1)
-    return _klt("gen-compose", request_path)
+    return klt_report.run_klt_json(["gen-compose", request_path])
 
 
 def _sha256(path: str) -> str:
@@ -2290,14 +2275,16 @@ def build(out_dir: str, pdk: str) -> dict:
     with open(request_path, "w", encoding="utf-8") as handle:
         json.dump(interconnect_request, handle, indent=1)
     interconnect_gds = os.path.join(work_dir, "interconnect.gds")
-    draw_report = _klt(
-        "draw",
-        "--params",
-        request_path,
-        "--cell-name",
-        "gate_driver_core_interconnect",
-        "-o",
-        interconnect_gds,
+    draw_report = klt_report.run_klt_json(
+        [
+            "draw",
+            "--params",
+            request_path,
+            "--cell-name",
+            "gate_driver_core_interconnect",
+            "-o",
+            interconnect_gds,
+        ]
     )
     # `klt draw` is not a `klt gen` generator, so it does not emit a
     # generator_report. `gen-compose` only needs generator/cell_name/gds_path/
@@ -2397,9 +2384,7 @@ def build(out_dir: str, pdk: str) -> dict:
 
 
 def _klt_version() -> str:
-    exe = shutil.which("klt")
-    if exe is None:
-        return "unknown"
+    exe = klt_env.require_klt()
     proc = subprocess.run([exe, "--version"], capture_output=True, text=True, check=False)
     return proc.stdout.strip() or proc.stderr.strip()
 
@@ -2416,7 +2401,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = build(os.path.abspath(args.out_dir), args.pdk)
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

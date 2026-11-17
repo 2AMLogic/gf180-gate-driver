@@ -139,7 +139,7 @@ def main() -> int:
     try:
         isolated = _verdict(klt, "isolated", _ISOLATED_SHAPES)
         shorted = _verdict(klt, "shorted", _ISOLATED_SHAPES + _BRIDGE_SHAPES)
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
