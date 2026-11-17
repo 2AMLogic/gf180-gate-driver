@@ -101,17 +101,17 @@ DEVICE_ORDER = ["n06", "p06", "n05", "p05", "n33", "p33"]
 # reads model-internal op-point capacitances, none of which fits
 # sim/harness/runner.py's single `let m_<name> = <expr>` op-point convention,
 # so it composes its own control block instead of going through
-# runner.compose_deck(). PDK model paths still come from sim/harness/pdk.py --
-# nothing here re-resolves the PDK on its own.
+# runner.compose_deck(). The control preamble (issue #146's num_threads=1 pin
+# plus the batch-table sizing) is inserted by run_corner_deck itself
+# (script_helpers.control_preamble, issue #515) -- do not re-type it here.
+# PDK model paths still come from sim/harness/pdk.py -- nothing here
+# re-resolves the PDK on its own.
 # --------------------------------------------------------------------------
 
 
 def _control_block() -> str:
     lines = [
         ".control",
-        "set width = 512",
-        "set height = 100000",
-        "set numdgt = 10",
         "",
         "* --- Section A: linear-region Vt sweep ---",
         "dc vfrac 0 1 0.002",

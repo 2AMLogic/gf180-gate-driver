@@ -40,6 +40,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple
 
+import klt_env
+
 
 class KltRunError(Exception):
     """``klt`` exited with a code outside the tool's success contract.
@@ -84,7 +86,7 @@ def _raise_if_bad(
 
 
 def run_klt(
-    cwd: Path, argv: Sequence[str], *, ok_codes: Sequence[int] = (0,)
+    cwd: Path | None, argv: Sequence[str], *, ok_codes: Sequence[int] = (0,)
 ) -> subprocess.CompletedProcess[str]:
     """Run ``argv`` from ``cwd``; print a failure block and raise on a bad exit."""
     proc = subprocess.run(
@@ -92,6 +94,29 @@ def run_klt(
     )
     _raise_if_bad(argv, proc, ok_codes)
     return proc
+
+
+def run_klt_json(
+    argv: Sequence[str], *, cwd: Path | None = None, ok_codes: Sequence[int] = (0,)
+) -> dict:
+    """Run one ``klt`` subcommand with ``--format json``; return the parsed payload.
+
+    ``argv`` is the subcommand without the binary and without ``--format``
+    (``["extract", gds, "--deck", deck]``): the binary is resolved through
+    :func:`klt_env.require_klt`, so the pinned install hint is the only one
+    and no caller can re-import a second resolution path (issue #480), and
+    ``--format json`` is appended here. A missing binary raises
+    ``SystemExit(1)`` (klt_env's prerequisite-failure contract); a bad exit
+    prints the failure block and raises :class:`KltRunError`; the payload of
+    a tolerated exit must parse as json.
+
+    ``cwd`` defaults to the caller's own cwd: every call site passes paths
+    its entry point has already absolutized (or resolves against the cwd it
+    was launched from).
+    """
+    exe = klt_env.require_klt()
+    proc = run_klt(cwd, [exe, *argv, "--format", "json"], ok_codes=ok_codes)
+    return json.loads(proc.stdout)
 
 
 def run_klt_report(

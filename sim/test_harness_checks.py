@@ -40,6 +40,7 @@ were recorded PASS under the old single-bound behavior and must now fail.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -360,6 +361,111 @@ class RecordRenderingTests(unittest.TestCase):
         text = self.record_fragment(0.88, 5.0)
         self.assertIn("| PASS |", text)
         self.assertNotIn("FAIL", text)
+
+
+class WorkingTreeDirtyTests(unittest.TestCase):
+    """``working_tree_dirty()`` vs the append-only evidence class (issue #516).
+
+    Since #333 each run also writes an untracked evidence manifest to
+    ``manifests/artifacts/<bench>-<rid>.manifest.json``. That manifest is run
+    output, not an input, so the *second* of two back-to-back runs must not
+    be flagged "taken against a dirty working tree" merely because the first
+    run's manifest is sitting untracked in the tree. Each test builds a
+    throwaway git repo so the pins are hermetic -- no checkout state, no
+    commits, and (where a rename line is exercised) a local identity that
+    does not depend on machine git config.
+    """
+
+    #: Commit identity passed inline so the fixture never reads machine git
+    #: config (which may not exist on a bare CI runner).
+    IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name) / "repo"
+        (self.repo / "sim" / "harness").mkdir(parents=True)
+        (self.repo / "manifests" / "artifacts").mkdir(parents=True)
+        (self.repo / "docs").mkdir(parents=True)
+        self._git("init", "-q", ".")
+        # The real repo tracks a skeleton under each of these directories
+        # (manifests/artifacts/README.md among them), so ``git status
+        # --porcelain`` lists later untracked files individually instead of
+        # collapsing each wholly-untracked directory into one ``?? dir/``
+        # line. Committing the same skeleton here keeps the fixture faithful
+        # and the pins about individual paths.
+        self._touch("manifests/artifacts/README.md", "# manifests\n")
+        self._touch("sim/harness/.gitkeep")
+        self._touch("docs/.gitkeep")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "fixture skeleton")
+
+    def _git(self, *args: str) -> None:
+        subprocess.run(
+            ("git", *self.IDENTITY, *args),
+            cwd=str(self.repo),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+    def _touch(self, rel: str, text: str = "x\n") -> None:
+        path = self.repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+    def test_untracked_manifest_alone_is_not_dirty(self):
+        rel = "manifests/artifacts/level-shifter-20261116-080655-962d2d1.manifest.json"
+        self._touch(rel)
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_manifest_readme_is_still_an_input(self):
+        self._touch("manifests/artifacts/README.md", "edited prose\n")
+        self.assertTrue(report.working_tree_dirty(self.repo))
+
+    def test_manifest_subdirectory_is_not_evidence(self):
+        self._touch("manifests/artifacts/sub/x.manifest.json")
+        self.assertTrue(report.working_tree_dirty(self.repo))
+
+    def test_manifest_elsewhere_outside_the_tree_root_is_dirty(self):
+        self._touch("docs/manifests/artifacts/x.manifest.json")
+        self.assertTrue(report.working_tree_dirty(self.repo))
+
+    def test_non_evidence_file_is_dirty(self):
+        self._touch("sim/harness/x.py")
+        self.assertTrue(report.working_tree_dirty(self.repo))
+
+    def test_per_bench_evidence_dirs_are_still_excluded(self):
+        # A prior run's record is tracked, as it is in the real tree; the
+        # next run's fresh evidence lands untracked alongside it.
+        self._touch("sim/level-shifter-oxide-safety/records/prior-run.md")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "prior run")
+        self._touch("sim/level-shifter-oxide-safety/records/20261116-080900-962d2d1.md")
+        self._touch(
+            "sim/level-shifter-oxide-safety/corners/"
+            "20261116-080900-962d2d1/tt-27c-5v0-3v3.log"
+        )
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_quoted_manifest_path_is_not_dirty(self):
+        self._touch("manifests/artifacts/foo bar.manifest.json")
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_rename_into_manifests_artifacts_is_not_dirty(self):
+        self._touch("sim/harness/moved.py")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "fixture")
+        self._git("mv", "sim/harness/moved.py", "manifests/artifacts/moved.manifest.json")
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_rename_to_a_non_evidence_path_under_manifests_is_dirty(self):
+        self._touch("sim/harness/moved.py")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "fixture")
+        self._git("mv", "sim/harness/moved.py", "manifests/artifacts/notes.md")
+        self.assertTrue(report.working_tree_dirty(self.repo))
 
 
 if __name__ == "__main__":

@@ -8,8 +8,57 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-17
+
+- **PR #533**: layout: pin the generator's layout/common/ import closure in provenance freshness
+- **PR #517**: refactor: share the single-format klt json driver via klt_report.run_klt_json
+- **Issue #528** (closed): layout: the provenance freshness check pins the generator but not its klt_report/klt_env dependencies
+- **Issue #480** (closed): Promote the generator's private _klt out of gen_gate_driver_core.py: 14 call sites in 3 modules reach it by private name, bypassing klt_env
+
+### 2026-11-16
+
+- **PR #514**: chore(loom): resync installed Loom to v0.19.1302
+- **PR #529**: sim: hoist the ngspice .control preamble into script_helpers (pins num_threads=1 everywhere)
+- **Issue #515** (closed): Dedupe hand-written ngspice .control preambles in sim run scripts (device-mv-fet lacks num_threads=1)
+- **PR #461**: refactor(layout): draw both negative-control fixtures with the resolved klt
+- **Issue #451** (closed): Route the two hand-rolled klt draw calls through klt_report.run_klt: both ignore the resolved klt binary
+- **PR #526**: fix: exempt run evidence manifests from the sim harness dirty-tree check
+- **Issue #516** (closed): sim harness: evidence manifests under manifests/artifacts/ are outside the dirty-tree exclusion, so any run after a sibling run is flagged 'taken against a dirty working tree'
+- **PR #525**: fix: call campaign.dropped_note instead of the last inline copy
+- **Issue #508** (closed): ronw mismatch runner hand-rolls campaign.dropped_note, the last inline copy in the family
+- **PR #471**: refactor(layout): share the negative-control pass/fail epilogue across the four controls
+- **Issue #468** (closed): Share the negative-control pass/fail epilogue: 4 copies in layout/, already drifted in loop placement
+- **PR #522**: sim: guard mismatch runners' bound prose against re-typed f-string literals
+- **Issue #520** (closed): No source-level guard stops the mismatch runners' bound prose from being re-typed as literals (goldens cannot catch it)
+- **PR #519**: sim: interpolate Exception 1/2/3 bound literals in mismatch runners' emitted record prose
+- **PR #501**: refactor: render indrv record prose family names from MISMATCH_FAMILIES
+- **Issue #509** (closed): Three mismatch runners still state Exception 1/2/3's ratified bounds as literals in emitted record prose (32 sites)
+- **Issue #464** (closed): Wire up montecarlo.py's MISMATCH_FAMILIES into the record prose that re-types the same six wrapper names
+- **PR #507**: sim: bind mc_to_yield and the runners to script_helpers' ratified bounds
+- **PR #504**: refactor: route ronw mismatch record body through shared campaign helpers
+- **PR #503**: docs: restate the pinned-klt recipe in throwaway-environment form
+- **PR #489**: fix(lvs): regenerate both extracted DUTs from the current GDS and re-run the oxide-safety facet
+- **PR #473**: refactor(layout): check both klt report legs through one failure block
+- **Issue #492** (closed): layout/README.md pinning section tells agents to run `uv tool install`, which the fleet host rules forbid
+- **Issue #477** (closed): sim/mc_to_yield.py re-types the ratified gate ceiling and both exception bounds now that script_helpers.py is their one home
+- **Issue #472** (closed): Collapse run_klt_report onto run_klt: duplicated failure block, and the --format text leg's exit code is discarded into committed evidence
+- **Issue #459** (closed): ronw mismatch runner keeps two inline copies the shared campaign helpers already cover (ERROR verdict line, context-table loop)
+- **Issue #456** (closed): Regenerate the extracted netlists from the current GDS and re-run the oxide-safety post-layout facet
+
 ### 2026-11-15
 
+- **PR #506**: signoff: refresh generator.sha256 pin for the post-#478 generator; record the same-klt GDS comparison
+- **PR #484**: refactor(sim): drop unused write_record() record writer from report.py
+- **Issue #449** (closed): Remove sim/harness/report.py write_record(): dead bootstrap path that bypasses the evidence store
+- **PR #494**: refactor: rename the two colliding sim-harness fmt() formatters to fixed() and sigfig()
+- **Issue #479** (closed): Disambiguate the two sim-harness fmt() helpers: one name, two incompatible number formats
+- **PR #496**: refactor(sim): share the mismatch Statistical-convention head via campaign.convention_head and route ronw through convention_tail
+- **Issue #460** (closed): Share the mismatch Statistical-convention head (4 copies) and route ronw through convention_tail: its inline tail drops the control's defining property
+- **PR #478**: refactor: route power_array_folded's shape helpers through the generator's
+- **Issue #467** (closed): power_array_folded keeps three duplicate copies of the generator's shape helpers: one drops _rect's rounding, and _vbar's argument order is swapped
+- **PR #493**: fix: make npm test run the tracked test suite instead of printing the sim catalogue
+- **Issue #482** (closed): Make npm test run the test suite, or remove it: it runs sim/run_corners.py --list and exits 0 having run zero tests
+- **PR #490**: docs: complete the sim facet table and restate the post-layout status row against committed evidence
 - **PR #495**: signoff: check layout provenance hashes in CI; rest T1 item-2 attestation on the documented-provenance arm
 - **Issue #463** (closed): T1 item-2 GDS reproducibility attestation no longer holds under the host klt (0.9.2 renames generated sub-cells)
 - **Issue #470** (closed): bug: erc_negative_control's deck-clean arm grades 'violations' on main under klt 0.9.2 — the ERC control fails closed

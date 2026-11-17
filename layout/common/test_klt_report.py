@@ -52,8 +52,9 @@ def _klt_stub(
 ) -> str:
     """Write an executable ``klt`` stub that answers each ``--format`` leg.
 
-    ``run_klt_report`` appends ``--format json`` / ``--format text`` last, so
-    the stub dispatches on the tail of its own argv.
+    ``run_klt_report`` appends ``--format json`` / ``--format text`` last (and
+    ``run_klt_json`` appends ``--format json`` the same way), so the stub
+    dispatches on the tail of its own argv.
     """
     path = directory / "klt"
     path.write_text(
@@ -210,6 +211,60 @@ class RunKltUnchanged(unittest.TestCase):
                     klt_report.run_klt(self.tmp, [self.single_format_stub(3), "lvs"])
 
 
+class RunKltJson(unittest.TestCase):
+    """``run_klt_json`` is the single-format json driver the generator's
+    former ``_klt`` was (issue #480): binary from :func:`klt_env.require_klt`,
+    ``--format json`` appended, exit checked by the one shared block, parsed
+    payload returned."""
+
+    def setUp(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        self.tmp = Path(td.name).resolve()
+
+    def test_returns_the_parsed_payload(self):
+        # The stub exits 97 on any argv that does not end in "--format json",
+        # and its path is nowhere on PATH: a successful return pins both the
+        # appended flag and the binary being resolved through require_klt.
+        klt = _klt_stub(self.tmp)
+        with mock.patch.object(klt_report.klt_env, "require_klt", return_value=klt):
+            payload = klt_report.run_klt_json(["drc", "blk.gds"])
+        self.assertEqual(payload, {"violations": 0})
+
+    def test_bad_exit_prints_the_shared_block_and_names_the_subcommand(self):
+        # Single-format message shape: no "--format" leg suffix (there is
+        # only one leg), and the payload's stdout still lands on stdout.
+        klt = _klt_stub(self.tmp, json_rc=2, json_out="half a payload", json_err="klt: bad deck\n")
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(klt_report.klt_env, "require_klt", return_value=klt):
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                with self.assertRaises(klt_report.KltRunError) as cm:
+                    klt_report.run_klt_json(["drc", "blk.gds"])
+        self.assertEqual(str(cm.exception), "drc")
+        self.assertIn("error: klt drc failed (exit 2)", err.getvalue())
+        self.assertIn("klt: bad deck", err.getvalue())
+        self.assertIn("half a payload", out.getvalue())
+
+    def test_tolerated_nonzero_exit_returns_the_payload(self):
+        # The real DRC/LVS path: exit 3 is "violations found", not a failure.
+        klt = _klt_stub(self.tmp, json_rc=3)
+        with mock.patch.object(klt_report.klt_env, "require_klt", return_value=klt):
+            payload = klt_report.run_klt_json(["drc", "blk.gds"], ok_codes=(0, 3))
+        self.assertEqual(payload, {"violations": 0})
+
+    def test_prerequisite_failure_is_not_swallowed(self):
+        # require_klt's SystemExit (the pinned install hint, exit 1) must
+        # reach the caller: the helper resolves the binary, it does not
+        # re-implement the guard.
+        patcher = mock.patch.object(
+            klt_report.klt_env, "require_klt", side_effect=SystemExit(1)
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        with self.assertRaises(SystemExit):
+            klt_report.run_klt_json(["drc", "blk.gds"])
+
+
 class OneFailureBlock(unittest.TestCase):
     """The structural facts: one shared check, one ``ok_codes`` shape."""
 
@@ -250,8 +305,8 @@ class OneFailureBlock(unittest.TestCase):
         )
         self.assertEqual(seen, [3, 3])
 
-    def test_ok_codes_has_the_same_shape_in_both_entry_points(self):
-        for name in ("run_klt", "run_klt_report"):
+    def test_ok_codes_has_the_same_shape_in_every_entry_point(self):
+        for name in ("run_klt", "run_klt_json", "run_klt_report"):
             with self.subTest(entry_point=name):
                 param = inspect.signature(getattr(klt_report, name)).parameters[
                     "ok_codes"

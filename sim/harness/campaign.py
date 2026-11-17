@@ -824,7 +824,8 @@ def non_converged_section(
 
     `explanation` follows "excluded from every statistic in this record" and
     may use `{it_is}` for "It is"/"They are"; `closing` is the paragraph
-    after the table. Both are claim-specific wording.
+    after the table. Both are claim-specific wording. An empty `closing`
+    emits no closing paragraph and no extra blank line.
     """
     lines = ["  ### Non-converged draws", ""]
     bad = [
@@ -849,7 +850,7 @@ def non_converged_section(
         for outcome, mc, result in bad:
             message = " ".join(result.message.split())[:180]
             lines.append(f"  | `{outcome.corner_id}` | {mc.sample} | {mc.seed} | `{message}` |")
-        lines += ["", closing]
+        lines += ["", closing] if closing else [""]
     lines.append("")
     return lines
 
