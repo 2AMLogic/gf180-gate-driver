@@ -52,9 +52,15 @@ MIN_PROCESS_CORNERS = 3
 
 
 #: Paths whose git state says nothing about whether a run is reproducible:
-#: the append-only evidence tree, which runs *write into*.
+#: the append-only evidence tree, which runs *write into* -- each bench's
+#: ``records/``/``netlist-snapshots/``/``corners/`` output, plus each run's
+#: evidence manifest at ``manifests/artifacts/<bench>-<rid>.manifest.json``
+#: (issue #333; exactly one path component under ``manifests/artifacts/``).
+#: Everything else under ``manifests/`` -- e.g. the README, which is prose --
+#: is an input, not run output, and still counts as dirt.
 _EVIDENCE_PATH_RE = re.compile(
-    r"^sim/(?:[^/]+/(?:%s|%s|%s)/)" % (RECORDS_DIR, SNAPSHOT_DIR, CORNERS_DIR)
+    r"^sim/(?:[^/]+/(?:%s|%s|%s)/)|^manifests/artifacts/[^/]+\.manifest\.json$"
+    % (RECORDS_DIR, SNAPSHOT_DIR, CORNERS_DIR)
 )
 
 
@@ -65,8 +71,11 @@ def working_tree_dirty(repo_root: Path) -> bool:
     reproduced from a commit? Uncommitted evidence cannot make it
     unreproducible -- and evidence is exactly what a run leaves behind, so a
     naive ``git status --porcelain`` check reports every run after the first
-    as dirty (the previous bench's own logs are sitting in the tree). Only
-    changes outside the append-only evidence directories count.
+    as dirty (the previous bench's own logs, and its evidence manifest under
+    ``manifests/artifacts/``, are sitting in the tree). Only changes outside
+    the append-only evidence paths -- ``sim/<bench>/{records,
+    netlist-snapshots,corners}/`` and ``manifests/artifacts/*.manifest.json``
+    -- count.
     """
     res = _git(repo_root, "status", "--porcelain")
     status = res.stdout.strip() if res else ""

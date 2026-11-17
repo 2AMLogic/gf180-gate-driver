@@ -258,6 +258,14 @@ hours, for byte-identical measurements. The harness is what decides the
 sweep's parallelism, so it is also what pins each ngspice invocation to a
 single thread underneath it, independent of host `spinit` configuration.
 
+The standalone `sim/*/run_*.py` experiments that bypass `compose_deck()`
+inherit the same pin rather than carrying their own copies:
+`harness/script_helpers.control_preamble()` is the one home for it (plus the
+`width`/`height`/`numdgt` batch-table sizing), `run_corner_deck()` inserts it
+into every staged `control.spice`, and the scripts that stage their own decks
+call it directly — a hand-typed per-script copy had already drifted into
+omitting the pin once (issue #515), which is why it lives in the harness.
+
 | Parameter | Value |
 |---|---|
 | `<rail>_val` | that rail's supply for this PVT point (nominal, +tol or -tol) |

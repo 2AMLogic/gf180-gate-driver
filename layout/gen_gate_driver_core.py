@@ -82,14 +82,19 @@ Known limitations of this first-cut layout (deliberately not fixed here -- see
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import math
 import os
 import re
-import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
+
+import klt_env  # noqa: E402  (path set above)
+import klt_report  # noqa: E402  (path set above)
 
 # --------------------------------------------------------------------------- #
 # Repo layout
@@ -823,31 +828,6 @@ def _passive_from_params(
 # --------------------------------------------------------------------------- #
 
 
-def _klt(*args: str) -> dict:
-    """Run one ``klt`` subcommand with ``--format json`` and return its response."""
-    exe = shutil.which("klt")
-    if exe is None:
-        raise GenError(
-            "klayout-tools ('klt') is not on PATH -- this repo's layout flow "
-            "requires it (see CLAUDE.md)"
-        )
-    proc = subprocess.run(
-        [exe, *args, "--format", "json"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise GenError(
-            f"klt {' '.join(args[:2])} failed (exit {proc.returncode}):\n"
-            f"{proc.stderr.strip() or proc.stdout.strip()}"
-        )
-    try:
-        return json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-        raise GenError(f"klt {' '.join(args[:2])} produced non-JSON output: {exc}") from exc
-
-
 def generate_device_cells(
     devices: list[Device], out_dir: str, pdk: str
 ) -> dict[str, dict]:
@@ -867,17 +847,19 @@ def generate_device_cells(
             "gate_contact": True,
         }
         gds_path = os.path.join(out_dir, f"{device.name}.gds")
-        report = _klt(
-            "gen",
-            "mos_array",
-            "--pdk",
-            pdk,
-            "--params",
-            json.dumps(params),
-            "--cell-name",
-            device.name,
-            "-o",
-            gds_path,
+        report = klt_report.run_klt_json(
+            [
+                "gen",
+                "mos_array",
+                "--pdk",
+                pdk,
+                "--params",
+                json.dumps(params),
+                "--cell-name",
+                device.name,
+                "-o",
+                gds_path,
+            ]
         )
         reports[device.name] = report
     return reports
@@ -905,17 +887,19 @@ def generate_resistor_cells(
             "flavor": "generic",
         }
         gds_path = os.path.join(out_dir, f"{resistor.name}.gds")
-        report = _klt(
-            "gen",
-            "res_array",
-            "--pdk",
-            pdk,
-            "--params",
-            json.dumps(params),
-            "--cell-name",
-            resistor.name,
-            "-o",
-            gds_path,
+        report = klt_report.run_klt_json(
+            [
+                "gen",
+                "res_array",
+                "--pdk",
+                pdk,
+                "--params",
+                json.dumps(params),
+                "--cell-name",
+                resistor.name,
+                "-o",
+                gds_path,
+            ]
         )
         reports[resistor.name] = report
     return reports
@@ -965,7 +949,9 @@ def native_tap_pads(report: dict) -> list[tuple[float, float, float, float]]:
     gds_path = report.get("gds_path")
     if not gds_path:
         return []
-    comps = _klt("components", gds_path, "--conductors", json.dumps([{"name": "m1", "layer": [34, 0]}]))
+    comps = klt_report.run_klt_json(
+        ["components", gds_path, "--conductors", json.dumps([{"name": "m1", "layer": [34, 0]}])]
+    )
     ports = [(p["x_um"], p["y_um"]) for p in report.get("ports", [])]
     pads = []
     for comp in comps.get("components", []):
@@ -2200,7 +2186,7 @@ def compose(
     request_path = os.path.join(out_dir, "gen-compose-request.json")
     with open(request_path, "w", encoding="utf-8") as handle:
         json.dump(request, handle, indent=1)
-    return _klt("gen-compose", request_path)
+    return klt_report.run_klt_json(["gen-compose", request_path])
 
 
 def _sha256(path: str) -> str:
@@ -2209,6 +2195,56 @@ def _sha256(path: str) -> str:
         for chunk in iter(lambda: handle.read(1 << 16), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _generator_dep_modules(path: str | None = None) -> list[dict]:
+    """Provenance ``generator_deps`` entries for this generator's local imports.
+
+    Walks the absolute imports of ``path`` (default: this file) that resolve
+    into ``layout/common/``, transitively -- ``klt_report`` imports
+    ``klt_env`` -- and returns one ``{module, path, sha256}`` entry per file,
+    sorted by module name. Since PR #517 these bytes co-determine the
+    generated GDS (``run_klt_json`` assembles every klt argv; ``require_klt``
+    resolves the binary) while only the generator file itself was pinned --
+    the gap issue #528 closed. The freshness check re-derives the same
+    closure from the live tree, so the record cannot drift from what the
+    generator actually imports.
+    """
+    target = os.path.abspath(path or __file__)
+    common = os.path.join(os.path.dirname(target), "common")
+    closure: dict[str, str] = {}
+    pending = [target]
+    seen: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            with open(current, encoding="utf-8") as handle:
+                tree = ast.parse(handle.read())
+        except (OSError, SyntaxError, ValueError):
+            continue
+        names: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names.append(node.module)
+        for name in names:
+            top = name.split(".")[0]
+            candidate = os.path.join(common, f"{top}.py")
+            if top not in closure and os.path.isfile(candidate):
+                closure[top] = candidate
+                pending.append(candidate)
+    return [
+        {
+            "module": module,
+            "path": os.path.relpath(file_path, REPO_ROOT),
+            "sha256": _sha256(file_path),
+        }
+        for module, file_path in sorted(closure.items())
+    ]
 
 
 def _git(*args: str) -> str | None:
@@ -2290,14 +2326,16 @@ def build(out_dir: str, pdk: str) -> dict:
     with open(request_path, "w", encoding="utf-8") as handle:
         json.dump(interconnect_request, handle, indent=1)
     interconnect_gds = os.path.join(work_dir, "interconnect.gds")
-    draw_report = _klt(
-        "draw",
-        "--params",
-        request_path,
-        "--cell-name",
-        "gate_driver_core_interconnect",
-        "-o",
-        interconnect_gds,
+    draw_report = klt_report.run_klt_json(
+        [
+            "draw",
+            "--params",
+            request_path,
+            "--cell-name",
+            "gate_driver_core_interconnect",
+            "-o",
+            interconnect_gds,
+        ]
     )
     # `klt draw` is not a `klt gen` generator, so it does not emit a
     # generator_report. `gen-compose` only needs generator/cell_name/gds_path/
@@ -2351,6 +2389,13 @@ def build(out_dir: str, pdk: str) -> dict:
             "path": os.path.relpath(os.path.abspath(__file__), REPO_ROOT),
             "sha256": _sha256(os.path.abspath(__file__)),
         },
+        # The generator's layout/common/ import closure (issue #528): after
+        # PR #517 the klt argv assembly (klt_report.run_klt_json) and binary
+        # resolution (klt_env.require_klt) live outside the pinned generator
+        # file, so these bytes co-determine the GDS;
+        # check_layout_provenance.py re-derives the closure and re-hashes
+        # every entry against the live tree.
+        "generator_deps": _generator_dep_modules(),
         "tools": {
             "klt_version": _klt_version(),
             "pdk": compose_report.get("pdk"),
@@ -2397,9 +2442,7 @@ def build(out_dir: str, pdk: str) -> dict:
 
 
 def _klt_version() -> str:
-    exe = shutil.which("klt")
-    if exe is None:
-        return "unknown"
+    exe = klt_env.require_klt()
     proc = subprocess.run([exe, "--version"], capture_output=True, text=True, check=False)
     return proc.stdout.strip() or proc.stderr.strip()
 
@@ -2416,7 +2459,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = build(os.path.abspath(args.out_dir), args.pdk)
-    except GenError as exc:
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

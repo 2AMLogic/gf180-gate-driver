@@ -29,9 +29,11 @@ draws) that decision record 0017 ratifies.
 
 from __future__ import annotations
 
+import ast
 import contextlib
 import datetime as _dt
 import io
+import re
 import sys
 import tempfile
 import unittest
@@ -93,6 +95,64 @@ def _outcome(values, control=5.0, baseline=5.0, statuses=None) -> campaign.Point
         for i, (v, status) in enumerate(zip(values, statuses))
     ]
     return campaign.PointOutcome(_POINT, _result(_POINT, baseline), controls, samples)
+
+
+# Bound figures an editor might re-type into `build_record_body` prose (issue
+# #520): the positive `≤ <n> mV` shape (the `:.0f` on `EXCEPTION*_BOUND_V *
+# 1000` form #509 established) and the negative `−<n>.mmm mV` margin shape
+# (U+2212 minus, `:.3f`, same source). Value-agnostic on purpose: a decision
+# record that re-ratifies a bound must not also require remembering to widen
+# this guard.
+_BOUND_PROSE_LITERALS = (
+    re.compile(r"(?:≤|<=)\s*\d"),
+    re.compile(r"−\d+\.\d{3}\s*mV"),
+)
+
+# f-strings inside `build_record_body` whose bound prose #509's curation
+# ratified to stay literal: the **Claim** paragraph (one per runner) and inb's
+# `over_rail` glossary footnote. A constant part containing any of these
+# anchors exempts its whole f-string; plain non-f strings, table headers and
+# docstrings are not f-strings and are never scanned.
+_RATIFIED_BOUND_PROSE_ANCHORS = (
+    "**Claim**",
+    "`over_rail` is the measured peak minus",
+)
+
+
+def _fstring_bound_prose_violations(dirname, filename):
+    """Literal bound figures re-typed into ``build_record_body`` f-strings.
+
+    Source-level guard (issue #520): the goldens compare *output*, so an edit
+    that re-types ``≤ {EXCEPTION*_BOUND_V * 1000:.0f} mV`` back into a literal
+    renders byte-identical prose and still passes them -- the blind spot
+    #464's family-name guard covers, one interpolation layer over. Returns
+    ``(line, excerpt)`` pairs for every f-string constant part under
+    ``build_record_body`` matching a re-typed bound shape.
+    """
+    path = SIM_DIR / dirname / filename
+    source = path.read_text()
+    fn = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "build_record_body"
+    )
+    violations = []
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.JoinedStr):
+            continue
+        constants = [
+            part.value for part in node.values
+            if isinstance(part, ast.Constant) and isinstance(part.value, str)
+        ]
+        if any(
+            anchor in text
+            for text in constants
+            for anchor in _RATIFIED_BOUND_PROSE_ANCHORS
+        ):
+            continue
+        for text in constants:
+            if any(pattern.search(text) for pattern in _BOUND_PROSE_LITERALS):
+                violations.append((node.lineno, text.strip()))
+    return violations
 
 
 class StubRunner:
@@ -510,6 +570,75 @@ class RecordBodyGoldenTests(unittest.TestCase):
         self.assertNotIn("| n/a |", body)
         self.assertIn("cross-checked against the committed corner-matrix", body)
         self.assertNotIn("was **not performed**", body)
+
+    def test_indrv_item1_re_types_none_of_the_mismatch_families(self):
+        # Source-level guard (issue #464): the goldens compare *output*, so an
+        # edit that re-typed a family name as a literal in the item-1 record
+        # paragraph would render identical bytes and still pass them --
+        # silently restoring the second source of truth the interpolation
+        # removes. Locate the add() call by `ast` so this does not rot when
+        # the file shifts; read the families as the runner sees them, through
+        # its own `mc_mod` import.
+        path = SIM_DIR / "gate-driver-indrv-mismatch" / "run_indrv_mismatch.py"
+        source = path.read_text()
+        tree = ast.parse(source)
+        calls = [
+            node for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and getattr(node.func, "id", "") == "add"
+            and node.args
+            and "MOSFET local mismatch" in (ast.get_source_segment(source, node.args[0]) or "")
+        ]
+        self.assertEqual(len(calls), 1, "could not locate the item-1 add() call")
+        segment = ast.get_source_segment(source, calls[0])
+        for family in fixture.load_runner("indrv").mc_mod.MISMATCH_FAMILIES:
+            self.assertNotIn(
+                f"`{family}`", segment,
+                f"{family!r} is hard-coded in the item-1 record paragraph; "
+                "interpolate harness.montecarlo.MISMATCH_FAMILIES instead so the "
+                "record prose cannot drift from the families a run perturbs.",
+            )
+
+    def test_indrv_build_record_body_interpolates_the_exception_bound(self):
+        # Source-level guard (issue #520): #509 interpolated the Exception 2/3
+        # bounds out of this runner's record prose, and the goldens cannot
+        # catch an edit that re-types a literal -- it renders identical bytes
+        # and still passes them. Same reasoning as the family-name guard
+        # above, one interpolation layer over.
+        self.assertEqual(
+            [],
+            _fstring_bound_prose_violations(
+                "gate-driver-indrv-mismatch", "run_indrv_mismatch.py"
+            ),
+            "a bound figure is re-typed as a literal in an indrv "
+            "build_record_body f-string; interpolate EXCEPTION1/2/3_BOUND_V "
+            "from sim/harness/script_helpers.py instead (#509)",
+        )
+
+    def test_inb_build_record_body_interpolates_the_exception_bound(self):
+        # As above, for the inb runner's Exception 1 bound prose (#520).
+        self.assertEqual(
+            [],
+            _fstring_bound_prose_violations(
+                "level-shifter-inb-mismatch", "run_inb_mismatch.py"
+            ),
+            "a bound figure is re-typed as a literal in an inb "
+            "build_record_body f-string; interpolate EXCEPTION1_BOUND_V from "
+            "sim/harness/script_helpers.py instead (#509)",
+        )
+
+    def test_output_stage_build_record_body_interpolates_the_exception_bound(self):
+        # As above, for the output-stage runner's Exception 2 bound prose
+        # (#520).
+        self.assertEqual(
+            [],
+            _fstring_bound_prose_violations(
+                "output-stage-taper-mismatch", "run_output_stage_mismatch.py"
+            ),
+            "a bound figure is re-typed as a literal in an output-stage "
+            "build_record_body f-string; interpolate EXCEPTION2_BOUND_V from "
+            "sim/harness/script_helpers.py instead (#509)",
+        )
 
 
 class RonwNoConvergedDrawTests(unittest.TestCase):

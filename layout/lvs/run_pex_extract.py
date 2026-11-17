@@ -19,9 +19,21 @@ file into ``layout/lvs/reports/<block>/`` under the same name and commit it
 (``layout/README.md``, "Stored vs committed signoff outputs"). Never
 overwritten, same append-only convention as ``run_drc.py``/``run_lvs.py``.
 
+Like ``run_drc.py``/``run_erc.py``, it accepts ``--klt <path>`` so an
+extraction can be produced from a specific pinned ``klt`` install without
+touching the ``PATH`` pin -- see ``layout/README.md`` ("Reproducibility:
+pin the ``klt`` install (#190)"). The extracted netlist it feeds into
+``mk_extracted_dut.py`` names its klt build only through the report's own
+``provenance`` -- pass ``--klt`` when reproducing a committed report's
+deck build.
+
 Usage (from the repo root)::
 
     python3 layout/lvs/run_pex_extract.py layout/gate_driver_core.gds
+
+    # explicit block / deck / klt, if ever needed:
+    python3 layout/lvs/run_pex_extract.py <path/to.gds> --block <name> \\
+        --deck gf180mcu --klt /path/to/klt
 """
 
 from __future__ import annotations
@@ -40,15 +52,23 @@ import signoff_store  # noqa: E402
 REPORTS_ROOT = Path(__file__).resolve().parent / "reports"
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("gds", type=Path, help="path to the GDS/OASIS file")
     parser.add_argument("--block", help="report subdirectory (default: the GDS stem)")
     parser.add_argument("--deck", default="gf180mcu", help="extraction deck")
     parser.add_argument("--top", default=None, help="top cell (default: the GDS stem)")
-    args = parser.parse_args()
+    parser.add_argument(
+        "--klt",
+        help="path to the klt binary (default: 'klt' on PATH)",
+    )
+    return parser
 
-    klt = klt_env.require_klt()
+
+def main() -> int:
+    args = build_parser().parse_args()
+
+    klt = klt_env.require_klt(args.klt)
     signoff_store.preflight_or_exit(REPO_ROOT)
 
     gds_path = klt_env.resolve_existing(args.gds)

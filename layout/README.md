@@ -19,6 +19,12 @@ layout/
                                     ground_rail_isolation check (#132)
   build/                            generator scratch (gitignored)
   common/report_id.py               shared <record-id> minting for the run scripts
+  common/control_verdict.py         the one pass/fail epilogue all four
+                                    negative controls return through (#468):
+                                    FAIL: lines + what they invalidate, or the
+                                    ok: line saying the sibling verdict is real
+  common/test_control_verdict.py    unit tests for the above (PDK-free CI;
+                                    the controls themselves need klt + the PDK)
   common/power_array_folded.py      folded, cross-row-tied high-m power-array
                                     generator (#254). Kept on purpose for future
                                     power-stage growth; nothing in this block
@@ -602,6 +608,17 @@ uvx --from "git+https://github.com/2AMLogic/klayout-tools@<rev>" klt …
 or a scratch `uv venv` created from the same pinned source for a repeated
 set of runs.
 
+Every report runner also accepts the build directly, without a `PATH` pin:
+[`drc/run_drc.py`](drc/run_drc.py), [`lvs/run_lvs.py`](lvs/run_lvs.py),
+[`lvs/run_pex_extract.py`](lvs/run_pex_extract.py) and
+[`erc/run_erc.py`](erc/run_erc.py) each take `--klt <path>`, as does
+[`verification/signoff/check_tier_report.py`](../verification/signoff/check_tier_report.py).
+Reproduce a pinned build into a throwaway environment — `uvx --from
+"git+https://github.com/2AMLogic/klayout-tools@<rev>" klt …` for a one-off,
+or a scratch `uv venv` from the same source for a series of runs — and pass
+its `bin/klt` to the runner, so the command that produced a report names
+the exact build.
+
 The reports linked below (`20260818-082605-cf3a1c7` DRC,
 `20260818-082329-cf3a1c7` LVS) were produced against
 `klt 0.2.0` / `klayout 0.30.10` / deck content hash
@@ -630,14 +647,42 @@ from main (`89390e0`) under the same host `klt 0.9.3.dev3+gd5d57daf9a14`,
 both into scratch directories — `cmp`: identical, both outputs hash
 `736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` — so
 the refactor is GDS-neutral and the pin moved to the post-#467 generator
-(`940c04d4…`) with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
+(`940c04d4…`) with the committed GDS bytes untouched. Refreshed again for
+the #480 `run_klt_json` refactor (PR #517, 2026-11-16): regenerated from
+pre-#480 main (`631da07`) and from the PR head (`c927dcc`) under the same
+host `klt 0.9.3.dev181+g2f281f0d605c`, both into scratch directories —
+all 41 GDS outputs (the 40 `build/*.gds` blocks + `gate_driver_core.gds`)
+byte-identical, the top cell again hashing
+`736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` (the
+compose-request/provenance JSONs differ only in scratch-dir paths, the
+`git` block, and the generator hash itself) — so the refactor is
+GDS-neutral and the pin moves to the post-#480 generator (`4ce5b530…`)
+with the committed GDS bytes untouched. Refreshed again for the #528
+provenance-deps pinning (2026-11-17): the generator edit that records
+`generator_deps` is GDS-neutral the same way — regenerated from main
+(`ab75e017`) and from the branch head under the same host
+`klt 0.9.3.dev234+g5ed4e55bffbd`, both into scratch directories, all 41
+GDS outputs byte-identical, the top cell again hashing
+`736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` — so
+the pin moves to `2761d48e…` with the committed GDS bytes untouched, and
+`generator_deps` pins the two `layout/common/` modules the #517 refactor
+made behavioural (`klt_env` `9d33447…`, `klt_report` `1b81a82…`; their
+bytes are unchanged since `c927dcc`, so #517's own GDS-neutrality
+comparison backs these pins too). The #528 measurement that motivated
+this: all six commits that ever touched the two helpers changed them
+without touching the GDS, two of them after the last regeneration — the
+silent-staleness class #463 built the check to catch. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
-in CI's PDK-free signoff job) re-hashes the three recorded pins — `layout`,
-`source_netlist`, `generator` — against the live tree on every CI run, so a
-generator edit merging without a provenance refresh fails loudly instead of
+in CI's PDK-free signoff job) re-hashes the recorded pins — `layout`,
+`source_netlist`, `generator` and the generator's `generator_deps`
+closure — against the live tree on every CI run, so a generator edit merging without a provenance refresh fails loudly instead of
 rotting silently (exactly what PR #466's merge did to `generator.sha256`
-before this check existed). Its klt-version arm is advisory by design: it
+before this check existed). The `generator_deps` set is *derived* from
+the live generator's own `layout/common/` imports (transitively —
+`klt_report` imports `klt_env`) rather than trusted from the record, so a
+future generator that gains or loses a common import fails the check
+until the provenance record follows it. Its klt-version arm is advisory by design: it
 prints the drift and its consequence when the host `klt --version` differs
 from `tools.klt_version` and exits zero — per #470 the host tool moving
 ahead of committed evidence is the normal condition, not an error. The #362

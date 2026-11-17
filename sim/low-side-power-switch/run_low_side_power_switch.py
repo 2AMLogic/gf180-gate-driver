@@ -130,19 +130,6 @@ DR0008_N06_TYPICAL = {
 def _control_block() -> str:
     lines = [
         ".control",
-        # Same reason sim/harness/runner.compose_deck() emits this on every
-        # generated deck (issue #146, pinned by sim/test_harness_runner.py): a
-        # locally built, OpenMP-enabled ngspice's own spinit can default to a
-        # thread count > 1, which on these small DC sweeps is pure
-        # oversubscription -- the first trial run of this experiment burned
-        # 9m51s of CPU for 1m40s of wall clock producing numbers identical to
-        # the single-threaded run. This script drives the harness library
-        # directly and so composes its own control block, which means it has
-        # to carry the convention itself rather than inherit it.
-        "set num_threads=1",
-        "set width = 512",
-        "set height = 100000",
-        "set numdgt = 10",
         "",
         "* --- Sections A/B: Id(Vds) output characteristics (one print block "
         "per device so each 101-row table stays under ngspice's column-wrap "
