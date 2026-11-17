@@ -46,6 +46,8 @@ sys.path.insert(0, str(SIM_DIR))
 
 import mismatch_body_fixture as fixture  # noqa: E402
 from harness import campaign  # noqa: E402
+from harness import cli as harness_cli  # noqa: E402
+from harness import corners as corners_mod  # noqa: E402
 from harness import runner as harness_runner  # noqa: E402
 from harness.corners import CORNERS, PvtPoint, Rail  # noqa: E402
 from harness.montecarlo import CONTROL_SAMPLE, MismatchSample, sample_seed  # noqa: E402
@@ -1411,6 +1413,100 @@ class RunnerHookSmokeTests(unittest.TestCase):
             ),
             "falling=4.1372 rising=4.4809 hyst=0.3437 response=150.8ns",
         )
+
+
+class CliDisclosureTests(unittest.TestCase):
+    """`run_corners.py` discloses a dirty input tree like the envelope (#541).
+
+    `harness/cli.py` does not sit on the envelope (measured, issue #541: its
+    `--no-write` is offline debugging and must keep skipping the evidence
+    preflight, which `start_run` cannot express for a driver with its own
+    parser), so it calls the shared disclosure helper directly. These tests
+    stop `cli.run()` at the head: everything past the record-id mint is
+    stubbed, `runner.run_grid` raises `NgspiceMissing`, and `run()` reports
+    and returns -- so the assertion only sees what the head printed.
+    """
+
+    RECORD = "20260102-030405-abc1234"
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        (self.root / "records").mkdir()
+        self.dirty = False
+        self.preflighted = []
+
+        def _git(repo_root):
+            return {
+                "commit": "abc1234" + "0" * 33, "short": "abc1234",
+                "branch": "main", "dirty": self.dirty,
+            }
+
+        fake_tb = SimpleNamespace(
+            corners=["tt"], temperatures_c=[27.0],
+            experiment="fake-tb", description=None, dut=None,
+            experiment_dir=self.root, rails=corners_mod.DEFAULT_RAILS,
+            stretch=None, subset_reason="",
+        )
+
+        def _run_grid(*args, **kwargs):
+            raise harness_runner.NgspiceMissing("stub: no ngspice in this test")
+
+        for module, name, replacement in (
+            (harness_cli, "_resolve_tb_path", lambda argument: self.root / "tb"),
+            (harness_cli.tb_mod, "load", lambda *a, **k: fake_tb),
+            (harness_cli, "find_pdk", lambda: SimpleNamespace()),
+            (harness_cli.runner, "ngspice_version", lambda: "ngspice stub"),
+            (harness_cli.report, "matrix_conformance",
+             lambda tb, points: {"full": True, "missing": []}),
+            (harness_cli.report, "git_provenance", _git),
+            (harness_cli.report, "allocate_record_id", lambda *a, **k: self.RECORD),
+            (harness_cli.evidence_store, "preflight_or_exit", self.preflighted.append),
+            (harness_cli.evidence_store, "stage_dir", lambda *a, **k: self.root / "stage"),
+            (harness_cli.runner, "run_grid", _run_grid),
+        ):
+            saved = getattr(module, name)
+            setattr(module, name, replacement)
+            self.addCleanup(setattr, module, name, saved)
+
+    def _run(self, *extra):
+        buf, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            code = harness_cli.main(["--quiet", *extra, "fake-tb"])
+        return code, buf.getvalue()
+
+    def test_a_dirty_input_tree_is_disclosed_by_run_corners(self):
+        self.dirty = True
+        code, out = self._run("--no-write")
+        self.assertIn(
+            "warning: input tree (design/testbench/harness/docs) is dirty; "
+            f"record {self.RECORD} will not be reproducible from commit "
+            "abc1234 alone\n",
+            out,
+        )
+        self.assertEqual(self.preflighted, [])
+
+    def test_a_clean_input_tree_prints_no_warning(self):
+        _, out = self._run("--no-write")
+        self.assertNotIn("dirty", out)
+
+    def test_no_write_still_discloses(self):
+        self.dirty = True
+        _, out = self._run("--no-write")
+        self.assertIn("is dirty", out)
+
+    def test_a_recording_run_discloses_too(self):
+        self.dirty = True
+        code, out = self._run("--corners", "tt", "--temps", "27",
+                              "--subset-reason", "test", "-j", "2")
+        self.assertIn("is dirty", out)
+        self.assertEqual(self.preflighted, [harness_cli.REPO_ROOT])
+
+    def test_the_warning_prints_once(self):
+        self.dirty = True
+        _, out = self._run("--no-write")
+        self.assertEqual(out.count("is dirty"), 1)
 
 
 if __name__ == "__main__":
