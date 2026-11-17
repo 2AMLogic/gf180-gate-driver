@@ -477,6 +477,26 @@ What stays in a campaign script: which measurement is under claim, which
 committed record its control is checked against, and the record's own
 narrative (`build_record_body`).
 
+### The run envelope: `campaign.start_run` / `campaign.finish_run`
+
+Around the campaign itself, every recorded run's `main()` shares a head and
+a tail (issue #483). `campaign.start_run(argv, description=..., here=...,
+repo_root=..., default_samples=...)` parses the common
+`-n/-j/--smoke/--no-write` flags, discovers the PDK and ngspice, runs the
+evidence-store preflight (skipped under `--no-write`), mints the record id
+from the tree's git provenance, parses its stamp, and discloses a dirty
+input tree; it returns a `campaign.RunContext` (`args`, `pdk`, `ngspice`,
+`git`, `record`, `stamp`). The drivers without a CLI -- the device runners
+below -- pass `parse_cli=False` and get the same head minus the flags.
+`campaign.finish_run(stage=..., repo_root=..., here=..., record=...,
+body=..., verdict=..., anomalies=())` closes the run: it commits the staged
+evidence (`campaign.commit_run`), prints the `record` / `manifest` /
+`staged` / `status` block, prints the optional `anomalies` list, and
+returns `0` iff the verdict is `PASS`. `run_mismatch_main` above,
+`run_device_main` below, and the fourth mismatch runner
+(`sim/low-side-power-switch-ronw-mismatch`) all sit on this envelope, so
+"what does a run print, warn about, and commit" has one answer.
+
 ### The device-runner driver: `campaign.run_device_main`
 
 The `sim/device-*` / `sim/low-side-power-switch` / `sim/uvlo-trip-verification`
@@ -528,11 +548,12 @@ inside its own `run_point` rather than teaching the driver about it --
 `run_uvlo_trip.py` files its hysteresis and response-time decks as one corner
 log that way.
 
-**A dirty input tree is disclosed by every runner using this driver.** Before
+**A dirty input tree is disclosed by every recorded run.** Before
 #450 only `run_low_side_power_switch.py` printed the "record will not be
 reproducible from commit `<sha>` alone" warning, even though all of them read
-`report.git_provenance()`; the driver is the one place that decision gets made
-once. Whether a device record's *body* should also carry
+`report.git_provenance()`; #450 gave this driver its own copy, and issue #483
+lifted the decision into the shared `campaign.start_run` envelope, so the
+mismatch campaigns say it too. Whether a record's *body* should also carry
 `report.render_record`'s in-record dirty-tree disclosure is a separate call,
 deliberately left open.
 
