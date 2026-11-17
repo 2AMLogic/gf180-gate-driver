@@ -29,7 +29,7 @@ re-audit of the links):
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
-| `sim/harness/README.md` | `sha256:b19c7b337f4313454b33975143985f0efc9a63fa5e2cb08ce80183592887f592` |
+| `sim/harness/README.md` | `sha256:464d81e2a258fd4dc3bacfff4f7ecef8eda1f95a501c30c408e1d6cc95fb6b1e` |
 | `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
@@ -497,6 +497,44 @@ layout flow or generator re-run happened as part of this audit; the same-klt
 generator comparison the refreshed `generator.sha256` pin rests on was run
 into scratch directories outside the tree.
 
+## Re-audit for issue #450 (2026-11-15)
+
+One listed file changed on the issue #450 branch (`feature/issue-450`, on top
+of `origin/main` at `0f25e3c`) and was re-read against the findings above; its
+hash is refreshed in the tables:
+
+- `sim/harness/README.md` (**read** the diff): adds one section, "The
+  device-runner driver: `campaign.run_device_main`", before "`klt sim`
+  requests: `harness/klt_request.py`", documenting the shared `main()` the
+  three device-characterization runners now call -- what the driver owns, the
+  `run_point` / `build_record_body` / `summarize` hooks, the optional
+  `corner_key` and `progress_detail` hooks, and that a dirty input tree is
+  disclosed by every runner using the driver. The Quick start, Prerequisites,
+  PVT grid, testbench-authoring, "What a run writes", Monte Carlo and xschem
+  sections are untouched (the diff is a single pure insertion), so every
+  reproduction command this inventory's Reproduction finding relies on is
+  unchanged. Each claim in the new section was checked against the code it
+  documents: the driver's signature and hook defaults (`campaign.py`), the
+  `report.write_corner_log` + `report.device_log_header` pair it names, and
+  the three runners' calls (including `low-side-power-switch`'s
+  `corner_key=lambda c: c.name` and `uvlo-trip-verification`'s two-decks-per
+  point `_progress_detail`).
+
+The other listed files are unchanged; in particular `README.md`, `LICENSE` and
+`spec/gate-driver.md` are untouched by this branch, so those findings still
+hold. Recorded but **not** pinned here: `campaign.run_device_main` itself, the
+deletion of `report.write_device_corner_log`, the three migrated runners
+(`sim/device-mv-fet`, `sim/low-side-power-switch`,
+`sim/uvlo-trip-verification`) and the new driver tests in
+`sim/test_harness_campaign.py` -- none is listed in this inventory and none
+carries a hash in it.
+
+The edit exists because the three device-characterization runners each carried
+a near-identical copy of the same `main()` that had drifted -- only one of the
+three disclosed a dirty input tree, and the driver is now the one place that
+decision gets made (issue #450). No simulation, netlisting or layout flow was
+run for this re-audit.
+
 ## Re-audit for issue #486 (2026-11-15)
 
 Two listed files changed on the issue #486 branch (`feature/issue-486`, on
@@ -629,6 +667,23 @@ All nine listed hashes were re-computed against the merged tree and match
 the tables (the #458/#470 refreshes of the README set still hold — this
 branch touched none of those files). The other findings are unchanged. No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 merge (2026-11-15)
+
+Two listed rows changed in the merge of `origin/main` into
+`feature/issue-450` (PR #462's conflict resolution); each now lists the hash
+of the merged file it pins, re-computed from the live tree:
+
+- `sim/README.md`: main's side (the #458 re-audit above covers its change);
+  this branch did not touch the file.
+- `sim/harness/README.md`: this branch's side (the #450 re-audit above
+  covers its change); main did not touch the file since the branch's last
+  main-merge.
+- `layout/README.md`: main's side, likewise unchanged by this branch.
+
+Both sides' re-audit sections are preserved. Nothing else in the tables
+moved, so the findings above still hold. CI was read, not observed to pass
+here. No simulation, netlisting or layout flow was run for this re-audit.
 ## Re-audit for issue #479 (2026-11-15)
 
 One listed file changed on the issue #479 branch (`feature/issue-479`,
@@ -799,6 +854,29 @@ All nine listed hashes were re-computed against the final merged tree and
 match the tables. The other findings are unchanged. No simulation,
 netlisting or layout flow was run for this re-audit.
 
+## Re-audit for the PR #462 second merge (2026-11-15)
+
+`origin/main` moved again after the first PR #462 conflict-resolution merge
+above, and this second merge brings the issue #479 and issue #502 re-audit
+sections (and their hash-table refreshes) into this inventory from main.
+The merged tree was re-checked against the findings above:
+
+- `sim/harness/README.md`: the merged file now carries this branch's
+  "device-runner driver" section (the #450 re-audit above) **and** main's
+  issue #479 `fmt` -> `sigfig` rename in the campaign API bullet list —
+  different sections of the file, so the merge keeps both; the table row is
+  re-computed against the combined file and refreshed.
+- `layout/README.md`: main's issue #502 same-klt paragraph is the version
+  this merge brings in; this branch has never touched the file, so the row
+  is main's refreshed hash, re-computed and matching.
+- `.github/workflows/ci.yml`, `README.md`, `sim/README.md` did not change
+  on the main side of this second merge beyond what the existing rows
+  already name; re-computed against the merged tree and matching.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
+
 ## Re-audit for issue #472 / the PR #473 merge (2026-11-15)
 
 Two listed files changed — one by the issue #472 branch, one via the merge
@@ -830,6 +908,32 @@ The other listed files are unchanged by the branch; the merge's updates to
 name, re-computed against the merged tree and matching. No simulation,
 netlisting or layout flow was run for this re-audit.
 
+## Re-audit for the PR #462 third merge (2026-11-16)
+
+`origin/main` moved again after the second PR #462 conflict-resolution merge
+above (#473: the issue #472 `klt` report-runner refactor and its re-audit
+section), and this third merge brings that section and the ci.yml change
+into this inventory from main. The merged tree was re-checked against the
+findings above:
+
+- `.github/workflows/ci.yml` (**read** the diff): the merge brings main's
+  issue #472 side in full — the `klt report-runner unit tests` step and its
+  header-table row; this branch has never touched the file, so the merged
+  file is main's version and the table row is re-computed against it and
+  refreshed.
+- `sim/harness/README.md`: main did not change the file on its side of this
+  merge; the merged file is still this branch's combined version (the #450
+  device-runner-driver section plus main's issue #479 `fmt` -> `sigfig`
+  rename) named by the second-merge section above; the row is re-computed
+  and matching.
+- `layout/README.md`, `README.md`, `sim/README.md` and the other listed
+  files are byte-identical in both parents of this merge; rows re-computed
+  and matching.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
+
 ## Re-audit for the PR #498 third merge (2026-11-16)
 
 One listed file changed in the merge of `origin/main` into
@@ -849,6 +953,7 @@ All other listed hashes were re-computed against the merged tree and match
 the tables. As with the #502 re-audit, the envelope, manifest item 10 and
 tier-report citation pins are refreshed for the new inventory bytes. No
 simulation, netlisting or layout flow was run for this re-audit.
+
 ## Re-audit for the PR #489 third merge (2026-11-16)
 
 `origin/main` moved again after the PR #489 second merge above — PR #473
@@ -952,6 +1057,68 @@ listed hashes were re-computed against the final merged tree and match the
 tables. The other findings are unchanged. The envelope, manifest item 10 and
 tier-report citation pins are refreshed for the new inventory bytes. No
 simulation, netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 fourth merge (2026-11-16)
+
+`origin/main` moved again after the third PR #462 conflict-resolution merge
+above — PR #489 (the issue #456 branch) landed on main carrying its three
+re-audit sections above and the extracted-DUT report re-point, with the
+docs-guide and sim-bounds updates (#505, #507) merged on top — and this
+fourth merge brings those sections and changes into this inventory from
+main. The merged tree was re-checked against the findings above:
+
+- `.github/workflows/ci.yml` (**read** the diff against the merge base
+  `3a4ee5a`): the merge brings main's side in full — the "Extracted
+  post-layout DUT netlists are in sync with their reports" step's two
+  `mk_extracted_dut.py --check` invocations re-pointed at the 20261114
+  extracted reports (the #456 re-audit above). This branch has never
+  touched the file, so the merged file is main's version and the table row
+  is re-computed against it and refreshed (superseding the third-merge
+  section's value).
+- `README.md`, `LICENSE`, `spec/gate-driver.md`, `design/README.md`,
+  `sim/README.md`, `sim/harness/README.md`, `layout/README.md` and
+  `design/gate-driver-characterization.md` are byte-identical in both
+  parents of this merge; rows re-computed and matching. Main's #505/#507
+  changes touch `WORK_LOG.md`, `sim/harness/script_helpers.py`,
+  `sim/mc_to_yield.py` and their tests, and the LVS report set — none of
+  them is listed in this inventory.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+## Re-audit for the PR #462 fifth merge (2026-11-16)
+
+`origin/main` moved again after the fourth PR #462 conflict-resolution merge
+above — PR #503 (the issue #492 branch) landed on main carrying the issue
+#492 re-audit section and the issue #492 second-merge section above, with
+the throwaway-environment install recipe — and this fifth merge brings
+those sections and the change into this inventory from main. The merged
+tree was re-checked against the findings above:
+
+- `layout/README.md` (**read** the diff): the merge brings main's issue
+  #492 side in full — the "Reproducibility: pin the klt install (#190)"
+  section now restates the pinned-install recipe in the throwaway
+  `uvx --from` / scratch `uv venv` form instead of a bare
+  `uv tool install` into the host's shared tool paths, and the
+  before-trusting-a-re-run sentence names both
+  `provenance.deck.content_hash` and `provenance.klt_version`. This branch
+  has never touched the file, so the merged file is main's version and the
+  table row is re-computed against it and refreshed.
+- `sim/harness/README.md`: main did not change the file on its side of this
+  merge; the merged file is still this branch's combined version (the #450
+  device-runner-driver section plus main's issue #479 `fmt` -> `sigfig`
+  rename) named by the second-merge section above; the row stays this
+  branch's hash and matches the live file (main's pre-merge row named
+  main's driver-less bytes and does not apply to the merged tree).
+- `README.md`, `LICENSE`, `spec/gate-driver.md`, `.github/workflows/ci.yml`,
+  `design/README.md`, `sim/README.md` and
+  `design/gate-driver-characterization.md` are byte-identical in both
+  parents of this merge; rows re-computed and matching.
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The other findings are unchanged. No simulation,
+netlisting or layout flow was run for this re-audit.
 
 ## Re-audit for the third PR #471 merge (2026-11-16)
 
@@ -1182,6 +1349,47 @@ refreshed for the new inventory bytes, and the report is re-rendered with
 the pinned grader (`879d39ba`). No simulation, netlisting, layout flow or
 generator re-run happened as part of this re-audit.
 
+## Re-audit for the PR #462 sixth merge (2026-11-17)
+
+`origin/main` moved again after the fifth PR #462 conflict-resolution merge
+above — main gained the issue #528 chain (`klt_env` resolver plumbing, the
+provenance `generator_deps` pin and its re-audit section), PR #533's
+WORK_LOG/WORK_PLAN refresh and PR #534's docs-guide update, plus PR #498's
+own re-audit sections landing with `feature/issue-486` — and the four
+signoff cascade files (`repo-hygiene.inventory.md`,
+`repo-hygiene.generic.json`, `manifest.json`, `tier-report.json`) plus
+`sim/test_harness_campaign.py` conflicted. The merged tree was re-checked
+against the findings above:
+
+- `sim/harness/README.md` changed on **both** sides and auto-merged to the
+  union: this branch's "The device-runner driver: `campaign.run_device_main`"
+  section plus main's new paragraph on `script_helpers.control_preamble()`
+  being the one home for the ngspice thread pin (issue #515). The row is
+  re-pinned for the merged union bytes (the hash above supersedes this
+  branch's `f67f77a0…` value and main's `b19c7b33…` value); each claim in
+  main's new paragraph was checked against the code it documents
+  (`sim/harness/script_helpers.py`).
+- `layout/README.md` changed on the main side only (this branch has never
+  edited it): the merged file is main's version and the row is re-computed
+  against it and refreshed (`49bfde65…`, the #528 re-audit's value).
+- `.github/workflows/ci.yml` changed on the main side only: the merged row
+  is main's #528-refreshed value (`217aa32c…`), re-computed and matching.
+- `sim/test_harness_campaign.py` (not listed in this inventory): the merge
+  conflict was the import block only — this branch's `contextlib`/`io` (the
+  `RunDeviceMainTests` driver suite) and main's `ast`/`re` (the #520
+  bound-prose source guards) united alphabetically; both sides' test classes
+  are kept and the merged suite passes (84 tests).
+- Both sides' appended re-audit sections are kept in event order (this
+  branch's #450 re-audit and #462 third/fourth/fifth merge sections, main's
+  #486 re-audit, #498 third/fourth merge, third #471, #451 fourth, #515,
+  #517 and #528 sections).
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The envelope, manifest item 10 and tier-report citation
+pins are refreshed for the final merged inventory bytes. No simulation,
+netlisting or layout flow was run for this re-audit.
+
+
 ## Re-audit for the PR #513 merge (2026-11-17)
 
 `origin/main` moved past the issue #499 re-audit above (six more dated
@@ -1249,3 +1457,32 @@ for the final merged inventory bytes. The PR's own fix
 is untouched by the merge: main never modified that file after the base.
 No simulation, netlisting or layout flow was run for this re-audit.
 
+## Re-audit for the PR #462 seventh merge (2026-11-17)
+
+`origin/main` moved again after the sixth PR #462 merge above (tip now
+`48f2be0b`: PR #513's two re-audit sections landing with `feature/issue-499`,
+the PR #535 installed-Loom resync to v0.19.1306, and the PR #536/#537
+docs-guide WORK_LOG/WORK_PLAN updates), so the four signoff cascade files
+(`repo-hygiene.inventory.md`, `repo-hygiene.generic.json`, `manifest.json`,
+`tier-report.json`) conflicted again. The merged tree was re-checked against
+the findings above:
+
+- `.github/workflows/ci.yml` changed on the main side only (the issue #499
+  `python3 scripts/tests/test_run_tests.py` line and its comment refresh in
+  the `Evidence-store and manifest-check unit tests` step); the merge takes
+  main's side verbatim and the CI table row is re-pinned for the merged
+  bytes. No job, trigger, permission or grader pin moved.
+- This branch's own side since the sixth merge is the review fix only:
+  `sim/uvlo-trip-verification/run_uvlo_trip.py` (`_fmt` -> `fixed`, four call
+  sites in `_progress_detail`) and a `RunnerHookSmokeTests` regression test in
+  `sim/test_harness_campaign.py`. Neither file is listed in this inventory;
+  the merged suite passes (85 tests).
+- Both sides' appended re-audit sections are kept in commit-time order (this
+  branch's sixth merge at 04:56, then main's PR #513 merge sections at
+  05:19/05:30).
+
+All nine listed hashes were re-computed against the final merged tree and
+match the tables. The envelope, manifest item 10 and tier-report citation
+pins are refreshed for the final merged inventory bytes, and the report is
+re-rendered with the pinned grader (`879d39ba`). No simulation, netlisting,
+layout flow or generator re-run happened as part of this re-audit.
