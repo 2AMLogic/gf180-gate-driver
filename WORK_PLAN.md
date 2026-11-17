@@ -23,7 +23,7 @@ _None._
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
-- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md
+- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md *(held)*
 
 ## Ready
 
@@ -35,7 +35,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#450**: Share one device-runner driver in harness/campaign.py: three hand-rolled main() copies and a dead write_device_corner_log alias
+_None._
 
 ## PRs Awaiting Review
 
@@ -53,15 +53,14 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md *(curated)*
-- **#502**: layout: provenance generator.sha256 stale after #478's generator refactor (signoff CI red on main) *(curated)*
-- **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)*
-- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)*
+- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md *(curated)* *(held)*
+- **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
+- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)* *(held)*
 
 ## Proposed (Architect / Hermit)
 
 - **#483**: Route the ronw mismatch runner's private main() onto a shared campaign envelope: 46 of its 101 lines already exist in run_mismatch_main *(hermit)*
-- **#487**: Remove parse_netlist(): its MOS-only rationale no longer has a consumer *(hermit)*
+- **#487**: Remove parse_netlist(): its MOS-only rationale no longer has a consumer *(hermit)* *(held)*
 
 ## Epics
 
@@ -75,10 +74,10 @@ _None._
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 4 |
+| Curated | 3 |
 | Architect / Hermit proposals | 2 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
