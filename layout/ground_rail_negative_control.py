@@ -54,13 +54,15 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 
+import control_verdict  # noqa: E402  (path set above)
 import klt_env  # noqa: E402  (path set above)
+import klt_report  # noqa: E402  (path set above)
 from check_gate_driver_core import (  # noqa: E402  (path set above)
     ground_rail_isolation_verdict,
     routed_metal_components,
@@ -98,42 +100,46 @@ _BRIDGE_SHAPES = [
 ]
 
 
-def _draw(name: str, shapes: list[dict]) -> str:
-    """``klt draw`` one fixture into ``layout/build/`` and return its path."""
+def _draw(klt: str, name: str, shapes: list[dict]) -> str:
+    """``klt draw`` one fixture into ``layout/build/`` and return its path.
+
+    ``klt`` is the binary :func:`klt_env.require_klt` resolved, threaded down
+    from :func:`main` so this control cannot draw its fixture with a different
+    ``klt`` than the one its own prerequisite check approved (issue #451).
+    """
     os.makedirs(BUILD_DIR, exist_ok=True)
     gds = os.path.join(BUILD_DIR, f"ground-rail-{name}.gds")
-    proc = subprocess.run(
-        [
-            "klt", "draw",
-            "--params", json.dumps({"shapes": shapes, "labels": _LABELS}),
-            "--cell-name", CELL,
-            "-o", gds,
-            "--format", "json",
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if proc.returncode != 0:
-        print(proc.stdout, proc.stderr, file=sys.stderr)
-        raise GenError(f"could not draw the '{name}' control fixture")
+    try:
+        klt_report.run_klt(
+            # REPO_ROOT is a str here (gen_gate_driver_core builds it with
+            # os.path); run_klt's cwd is typed Path, so convert at the call.
+            Path(REPO_ROOT),
+            [
+                klt, "draw",
+                "--params", json.dumps({"shapes": shapes, "labels": _LABELS}),
+                "--cell-name", CELL,
+                "-o", gds,
+                "--format", "json",
+            ],
+        )
+    except klt_report.KltRunError as exc:
+        raise GenError(f"could not draw the '{name}' control fixture") from exc
     return gds
 
 
-def _verdict(name: str, shapes: list[dict]) -> dict:
+def _verdict(klt: str, name: str, shapes: list[dict]) -> dict:
     return ground_rail_isolation_verdict(
-        routed_metal_components(_draw(name, shapes), top=CELL), NETS
+        routed_metal_components(_draw(klt, name, shapes), top=CELL), NETS
     )
 
 
 def main() -> int:
-    klt_env.require_klt()
+    klt = klt_env.require_klt()
 
     try:
-        isolated = _verdict("isolated", _ISOLATED_SHAPES)
-        shorted = _verdict("shorted", _ISOLATED_SHAPES + _BRIDGE_SHAPES)
-    except GenError as exc:
+        isolated = _verdict(klt, "isolated", _ISOLATED_SHAPES)
+        shorted = _verdict(klt, "shorted", _ISOLATED_SHAPES + _BRIDGE_SHAPES)
+    except (GenError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
@@ -160,23 +166,19 @@ def main() -> int:
             if net not in message:
                 failures.append(f"the 'shorted' verdict does not name {net}: {message}")
 
-    for failure in failures:
-        print(f"FAIL: {failure}", file=sys.stderr)
-    if failures:
-        print(
+    return control_verdict.control_verdict(
+        failures,
+        invalidates=(
             "ground_rail_isolation did not rule as it must on a known-good/"
             "known-bad pair -- the block's own PASS is not evidence until this "
-            "is explained.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(
-        "ok: ground_rail_isolation passed the isolated fixture (2 components) "
-        "and failed the bridged one, naming both rails -- the block's own PASS "
-        "is a real verdict"
+            "is explained."
+        ),
+        confirms=(
+            "ok: ground_rail_isolation passed the isolated fixture (2 components) "
+            "and failed the bridged one, naming both rails -- the block's own PASS "
+            "is a real verdict"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":

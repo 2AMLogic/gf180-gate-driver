@@ -128,7 +128,9 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
 
+import klt_report  # noqa: E402  (path set above)
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
     HERE,
     L_METAL1,
@@ -143,7 +145,6 @@ from gen_gate_driver_core import (  # noqa: E402  (path set above)
     Device,
     GenError,
     Passive,
-    _klt,
     _spice_number,
     parse_netlist_full,
 )
@@ -492,17 +493,19 @@ def mim_stack_verdict(
 
 def check_devices(gds: str, pdk: str, devices: list[Device], work_dir: str) -> dict:
     spice_path = os.path.join(work_dir, f"{TOP_CELL}.extracted.spice")
-    report = _klt(
-        "extract",
-        gds,
-        "--deck",
-        "gf180mcu",
-        "--pdk",
-        pdk,
-        "--top",
-        TOP_CELL,
-        "-o",
-        spice_path,
+    report = klt_report.run_klt_json(
+        [
+            "extract",
+            gds,
+            "--deck",
+            "gf180mcu",
+            "--pdk",
+            pdk,
+            "--top",
+            TOP_CELL,
+            "-o",
+            spice_path,
+        ]
     )
     expected = expected_devices(devices)
     found = extracted_devices(spice_path)
@@ -540,30 +543,32 @@ def check_mim_stack(spice_path: str, passives: list[Passive]) -> dict:
 
 def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
     """Assert the 3.3V and 5V/6V devices never share a DNWELL (DRM 7.2)."""
-    response = _klt(
-        "components",
-        gds,
-        "--top",
-        TOP_CELL,
-        "--conductors",
-        json.dumps(
-            [
-                {"name": "dnwell", "layer": list(L_DNWELL)},
-                # Gate-bearing Comp only: one shape per transistor finger,
-                # independent of how many body taps surround each device.
-                {"name": "active", "layer": list(L_COMP), "and": [list(L_POLY)]},
-            ]
-        ),
-        "--vias",
-        json.dumps(
-            [
-                {
-                    "name": "active_in_dnwell",
-                    "layer": list(L_DNWELL),
-                    "between": ["dnwell", "active"],
-                }
-            ]
-        ),
+    response = klt_report.run_klt_json(
+        [
+            "components",
+            gds,
+            "--top",
+            TOP_CELL,
+            "--conductors",
+            json.dumps(
+                [
+                    {"name": "dnwell", "layer": list(L_DNWELL)},
+                    # Gate-bearing Comp only: one shape per transistor finger,
+                    # independent of how many body taps surround each device.
+                    {"name": "active", "layer": list(L_COMP), "and": [list(L_POLY)]},
+                ]
+            ),
+            "--vias",
+            json.dumps(
+                [
+                    {
+                        "name": "active_in_dnwell",
+                        "layer": list(L_DNWELL),
+                        "between": ["dnwell", "active"],
+                    }
+                ]
+            ),
+        ]
     )
 
     def counts(component: dict) -> dict[str, int]:
@@ -728,24 +733,26 @@ def routed_metal_components(gds: str, top: str = TOP_CELL) -> dict:
     (these conductors, this via, this label layer) is capable of reporting a
     short, rather than proving it about a re-typed copy of it.
     """
-    return _klt(
-        "components",
-        gds,
-        "--top",
-        top,
-        "--conductors",
-        json.dumps(
-            [
-                {"name": "m1", "layer": list(L_METAL1)},
-                {"name": "m2", "layer": list(L_METAL2)},
-            ]
-        ),
-        "--vias",
-        json.dumps(
-            [{"name": "via1", "layer": list(L_VIA1), "between": ["m1", "m2"]}]
-        ),
-        "--label-layers",
-        json.dumps([{"name": "m2_label", "layer": list(L_METAL2_LABEL)}]),
+    return klt_report.run_klt_json(
+        [
+            "components",
+            gds,
+            "--top",
+            top,
+            "--conductors",
+            json.dumps(
+                [
+                    {"name": "m1", "layer": list(L_METAL1)},
+                    {"name": "m2", "layer": list(L_METAL2)},
+                ]
+            ),
+            "--vias",
+            json.dumps(
+                [{"name": "via1", "layer": list(L_VIA1), "between": ["m1", "m2"]}]
+            ),
+            "--label-layers",
+            json.dumps([{"name": "m2_label", "layer": list(L_METAL2_LABEL)}]),
+        ]
     )
 
 
@@ -759,7 +766,7 @@ def check_ground_rail_isolation(gds: str, devices: list[Device]) -> dict:
 
 
 def check_voltage_domain(gds: str, extract_report: dict) -> dict:
-    response = _klt("layers", gds, "--top", TOP_CELL, "--flattened")
+    response = klt_report.run_klt_json(["layers", gds, "--top", TOP_CELL, "--flattened"])
     by_layer = {
         (layer["layer"], layer["datatype"]): layer for layer in response.get("layers", [])
     }
@@ -854,7 +861,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         result = run(gds, args.pdk, work_dir)
-    except (GenError, KeyError) as exc:
+    except (GenError, KeyError, klt_report.KltRunError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

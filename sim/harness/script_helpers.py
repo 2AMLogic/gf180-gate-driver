@@ -35,14 +35,32 @@ SIM_DIR = Path(__file__).resolve().parent.parent
 # #465), a decision record that moved one could be applied to one runner and
 # missed in the other, and the two campaigns' append-only records would then
 # disagree about the same ratified number with nothing in the tree flagging it.
+# Since issue #477 the criterion is met by a consumer that is not a runner
+# either: `sim/mc_to_yield.py` converts the campaigns' Monte Carlo CSVs into
+# `klt yield` sample sets against the same bounds, feeding the append-only,
+# manifest-hashed evidence under `verification/signoff/yield/`.
 
 #: The ratified §2.3 thick-oxide DC gate ceiling that the gate-node excursions
 #: in this family are measured against.
 GATE_CEILING_V = 6.0
 
+#: The `vlogic3p63v` supply corner Exception 1 is scoped to -- the rail the
+#: level shifter's pre-driver inverter output `inb` is measured above, not the
+#: ceiling.
+VDD_LOGIC_V = 3.63
+
+#: `spec/gate-driver.md` §5 Exception 1's ratified bound: <= 40 mV above
+#: VDD_LOGIC (decision record 0015). Reported against, never adjusted here.
+EXCEPTION1_BOUND_V = 0.040
+
 #: `spec/gate-driver.md` §5 Exception 2's ratified bound: <= 175 mV above the
 #: ceiling (decision record 0013).
 EXCEPTION2_BOUND_V = 0.175
+
+#: `spec/gate-driver.md` §5 Exception 3's ratified bound: <= 10 mV above the
+#: ceiling. Reported against, never adjusted here -- a bound change would
+#: need its own decision record (CLAUDE.md).
+EXCEPTION3_BOUND_V = 0.010
 
 #: The five output-stage taper nodes Exception 2 is scoped to -- the claim
 #: measurements of `output-stage-taper-mismatch`, and secondary context that
@@ -152,6 +170,39 @@ def corner_shim(
     return "\n".join(lines) + "\n"
 
 
+def control_preamble() -> str:
+    """The four ``set`` lines every ``.control`` block this module stages or
+    a run script composes opens with, each newline-terminated.
+
+    ``set num_threads=1`` is issue #146's pin (sim/harness/README.md): a
+    locally built, OpenMP-enabled ngspice reads its own ``spinit`` for a
+    default thread count, which is pure oversubscription underneath any
+    parallel sweep -- measured at ~2000x slower for byte-identical results.
+    The ``width``/``height``/``numdgt`` trio sizes the batch-mode ASCII
+    tables the run scripts parse (one header, wide rows, 10 digits).
+
+    ``runner.compose_deck`` emits the pin on every generated deck, and
+    ``run_corner_deck`` inserts this preamble into every staged
+    ``control.spice`` -- the convention has one home, so a script cannot
+    forget it (issue #515: device-mv-fet's hand-typed copy had already
+    drifted into omitting the pin)."""
+    return (
+        "set num_threads=1\n"
+        "set width = 512\n"
+        "set height = 100000\n"
+        "set numdgt = 10\n"
+    )
+
+
+def _with_control_preamble(control: str) -> str:
+    """`control` with `control_preamble()` inserted right after its leading
+    ``.control`` line; `ValueError` when it does not start with one."""
+    head, _, rest = control.partition("\n")
+    if head.strip() != ".control":
+        raise ValueError(f"control must start with a '.control' line, got {head!r}")
+    return f"{head}\n{control_preamble()}{rest}"
+
+
 _NGSPICE_ERROR_RE = re.compile(r"^\s*(Error|ERROR|fatal)", re.MULTILINE)
 
 
@@ -196,16 +247,20 @@ def run_corner_deck(
 
     In a fresh temp dir (named with `prefix`) writes ``corner.spice``
     (`corner_shim`), ``control.spice`` (`control`, the caller's ``.control``
-    block) and a wrapper deck that ``.include``s both around `deck`'s text,
-    then calls `run_ngspice` (raises `RuntimeError` as it does; `label` names
-    the point)."""
+    block with `control_preamble()` inserted after its ``.control`` line --
+    issue #146's `num_threads=1` pin and the batch-table sizing come from
+    the harness, not the caller) and a wrapper deck that ``.include``s both
+    around `deck`'s text, then calls `run_ngspice` (raises `RuntimeError`
+    as it does; `label` names the point)."""
     with tempfile.TemporaryDirectory(prefix=prefix) as tmp:
         work = Path(tmp)
         (work / "corner.spice").write_text(
             corner_shim(pdk, sections, temp_c, script=script, extra_lines=extra_lines),
             encoding="utf-8",
         )
-        (work / "control.spice").write_text(control, encoding="utf-8")
+        (work / "control.spice").write_text(
+            _with_control_preamble(control), encoding="utf-8"
+        )
         (work / deck.name).write_text(
             '.include "corner.spice"\n'
             + deck.read_text(encoding="utf-8")

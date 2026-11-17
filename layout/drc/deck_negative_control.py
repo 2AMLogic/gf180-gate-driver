@@ -39,7 +39,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "layout" / "common"))
 
+import control_verdict  # noqa: E402
 import klt_env  # noqa: E402
+import klt_report  # noqa: E402
 
 BUILD_DIR = REPO_ROOT / "layout" / "build"
 FIXTURE_GDS = BUILD_DIR / "drc-negative-control.gds"
@@ -58,25 +60,21 @@ EXPECTED_RULE = "metal1.space.1"
 
 
 def main() -> int:
-    klt_env.require_klt()
+    klt = klt_env.require_klt()
 
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    draw = subprocess.run(
-        [
-            "klt", "draw",
-            "--params", json.dumps(FIXTURE_SHAPES),
-            "--cell-name", "drc_negative_control",
-            "-o", str(FIXTURE_GDS),
-            "--format", "json",
-        ],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if draw.returncode != 0:
-        print(draw.stdout, draw.stderr, file=sys.stderr)
-        print("error: could not draw the negative-control fixture", file=sys.stderr)
+    try:
+        klt_report.run_klt(
+            REPO_ROOT,
+            [
+                klt, "draw",
+                "--params", json.dumps(FIXTURE_SHAPES),
+                "--cell-name", "drc_negative_control",
+                "-o", str(FIXTURE_GDS),
+                "--format", "json",
+            ],
+        )
+    except klt_report.KltRunError:
         return 1
 
     drc = subprocess.run(
@@ -106,22 +104,18 @@ def main() -> int:
             f"expected exactly one {EXPECTED_RULE} violation, got "
             f"{payload['rule_counts']!r}"
         )
-    if failures:
-        for failure in failures:
-            print(f"FAIL: {failure}", file=sys.stderr)
-        print(
+    return control_verdict.control_verdict(
+        failures,
+        invalidates=(
             "The gf180mcu deck did not flag a fixture it must flag -- a "
             "'status: clean' report produced with this deck is not evidence "
-            "until this is explained.",
-            file=sys.stderr,
-        )
-        return 1
-
-    print(
-        f"ok: the gf180mcu deck flagged the known-bad fixture "
-        f"({EXPECTED_RULE} x1) -- 'status: clean' on the block is a real verdict"
+            "until this is explained."
+        ),
+        confirms=(
+            f"ok: the gf180mcu deck flagged the known-bad fixture "
+            f"({EXPECTED_RULE} x1) -- 'status: clean' on the block is a real verdict"
+        ),
     )
-    return 0
 
 
 if __name__ == "__main__":
