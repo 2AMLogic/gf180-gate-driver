@@ -82,6 +82,7 @@ Known limitations of this first-cut layout (deliberately not fixed here -- see
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import math
@@ -2196,6 +2197,56 @@ def _sha256(path: str) -> str:
     return digest.hexdigest()
 
 
+def _generator_dep_modules(path: str | None = None) -> list[dict]:
+    """Provenance ``generator_deps`` entries for this generator's local imports.
+
+    Walks the absolute imports of ``path`` (default: this file) that resolve
+    into ``layout/common/``, transitively -- ``klt_report`` imports
+    ``klt_env`` -- and returns one ``{module, path, sha256}`` entry per file,
+    sorted by module name. Since PR #517 these bytes co-determine the
+    generated GDS (``run_klt_json`` assembles every klt argv; ``require_klt``
+    resolves the binary) while only the generator file itself was pinned --
+    the gap issue #528 closed. The freshness check re-derives the same
+    closure from the live tree, so the record cannot drift from what the
+    generator actually imports.
+    """
+    target = os.path.abspath(path or __file__)
+    common = os.path.join(os.path.dirname(target), "common")
+    closure: dict[str, str] = {}
+    pending = [target]
+    seen: set[str] = set()
+    while pending:
+        current = pending.pop()
+        if current in seen:
+            continue
+        seen.add(current)
+        try:
+            with open(current, encoding="utf-8") as handle:
+                tree = ast.parse(handle.read())
+        except (OSError, SyntaxError, ValueError):
+            continue
+        names: list[str] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.extend(alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                names.append(node.module)
+        for name in names:
+            top = name.split(".")[0]
+            candidate = os.path.join(common, f"{top}.py")
+            if top not in closure and os.path.isfile(candidate):
+                closure[top] = candidate
+                pending.append(candidate)
+    return [
+        {
+            "module": module,
+            "path": os.path.relpath(file_path, REPO_ROOT),
+            "sha256": _sha256(file_path),
+        }
+        for module, file_path in sorted(closure.items())
+    ]
+
+
 def _git(*args: str) -> str | None:
     try:
         proc = subprocess.run(
@@ -2338,6 +2389,13 @@ def build(out_dir: str, pdk: str) -> dict:
             "path": os.path.relpath(os.path.abspath(__file__), REPO_ROOT),
             "sha256": _sha256(os.path.abspath(__file__)),
         },
+        # The generator's layout/common/ import closure (issue #528): after
+        # PR #517 the klt argv assembly (klt_report.run_klt_json) and binary
+        # resolution (klt_env.require_klt) live outside the pinned generator
+        # file, so these bytes co-determine the GDS;
+        # check_layout_provenance.py re-derives the closure and re-hashes
+        # every entry against the live tree.
+        "generator_deps": _generator_dep_modules(),
         "tools": {
             "klt_version": _klt_version(),
             "pdk": compose_report.get("pdk"),

@@ -62,6 +62,7 @@ total drawn width ``W*m``, independent of ``nf``.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import sys
@@ -96,6 +97,7 @@ from gen_gate_driver_core import (  # noqa: E402  (path set above)
     Passive,
     Resistor,
     _device_from_tokens,
+    _generator_dep_modules,
     _resistor_from_tokens,
     parse_netlist,
     parse_netlist_full,
@@ -1004,6 +1006,69 @@ class GuardRingStrokeCountTest(unittest.TestCase):
         ]
         Interconnect.guard_ring(obj)
         self.assertEqual(obj.shapes, [])
+
+
+class GeneratorDepModulesTest(unittest.TestCase):
+    """``_generator_dep_modules`` walks the ``layout/common/`` closure (#528).
+
+    Since PR #517 the generator's klt argv assembly (``klt_report``) and
+    binary resolution (``klt_env``) live outside the pinned generator file;
+    the provenance record pins that closure, and this walker is what
+    enumerates it -- transitively, so ``klt_report``'s own ``import klt_env``
+    is included even when the generator names only ``klt_report``.
+    """
+
+    def test_closure_is_transitive_deterministic_and_hashed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            common = os.path.join(tmp, "common")
+            os.makedirs(common)
+            klt_env = os.path.join(common, "klt_env.py")
+            klt_report = os.path.join(common, "klt_report.py")
+            with open(klt_env, "w", encoding="utf-8") as handle:
+                handle.write("import shutil\n")
+            with open(klt_report, "w", encoding="utf-8") as handle:
+                handle.write("import klt_env\n")
+            with open(os.path.join(common, "unused.py"), "w", encoding="utf-8") as handle:
+                handle.write("pass\n")
+            gen = os.path.join(tmp, "gen_gate_driver_core.py")
+            with open(gen, "w", encoding="utf-8") as handle:
+                handle.write(
+                    "import argparse\n"
+                    "import klt_report\n"
+                    "from klt_env import require_klt\n"
+                    "import pathlib\n"
+                )
+            expected_hashes = {}
+            for source in (klt_env, klt_report):
+                with open(source, "rb") as handle:
+                    expected_hashes[source] = hashlib.sha256(handle.read()).hexdigest()
+            entries = _generator_dep_modules(gen)
+
+        self.assertEqual(
+            [e["module"] for e in entries], ["klt_env", "klt_report"]
+        )
+        # Paths are recorded REPO_ROOT-relative; a scratch tree outside the
+        # repo yields a ../ chain that still names the walked file.
+        self.assertTrue(
+            all(
+                e["path"].endswith(f"common/{e['module']}.py") for e in entries
+            ),
+            entries,
+        )
+        for entry, source in zip(entries, (klt_env, klt_report)):
+            self.assertEqual(entry["sha256"], expected_hashes[source])
+
+    def test_no_common_imports_yields_no_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            common = os.path.join(tmp, "common")
+            os.makedirs(common)
+            with open(os.path.join(common, "klt_env.py"), "w", encoding="utf-8") as handle:
+                handle.write("import shutil\n")
+            gen = os.path.join(tmp, "gen_gate_driver_core.py")
+            with open(gen, "w", encoding="utf-8") as handle:
+                handle.write("import argparse\nimport json\n")
+            entries = _generator_dep_modules(gen)
+        self.assertEqual(entries, [])
 
 
 if __name__ == "__main__":

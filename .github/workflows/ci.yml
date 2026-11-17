@@ -387,9 +387,11 @@ jobs:
 
       - name: Layout provenance freshness
         # layout/gate_driver_core.provenance.json pins the sha256 of the
-        # committed GDS, its source netlist and its generator -- the
-        # documented-provenance arm T1 item 2's live attestation rests on
-        # (issue #463). Nothing re-checked those hashes against the live
+        # committed GDS, its source netlist, its generator and -- since
+        # #528 -- the generator's layout/common/ import closure
+        # (generator_deps: klt_env, klt_report), the documented-provenance
+        # arm T1 item 2's live attestation rests on (issue #463).
+        # Nothing re-checked those hashes against the live
         # tree before, so a generator edit merging without a provenance
         # refresh went unnoticed (exactly what PR #466's merge did to
         # generator.sha256). Stdlib-only, like the checker tests above: no

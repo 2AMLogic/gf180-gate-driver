@@ -646,14 +646,32 @@ byte-identical, the top cell again hashing
 compose-request/provenance JSONs differ only in scratch-dir paths, the
 `git` block, and the generator hash itself) — so the refactor is
 GDS-neutral and the pin moves to the post-#480 generator (`4ce5b530…`)
-with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
+with the committed GDS bytes untouched. Refreshed again for the #528
+provenance-deps pinning (2026-11-17): the generator edit that records
+`generator_deps` is GDS-neutral the same way — regenerated from main
+(`ab75e017`) and from the branch head under the same host
+`klt 0.9.3.dev234+g5ed4e55bffbd`, both into scratch directories, all 41
+GDS outputs byte-identical, the top cell again hashing
+`736c92bb5580a5cb4f48eaf717f81a51a3ba94bba0b39a4311e5d50e7835ef3c` — so
+the pin moves to `2761d48e…` with the committed GDS bytes untouched, and
+`generator_deps` pins the two `layout/common/` modules the #517 refactor
+made behavioural (`klt_env` `9d33447…`, `klt_report` `1b81a82…`; their
+bytes are unchanged since `c927dcc`, so #517's own GDS-neutrality
+comparison backs these pins too). The #528 measurement that motivated
+this: all six commits that ever touched the two helpers changed them
+without touching the GDS, two of them after the last regeneration — the
+silent-staleness class #463 built the check to catch. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
-in CI's PDK-free signoff job) re-hashes the three recorded pins — `layout`,
-`source_netlist`, `generator` — against the live tree on every CI run, so a
-generator edit merging without a provenance refresh fails loudly instead of
+in CI's PDK-free signoff job) re-hashes the recorded pins — `layout`,
+`source_netlist`, `generator` and the generator's `generator_deps`
+closure — against the live tree on every CI run, so a generator edit merging without a provenance refresh fails loudly instead of
 rotting silently (exactly what PR #466's merge did to `generator.sha256`
-before this check existed). Its klt-version arm is advisory by design: it
+before this check existed). The `generator_deps` set is *derived* from
+the live generator's own `layout/common/` imports (transitively —
+`klt_report` imports `klt_env`) rather than trusted from the record, so a
+future generator that gains or loses a common import fails the check
+until the provenance record follows it. Its klt-version arm is advisory by design: it
 prints the drift and its consequence when the host `klt --version` differs
 from `tools.klt_version` and exits zero — per #470 the host tool moving
 ahead of committed evidence is the normal condition, not an error. The #362
