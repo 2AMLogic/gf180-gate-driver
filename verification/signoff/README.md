@@ -18,7 +18,7 @@ re-graded by a command, and CI re-grades it on every PR.
 | `tier-report.json` | The committed record of `klt signoff --manifest manifest.json --format json` — the graded item table. Regenerate after any evidence/manifest change; `check_tier_report.py` fails CI if it drifts from a fresh render. |
 | `gate-driver-characterization.generic.json` | T1 item 8's opt-in `generic` evidence envelope wrapping `design/gate-driver-characterization.md` (the one item that names no `klt` verb). Its `provenance.input.content_hash` pins that report, so editing the report without refreshing this envelope renders the item stale. |
 | `design-sources.generic.json`, `layout.generic.json`, `testbenches.generic.json` | The artifact-bound `generic` envelopes for T1 items **1**, **2** and **9** (klayout-tools#2843). Each declares `"t1_item": <n>` and names the audited artifact in `provenance.input.path` (`{"path", "scope": "repo"}`) with its `content_hash`; the manifest pins that same hash. |
-| `repo-hygiene.generic.json`, `repo-hygiene.inventory.md` | T1 item **10** (issue #289): the artifact-bound `generic` envelope (`"t1_item": 10`) and the audited inventory it binds to, which lists `README.md`, `LICENSE`, `spec/gate-driver.md`, `.github/workflows/ci.yml` and the reproduction documents with their sha256 values. The manifest pins the inventory's hash. |
+| `repo-hygiene.attest.json`, `repo-hygiene.generic.json`, `repo-hygiene.inventory.md` | T1 item **10** (issue #289; produced by `klt signoff --attest 10` since #511): the klt attestation inventory, the artifact-bound `generic` envelope it emits (`"t1_item": 10`; the manifest pins the inventory's hash through it), and the audit narrative + append-only re-audit trail (itself a raw-byte entry of the inventory). The inventory lists `README.md`, `LICENSE`, `spec/gate-driver.md`, the reproduction documents and the audit file as raw-byte entries, and `.github/workflows/ci.yml` as a canonical-YAML entry (`attest: "yaml"`, `select: "jobs.signoff"`, klayout-tools #5862): comments, key reordering and every edit outside the signoff job are not drift, while a weakened gate still is. |
 | `design-sources.inventory.md`, `testbenches.inventory.md` | The audited inventories items 1 and 9 bind to: every listed source/testbench with its sha256, the regeneration or cold-start command, and what the audit did and did not run. Read the "What was actually run" sections before quoting either `met`. |
 | `check_tier_report.py` | The freshness gate run by the `signoff` CI job (and `npm run signoff:check`): anchors every manifest pin to the live tree's sha256, re-runs the grading, and diffs the fresh render against the committed report. Explicit `provenance.input.path` bindings are resolved with the grader's own semantics (string beside the envelope, repo-scoped object from the repo root; a malformed declared path fails, never falls back to `source`), and every `path` + `sha256:` pair an inventory lists is re-hashed. |
 | `yield/*.samples.json`, `yield/*.yield.json` | T1 item **6** (issue #368): per campaign, the `klt yield` sample-set document (converted from the committed `sim/*-mismatch` `samples-*.csv` by `sim/mc_to_yield.py`) and its committed `klt yield --format json` report. The manifest pins each *samples* file (a `yield` citation's `content_hash` is the hash of the samples document its report names). |
@@ -68,7 +68,9 @@ turns `unmet` if they change. What each audit found:
   state they were taken on a dirty working tree. One invocation (the primary
   post-layout testbench, one process/temperature point set) was executed; the
   rest were checked by file existence and `run_corners.py --list`.
-- **Item 10** (binds to `repo-hygiene.inventory.md`, issue #289) — the audit
+- **Item 10** (binds to the klt attest inventory `repo-hygiene.attest.json`
+  since #511; before that, to `repo-hygiene.inventory.md`, issue #289) — the
+  audit
   found `README.md` now states the block, carries the section 3 target/stretch
   table (hand-transcribed from `spec/gate-driver.md`, which stays
   authoritative; targets, not measured results) and gives root-relative
@@ -79,10 +81,16 @@ turns `unmet` if they change. What each audit found:
   `run_corners.py --check-env`/`--list`, `sim/check_records.py` and `npm run
   lint`; it did not re-run any simulation, netlisting or layout flow, did not
   observe CI run, and the README's "generate new evidence" commands were
-  taken from the linked project documents, not exercised. Editing the
-  README, license, spec, CI or a linked reproduction document without
-  re-auditing and refreshing the inventory, envelope, manifest and report
-  fails `check_tier_report.py`. Known gaps the README discloses: the layout
+  taken from the linked project documents, not exercised. Since #511 the
+  envelope is the output of `klt signoff --attest 10` (the three PDK-free
+  audit commands are declared in the inventory and run at attest time), and
+  the grader re-hashes every entry against the live tree when it grades the
+  manifest: the raw entries (README, license, spec, reproduction documents,
+  the audit file itself) by bytes — editing one without re-auditing and
+  re-attesting fails `check_tier_report.py` — and `ci.yml` by the canonical
+  parse of `jobs.signoff` only, so a comment-only edit or a step added to an
+  unrelated job moves no pin and needs no chain refresh, while a change
+  inside the signoff job is drift. Known gaps the README discloses: the layout
   GDS regeneration limitation above, and `sim/README.md`'s facet table
   omitting four on-disk experiments (`testbenches.inventory.md` is complete).
 
@@ -396,7 +404,26 @@ must move with it, and CI enforces that:
    items 1, 2 and 9, re-audit the inventory first (an edit to any listed
    schematic, netlist, `tb.json`, `sim/pdk.json` or the GDS fails
    `check_tier_report.py` until the inventory and its envelope's
-   `provenance.input.content_hash` are refreshed).
+   `provenance.input.content_hash` are refreshed). For item 10, re-audit
+   `repo-hygiene.inventory.md` (append the re-audit section, refresh the
+   raw rows) and re-attest the envelope — stage the tree first, the grader
+   grades the git index (klayout-tools #5857):
+
+   ```bash
+   klt signoff --attest 10 --inventory verification/signoff/repo-hygiene.attest.json \
+     -o verification/signoff/repo-hygiene.generic.json
+   ```
+
+   Which `ci.yml` edits no longer force this (issue #511): the `ci.yml`
+   entry is pinned by the canonical parse of `jobs.signoff` only
+   (`sha256-canonical-yaml-v1`, klayout-tools #5862), so a comment,
+   whitespace, key-reorder or anchor/alias refactor — and any edit outside
+   the signoff job, including the routine add-a-test-step PR — moves no pin
+   and needs no re-audit or chain refresh. An edit inside `jobs.signoff` (a
+   weakened, removed or changed step; the grader pin itself) is a gate
+   change and does force the refresh, as does an edit to any raw-byte
+   entry (`README.md`, `LICENSE`, `spec/gate-driver.md`, the reproduction
+   documents, the audit inventory itself).
 3. Regenerate the committed record:
 
    ```bash
@@ -412,20 +439,22 @@ must move with it, and CI enforces that:
 
 `klt` install for grading-only (no klayout, no PDK — this is what the
 `signoff` CI job does). The pin is the exact source commit the committed
-report was graded with (klayout-tools merge `879d39ba…`, moved from `3a75c3ae…` by issues #367 and #368; see "Grader pin move, 3a75c3ae to 879d39ba"); the PyPI
+report was graded with (klayout-tools merge `33df0b12…`, moved from `879d39ba…` by issue #511 for klayout-tools #5862's canonical-YAML attest mode (itself moved from `3a75c3ae…` by issues #367 and #368; see "Grader pin move, 879d39ba to 33df0b12"); the PyPI
 `0.5.0` wheel predates it (it bundles the 10-item tiers doc and lacks the
 `source_doc_content_hash` report field, so its render can never match
 `tier-report.json`). `jsonschema` is required
-because `klt`'s CLI entry imports it eagerly:
+because `klt`'s CLI entry imports it eagerly, and `pyyaml` because the
+canonical-YAML attest module #5862 added imports it at module level
+(klayout-tools declares `pyyaml>=6`; `--no-deps` skips it):
 
 ```bash
-pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e"
-pip install 'jsonschema>=4.0'
+pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@33df0b128c610f5093c5e10153ce9fc8251b74a2"
+pip install 'jsonschema>=4.0' 'pyyaml>=6'
 ```
 
 On a shared host with provisioned tool paths (e.g. a fleet worker), run that
 install inside a throwaway `uv venv` — or skip the install entirely with
-`uvx --from "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e" klt signoff …` — rather than installing into the host's
+`uvx --from "git+https://github.com/2AMLogic/klayout-tools@33df0b128c610f5093c5e10153ce9fc8251b74a2" klt signoff …` — rather than installing into the host's
 shared tool paths; the bare `pip install` above is for an ephemeral CI runner
 or an already-isolated virtualenv.
 
@@ -447,6 +476,27 @@ evidence: no item's `status` or `reason` changed; only report metadata
 (`source_doc_content_hash`, `build`), the descriptive `text` of items 4, 5, 6, 11
 and item 11's `notes` differ. Item 6 moved from `no_evidence` to
 `partial_coverage`.
+
+## Grader pin move, 879d39ba to 33df0b12 (issue #511)
+
+Moved for klayout-tools #5862 (PR #6322, merge `33df0b12`): the
+`attest: "yaml"` canonical-YAML hygiene mode the item-10 attest inventory
+now uses for the `ci.yml` row (see the #511 re-audit in
+`repo-hygiene.inventory.md`). The build imports PyYAML at module level, so
+CI's `--no-deps` install adds `pyyaml>=6` beside `jsonschema`. Rendered
+before the move with the committed report's own pin (`879d39ba`) against
+the then-unchanged manifest: identical statuses, reasons and citations,
+confirming the chain was fresh. Rendered after the move, still against the
+unchanged manifest: no item's `status` or `reason` changed (9/11 met, tier
+`null`, items 5/7 `check_failed`); the only differences are report metadata
+(`source_doc_content_hash`, `tool.version`, `git_commit`,
+`grading_ruleset_id`), descriptive `text` on items 3–6, 8 and 11, and three
+additive citation details — item 6's `yield_campaign` gains
+`not_applicable_negative_controls: []`, item 8's citation gains
+`attestation: {tool_produced: false}`, item 11's `power_delivery` gains
+`substrate_continuity: {checked: true, by_assertion: false}`. The chain
+refresh in the same PR then re-attested item 10 under the new pin, so the
+committed report carries the new build's citation fields from here on.
 
 To regenerate the yield reports (needs the `klt_yield_native` extension, which
 the published `klt` build lacks; built here in a throwaway env from a

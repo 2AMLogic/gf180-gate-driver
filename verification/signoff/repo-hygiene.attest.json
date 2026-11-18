@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "kind": "t1-attestation-inventory",
+  "t1_item": 10,
+  "description": "Repo hygiene (T1 item 10, issue #289; migrated to the klt --attest producer by issue #511). Raw-byte entries bind the audited bytes, including the audit narrative repo-hygiene.inventory.md itself; the ci.yml entry binds the canonical YAML parse of the signoff job only (sha256-canonical-yaml-v1, klayout-tools #5862), so comments, key reordering and edits outside jobs.signoff are not drift while a weakened gate still is. The audit findings and the append-only re-audit trail live in repo-hygiene.inventory.md.",
+  "hygiene": [
+    "README.md",
+    "LICENSE",
+    "spec/gate-driver.md",
+    {"path": ".github/workflows/ci.yml", "attest": "yaml", "select": "jobs.signoff"},
+    "verification/signoff/repo-hygiene.inventory.md",
+    "design/README.md",
+    "sim/README.md",
+    "sim/harness/README.md",
+    "layout/README.md",
+    "design/gate-driver-characterization.md"
+  ],
+  "checks": [
+    {
+      "name": "evidence-records",
+      "argv": ["python3", "sim/check_records.py"]
+    },
+    {
+      "name": "experiment-grid",
+      "argv": ["python3", "sim/run_corners.py", "--list"]
+    },
+    {
+      "name": "repo-lint",
+      "argv": ["bash", ".github/scripts/lint.sh"]
+    }
+  ]
+}

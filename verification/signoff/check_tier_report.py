@@ -27,6 +27,13 @@ path is a failure, not a fallback. Only an envelope that declares no
 ``provenance.input.path`` at all (item 8's legacy form) falls back to
 ``source``. Inventory artifacts (``*.inventory.md``) additionally have every
 ``path`` + ``sha256:`` pair they list re-hashed against the live tree.
+Item 10's binding is the ``klt signoff --attest`` inventory
+(``repo-hygiene.attest.json``, issue #511): not a ``.inventory.md``, so its
+entries are deliberately not re-hashed by this script -- the grader
+re-hashes them during the fresh render (raw bytes for plain entries, the
+canonical YAML parse ``sha256-canonical-yaml-v1`` for the ``ci.yml``
+entry), which is what keeps a comment-only CI edit green with no chain
+edit while a gate change inside ``jobs.signoff`` still fails.
 
 Exit code ``3`` from the re-run is *success*: ``klt signoff`` renders
 ``tier: null`` whenever at least one T1 item is honestly ``unmet``, which is

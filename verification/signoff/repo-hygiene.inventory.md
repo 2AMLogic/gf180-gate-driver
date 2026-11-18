@@ -1,11 +1,22 @@
 # Repository hygiene inventory (T1 item 10)
 
-Bound by `repo-hygiene.generic.json` (T1 item 10). Audited 2026-10-09
-(issue #289) against `origin/main` at `ceea0e2`. `klt signoff` hashes **this
-file's bytes**; it does not read the README, run CI or judge the audit.
-`check_tier_report.py` re-hashes every `path` + `sha256:` pair listed below
-against the live tree, so editing a listed file without re-auditing and
-refreshing this inventory (and its envelope and manifest pins) fails.
+The item-10 evidence envelope `repo-hygiene.generic.json` is produced by
+`klt signoff --attest 10` (issue #511) from the klt attestation inventory
+`repo-hygiene.attest.json`; the manifest pins that inventory's hash through
+the envelope. This markdown file is the audit narrative and the append-only
+re-audit trail, and is itself listed as a raw-byte entry of that inventory.
+Audited 2026-10-09 (issue #289) against `origin/main` at `ceea0e2`. When the
+grader renders the manifest it re-hashes every inventory entry against the
+live tree — raw bytes for the plain entries, the canonical YAML parse
+(`sha256-canonical-yaml-v1`) for the `ci.yml` entry — so editing a listed
+file without re-auditing and re-attesting fails `check_tier_report.py`. The
+`ci.yml` binding is scoped to `jobs.signoff`: comments, whitespace, key
+reordering and every edit outside that subtree (the routine
+add-a-test-step PR) move no pin and need no chain refresh; a change inside
+the signoff job — a weakened step, a removed step, a changed command, the
+grader pin itself — is a gate change and does (the #511 re-audit below has
+the full rationale). `klt signoff` does not read the README, run CI or
+judge the audit; it proves the pinned scope's bytes/parse and nothing more.
 
 ## The requirement
 
@@ -20,7 +31,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e132349c49a00226bc2ceba4af4df6d611822522f5059c464a70bfcd521d282c` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | canonical YAML of `jobs.signoff` only (`sha256-canonical-yaml-v1`, `select: "jobs.signoff"`; no raw byte pin since issue #511 — comments and edits outside the signoff job are not drift, see the #511 re-audit below) |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -1546,3 +1557,63 @@ hash here. The envelope, manifest item 10 and tier-report citation pins are
 refreshed for the new inventory bytes, and the report is re-rendered with the
 pinned grader (`879d39ba`). No simulation, netlisting or layout flow was run
 for this re-audit.
+
+## Re-audit for issue #511 (2026-11-18)
+
+The item-10 binding migrates from a hand-maintained markdown hash chain to
+the klt attestation producer (operator ruling 2026-11-15: keep every pin,
+fix the record format in klayout-tools; klayout-tools #5862 shipped the
+missing mode as `attest: "yaml"`, PR #6322, merge `33df0b12`). Nothing in
+this re-audit relaxes an audit finding; every finding above still holds.
+Changes:
+
+- **The envelope is now produced, not hand-written.** A new klt item-10
+  attestation inventory, `verification/signoff/repo-hygiene.attest.json`,
+  lists the same audited files this table always listed — `README.md`,
+  `LICENSE`, `spec/gate-driver.md`, the five reproduction documents and this
+  audit file itself as raw-byte entries — and declares the three audit
+  commands the original #289 audit executed PDK-free (`sim/check_records.py`,
+  `sim/run_corners.py --list`, `.github/scripts/lint.sh`), which
+  `klt signoff --attest 10` runs at attest time. The envelope
+  (`repo-hygiene.generic.json`) is that command's output; the manifest pins
+  the attest inventory's hash through it, exactly as it pinned this file's
+  hash before.
+- **`ci.yml` is pinned by canonical YAML parse, not raw bytes.** The
+  inventory entry is `{"path": ".github/workflows/ci.yml", "attest": "yaml",
+  "select": "jobs.signoff"}`. Choice and why: the property T1 item 10 audits
+  in CI is that the harness and evidence formats stay valid under a live
+  gate — the signoff job. Scoping the pin to `jobs.signoff` keeps that
+  property bound (a `continue-on-error: true` on a signoff step, a removed
+  step or a changed `run:` is still drift) while the routine
+  add-a-test-step PR — the edit that put #461 and #498 through three
+  conflict cycles each — moves no pin at all. Whole-document was rejected
+  for exactly that reason: it would have kept every step addition a chain
+  refresh, the starvation this issue records. Edits to the other jobs stay
+  bound mechanically by `.github/scripts/lint.sh` step 5/5 (every tracked
+  `test_*.py` must be named by a non-comment line of the workflow), which
+  is not pinned here but is cited by the CI finding above; the canonical
+  algorithm is the grader's named `sha256-canonical-yaml-v1`
+  (klayout-tools #5862), so a comment-only, whitespace-only, key-reorder or
+  anchor/alias refactor of the file is not drift, and the repo duplicates
+  none of it.
+- **The grader pin moved, `879d39ba` to `33df0b12`** (this file's own
+  signoff job changed, which is itself a gate change and why the re-attest
+  below was required); see `verification/signoff/README.md`, "Grader pin
+  move, 879d39ba to 33df0b12". CI's `--no-deps` grading env now also
+  installs `pyyaml>=6`, which the canonical-YAML module imports at module
+  level.
+- **The `ci.yml` row above no longer carries a raw sha256.** The other rows
+  are unchanged and still match the live tree; they are now the audit's
+  dated record, with the live pins carried by the attest inventory and the
+  envelope it produced.
+
+What was actually run for this re-audit: the three declared checks (all
+passing, PDK-free); the pin-move render comparison recorded in the signoff
+README; and `check_tier_report.py` against the refreshed chain. The negative
+controls were exercised on scratch copies: a comment-only `ci.yml` edit and
+a step added to an unrelated job leave the check green with no chain edit;
+`continue-on-error: true` on a signoff step and an un-refreshed raw-byte
+entry (`README.md`) both fail it. The new cases live in
+`verification/signoff/test_check_tier_report.py` (klt-gated, so they run in
+CI's signoff job where the pinned build is installed). No simulation,
+netlisting or layout flow was run for this re-audit.
