@@ -10,6 +10,7 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-17
 
+- **Issue #458** (closed): Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md
 - **PR #542**: fix: disclose a dirty input tree at the run_corners.py entry point
 - **Issue #541** (closed): run_corners.py (harness/cli.py) mints records outside the shared run envelope and never discloses a dirty tree
 - **PR #539**: refactor: route every recorded run through a shared campaign envelope
