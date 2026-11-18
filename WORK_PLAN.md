@@ -23,7 +23,6 @@ _None._
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
-- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md *(held)*
 
 ## Ready
 
@@ -53,7 +52,6 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#458**: Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md *(curated)* *(held)*
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
 - **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)* *(held)*
 
@@ -71,12 +69,12 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
-| Important | 2 |
+| Important | 1 |
 | Ready (`loom:issue`) | 0 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 3 |
+| Curated | 2 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
