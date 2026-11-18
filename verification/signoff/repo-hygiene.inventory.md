@@ -1558,6 +1558,34 @@ refreshed for the new inventory bytes, and the report is re-rendered with the
 pinned grader (`879d39ba`). No simulation, netlisting or layout flow was run
 for this re-audit.
 
+## Re-audit for issue #547 (2026-11-18)
+
+One listed file changed on the issue #547 branch (`feature/issue-547`, on top
+of `origin/main` at `7e41699`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `merge_group:` trigger
+  (no filters; the `pull_request` and `push` triggers are byte-unchanged) and
+  plumbing so the lint job's append-only check takes its merge base from the
+  queue's trial-merge event instead of falling back to `origin/main`: the Lint
+  step gains `MG_BASE: ${{ github.event.merge_group.base_sha }}` and a two-line
+  shell `if` that exports `MERGE_GROUP_BASE_SHA` on `merge_group` runs only, so
+  `pull_request` and `push` runs see exactly the environment they saw before.
+  `lint` still runs
+  `.github/scripts/lint.sh --require-shellcheck --require-append-only`, and the
+  harness self-test and `signoff` job are unchanged, so the CI finding still
+  holds. CI was read, not observed to pass here.
+
+The other listed files are unchanged. The PR's other changed files
+(`sim/harness/evidence_lint.py`, `sim/test_evidence_store.py`) are not listed
+in this inventory and carry no hash here; `evidence_lint.py` is reached only
+through the same `sim/check_records.py --require-append-only` invocation the
+workflow already runs, and its merge-group fallback removal (fail closed on an
+unresolvable base) tightens the check the CI finding already asserts. The
+envelope, manifest item 10 and tier-report citation pins are refreshed for the
+new inventory bytes, and the report is re-rendered with the pinned grader
+(`879d39ba`). No simulation, netlisting or layout flow was run for this
+re-audit.
 ## Re-audit for issue #511 (2026-11-18)
 
 The item-10 binding migrates from a hand-maintained markdown hash chain to
@@ -1600,8 +1628,11 @@ Changes:
   signoff job changed, which is itself a gate change and why the re-attest
   below was required); see `verification/signoff/README.md`, "Grader pin
   move, 879d39ba to 33df0b12". CI's `--no-deps` grading env now also
-  installs `pyyaml>=6`, which the canonical-YAML module imports at module
-  level.
+  installs `pyyaml>=6` (module-level import of the canonical-YAML module)
+  and `klayout>=0.30` (the CLI entry imports `erc_islands`, which imports
+  `klayout.db`, before parsing any argument — the third eager import
+  `--no-deps` has surfaced, observed as a CI failure on this PR's first
+  run).
 - **The `ci.yml` row above no longer carries a raw sha256.** The other rows
   are unchanged and still match the live tree; they are now the audit's
   dated record, with the live pins carried by the attest inventory and the

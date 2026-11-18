@@ -45,6 +45,12 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Merge queue (issue #547): the required checks must also report on the
+  # queue's trial-merge commits, or the fleet's ruleset tooling refuses to
+  # enable the queue. A merge_group run has no PR base ref -- the lint job's
+  # append-only check takes its base from the event payload instead (see the
+  # Lint step below).
+  merge_group:
 
 permissions:
   contents: read
@@ -73,7 +79,19 @@ jobs:
         # --require-append-only: same argument for the merge base -- if it stops
         # resolving, fail loudly instead of passing on a skipped check.
         # Same script `npm run lint` runs locally.
-        run: .github/scripts/lint.sh --require-shellcheck --require-append-only
+        # Merge queue (issue #547): on a merge_group run GITHUB_BASE_REF is
+        # empty and the base is the trial merge's base sha from the event
+        # payload. It is exported only on merge_group, so pull_request and
+        # push runs see exactly the environment they saw before; a missing
+        # or unresolvable base fails the check (--require-append-only),
+        # never silently passes.
+        env:
+          MG_BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            export MERGE_GROUP_BASE_SHA="$MG_BASE"
+          fi
+          .github/scripts/lint.sh --require-shellcheck --require-append-only
 
       - name: Stored-evidence manifests
         # New sim evidence lives in the fleet artifact store; git keeps only
@@ -387,13 +405,16 @@ jobs:
         # 11 lands, replace both install lines with that pinned release.
         # jsonschema is installed because klt's CLI entry imports it
         # eagerly (klt kb validate; observed as a CI failure on the first
-        # run of this job), and pyyaml because the canonical-YAML attest
-        # module the #511 pin carries imports it at module level
-        # (klayout-tools declares pyyaml>=6; --no-deps skips it), while
-        # klayout itself stays unnecessary.
+        # run of this job), pyyaml because the canonical-YAML attest
+        # module the #511 pin carries imports it at module level, and
+        # klayout because that same entry imports erc_islands
+        # (klayout.db) before parsing any argument -- at this pin the
+        # CLI eagerly imports all three (klayout-tools declares
+        # jsonschema>=4.0, klayout>=0.30 and pyyaml>=6; --no-deps skips
+        # them, so each is listed by hand).
         run: |
           pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@33df0b128c610f5093c5e10153ce9fc8251b74a2"
-          pip install 'jsonschema>=4.0' 'pyyaml>=6'
+          pip install 'jsonschema>=4.0' 'pyyaml>=6' 'klayout>=0.30'
 
       - name: Checker regression tests
         # Stdlib-only tests for check_tier_report.py's pin anchoring (issue

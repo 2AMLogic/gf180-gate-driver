@@ -20,8 +20,8 @@
         "select": "jobs.signoff",
         "hash_algorithm": "sha256-canonical-yaml-v1",
         "passed": true,
-        "content_hash": "sha256:75b4ee462df78b015620a882bf58906b340fa79b13c6cf6705372bc2337847ea",
-        "raw_content_hash": "sha256:cf3896e35c07a70f2c98d1017ae3c27ff6ee49a50b96a741bbc96aee65c8b6ce"
+        "content_hash": "sha256:ced34a1e0abe7a55f7c1da37119174bf095a305dd129f229a57b166b6561619c",
+        "raw_content_hash": "sha256:66ebda506fc664c3c67d8df7227d4165a2effcb56dda40ca48b1e1add1705843"
       },
       {
         "check": "present",
@@ -84,7 +84,7 @@
         "role": "hygiene",
         "path": "verification/signoff/repo-hygiene.inventory.md",
         "passed": true,
-        "content_hash": "sha256:9b8ac64d0d13cef63744250f3977398cdee14bdee257a82365c3d2818cea3f67"
+        "content_hash": "sha256:c39797630db37fa0dab51204b1b927dda2d485c3b112bc8de5b8fc1c9ec70e45"
       },
       {
         "check": "command",

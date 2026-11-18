@@ -437,19 +437,23 @@ must move with it, and CI enforces that:
    npm run signoff:check
    ```
 
-`klt` install for grading-only (no klayout, no PDK — this is what the
-`signoff` CI job does). The pin is the exact source commit the committed
+`klt` install for grading-only (no PDK — this is what the
+`signoff` CI job does; `klayout` is installed only because the CLI entry
+imports it eagerly, the module itself is unused by grading). The pin is the exact source commit the committed
 report was graded with (klayout-tools merge `33df0b12…`, moved from `879d39ba…` by issue #511 for klayout-tools #5862's canonical-YAML attest mode (itself moved from `3a75c3ae…` by issues #367 and #368; see "Grader pin move, 879d39ba to 33df0b12"); the PyPI
 `0.5.0` wheel predates it (it bundles the 10-item tiers doc and lacks the
 `source_doc_content_hash` report field, so its render can never match
 `tier-report.json`). `jsonschema` is required
-because `klt`'s CLI entry imports it eagerly, and `pyyaml` because the
-canonical-YAML attest module #5862 added imports it at module level
-(klayout-tools declares `pyyaml>=6`; `--no-deps` skips it):
+because `klt`'s CLI entry imports it eagerly, `pyyaml` because the
+canonical-YAML attest module #5862 added imports it at module level, and
+`klayout` because that same entry imports `erc_islands` (`klayout.db`)
+before parsing any argument — at this pin the CLI eagerly imports all
+three (klayout-tools declares `jsonschema>=4.0`, `klayout>=0.30` and
+`pyyaml>=6`; `--no-deps` skips them, so each is listed by hand):
 
 ```bash
 pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@33df0b128c610f5093c5e10153ce9fc8251b74a2"
-pip install 'jsonschema>=4.0' 'pyyaml>=6'
+pip install 'jsonschema>=4.0' 'pyyaml>=6' 'klayout>=0.30'
 ```
 
 On a shared host with provisioned tool paths (e.g. a fleet worker), run that
@@ -482,8 +486,10 @@ and item 11's `notes` differ. Item 6 moved from `no_evidence` to
 Moved for klayout-tools #5862 (PR #6322, merge `33df0b12`): the
 `attest: "yaml"` canonical-YAML hygiene mode the item-10 attest inventory
 now uses for the `ci.yml` row (see the #511 re-audit in
-`repo-hygiene.inventory.md`). The build imports PyYAML at module level, so
-CI's `--no-deps` install adds `pyyaml>=6` beside `jsonschema`. Rendered
+`repo-hygiene.inventory.md`). The build imports PyYAML at module level and
+— via the CLI entry's eager `erc_islands` import — `klayout` too, so CI's
+`--no-deps` install adds `pyyaml>=6` and `klayout>=0.30` beside
+`jsonschema`. Rendered
 before the move with the committed report's own pin (`879d39ba`) against
 the then-unchanged manifest: identical statuses, reasons and citations,
 confirming the chain was fresh. Rendered after the move, still against the
