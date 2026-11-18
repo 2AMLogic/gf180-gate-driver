@@ -605,7 +605,24 @@ def _git(root: Path, *args: str) -> subprocess.CompletedProcess | None:
 
 
 def default_base_ref() -> str:
-    """The ref a PR is diffed against: the PR base branch, else origin/main."""
+    """The ref a PR is diffed against: the PR base branch, else origin/main.
+
+    A merge queue's trial merge (``GITHUB_EVENT_NAME=merge_group``) has no
+    base branch name -- ``GITHUB_BASE_REF`` is empty there -- so the base is
+    the event's ``merge_group.base_sha``, exported as ``MERGE_GROUP_BASE_SHA``
+    by the CI lint step. Falling back to ``origin/main`` on that event would
+    diff the append-only check against the wrong range, so a missing base
+    fails closed (the same posture as ``--require-append-only``).
+    """
+    if os.environ.get("GITHUB_EVENT_NAME", "").strip() == "merge_group":
+        base = os.environ.get("MERGE_GROUP_BASE_SHA", "").strip()
+        if not base:
+            raise SystemExit(
+                "merge_group event without MERGE_GROUP_BASE_SHA: the append-only "
+                "check has no base to diff against -- set it to the event's "
+                "merge_group.base_sha; refusing to fall back to origin/main"
+            )
+        return base
     base = os.environ.get("GITHUB_BASE_REF", "").strip()
     return f"origin/{base}" if base else "origin/main"
 
@@ -711,7 +728,8 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--base-ref",
         default=None,
-        help="ref the append-only check diffs against (default: $GITHUB_BASE_REF, "
+        help="ref the append-only check diffs against (default: the "
+        "merge_group base sha on a merge_group event, else $GITHUB_BASE_REF, "
         "else origin/main)",
     )
     parser.add_argument(

@@ -20,7 +20,7 @@ harness and evidence formats valid.
 | README: what the block is, spec table, reproduction | `README.md` | `sha256:fc9e1a784d47150911b2be899addbac62067c72c4546b3a25cfa5c84c4de6f93` |
 | License (Apache-2.0) | `LICENSE` | `sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | Authoritative spec (source of the README's table) | `spec/gate-driver.md` | `sha256:fdc793507cb5d283b2a17b5519570a450016ed65af6b687851ebfaa44e84410c` |
-| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:e132349c49a00226bc2ceba4af4df6d611822522f5059c464a70bfcd521d282c` |
+| CI (lint + evidence-record checks, harness self-test, signoff freshness) | `.github/workflows/ci.yml` | `sha256:dc4dd6130b5e26fbe02dddf4deb058c1ab25db686e41d65b9a22d726866aa9da` |
 
 Reproduction documents the README links to (read, hashed so a change forces a
 re-audit of the links):
@@ -1546,3 +1546,32 @@ hash here. The envelope, manifest item 10 and tier-report citation pins are
 refreshed for the new inventory bytes, and the report is re-rendered with the
 pinned grader (`879d39ba`). No simulation, netlisting or layout flow was run
 for this re-audit.
+
+## Re-audit for issue #547 (2026-11-18)
+
+One listed file changed on the issue #547 branch (`feature/issue-547`, on top
+of `origin/main` at `7e41699`) and was re-read against the findings above;
+its hash is refreshed in the table:
+
+- `.github/workflows/ci.yml` (**read** the diff): adds a `merge_group:` trigger
+  (no filters; the `pull_request` and `push` triggers are byte-unchanged) and
+  plumbing so the lint job's append-only check takes its merge base from the
+  queue's trial-merge event instead of falling back to `origin/main`: the Lint
+  step gains `MG_BASE: ${{ github.event.merge_group.base_sha }}` and a two-line
+  shell `if` that exports `MERGE_GROUP_BASE_SHA` on `merge_group` runs only, so
+  `pull_request` and `push` runs see exactly the environment they saw before.
+  `lint` still runs
+  `.github/scripts/lint.sh --require-shellcheck --require-append-only`, and the
+  harness self-test and `signoff` job are unchanged, so the CI finding still
+  holds. CI was read, not observed to pass here.
+
+The other listed files are unchanged. The PR's other changed files
+(`sim/harness/evidence_lint.py`, `sim/test_evidence_store.py`) are not listed
+in this inventory and carry no hash here; `evidence_lint.py` is reached only
+through the same `sim/check_records.py --require-append-only` invocation the
+workflow already runs, and its merge-group fallback removal (fail closed on an
+unresolvable base) tightens the check the CI finding already asserts. The
+envelope, manifest item 10 and tier-report citation pins are refreshed for the
+new inventory bytes, and the report is re-rendered with the pinned grader
+(`879d39ba`). No simulation, netlisting or layout flow was run for this
+re-audit.
