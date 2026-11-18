@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-18
 
+- **PR #550**: feat(signoff): pin ci.yml by canonical YAML of jobs.signoff via klt --attest
+- **Issue #511** (closed): verification/signoff hash chain serializes every PR that touches an inventory-listed file
 - **PR #549**: ci: report the lint gate on merge_group trial merges (merge queue readiness)
 
 ### 2026-11-17
