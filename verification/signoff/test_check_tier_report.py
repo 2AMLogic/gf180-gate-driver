@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -355,6 +357,176 @@ class CommittedTree(unittest.TestCase):
             text = (c.SIGNOFF_DIR / name).read_text(encoding="utf-8")
             for path in set(__import__("re").findall(r"`((?:design|sim|layout|spec|verification)/[\w./-]+\.\w+)`", text)):
                 self.assertTrue((c.REPO_ROOT / path).is_file(), f"{name} names a missing file: {path}")
+
+
+class KltAttestItem10Inventory(unittest.TestCase):
+    """End-to-end item-10 cases against the real grader (issue #511).
+
+    The comment-neutrality of the ``ci.yml`` pin lives in klt's
+    ``sha256-canonical-yaml-v1`` digest, not in this repo's checker -- the
+    grader owns the algorithm and the repo duplicates none of it. So these
+    tests drive ``klt signoff --attest`` and ``klt signoff --manifest`` in a
+    throwaway git repo and grade the fresh render's item-10 row: a
+    comment-only edit and a step added to an unrelated job stay ``met`` with
+    no chain edit, while a gate change inside ``jobs.signoff`` and an
+    un-refreshed raw-byte entry go ``unmet``/``stale_evidence``. Skipped
+    when ``klt`` is not on PATH (CI's signoff job installs the pinned
+    build, so this runs there); the checker's own pass-1 anchoring of the
+    producer's envelope shape is asserted without klt below.
+    """
+
+    SCRATCH_CI = """\
+name: scratch-ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Unit tests
+        run: echo unit-tests
+  signoff:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install klt
+        run: pip install klt
+      - name: Grade
+        run: python3 verification/signoff/check_tier_report.py
+"""
+
+    SCRATCH_README = b"scratch readme\n"
+
+    SCRATCH_INVENTORY = {
+        "schema_version": 1,
+        "kind": "t1-attestation-inventory",
+        "t1_item": 10,
+        "hygiene": [
+            "README.md",
+            {
+                "path": ".github/workflows/ci.yml",
+                "attest": "yaml",
+                "select": "jobs.signoff",
+            },
+        ],
+        "checks": [{"name": "ok", "argv": ["python3", "-c", "pass"]}],
+    }
+
+    @classmethod
+    def setUpClass(cls):
+        cls.klt = shutil.which("klt")
+        if cls.klt is None:
+            raise unittest.SkipTest(
+                "klt not on PATH (CI's signoff job installs the pinned grader)"
+            )
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._tmp.cleanup)
+        cls.root = Path(cls._tmp.name).resolve()
+        (cls.root / ".github/workflows").mkdir(parents=True)
+        (cls.root / "attest").mkdir()
+        (cls.root / ".github/workflows/ci.yml").write_bytes(cls.SCRATCH_CI.encode())
+        (cls.root / "README.md").write_bytes(cls.SCRATCH_README)
+        inventory = cls.root / "attest/item10.json"
+        inventory.write_text(json.dumps(cls.SCRATCH_INVENTORY, indent=2) + "\n")
+        # The grader's grading basis is the git index (klayout-tools #5857):
+        # an untracked candidate is dropped, so stage everything first.
+        subprocess.run(["git", "init", "-q"], cwd=cls.root, check=True)
+        cls._git("add", "-A")
+        proc = cls.klt_run(
+            "signoff", "--attest", "10",
+            "--inventory", "attest/item10.json",
+            "-o", "attest/item10-envelope.json",
+        )
+        if proc.returncode != 0:
+            if "unrecognized arguments" in (proc.stderr or ""):
+                raise unittest.SkipTest(
+                    "installed klt predates --attest (issue #511 needs the pinned build)"
+                )
+            raise AssertionError(f"attest failed in the scratch repo: {proc.stderr}")
+        manifest = {
+            "block": "scratch",
+            "kind": "analog",
+            "evidence": {
+                "10": {
+                    "file": "attest/item10-envelope.json",
+                    "content_hash": sha(inventory.read_bytes()),
+                }
+            },
+        }
+        (cls.root / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        cls.manifest = manifest
+        cls._git("add", "-A")
+
+    @classmethod
+    def _git(cls, *args):
+        subprocess.run(["git", *args], cwd=cls.root, check=True, capture_output=True)
+
+    @classmethod
+    def klt_run(cls, *argv):
+        return subprocess.run(
+            [cls.klt, *argv], cwd=cls.root, capture_output=True, text=True, check=False
+        )
+
+    @classmethod
+    def item10(cls):
+        proc = cls.klt_run("signoff", "--manifest", "manifest.json", "--format", "json")
+        if proc.returncode not in (0, 3):
+            raise AssertionError(f"render failed: {proc.stderr}")
+        report = json.loads(proc.stdout)
+        row = next(item for item in report["items"] if item.get("id") == 10)
+        return row.get("status"), row.get("reason")
+
+    def setUp(self):
+        (self.root / ".github/workflows/ci.yml").write_bytes(self.SCRATCH_CI.encode())
+        (self.root / "README.md").write_bytes(self.SCRATCH_README)
+
+    def test_baseline_envelope_is_met(self):
+        self.assertEqual(self.item10(), ("met", None))
+
+    def test_comment_only_ci_edit_stays_met_with_no_chain_edit(self):
+        path = self.root / ".github/workflows/ci.yml"
+        path.write_bytes(self.SCRATCH_CI.encode() + b"\n# a pure comment\n")
+        self.assertEqual(self.item10(), ("met", None))
+
+    def test_key_reorder_stays_met(self):
+        text = self.SCRATCH_CI.replace(
+            "  push:\n  pull_request:\n", "  pull_request:\n  push:\n"
+        )
+        self.assertNotEqual(text, self.SCRATCH_CI)
+        (self.root / ".github/workflows/ci.yml").write_text(text)
+        self.assertEqual(self.item10(), ("met", None))
+
+    def test_step_added_to_an_unrelated_job_stays_met(self):
+        text = self.SCRATCH_CI.replace(
+            "      - name: Unit tests\n        run: echo unit-tests",
+            "      - name: Unit tests\n        run: echo unit-tests\n"
+            "      - name: One more suite\n        run: echo more",
+        )
+        self.assertNotEqual(text, self.SCRATCH_CI)
+        (self.root / ".github/workflows/ci.yml").write_text(text)
+        self.assertEqual(self.item10(), ("met", None))
+
+    def test_gate_change_inside_signoff_job_is_stale_evidence(self):
+        text = self.SCRATCH_CI.replace(
+            "      - name: Grade\n",
+            "      - name: Grade\n        continue-on-error: true\n",
+        )
+        self.assertNotEqual(text, self.SCRATCH_CI)
+        (self.root / ".github/workflows/ci.yml").write_text(text)
+        self.assertEqual(self.item10(), ("unmet", "stale_evidence"))
+
+    def test_raw_byte_entry_edit_without_refresh_is_stale_evidence(self):
+        (self.root / "README.md").write_bytes(self.SCRATCH_README + b"edited\n")
+        self.assertEqual(self.item10(), ("unmet", "stale_evidence"))
+
+    def test_checker_pass1_anchors_the_producer_envelope(self):
+        # The producer's generic envelope shape (attestation block, repo-scoped
+        # provenance.input.path naming the attest inventory) anchors through the
+        # checker's existing declared-input rule; the JSON inventory is not a
+        # `.inventory.md`, so no markdown pair re-hash runs against it -- the
+        # grader's live re-hash in the render above is the freshness gate.
+        self.assertEqual(c.anchor_citations(self.manifest, repo_root=self.root), [])
 
 
 if __name__ == "__main__":

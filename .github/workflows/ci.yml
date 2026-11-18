@@ -394,10 +394,10 @@ jobs:
         # report's source_doc_content_hash schema (#2191), so its render
         # can never match the committed 11-item tier report. This pin is
         # the exact source commit the report was graded with (klayout-tools
-        # merge 879d39ba (was 3a75c3ae, #2843; moved by issue #367 because the
-        # older build grades item 5's multi-envelope list + spec_rows form
-        # invalid_evidence, and again needed by issue #368 because it renders a
-        # multi-row `yield` item 6 as invalid_evidence): artifact-bound generic
+        # merge 33df0b12 (was 879d39ba, itself moved from 3a75c3ae, #2843, by
+        # issues #367/#368; moved by issue #511 for klayout-tools #5862's
+        # `attest: "yaml"` canonical-YAML hygiene mode, which the item-10
+        # attest inventory uses for this file's own signoff job): artifact-bound generic
         # envelopes for T1 items 1, 2, 9 and 10, issue #288) -- moving it
         # is a deliberate PR that also refreshes verification/signoff/
         # (the fresh render is diffed against the committed report below),
@@ -405,15 +405,23 @@ jobs:
         # 11 lands, replace both install lines with that pinned release.
         # jsonschema is installed because klt's CLI entry imports it
         # eagerly (klt kb validate; observed as a CI failure on the first
-        # run of this job), while klayout itself stays unnecessary.
+        # run of this job), pyyaml because the canonical-YAML attest
+        # module the #511 pin carries imports it at module level, and
+        # klayout because that same entry imports erc_islands
+        # (klayout.db) before parsing any argument -- at this pin the
+        # CLI eagerly imports all three (klayout-tools declares
+        # jsonschema>=4.0, klayout>=0.30 and pyyaml>=6; --no-deps skips
+        # them, so each is listed by hand).
         run: |
-          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@879d39bad82b67abbcc02e482a2c05f17140d18e"
-          pip install 'jsonschema>=4.0'
+          pip install --no-deps "git+https://github.com/2AMLogic/klayout-tools@33df0b128c610f5093c5e10153ce9fc8251b74a2"
+          pip install 'jsonschema>=4.0' 'pyyaml>=6' 'klayout>=0.30'
 
       - name: Checker regression tests
         # Stdlib-only tests for check_tier_report.py's pin anchoring (issue
         # #288): artifact-bound generic bindings, the legacy item-8 `source`
-        # rule, compound item 11, inventory listed hashes. No klt needed.
+        # rule, compound item 11, inventory listed hashes -- plus, since
+        # issue #511, klt-gated end-to-end item-10 attest cases (skipped on
+        # a klt-less host, graded against THIS step's pinned build here).
         run: python3 verification/signoff/test_check_tier_report.py
 
       - name: Layout provenance freshness
