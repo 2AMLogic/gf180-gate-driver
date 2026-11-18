@@ -576,6 +576,73 @@ class AppendOnlyManifests(unittest.TestCase):
             [self.MANIFEST, "sim/b/records/20261022-000000-abc1234.md"],
         )
 
+    def test_unavailable_merge_group_base_is_a_skip_reason(self):
+        # Merge queue (issue #547): the event's base sha is a bare commit, so
+        # a bogus or unreachable one leaves the check unable to run at all.
+        # That must surface as a skip_reason -- which the workflow's
+        # --require-append-only turns into a failure -- never as a silent
+        # pass against some other range.
+        from harness import evidence_lint as el
+        problems, skip = el.check_append_only(self.root, "0" * 40)
+        self.assertEqual(problems, [])
+        self.assertIsNotNone(skip)
+
+
+class MergeGroupBase(unittest.TestCase):
+    """``default_base_ref`` under the merge queue (issue #547).
+
+    A ``merge_group`` run has no ``GITHUB_BASE_REF``: the base is the queue's
+    trial-merge base sha from the event payload. It must be used verbatim,
+    and a missing one must fail closed -- silently falling back to
+    ``origin/main`` would diff the append-only check against the wrong
+    range. PR and push resolution stays exactly what it was.
+    """
+
+    ENV_KEYS = ("GITHUB_EVENT_NAME", "GITHUB_BASE_REF", "MERGE_GROUP_BASE_SHA")
+
+    def setUp(self):
+        # CI steps run with the Actions defaults (GITHUB_EVENT_NAME etc. are
+        # set on real runs), so save and clear whatever leaked in.
+        self._saved = {k: os.environ.pop(k, None) for k in self.ENV_KEYS}
+
+    def tearDown(self):
+        for key, value in self._saved.items():
+            if value is not None:
+                os.environ[key] = value
+
+    def ref(self):
+        from harness import evidence_lint as el
+        return el.default_base_ref()
+
+    def test_merge_group_uses_the_event_base_sha(self):
+        os.environ["GITHUB_EVENT_NAME"] = "merge_group"
+        os.environ["MERGE_GROUP_BASE_SHA"] = "a" * 40
+        self.assertEqual(self.ref(), "a" * 40)
+
+    def test_merge_group_missing_base_fails_closed(self):
+        os.environ["GITHUB_EVENT_NAME"] = "merge_group"
+        with self.assertRaises(SystemExit):
+            self.ref()
+
+    def test_merge_group_blank_base_fails_closed(self):
+        os.environ["GITHUB_EVENT_NAME"] = "merge_group"
+        os.environ["MERGE_GROUP_BASE_SHA"] = "   "
+        with self.assertRaises(SystemExit):
+            self.ref()
+
+    def test_pull_request_base_unchanged(self):
+        os.environ["GITHUB_EVENT_NAME"] = "pull_request"
+        os.environ["GITHUB_BASE_REF"] = "feature/x"
+        self.assertEqual(self.ref(), "origin/feature/x")
+
+    def test_push_base_unchanged(self):
+        os.environ["GITHUB_EVENT_NAME"] = "push"
+        self.assertEqual(self.ref(), "origin/main")
+
+    def test_no_event_name_base_unchanged(self):
+        # Local runs: no Actions env at all.
+        self.assertEqual(self.ref(), "origin/main")
+
 
 if __name__ == "__main__":
     unittest.main()
