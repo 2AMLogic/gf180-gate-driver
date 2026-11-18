@@ -8,6 +8,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-18
+
+- **PR #549**: ci: report the lint gate on merge_group trial merges (merge queue readiness)
+
 ### 2026-11-17
 
 - **Issue #458** (closed): Complete the sim/README.md facet table and fix the stale post-layout row in layout/README.md

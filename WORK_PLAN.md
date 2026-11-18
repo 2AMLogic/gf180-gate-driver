@@ -26,7 +26,7 @@ _None._
 
 ## Ready
 
-Human-approved issues ready for implementation (`loom:issue`).
+Human-approved issues (`loom:issue`) ready for implementation — excluding held (`loom:blocked`/`loom:operator`/`loom:frozen`), `loom:building`, and issues closed by an open `loom:pr` PR (listed under Approved).
 
 _None._
 
@@ -34,7 +34,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h)
 
 ## PRs Awaiting Review
 
@@ -54,6 +54,7 @@ Issues carrying `loom:curated`.
 
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
 - **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)*
+- **#547**: Merge queue: add the merge_group trigger to the required-check workflow(s) *(curated)* *(held)*
 
 ## Proposed (Architect / Hermit)
 
@@ -70,11 +71,11 @@ _None._
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
 | Important | 1 |
-| Ready (`loom:issue`) | 0 |
-| In Progress (`loom:building`) | 0 |
+| Ready (`loom:issue`, net of holds/building/merge-pending) | 0 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 2 |
+| Curated | 3 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
