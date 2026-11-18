@@ -34,7 +34,7 @@ _None._
 
 Issues currently being built (`loom:building`).
 
-- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h)
+_None._
 
 ## PRs Awaiting Review
 
@@ -53,7 +53,6 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
-- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)*
 - **#547**: Merge queue: add the merge_group trigger to the required-check workflow(s) *(curated)* *(held)*
 
 ## Proposed (Architect / Hermit)
@@ -72,10 +71,10 @@ _None._
 | Very important | 0 |
 | Important | 1 |
 | Ready (`loom:issue`, net of holds/building/merge-pending) | 0 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 3 |
+| Curated | 2 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
