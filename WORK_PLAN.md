@@ -53,7 +53,7 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
-- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)* *(held)*
+- **#511**: verification/signoff hash chain serializes every PR that touches an inventory-listed file (PR #461 conflicted 3x in 12h) *(curated)*
 
 ## Proposed (Architect / Hermit)
 
