@@ -6,6 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
+_Generated: 2026-11-19T14:25:49Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -53,7 +54,6 @@ _None._
 Issues carrying `loom:curated`.
 
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
-- **#547**: Merge queue: add the merge_group trigger to the required-check workflow(s) *(curated)* *(held)*
 
 ## Proposed (Architect / Hermit)
 
@@ -74,7 +74,7 @@ _None._
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 2 |
+| Curated | 1 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->

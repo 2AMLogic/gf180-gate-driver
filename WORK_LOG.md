@@ -8,6 +8,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-19
+
+- **Issue #547** (closed): Merge queue: add the merge_group trigger to the required-check workflow(s)
+
 ### 2026-11-18
 
 - **PR #550**: feat(signoff): pin ci.yml by canonical YAML of jobs.signoff via klt --attest
