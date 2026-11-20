@@ -28,8 +28,16 @@ envelope from ``sim/harness/klt_request.py`` instead of each carrying a hand-typ
 copy, so this byte comparison is also what pins the shared module (and, through
 it, ``harness/corners.py``'s five MOS bundles) against the committed requests.
 
+Issue #560 added the two post-layout drive generators (nominal and 6 V stretch
+requests for the no-RC and RC extracted DUTs of both drive facets) and, with
+them, a second check class: the requests' effective limits are compared
+against each facet's ``testbench/tb.json`` ``checks`` -- every check carried
+at its tier-appropriate bound, the 45 nominal and 15 stretch PVT points
+covered exactly once -- so a bound that drifts from its manifest fails here
+even when the generator still reproduces its own committed bytes.
+
 This file lives at ``sim/`` rather than inside one testbench's ``klt/`` directory
-because the generators it runs live under two different testbenches.
+because the generators it runs live under multiple testbenches.
 
 Each generator writes into ``Path(__file__).resolve().parent``, so the test
 mirrors the parts of ``sim/`` they need into a temp tree -- the ``harness``
@@ -61,6 +69,8 @@ SCRIPTS = (
     "gate-driver-core-drive-with-uvlo/klt/gen_requests.py",
     "gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py",
     "uvlo-trip-verification/klt/gen_requests.py",
+    "gate-driver-core-drive-postlayout/klt/gen_requests.py",
+    "gate-driver-core-drive-with-uvlo-postlayout/klt/gen_requests.py",
 )
 
 # (generator relative to sim/, committed outputs it owns, also relative to sim/)
@@ -93,6 +103,31 @@ GENERATORS = (
             "uvlo-trip-verification/klt/request-rail-stretch.json",
         ),
     ),
+    (
+        "gate-driver-core-drive-postlayout/klt/gen_requests.py",
+        (
+            "gate-driver-core-drive-postlayout/klt/request-nominal.json",
+            "gate-driver-core-drive-postlayout/klt/request-nominal-rc.json",
+            "gate-driver-core-drive-postlayout/klt/request-stretch.json",
+            "gate-driver-core-drive-postlayout/klt/request-stretch-rc.json",
+        ),
+    ),
+    (
+        "gate-driver-core-drive-with-uvlo-postlayout/klt/gen_requests.py",
+        (
+            "gate-driver-core-drive-with-uvlo-postlayout/klt/request-nominal.json",
+            "gate-driver-core-drive-with-uvlo-postlayout/klt/request-nominal-rc.json",
+            "gate-driver-core-drive-with-uvlo-postlayout/klt/request-stretch.json",
+            "gate-driver-core-drive-with-uvlo-postlayout/klt/request-stretch-rc.json",
+        ),
+    ),
+)
+
+# The two post-layout drive facets of issue #560: (slug, tb.json check count
+# re-derived from the manifest at assert time).
+POSTLAYOUT_DRIVE_FACETS = (
+    ("gate-driver-core-drive-postlayout", 20),
+    ("gate-driver-core-drive-with-uvlo-postlayout", 23),
 )
 
 
@@ -366,6 +401,161 @@ class UvloRecordProseRendersTheRatifiedTargets(unittest.TestCase):
                 "interpolate the constant from the DR-0001 block instead so the "
                 "record prose cannot drift from what the verdict logic grades.",
             )
+
+
+class PostlayoutDriveRequestsMatchTheirManifests(unittest.TestCase):
+    """The post-layout drive requests carry their tb.json checks (issue #560).
+
+    Every applicable min and max of each facet's ``testbench/tb.json`` must
+    appear as a request limit at the tier-appropriate bound, the 45 nominal
+    and 15 stretch PVT points must be covered exactly once with the 6 V
+    stretch rows in their own request, and each request must name the body of
+    the DUT variant it grades. The bound policy is un-sharded on purpose: the
+    post-layout manifests carry no DR-0016 / DR-0020 exception, so the
+    stretch sink bound is 1 A even at ss/sf 125 C -- pinned here the same way
+    the PEX test above pins the schematic policy.
+    """
+
+    def _request(self, facet, tier, suffix=""):
+        return json.loads(
+            (SIM / facet / "klt" / f"request-{tier}{suffix}.json").read_text()
+        )
+
+    def test_check_keys_and_effective_limits_match_tbjson(self) -> None:
+        for facet, n_checks in POSTLAYOUT_DRIVE_FACETS:
+            with self.subTest(facet=facet):
+                tb = json.loads(
+                    (SIM / facet / "testbench" / "tb.json").read_text()
+                )
+                self.assertEqual(
+                    len(tb["checks"]),
+                    n_checks,
+                    f"{facet}: tb.json check count moved; re-derive the "
+                    "request measurement set from the manifest",
+                )
+                for tier in ("nominal", "stretch"):
+                    for suffix in ("", "-rc"):
+                        req = self._request(facet, tier, suffix)
+                        limits = {
+                            m["name"]: m.get("limits")
+                            for m in req["measurements"]
+                        }
+                        self.assertEqual(
+                            set(limits),
+                            set(tb["checks"]) | {"vin_max_v", "vin_min_v"},
+                            f"{facet} request-{tier}{suffix}: measurement "
+                            "set must be the manifest checks plus the two "
+                            "ungraded vin columns",
+                        )
+                        for key, check in tb["checks"].items():
+                            override = (
+                                check.get("stretch", {})
+                                if tier == "stretch"
+                                else {}
+                            )
+                            expected = {
+                                k: v
+                                for k, v in {**check, **override}.items()
+                                if k in ("min", "max")
+                            }
+                            self.assertEqual(
+                                limits[key],
+                                expected,
+                                f"{facet} request-{tier}{suffix} {key}: "
+                                "effective bound must equal the tb.json "
+                                f"{tier} tier",
+                            )
+
+    def test_corner_axes_partition_the_60_point_grid_exactly_once(self) -> None:
+        for facet, _ in POSTLAYOUT_DRIVE_FACETS:
+            with self.subTest(facet=facet):
+                for suffix in ("", "-rc"):
+                    nominal = self._request(facet, "nominal", suffix)
+                    stretch = self._request(facet, "stretch", suffix)
+                    for req, vlogic, vdrv in (
+                        (nominal, [2.97, 3.3, 3.63], [4.5, 5.0, 5.5]),
+                        (stretch, [3.3], [6.0]),
+                    ):
+                        self.assertEqual(
+                            [p["name"] for p in req["corners"]["process"]],
+                            ["tt", "ff", "ss", "fs", "sf"],
+                        )
+                        self.assertEqual(
+                            req["corners"]["temperature_c"],
+                            [-40.0, 27.0, 125.0],
+                        )
+                        # the harness's tied two-rail grid: same index count
+                        # on both rails (swept together, never cross-producted)
+                        self.assertEqual(
+                            req["corners"]["supply_v"],
+                            {"vsup_logic": vlogic, "vsup_drv": vdrv},
+                        )
+                        self.assertEqual(len(vlogic), len(vdrv))
+                    n_points = (
+                        len(nominal["corners"]["process"])
+                        * len(nominal["corners"]["temperature_c"])
+                        * len(nominal["corners"]["supply_v"]["vsup_logic"])
+                    )
+                    s_points = (
+                        len(stretch["corners"]["process"])
+                        * len(stretch["corners"]["temperature_c"])
+                        * len(stretch["corners"]["supply_v"]["vsup_logic"])
+                    )
+                    self.assertEqual(n_points, 45)
+                    self.assertEqual(s_points, 15)
+                    # un-sharded policy: no DR-0016 exception -- 1 A sink
+                    # minimum at every stretch corner, ss/sf 125 C included.
+                    sink = {
+                        m["name"]: m.get("limits")
+                        for m in stretch["measurements"]
+                    }["ipeak_sink_a"]
+                    self.assertEqual(sink, {"min": 1.0})
+                    source = {
+                        m["name"]: m.get("limits")
+                        for m in nominal["measurements"]
+                    }["ipeak_source_a"]
+                    self.assertEqual(source, {"min": 0.5})
+
+    def test_each_request_names_its_duts_body(self) -> None:
+        for facet, _ in POSTLAYOUT_DRIVE_FACETS:
+            for tier in ("nominal", "stretch"):
+                self.assertEqual(
+                    self._request(facet, tier)["netlist"], "body.spice"
+                )
+                self.assertEqual(
+                    self._request(facet, tier, "-rc")["netlist"],
+                    "body-rc.spice",
+                )
+
+    def test_uvlo_facet_keeps_the_three_200ns_probes_flat_named(self) -> None:
+        facet = "gate-driver-core-drive-with-uvlo-postlayout"
+        for tier in ("nominal", "stretch"):
+            for suffix in ("", "-rc"):
+                req = self._request(facet, tier, suffix)
+                forms = {
+                    m["name"]: m.get("spice", "") + m.get("expr", "")
+                    for m in req["measurements"]
+                }
+                for name, node in (
+                    ("uvlo_lockout_at_in_high", "x3_lockout"),
+                    ("uvlo_vout_at_in_high_v", "OUT"),
+                    ("uvlo_vdrv_at_in_high_v", "VDD_DRV"),
+                ):
+                    self.assertIn(
+                        f"FIND v({node}) AT=200n",
+                        forms[name],
+                        f"{facet} request-{tier}{suffix}: {name} must stay "
+                        "a 200 ns FIND probe (crossing-free, so it returns "
+                        "a value at a UVLO-locked corner)",
+                    )
+                # the flat extracted taper-node names, not the schematic's
+                # dotted hierarchy
+                self.assertIn("v(x2_n1)", forms["n1_max_v"])
+        drive = self._request("gate-driver-core-drive-postlayout", "nominal")
+        self.assertFalse(
+            [m["name"] for m in drive["measurements"] if m["name"].startswith("uvlo_")],
+            "the drive facet's manifest carries no uvlo probes",
+        )
 
 
 if __name__ == "__main__":
