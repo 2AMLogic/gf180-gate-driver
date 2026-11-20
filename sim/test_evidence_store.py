@@ -28,9 +28,11 @@ from harness import evidence_store as es  # noqa: E402
 REPO = "owner/repo"
 
 
-def fake_klt(store: dict, *, fail=None, corrupt=False, uri=None):
+def fake_klt(store: dict, *, fail=None, corrupt=False, uri=None, mutate=None):
     """Emulate ``klt artifact put FILE --name N --manifest M --format json``.
-    ``uri`` overrides the written uri (given the key) to emulate an old klt."""
+    ``uri`` overrides the written uri (given the key) to emulate an old klt;
+    ``mutate`` rewrites the merged manifest before it is written back, to
+    emulate a klt whose returned manifest fails the schema (issue #562)."""
 
     def run(cmd, **kw):
         assert cmd[:3] == ["klt", "artifact", "put"], cmd
@@ -52,6 +54,8 @@ def fake_klt(store: dict, *, fail=None, corrupt=False, uri=None):
         p = Path(manifest)
         m = json.loads(p.read_text()) if p.exists() else {"schema_version": 1, "entries": []}
         m["entries"].append(entry)
+        if mutate is not None:
+            mutate(m)
         p.write_text(json.dumps(m))
         return subprocess.CompletedProcess(cmd, 0, json.dumps({"status": "stored"}), "")
 
@@ -125,14 +129,33 @@ class Writer(Base):
 
     def test_non_artifact_uri_from_klt_is_refused(self):
         # An old klt (before klayout-tools 7e3561f) writes a bucket-naming uri;
-        # the writer refuses any scheme but artifact:<key> and commits nothing.
+        # the shared schema rule refuses any scheme but artifact:<key> and
+        # commits nothing.
         legacy = "s3" + "://"  # built, so a grep for the literal stays clean
         for uri in (lambda k: f"{legacy}bucket/{k}", lambda k: f"https://host/{k}",
                     lambda k: f"artifact:/{k}", lambda k: k):
             with self.subTest(uri=uri("K")):
-                with self.assertRaisesRegex(es.StoreError, "uri is not artifact:<key>"):
+                with self.assertRaisesRegex(es.StoreError, "uri must be artifact:<key>"):
                     self.store_files(uri=uri)
                 self.assert_nothing_committed()
+
+    def test_duplicate_entries_in_klt_manifest_are_refused(self):
+        # klt returning the same entry twice used to install both files: the
+        # writer indexed by name, collapsing the duplicate for the comparison
+        # (issue #562). The shared schema rule rejects duplicate names, so the
+        # writer refuses the manifest and commits nothing.
+        with self.assertRaisesRegex(es.StoreError, "duplicate name"):
+            self.store_files(mutate=lambda m: m["entries"].append(m["entries"][-1]))
+        self.assert_nothing_committed()
+
+    def test_empty_producer_in_klt_manifest_is_refused(self):
+        # An empty producer object passed the writer's old isinstance-dict
+        # check, leaving evidence CI would reject (issue #562). The shared
+        # schema rule requires the producer fields, so the writer refuses the
+        # manifest and commits nothing.
+        with self.assertRaisesRegex(es.StoreError, "producer must carry"):
+            self.store_files(mutate=lambda m: m["entries"][-1].update(producer={}))
+        self.assert_nothing_committed()
 
     def test_existing_manifest_or_summary_is_never_overwritten(self):
         """Both committed paths are refused up front, dangling symlinks included.
