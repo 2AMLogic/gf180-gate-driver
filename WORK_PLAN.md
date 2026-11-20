@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-20T18:51:47Z (snapshot; compare against live labels)_
+_Generated: 2026-11-20T20:54:02Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -17,7 +17,7 @@ _None._
 
 `loom:very-important` (one counts per workspace); every stage takes these first.
 
-_None._
+- **#560**: Generate nominal and stretch fleet requests for both post-layout drive benches
 
 ## Important
 
@@ -30,18 +30,23 @@ _None._
 Human-approved issues (`loom:issue`) ready for implementation — excluding held (`loom:blocked`/`loom:operator`/`loom:frozen`), `loom:building`, and issues closed by an open `loom:pr` PR (listed under Approved).
 
 - **#556**: UVLO Vbe/dVbe reference: startup-path verification and layout cost estimate (decision record 0024 adoption gates 3 and 4)
+- **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A) *(in curation)*
+- **#560**: Generate nominal and stretch fleet requests for both post-layout drive benches
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#560**: Generate nominal and stretch fleet requests for both post-layout drive benches
+- **#555**: UVLO Vbe/dVbe reference: PDK-resistor re-measurement and local-mismatch Monte Carlo over the 15 corners (DR-0024 adoption gates 2 and 1)
+- **#559**: Qualify the oxide-safety fleet run against both extracted DUT baselines
+- **#562**: Share manifest validation so the evidence writer rejects records CI would refuse
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-_None._
+- **#563**: refactor(evidence): validate klt manifests with the CI schema rule
+- **#564**: sim: record UVLO Vbe/dVbe PDK-resistor pass and local-mismatch fail (DR-0025)
 
 ## Approved (Awaiting Merge)
 
@@ -56,7 +61,6 @@ Issues carrying `loom:curated`.
 - **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)* *(held)*
 - **#555**: UVLO Vbe/dVbe reference: PDK-resistor re-measurement and local-mismatch Monte Carlo over the 15 corners (DR-0024 adoption gates 2 and 1) *(curated)*
 - **#556**: UVLO Vbe/dVbe reference: startup-path verification and layout cost estimate (decision record 0024 adoption gates 3 and 4) *(curated)*
-- **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A) *(curated)*
 - **#559**: Qualify the oxide-safety fleet run against both extracted DUT baselines *(curated)*
 - **#560**: Generate nominal and stretch fleet requests for both post-layout drive benches *(curated)*
 
@@ -73,13 +77,13 @@ _None._
 | Bucket | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Very important | 0 |
+| Very important | 1 |
 | Important | 1 |
-| Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 1 |
-| PRs awaiting review | 0 |
+| Ready (`loom:issue`, net of holds/building/merge-pending) | 3 |
+| In Progress (`loom:building`) | 3 |
+| PRs awaiting review | 2 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 6 |
+| Curated | 5 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
