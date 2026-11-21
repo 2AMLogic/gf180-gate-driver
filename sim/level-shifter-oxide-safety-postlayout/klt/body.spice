@@ -1,0 +1,54 @@
+* level-shifter-oxide-safety-postlayout -- `klt sim` circuit BODY, no-RC DUT
+* (issue #559).
+*
+* Same stimulus and 1 nF reference load as
+* ../testbench/gate_driver_core_level_shifter_oxide_tb.spice (the harness
+* bench behind this facet's records), restated as a `klt sim` circuit body:
+* no models/.lib/.temp/.control/.end -- klt owns those. The DUT is the
+* ACTUAL extracted netlist layout/lvs/gate_driver_core.extracted.spice (the
+* no-RC --combine extraction tb.json's "dut" names, the same bytes the
+* baseline records 20261114-194502-55af608 ran), .include'd here at DECK
+* LEVEL -- not re-wrapped in a .subckt -- because the extracted DUT is flat
+* (its own .SUBCKT wrapper is dropped, layout/lvs/mk_extracted_dut.py T1):
+* deck-level inclusion is what keeps the flat extracted probe names
+* (x1_inb, x1_na, x1_nb, x1_ncb, ANON293..ANON295, IN_DRV) addressable,
+* exactly as the harness deck .include's the DUT fragment ahead of the
+* testbench fragment. Each run's environment.netlist_closure pins the
+* sha256 of the extraction actually used.
+*
+* The two rails are the voltage sources vsup_logic / vsup_drv, swept TIED by
+* index through the request's corners.supply_v (the harness's tied two-rail
+* grid: 2.97/4.5, 3.3/5.0, 3.63/5.5 plus the 3.3/6.0 vdrv-stretch point --
+* sim/README.md). Because supply_v only alters DC sources, the IN pulse is
+* built as a unit pulse scaled by v(VDD_LOGIC) -- the same method
+* signoff Item 5 records for the schematic facet and the #560 drive bodies
+* use; at every corner v(IN) has the same shape and amplitude the harness
+* fragment's pulse(0 {vlogic_val} ...) had.
+*
+* Harness solver settings, carried here as body-level .options cards rather
+* than options.ngspice_options (the batch fleet's runner drops that request
+* field): the manifest's own options (gmin=1e-9, method=gear) plus the
+* harness-wide transient tolerance reltol=1e-4 (sim/harness/runner.py
+* DEFAULT_TRAN_RELTOL, the truncation-error bound the oxide-excursion
+* columns are meaningless without -- see sim/README.md "Transient tolerance
+* convention").
+.options gmin=1e-9
+.options method=gear
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../layout/lvs/gate_driver_core.extracted.spice"
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 0.5n 0.5n 40n 80n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load on the block's final output (spec Sec.3), present so
+* the level shifter drives its real post-layout environment, exactly as the
+* harness bench includes it -- even though this facet's measurements stop at
+* IN_DRV.
+cload OUT GND_DRV 1n

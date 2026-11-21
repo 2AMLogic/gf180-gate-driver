@@ -82,10 +82,50 @@ def envelope(
 ) -> dict[str, Any]:
     """A complete `klt sim` request: the shared envelope around four fields.
 
-    Key order is the order the committed `request-*.json` files carry, and both
+    Key order is the order the committed ``request-*.json`` files carry, and both
     generators write ``json.dumps(..., indent=2)`` straight into the tree, so it
     is part of the committed bytes -- do not reorder.
     """
+    return _request(
+        netlist,
+        corners,
+        {"analysis": dict(analysis)},
+        measurements,
+    )
+
+
+def steps_envelope(
+    netlist: str,
+    corners: Mapping[str, Any],
+    analysis_steps: Sequence[Mapping[str, Any]],
+    measurements: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """The `analysis_steps[]` form of :func:`envelope` (issue #559).
+
+    A request declares exactly one of ``analysis`` / ``analysis_steps``; the
+    step-sequence form is what lets a top-level measurement be *derived* from
+    step-scoped results (``wave.hi / wave.drv``) -- the only batch-portable way
+    to express a figure the harness computes as one ``.meas`` result divided by
+    another. The oxide-safety postlayout generator (issue #559) is its first
+    consumer. ``analysis_steps`` lands in the key position ``analysis`` occupies
+    in :func:`envelope`'s output, so the committed bytes keep one field order
+    across both forms.
+    """
+    return _request(
+        netlist,
+        corners,
+        {"analysis_steps": list(analysis_steps)},
+        measurements,
+    )
+
+
+def _request(
+    netlist: str,
+    corners: Mapping[str, Any],
+    analysis_field: Mapping[str, Any],
+    measurements: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """The shared envelope around the analysis field(s) the caller picked."""
     return {
         "netlist": netlist,
         "engine": ENGINE,
@@ -95,7 +135,7 @@ def envelope(
             "runner_version_check": RUNNER_VERSION_CHECK,
             "capacity_wait_s": CAPACITY_WAIT_S,
         },
-        "analysis": dict(analysis),
+        **dict(analysis_field),
         "measurements": list(measurements),
         "options": {
             "timeout_s": TIMEOUT_S,

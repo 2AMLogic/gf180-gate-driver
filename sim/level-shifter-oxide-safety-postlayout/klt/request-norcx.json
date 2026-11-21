@@ -1,0 +1,263 @@
+{
+  "netlist": "body.spice",
+  "engine": "ngspice",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "tt",
+        "sections": [
+          "typical",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "ff",
+        "sections": [
+          "ff",
+          "res_ff",
+          "bjt_ff",
+          "diode_ff",
+          "moscap_ff",
+          "mimcap_ff"
+        ]
+      },
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_ss",
+          "bjt_ss",
+          "diode_ss",
+          "moscap_ss",
+          "mimcap_ss"
+        ]
+      },
+      {
+        "name": "fs",
+        "sections": [
+          "fs",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "sf",
+        "sections": [
+          "sf",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      -40.0,
+      27.0,
+      125.0
+    ],
+    "supply_v": {
+      "vsup_logic": [
+        2.97,
+        3.3,
+        3.63,
+        3.3
+      ],
+      "vsup_drv": [
+        4.5,
+        5.0,
+        5.5,
+        6.0
+      ]
+    }
+  },
+  "batch": {
+    "runner_version_check": "warn",
+    "capacity_wait_s": 1800
+  },
+  "analysis_steps": [
+    {
+      "name": "wave",
+      "analysis": {
+        "kind": "tran",
+        "args": "20p 200n"
+      },
+      "measurements": [
+        {
+          "name": "dq1",
+          "expr": "vecmax(abs(v(IN)-v(x1_inb)))",
+          "intermediate": true
+        },
+        {
+          "name": "dq2",
+          "expr": "vecmax(abs(v(IN)-v(GND_LOGIC)))",
+          "intermediate": true
+        },
+        {
+          "name": "dq3",
+          "expr": "vecmax(abs(v(IN)-v(VDD_LOGIC)))",
+          "intermediate": true
+        },
+        {
+          "name": "dq4",
+          "expr": "vecmax(abs(v(IN)-v(x1_na)))",
+          "intermediate": true
+        },
+        {
+          "name": "dq5",
+          "expr": "vecmax(abs(v(x1_inb)-v(x1_nb)))",
+          "intermediate": true
+        },
+        {
+          "name": "dq6",
+          "expr": "vecmax(abs(v(x1_inb)-v(GND_LOGIC)))",
+          "intermediate": true
+        },
+        {
+          "name": "dvc1",
+          "expr": "vecmax(abs(v(x1_ncb)-v(ANON293)))",
+          "intermediate": true
+        },
+        {
+          "name": "dvc2",
+          "expr": "vecmax(abs(v(ANON293)-v(ANON294)))",
+          "intermediate": true
+        },
+        {
+          "name": "dvc3",
+          "expr": "vecmax(abs(v(ANON294)-v(ANON295)))",
+          "intermediate": true
+        },
+        {
+          "name": "dvc4",
+          "expr": "vecmax(abs(v(ANON295)-v(IN_DRV)))",
+          "intermediate": true
+        },
+        {
+          "name": "vgate_thinox_max",
+          "expr": "max(max(max(dq1,dq2),max(dq3,dq4)),max(dq5,dq6))",
+          "unit": "V"
+        },
+        {
+          "name": "vna_peak",
+          "expr": "vecmax(v(x1_na))",
+          "unit": "V"
+        },
+        {
+          "name": "vnb_peak",
+          "expr": "vecmax(v(x1_nb))",
+          "unit": "V"
+        },
+        {
+          "name": "vccomp_dev_max",
+          "expr": "max(max(dvc1,dvc2),max(dvc3,dvc4))",
+          "unit": "V"
+        },
+        {
+          "name": "vccomp_stack_max",
+          "expr": "vecmax(abs(v(x1_ncb)-v(IN_DRV)))",
+          "unit": "V"
+        },
+        {
+          "name": "t_plh",
+          "spice": ".meas tran t_plh TRIG v(IN) VAL=1.65 RISE=1 TARG v(IN_DRV) VAL=2.5 RISE=1"
+        },
+        {
+          "name": "t_phl",
+          "spice": ".meas tran t_phl TRIG v(IN) VAL=1.65 FALL=1 TARG v(IN_DRV) VAL=2.5 FALL=1"
+        },
+        {
+          "name": "hi",
+          "spice": ".meas tran hi FIND v(IN_DRV) AT=59n"
+        },
+        {
+          "name": "lo",
+          "spice": ".meas tran lo FIND v(IN_DRV) AT=19n"
+        },
+        {
+          "name": "drv",
+          "spice": ".meas tran drv FIND v(VDD_DRV) AT=59n"
+        }
+      ]
+    }
+  ],
+  "measurements": [
+    {
+      "name": "vgate_thinox_max",
+      "unit": "V",
+      "expr": "wave.vgate_thinox_max",
+      "limits": {
+        "max": 3.63
+      }
+    },
+    {
+      "name": "vna_peak",
+      "unit": "V",
+      "expr": "wave.vna_peak"
+    },
+    {
+      "name": "vnb_peak",
+      "unit": "V",
+      "expr": "wave.vnb_peak"
+    },
+    {
+      "name": "vccomp_dev_max",
+      "unit": "V",
+      "expr": "wave.vccomp_dev_max",
+      "limits": {
+        "max": 6.0
+      }
+    },
+    {
+      "name": "vccomp_stack_max",
+      "unit": "V",
+      "expr": "wave.vccomp_stack_max"
+    },
+    {
+      "name": "t_plh_ns",
+      "unit": "ns",
+      "expr": "wave.t_plh * 1e9"
+    },
+    {
+      "name": "t_phl_ns",
+      "unit": "ns",
+      "expr": "wave.t_phl * 1e9"
+    },
+    {
+      "name": "vout_hi_ratio",
+      "unit": "V/V",
+      "expr": "wave.hi / wave.drv",
+      "limits": {
+        "min": 0.95
+      }
+    },
+    {
+      "name": "vout_lo_ratio",
+      "unit": "V/V",
+      "expr": "wave.lo / wave.drv",
+      "limits": {
+        "max": 0.05
+      }
+    }
+  ],
+  "options": {
+    "timeout_s": 3000,
+    "keep_artifacts": false,
+    "ngspice_init": [
+      "set measureprec=10",
+      "set numdgt=10"
+    ]
+  }
+}
