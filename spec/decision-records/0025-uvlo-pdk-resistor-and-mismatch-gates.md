@@ -63,6 +63,10 @@ gate-2 nominals to ten digits):
   15 corners on both windows**. Pooled yield against the ratified windows:
   **falling 43.1 %** (95 % CI 42.3-43.9), **rising 45.4 %** (CI 44.6-46.2);
   `sigma_to_spec` 0.48 / 0.22. `sample_size.verdict: sufficient` on both.
+  The empirical yields are conditional on value-producing draws — `klt
+  yield` excludes errored samples from the denominator (falling n=14,970
+  nominal / 12,981 control of 15,000; unconditional over the whole draw,
+  43.0 % / 18.2 % — the control is detected under either convention).
 - **Worst-case rising trip including mismatch at 3 sigma: 5.848 V
   (`ss/-40C`, mean 4.245 + 3 x 0.534)** — 1.35 V past the 4.50 V floor; even
   at mean + 1 sigma that corner exceeds the floor, i.e. roughly a third of

@@ -600,7 +600,15 @@ backend, paths and both sim statuses.
   for both trip measurements). Pooled yield against the ratified windows:
   **falling 43.1 %** (Clopper-Pearson 95 % CI 42.3-43.9 %), **rising 45.4 %**
   (CI 44.6-46.2 %). `sigma_to_spec` is 0.48 (falling) / 0.22 (rising) —
-  roughly a 0.25-sigma design against its own spec.
+  roughly a 0.25-sigma design against its own spec. These empirical yields
+  are **conditional on the draws that produced a value, not over the whole
+  draw** — the yield report's own warning: `klt yield` excludes errored
+  samples from the denominator. Falling is 6,455/14,970 nominal — not of the
+  15,000 drawn — and 2,735/12,981 control; rising errored no nominal draws,
+  so 45.4 % is already over all 15,000. Unconditional over the whole draw,
+  the falling yields would be 43.0 % nominal / 18.2 % control; the control
+  is detected under either convention, and the unconditional figures are the
+  more separated, not the less.
 - **Worst-case rising trip including mismatch at 3 sigma: 5.848 V
   (`ss/-40C`, mean 4.245 + 3 x 0.534) — 1.35 V past the 4.50 V low-line
   floor.** Even at mean + 1 sigma (4.779 V) that corner exceeds the floor;
@@ -616,6 +624,12 @@ backend, paths and both sim statuses.
   measurement-out-of-interval) and are counted as errored, not dropped; the
   control's 2,019 errored falling draws (13.5 %, the defect driving draws out
   of the measurable regime) are likewise disclosed in the derivation echo.
+- `hysteresis_v` is measured by the campaign but deliberately skipped by
+  `klt yield`: the campaign spec declares no limits for it (there is no
+  ratified hysteresis window to test — DR-0024's "not a static property"
+  caveat applies), so the yield figures above cover the two trip
+  measurements only; the skip is the yield report's first warning, not an
+  oversight.
 - The mismatch distribution is **not centred on the gate-2 nominal**: pooled
   means sit +57 mV (falling) / +64 mV (rising) above the mismatch-off values,
   consistent with the rail-clipped, nonlinear trip-versus-offset
@@ -635,7 +649,9 @@ backend, paths and both sim statuses.
 - **Known-bad negative control** (`mismatch_scale: 2.5`, independently seeded
   20261121): **detected** on both windows. Control yield 21.1 % (CI 20.4-21.8)
   falling / 21.1 % (CI 20.5-21.8) rising against the nominal's 43.1/45.4 % —
-  the Clopper-Pearson intervals do not overlap. Its sigma scales up
+  the Clopper-Pearson intervals do not overlap. (Its falling yield is over
+  the 12,981 control draws that produced a value — 18.2 % unconditional, per
+  the conditional-yield note above.) Its sigma scales up
   (falling 0.506 -> 0.881, rising 0.543 -> 1.181; sub-2.5 because the extreme
   draws clip against the ramp ends and error out instead of producing
   values), confirming the measured spread is mismatch, not deck or solver
