@@ -476,7 +476,7 @@ and control blocks the gate-1 spec requires).
 passes **15 of 15** corners with the resistor spread live (falling-trip spread
 35 mV; worst-case rising trip 4.138 V clears the 4.50 V low-line floor). But
 under per-instance mismatch the trip windows blow out at **every** corner:
-per-corner trip sigma is **0.48-0.57 V**, the 3-sigma windows fail all 15
+per-corner trip sigma is **0.47-0.57 V**, the 3-sigma windows fail all 15
 corners on both ratified windows, and the pooled yield against the windows is
 **43.1 % (falling) / 45.4 % (rising)**. This is the negative outcome DR-0024
 flagged as "the measurement most likely to overturn the result", recorded here

@@ -59,7 +59,7 @@ control (`mismatch_scale: 2.5`, independently seeded) and an exact determinism
 control (`mismatch_scale: 0`: per-corner sigma exactly 0, means reproduce the
 gate-2 nominals to ten digits):
 
-- Per-corner trip sigma is **0.476-0.570 V**; the 3-sigma windows **fail all
+- Per-corner trip sigma is **0.471-0.570 V**; the 3-sigma windows **fail all
   15 corners on both windows**. Pooled yield against the ratified windows:
   **falling 43.1 %** (95 % CI 42.3-43.9), **rising 45.4 %** (CI 44.6-46.2);
   `sigma_to_spec` 0.48 / 0.22. `sample_size.verdict: sufficient` on both.
