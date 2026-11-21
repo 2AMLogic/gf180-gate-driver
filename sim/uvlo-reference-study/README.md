@@ -20,11 +20,20 @@ process/temperature dependence").
 |---|---|
 | `uvlo_stacked_ref.spice` | #412 candidate. Flat fragment like `design/netlist/uvlo.spice`. |
 | `uvlo_bandgap_ref.spice` | #457 candidate. Same shape; `Vbe`/`dVbe` reference. |
+| `uvlo_bandgap_ref_pdk_r.spice` | #555 variant of the #457 candidate: every ideal `R` replaced by a PDK poly-resistor device (DR-0024 gate 2). |
 | `klt/request-trip.json`, `klt/body-trip.spice` | #412 trip request/body. |
 | `klt/request-bandgap-trip.json`, `klt/body-bandgap-trip.spice` | #457 trip request/body. Copies of the #412 pair; only the `netlist` key and the DUT `.include` differ. |
-| `klt/design.ngspice` | DR-0018 PDK globals, shared unchanged by both. |
+| `klt/request-bandgap-pdk-r-trip.json`, `klt/body-bandgap-pdk-r-trip.spice` | #555 gate-2 trip request/body. Copies of the #457 pair; only the `netlist` key and the DUT `.include` differ. |
+| `klt/campaign-bandgap-pdk-r.json` | #555 gate-1 `klt yield-campaign` spec (seeded mismatch campaign + negative control). |
+| `klt/request-bandgap-pdk-r-trip-mc0.json` | #555 determinism-control request (`mismatch_scale: 0`). |
+| `klt/design.ngspice` | DR-0018 PDK globals, shared unchanged by all three studies. |
 | `envelopes/20261106-453297f-klt-sim-uvlo-stacked-ref-trip.json` | #412 committed `klt sim` report (batch backend, 3 shards). |
 | `envelopes/20261114-38154c7-klt-sim-uvlo-bandgap-ref-trip.json` | #457 committed `klt sim` report (batch backend, 3 shards). |
+| `envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-trip.json` | #555 gate-2 committed `klt sim` report (batch backend, 3 shards). |
+| `envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-trip-mc0.json` | #555 determinism-control `klt sim` MC report (batch backend). |
+| `envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-mc.json` | #555 gate-1 nominal mismatch campaign `klt sim` report (batch backend, 4 shards; 15,000 samples). |
+| `envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-mc-control.json` | #555 known-bad control campaign `klt sim` report (`mismatch_scale: 2.5`). |
+| `envelopes/20261120-e1cfcba-klt-yield-uvlo-bandgap-pdk-r-mc.json` | #555 `klt yield` report over the nominal + control campaigns. |
 
 Both requests carry the same ramp (`tran 10n 40u`, a 0 -> 6 V -> 0 V triangle at
 20 us per edge), the same 5 process x 3 temperature points, and the same
@@ -449,3 +458,266 @@ Note that `klt` resolves `gf180mcuD` from `~/.ciel` while `sim/env.sh` /
 build); the envelope records the ambiguity in `provenance.pdk.ambiguous_sources`.
 The tt/27 C sizing probes were re-run against both installs and give identical
 trips to ten digits, so nothing here depends on which one is read.
+
+---
+
+# Study 3: PDK resistors + local mismatch (issue #555, DR-0024 gates 2 and 1)
+
+Decision record 0024 adopted nothing and named four gates. This study measures
+gate 2 (a re-measurement with PDK resistor devices and the `res_*` corner
+sections live) and gate 1 (a local-mismatch Monte Carlo campaign, combined with
+the corners) on the #457 `Vbe`/`dVbe` candidate. It is evidence only: `design/`,
+`layout/`, `verification/signoff/` and `spec/gate-driver.md` are untouched, and
+no ratified bound moved — the requests are byte-identical copies of the #457
+trip request except the `netlist` key (and, for the campaign, the `monte_carlo`
+and control blocks the gate-1 spec requires).
+
+**Result: gate 2 satisfied, gate 1 NOT satisfied.** The PDK-resistor variant
+passes **15 of 15** corners with the resistor spread live (falling-trip spread
+35 mV; worst-case rising trip 4.138 V clears the 4.50 V low-line floor). But
+under per-instance mismatch the trip windows blow out at **every** corner:
+per-corner trip sigma is **0.47-0.57 V**, the 3-sigma windows fail all 15
+corners on both ratified windows, and the pooled yield against the windows is
+**43.1 % (falling) / 45.4 % (rising)**. This is the negative outcome DR-0024
+flagged as "the measurement most likely to overturn the result", recorded here
+the way 0023 recorded its negative result. The response it points to is a
+design iteration (offset cancellation in the loop amplifier), never a wider
+trip window. See decision record 0025.
+
+## Variant (gate 2 setup)
+
+`uvlo_bandgap_ref_pdk_r.spice`: the #457 netlist with the seven ideal `R`
+elements replaced by PDK devices; every MOS/BJT/MIM line and every node is
+copied unchanged. Geometry is solved at 27 C / `res_typical` so each realized
+nominal equals the ideal-R value (verified against a local `.op` probe to
+2e-5 %):
+
+| Element | Value | Device | `r_width` | `r_length` | Why |
+|---|---|---|---|---|---|
+| `Rsa`, `Rsb` | 275 k | `ppolyf_u` | 1u | 745.433u | the device `layout/gen_gate_driver_core.py` draws (350 ohm/sq typ) |
+| `Rp` | 27 k | `ppolyf_u` | 1u | 72.880u | same |
+| `R1` | 960 k | `ppolyf_u` | 1u | 2603.091u | same |
+| `R2` | 450 k | `ppolyf_u` | 1u | 1220.017u | same |
+| `Rdet` | 20 M | `ppolyf_u_2k_6p0` | 1u | 9580.433u | 57k squares in base `ppolyf_u` is impractical; the 2k ohm/sq high-Rs flavor on field oxide is the one qualified for the **6.0 V area**, and `Rdet` sees the full `VDD_DRV` rail |
+| `Rfb` | 50 M | `ppolyf_u_2k_6p0` | 1u | 23951.412u | same (143k squares in base `ppolyf_u`) |
+
+No series segmentation (`s=1`), no parallel multiplier (`par=1`); the
+third terminal of every resistor is on `GND_DRV`, the same substrate identity
+the NMOS bodies use. All five `ppolyf_u` resistors share `r_width=1u`, so each
+target ratio (`Rsa`/`Rp` = 10.185 for the PTAT gain, `R1`/`R2` for the divider
+gain) is exact and temperature-coefficient-free to first order. The
+`ppolyf_u_2k_6p0` corner spread is the same +/-20 % family behavior as base
+`ppolyf_u` (2000/1600/2400 ohm/sq at `res_typical`/`res_ff`/`res_ss`). Two
+real-device effects the ideal-R candidate did not have are now in the
+measurement: the models' own temperature coefficients (the 2k flavor moves
++12 %/-13 % over -40/125 C, so `Rfb`'s hysteresis contribution varies with
+temperature), and each device's modelled `fox_sub` parasitic substrate
+capacitance (cox 8.85e-5 F/m^2, half at each end — `R1`+`R2` put ~340 fF on
+the divider tap, `Rfb`/`Rdet` ~2.1 pF/~850 fF total), which adds a real RC lag
+against the 20 us ramp. Layout cost of these geometries (`Rfb` is 24 mm of 1u
+poly) is gate 4, issue #556.
+
+## Gate 2 result: PDK resistors, `res_*` sections live (15 corners)
+
+`envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-trip.json`, produced on
+the batch backend (3 shards, all `done`/`exit 0`). DR-0024's ideal-R table
+sits beside it:
+
+| Corner | Falling (V) | Rising (V) | Hysteresis (V) | 0024 ideal-R falling / rising (V) | Status |
+|---|---|---|---|---|---|
+| `tt/-40C` | 3.487 | 4.006 | 0.519 | 3.590 / 3.897 | pass |
+| `tt/27C` | 3.489 | 4.012 | 0.523 | 3.593 / 3.905 | pass |
+| `tt/125C` | 3.478 | 4.014 | 0.535 | 3.588 / 3.903 | pass |
+| `ff/-40C` | 3.506 | 3.933 | 0.428 | 3.563 / 3.848 | pass |
+| `ff/27C` | 3.506 | 3.939 | 0.434 | 3.562 / 3.848 | pass |
+| `ff/125C` | 3.495 | 3.937 | 0.442 | 3.550 / 3.834 | pass |
+| `ss/-40C` | 3.477 | **4.138** | 0.661 | 3.622 / 3.956 | pass |
+| `ss/27C` | 3.484 | 4.111 | 0.627 | 3.634 / 3.975 | pass |
+| `ss/125C` | 3.480 | 4.102 | 0.622 | 3.641 / 3.988 | pass |
+| `fs/-40C` | 3.481 | 3.988 | 0.507 | 3.584 / 3.882 | pass |
+| `fs/27C` | 3.481 | 3.995 | 0.514 | 3.586 / 3.890 | pass |
+| `fs/125C` | 3.471 | 3.996 | 0.525 | 3.581 / 3.887 | pass |
+| `sf/-40C` | 3.494 | 4.028 | 0.534 | 3.596 / 3.914 | pass |
+| `sf/27C` | 3.497 | 4.032 | 0.535 | 3.601 / 3.924 | pass |
+| `sf/125C` | 3.488 | 4.035 | 0.547 | 3.597 / 3.923 | pass |
+
+Counts against the ratified windows (unchanged from 0018/0023/0024):
+
+- Falling in 3.3-3.9 V: **15 of 15**; rising in 3.6-4.2 V: **15 of 15**;
+  0 fail, **0 error** — the envelope's `errored`/`inconclusive` counts are 0.
+- Falling-trip spread **3.471-3.506 V (35 mV)** — tighter than 0024's 91 mV
+  (nominal corner), because the ratio-tracking poly dividers now hold.
+- Worst-case rising trip **4.138 V (`ss/-40C`)** vs the 4.50 V floor:
+  **clears it** by 0.363 V (0024: 0.512 V). Margin to the ratified 4.2 V
+  ceiling narrows to 0.062 V at that corner — the resistor spread and the
+  2k-flavour `Rfb` tempco push `ss` hysteresis to 0.62-0.66 V.
+- Hysteresis 0.428-0.661 V across corners (0024: 0.284-0.348 V): the
+  real-resistor RC lag against the 20 us ramp plus `Rfb`'s device tempco.
+  The 0024 caveat that this harness's hysteresis is not a static property
+  applies a fortiori here.
+
+Reading: the reference mechanism survives real poly resistors. The absolute
+resistor value shifts `Vbe` only logarithmically, the load-bearing ratios
+track in one device flavor, and the trip windows keep 15/15 with the `res_*`
+spread live. Gate 2 is satisfied.
+
+## Gate 1: local-mismatch Monte Carlo (`klt yield-campaign`, batch backend)
+
+Campaign spec `klt/campaign-bandgap-pdk-r.json`: a `klt sim` request over the
+same 15 corners with `monte_carlo: {n: 1000, seed: 20261120, vary: "mismatch",
+seed_scope: "point", mismatch_scale: 1, k_sigma: 3, window_scope:
+"per_corner"}` and a `negative_control: {monte_carlo: {mismatch_scale: 2.5,
+seed: 20261121}}`. `sw_stat_global` stays 0 (the `.lib` corner is the
+global-skew axis, per `sim/README.md`); `mismatch_scale: 1` makes `klt` write
+the gf180mcu override `.param sw_stat_mismatch=1` after the includes, so the
+shared `klt/design.ngspice` default of 0 is superseded. 15,000 samples per
+campaign (nominal + control), dispatched through `klt yield-campaign
+--backend batch --hosts 4`; the yield report's `campaign` block records seeds,
+backend, paths and both sim statuses.
+
+**Result: gate 1 is NOT satisfied.** Per-corner statistics from
+`measurements[].monte_carlo.by_corner[]` (falling / rising):
+
+| Corner | falling mean ± sigma (V) | falling 3-sigma window | rising mean ± sigma (V) | rising 3-sigma window |
+|---|---|---|---|---|
+| `tt/-40C` | 3.571 ± 0.513 | [2.033, 5.109] fail | 4.107 ± 0.542 | [2.481, 5.732] fail |
+| `tt/27C` | 3.533 ± 0.505 | [2.019, 5.047] fail | 4.060 ± 0.540 | [2.440, 5.680] fail |
+| `tt/125C` | 3.538 ± 0.512 | [2.004, 5.073] fail | 4.071 ± 0.547 | [2.429, 5.712] fail |
+| `ff/-40C` | 3.562 ± 0.503 | [2.054, 5.070] fail | 3.989 ± 0.537 | [2.378, 5.600] fail |
+| `ff/27C` | 3.545 ± 0.471 | [2.133, 4.957] fail | 3.977 ± 0.501 | [2.475, 5.479] fail |
+| `ff/125C` | 3.547 ± 0.489 | [2.080, 5.015] fail | 3.988 ± 0.518 | [2.434, 5.541] fail |
+| `ss/-40C` | 3.554 ± 0.515 | [2.010, 5.098] fail | 4.245 ± 0.534 | [2.642, 5.848] fail |
+| `ss/27C` | 3.540 ± 0.512 | [2.005, 5.074] fail | 4.199 ± 0.521 | [2.636, 5.761] fail |
+| `ss/125C` | 3.545 ± 0.524 | [1.974, 5.116] fail | 4.168 ± 0.570 | [2.457, 5.879] fail |
+| `fs/-40C` | 3.551 ± 0.501 | [2.049, 5.053] fail | 4.060 ± 0.552 | [2.403, 5.717] fail |
+| `fs/27C` | 3.553 ± 0.510 | [2.024, 5.082] fail | 4.071 ± 0.543 | [2.442, 5.700] fail |
+| `fs/125C` | 3.497 ± 0.476 | [2.069, 4.925] fail | 4.018 ± 0.507 | [2.496, 5.540] fail |
+| `sf/-40C` | 3.570 ± 0.520 | [2.011, 5.128] fail | 4.125 ± 0.547 | [2.485, 5.765] fail |
+| `sf/27C` | 3.550 ± 0.531 | [1.958, 5.143] fail | 4.099 ± 0.553 | [2.439, 5.759] fail |
+| `sf/125C` | 3.508 ± 0.509 | [1.982, 5.035] fail | 4.044 ± 0.557 | [2.374, 5.715] fail |
+
+- **All 15 corners fail both 3-sigma windows** (`failing_corners` lists all 15
+  for both trip measurements). Pooled yield against the ratified windows:
+  **falling 43.1 %** (Clopper-Pearson 95 % CI 42.3-43.9 %), **rising 45.4 %**
+  (CI 44.6-46.2 %). `sigma_to_spec` is 0.48 (falling) / 0.22 (rising) —
+  roughly a 0.25-sigma design against its own spec.
+- **Worst-case rising trip including mismatch at 3 sigma: 5.848 V
+  (`ss/-40C`, mean 4.245 + 3 x 0.534) — 1.35 V past the 4.50 V low-line
+  floor.** Even at mean + 1 sigma (4.779 V) that corner exceeds the floor;
+  i.e. roughly a third of units at `ss/-40C` would stay locked out at the
+  legitimate low-line rail — 0018 Finding 2's failure mode, resurrected by
+  mismatch. The observed sample extremes are 2.221-5.622 V (falling) and
+  1.477-5.999 V (rising); the 5.999 V draws are clipped by the 6 V ramp
+  ceiling (the release never happens inside the window).
+- Sample counts: 15,000 per campaign; `sample_size.verdict: sufficient` on
+  both windows (falling n=14,970, required >= 9,422; rising n=15,000,
+  required >= 9,521; method normal-approximation at target_ci_halfwidth 0.01).
+  30 nominal-campaign samples (0.2 %) errored (`ngspice_fatal` then
+  measurement-out-of-interval) and are counted as errored, not dropped; the
+  control's 2,019 errored falling draws (13.5 %, the defect driving draws out
+  of the measurable regime) are likewise disclosed in the derivation echo.
+- The mismatch distribution is **not centred on the gate-2 nominal**: pooled
+  means sit +57 mV (falling) / +64 mV (rising) above the mismatch-off values,
+  consistent with the rail-clipped, nonlinear trip-versus-offset
+  characteristic. The per-corner means above are the measured ones.
+
+### Controls (both recorded)
+
+- **Determinism control** (`mismatch_scale: 0`, n=4/corner, seed 20261122,
+  batch backend — `envelopes/20261120-e1cfcba-klt-sim-uvlo-bandgap-pdk-r-trip-mc0.json`):
+  per-corner sigma is **exactly 0.0** on every measurement at all 15 corners,
+  and each per-corner mean reproduces the gate-2 nominal trip **to all ten
+  printed digits** (e.g. `tt/27C` falling 3.4886411725 in both envelopes;
+  `ss/-40C` rising 4.1374740381). Between-corner spread persists with mismatch
+  disabled (pooled falling sigma 0.010 V — the corner grid, not mismatch).
+  `environment.monte_carlo.mismatch_scale` echoes `0.0` with
+  `mismatch_param: sw_stat_mismatch`.
+- **Known-bad negative control** (`mismatch_scale: 2.5`, independently seeded
+  20261121): **detected** on both windows. Control yield 21.1 % (CI 20.4-21.8)
+  falling / 21.1 % (CI 20.5-21.8) rising against the nominal's 43.1/45.4 % —
+  the Clopper-Pearson intervals do not overlap. Its sigma scales up
+  (falling 0.506 -> 0.881, rising 0.543 -> 1.181; sub-2.5 because the extreme
+  draws clip against the ramp ends and error out instead of producing
+  values), confirming the measured spread is mismatch, not deck or solver
+  noise.
+
+### What the campaign did and did not perturb
+
+Quoting the nominal envelope's `environment.monte_carlo.family_mismatch`
+(family list built from the netlist's whole include closure):
+
+- `mosfet` — `active: true` (the `fets_mm` include; per-device `delvto`/
+  `mulu0` under `sw_stat_mismatch`). Every `*_06v0` MOS in the candidate is
+  perturbed. Per DR-0017, `nfet_06v0`/`pfet_06v0` carry **threshold mismatch
+  only** (`par_k = 0`, so `mulu0` = 1) — the loop amplifier's input pair and
+  mirror load vary in `vth`, not in beta.
+- `bipolar` — `active: true` (the `bjt_mc` include; the same switch). The
+  `pnp_05p00x05p00` reference pair is perturbed per instance.
+- `resistor` — **`active: false`**: the poly-resistor subcircuits' mismatch
+  hook (`mis_r`) defaults to a hardcoded 0 and the Pelgrom sigma ships
+  commented out in the vendored deck (klayout-tools #355), regardless of
+  `sw_stat_mismatch`. `ppolyf_u`'s `(1 + mis_r*sw_stat_mismatch)` body term is
+  therefore always 1.
+- `capacitor` — `active: false` (MIM caps reference only global terms;
+  klayout-tools #2898). The 3.2 pF compensation cap `XCC` sees only the
+  `mimcap_*` corner spread.
+
+**Unmeasured residual of gate 1:** because resistors have no local-mismatch
+model, this campaign **cannot exercise `Rsa`/`Rp` or `R1`/`R2` ratio
+matching** — the PTAT gain and the divider gain directly. Gate 1 is NOT
+satisfied on the strength of this run, and the run that failed it did not
+even include those terms; adding them can only widen the spread. `fs`/`sf`
+also still select `bjt_typical`, so BJT process spread is exercised at 9 of
+the 15 points (study-2 Limitations, unchanged).
+
+## Reading
+
+Referred back through the loop, the measured trip sigma of ~0.51-0.54 V
+corresponds to an input-referred loop-amplifier offset sigma of ~15 mV
+(trip = Vref x 3.135, Vref error = Vos x (1 + Rsa/Rp) = 11.19 x Vos, so
+1 mV of offset is ~35 mV of trip). That is exactly the amplification DR-0024
+flagged ("~10 mV of random offset is ~100 mV of reference error"), measured
+rather than estimated — and it is worse than the estimate: the vth-only
+mismatch of the 6 V flavour input pair plus its mirror load and the PNP pair
+sum to ~15 mV. Neither of 0024's two named follow-ups recovers the window
+alone at that offset: dropping `Rsa/Rp` to ~2 (giving up the zero-TC ratio,
+with different compensation) still leaves ~0.14 V of trip sigma = 0.41 V of
+3-sigma window against the 0.30 V falling half-window, while offset
+cancellation to ~2.8 mV input-referred keeps today's ratio inside the windows.
+The numbers therefore point primarily at **offset cancellation in the loop
+amplifier** (larger input pair, or chopping/auto-zero), with the ratio
+re-optimization as a secondary lever — a design iteration for a new issue,
+recorded in decision record 0025. The ratified windows are not moved by this
+study.
+
+## Reproduce
+
+```bash
+cd sim/uvlo-reference-study/klt
+# gate 2: 15-corner PDK-resistor trip grid
+klt sim --backend batch --hosts 3 --wait-for-capacity 600 \
+  --report-out ../envelopes/<date>-<sha>-klt-sim-uvlo-bandgap-pdk-r-trip.json \
+  --format json request-bandgap-pdk-r-trip.json
+# determinism control (mismatch_scale 0)
+klt sim --backend batch --hosts 1 --wait-for-capacity 600 \
+  --report-out ../envelopes/<date>-<sha>-klt-sim-uvlo-bandgap-pdk-r-trip-mc0.json \
+  --format json request-bandgap-pdk-r-trip-mc0.json
+# gate 1: seeded mismatch campaign + known-bad control + yield analysis.
+# klt yield-campaign needs the klt_yield_native extension (pip install
+# 'klayout-tools[yield]'); a throwaway `uvx --from "klayout-tools[yield]"`
+# env runs it without touching the host install.
+uvx --from "klayout-tools[yield]" klt yield-campaign -o .klt/yield-campaign \
+  --backend batch --hosts 4 --format json campaign-bandgap-pdk-r.json
+```
+
+Gate 2 was produced with klt `0.9.3.dev2572+g75c6350d487d` against runner
+`0.9.0`, ngspice `47`, on three `m7i.4xlarge` spot shards (all
+`state=done exit_code=0`). The gate-1 campaign and its control were dispatched
+by `klt yield-campaign` from released klt `0.9.2` (the yield-native
+extension's supported route) on four `c7i.8xlarge` spot shards each; the
+shards' job-level `failed`/`exit 4` status is the units-failed exit code of a
+campaign whose windows fail, not an infrastructure error — every unit is
+accounted for in the committed sample sets (15,000 per campaign, 30 / 2,019
+errored as stated above). `seed_scope: "point"` makes the draws split-stable,
+so re-running the committed spec reproduces the same sample set under klt's
+SHA-256 seed contract.

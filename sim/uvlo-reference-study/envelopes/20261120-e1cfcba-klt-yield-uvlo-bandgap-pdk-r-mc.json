@@ -1,0 +1,414 @@
+{
+  "samples": ".klt/yield-campaign/derived-sample-set.json",
+  "limits": null,
+  "source": {
+    "kind": "sample-set",
+    "netlist": null,
+    "monte_carlo": null,
+    "provenance": {
+      "seed": 20261120,
+      "draws_per_population": 1000
+    },
+    "sample_count": 29970,
+    "native": {
+      "module": "klt_yield_native",
+      "version": "0.1.0"
+    }
+  },
+  "schema_version": 1,
+  "confidence": 0.95,
+  "target_ci_halfwidth": 0.01,
+  "min_samples": 2,
+  "status": "reported",
+  "measurement_count": 2,
+  "measurements": [
+    {
+      "name": "falling_trip_v",
+      "unit": "V",
+      "n": 14970,
+      "errored": 30,
+      "failed_unmeasurable": 0,
+      "censored": 0,
+      "inconclusive": 0,
+      "limits": {
+        "min": 3.3,
+        "max": 3.9
+      },
+      "source_corners": [
+        "tt/novdd/-40C",
+        "tt/novdd/27C",
+        "tt/novdd/125C",
+        "ff/novdd/-40C",
+        "ff/novdd/27C",
+        "ff/novdd/125C",
+        "ss/novdd/-40C",
+        "ss/novdd/27C",
+        "ss/novdd/125C",
+        "fs/novdd/-40C",
+        "fs/novdd/27C",
+        "fs/novdd/125C",
+        "sf/novdd/-40C",
+        "sf/novdd/27C",
+        "sf/novdd/125C"
+      ],
+      "distribution": {
+        "model": "normal",
+        "mean": 3.5442928992875364,
+        "stddev": 0.5061772298520893,
+        "min": 2.2207246,
+        "max": 5.6217381078,
+        "median": 3.4861714534,
+        "skewness": 0.6472184537060813,
+        "excess_kurtosis": 0.4420897427564374,
+        "normality": {
+          "test": "anderson-darling",
+          "statistic": 82.11238555660562,
+          "critical_value": 0.787,
+          "significance": 0.05,
+          "verdict": "rejected"
+        }
+      },
+      "yield": {
+        "empirical": {
+          "method": "clopper-pearson",
+          "estimate": 0.43119572478289914,
+          "confidence": 0.95,
+          "confidence_interval": {
+            "low": 0.42324300554714545,
+            "high": 0.4391751950744266
+          },
+          "n": 14970
+        },
+        "normal": {
+          "method": "normal-delta",
+          "estimate": 0.4442070758804503,
+          "confidence": 0.95,
+          "confidence_interval": {
+            "low": 0.43973074993813727,
+            "high": 0.4486834018227633
+          },
+          "n": 14970
+        },
+        "variance_reduced": null
+      },
+      "capability": {
+        "cp": 0.19755926205772065,
+        "cpk": 0.160874416363956,
+        "cpk_confidence_interval": {
+          "low": 0.15523233247574947,
+          "high": 0.16651650025216252
+        },
+        "sigma_to_spec": 0.482623249091868,
+        "sigma_to_spec_confidence_interval": {
+          "low": 0.4656969974272484,
+          "high": 0.4995495007564876
+        },
+        "limiting_side": "lower"
+      },
+      "sample_size": {
+        "n": 14970,
+        "observed_ci_halfwidth": 0.007966094763640574,
+        "target_ci_halfwidth": 0.01,
+        "required_n": 9422,
+        "required_n_for_target": null,
+        "verdict": "sufficient",
+        "method": "normal-approximation",
+        "variance_reduced": null
+      },
+      "negative_control": {
+        "description": "2.5x per-instance mismatch sigma (mismatch_scale 2.5), independently seeded",
+        "n": 12981,
+        "errored": 2019,
+        "failed_unmeasurable": 0,
+        "censored": 0,
+        "yield": {
+          "empirical": {
+            "method": "clopper-pearson",
+            "estimate": 0.21069255065095138,
+            "confidence": 0.95,
+            "confidence_interval": {
+              "low": 0.2037042591644902,
+              "high": 0.21781077582902603
+            },
+            "n": 12981
+          },
+          "normal": {
+            "method": "normal-delta",
+            "estimate": 0.2615976921035249,
+            "confidence": 0.95,
+            "confidence_interval": {
+              "low": 0.2585298923516997,
+              "high": 0.2646654918553501
+            },
+            "n": 12981
+          },
+          "variance_reduced": null
+        },
+        "nominal_empirical_estimate": 0.43119572478289914,
+        "degradation_detected": true,
+        "verdict": "detected"
+      },
+      "analytic_cross_check": null,
+      "sampling": {
+        "strategy": "plain_random",
+        "replicates": null,
+        "effective_sample_size": null
+      },
+      "status": "reported",
+      "warnings": [
+        "measurement 'falling_trip_v': the sample set is not consistent with a normal distribution (Anderson-Darling A2* = 82.1124 > 0.787); treat the parametric yield estimate and Cpk as indicative only and prefer the empirical estimate",
+        "measurement 'falling_trip_v': 30 sample(s) produced no usable value and were excluded from every statistic below",
+        "measurement 'falling_trip_v': 30 of the 15000 sample(s) drawn (0.2%) produced no usable value, so the empirical yield reported here is conditional on the 14970 sample(s) that produced one -- it is not the fraction of the whole draw that met spec. If a missing value is itself a failure for this measurement (an extraction only defined in-regime, a search that reports no operating point in range, a `.meas` that does not trigger), then counting every errored sample as a failure puts the yield over the whole draw at 0.430333, and the estimate reported here is an upper bound; see docs/cli/yield.md#errored-samples-and-conditional-yield",
+        "measurement 'falling_trip_v': samples were pooled across 15 originating corners; each corner is its own population, so the pooled estimate is a worst-case envelope rather than a distribution anyone sampled"
+      ],
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "rising_trip_v",
+      "unit": "V",
+      "n": 15000,
+      "errored": 0,
+      "failed_unmeasurable": 0,
+      "censored": 0,
+      "inconclusive": 0,
+      "limits": {
+        "min": 3.6,
+        "max": 4.2
+      },
+      "source_corners": [
+        "tt/novdd/-40C",
+        "tt/novdd/27C",
+        "tt/novdd/125C",
+        "ff/novdd/-40C",
+        "ff/novdd/27C",
+        "ff/novdd/125C",
+        "ss/novdd/-40C",
+        "ss/novdd/27C",
+        "ss/novdd/125C",
+        "fs/novdd/-40C",
+        "fs/novdd/27C",
+        "fs/novdd/125C",
+        "sf/novdd/-40C",
+        "sf/novdd/27C",
+        "sf/novdd/125C"
+      ],
+      "distribution": {
+        "model": "normal",
+        "mean": 4.081300654190834,
+        "stddev": 0.5432814107784302,
+        "min": 1.4772693985,
+        "max": 5.9987219291,
+        "median": 4.0174062922000005,
+        "skewness": 0.442860224056449,
+        "excess_kurtosis": 1.2228686786236613,
+        "normality": {
+          "test": "anderson-darling",
+          "statistic": 91.3687571573311,
+          "critical_value": 0.787,
+          "significance": 0.05,
+          "verdict": "rejected"
+        }
+      },
+      "yield": {
+        "empirical": {
+          "method": "clopper-pearson",
+          "estimate": 0.45353333333333334,
+          "confidence": 0.95,
+          "confidence_interval": {
+            "low": 0.44554276942961124,
+            "high": 0.46154192669813054
+          },
+          "n": 15000
+        },
+        "normal": {
+          "method": "normal-delta",
+          "estimate": 0.39864282854621563,
+          "confidence": 0.95,
+          "confidence_interval": {
+            "low": 0.3945052204376235,
+            "high": 0.4027804366548078
+          },
+          "n": 15000
+        },
+        "variance_reduced": null
+      },
+      "capability": {
+        "cp": 0.18406666971490332,
+        "cpk": 0.07282864426810315,
+        "cpk_confidence_interval": {
+          "low": 0.06743100893516851,
+          "high": 0.07822627960103778
+        },
+        "sigma_to_spec": 0.21848593280430945,
+        "sigma_to_spec_confidence_interval": {
+          "low": 0.20229302680550554,
+          "high": 0.23467883880311335
+        },
+        "limiting_side": "upper"
+      },
+      "sample_size": {
+        "n": 15000,
+        "observed_ci_halfwidth": 0.007999578634259652,
+        "target_ci_halfwidth": 0.01,
+        "required_n": 9521,
+        "required_n_for_target": null,
+        "verdict": "sufficient",
+        "method": "normal-approximation",
+        "variance_reduced": null
+      },
+      "negative_control": {
+        "description": "2.5x per-instance mismatch sigma (mismatch_scale 2.5), independently seeded",
+        "n": 14990,
+        "errored": 10,
+        "failed_unmeasurable": 0,
+        "censored": 0,
+        "yield": {
+          "empirical": {
+            "method": "clopper-pearson",
+            "estimate": 0.2114076050700467,
+            "confidence": 0.95,
+            "confidence_interval": {
+              "low": 0.2048944069446817,
+              "high": 0.21803298941237287
+            },
+            "n": 14990
+          },
+          "normal": {
+            "method": "normal-delta",
+            "estimate": 0.19668136176454748,
+            "confidence": 0.95,
+            "confidence_interval": {
+              "low": 0.1944990150393979,
+              "high": 0.19886370848969706
+            },
+            "n": 14990
+          },
+          "variance_reduced": null
+        },
+        "nominal_empirical_estimate": 0.45353333333333334,
+        "degradation_detected": true,
+        "verdict": "detected"
+      },
+      "analytic_cross_check": null,
+      "sampling": {
+        "strategy": "plain_random",
+        "replicates": null,
+        "effective_sample_size": null
+      },
+      "status": "reported",
+      "warnings": [
+        "measurement 'rising_trip_v': the sample set is not consistent with a normal distribution (Anderson-Darling A2* = 91.3688 > 0.787); treat the parametric yield estimate and Cpk as indicative only and prefer the empirical estimate",
+        "measurement 'rising_trip_v': samples were pooled across 15 originating corners; each corner is its own population, so the pooled estimate is a worst-case envelope rather than a distribution anyone sampled"
+      ],
+      "spec_row": "uvlo"
+    }
+  ],
+  "warnings": [
+    "measurement 'hysteresis_v' declares no spec limits and was skipped; supply limits via --limits to include it",
+    "no measurement declared a target_yield, so no yield claim was checked -- the estimates below are reported, never failed",
+    "at least one measurement excluded errored samples from its denominator, so its empirical yield is conditional on the samples that produced a value rather than over the whole draw -- see that measurement's own warnings, and docs/cli/yield.md#errored-samples-and-conditional-yield"
+  ],
+  "campaign": {
+    "spec": "campaign-bandgap-pdk-r.json",
+    "seed": 20261120,
+    "seed_source": "spec",
+    "requested_samples": 1000,
+    "vary": "mismatch",
+    "backend": "batch",
+    "hosts": 4,
+    "sim_status": "error",
+    "corner_count": 15000,
+    "sim_report_path": ".klt/yield-campaign/sample-set.json",
+    "request_path": ".klt/yield-campaign/sim-request.json",
+    "negative_control": {
+      "seed": 20261121,
+      "seed_source": "spec",
+      "description": "2.5x per-instance mismatch sigma (mismatch_scale 2.5), independently seeded",
+      "overrides": {
+        "mismatch_scale": 2.5,
+        "seed": 20261121
+      },
+      "sim_status": "error",
+      "derivation": [
+        {
+          "name": "falling_trip_v",
+          "negative_control": {
+            "source_corners": [
+              "tt/novdd/-40C",
+              "tt/novdd/27C",
+              "tt/novdd/125C",
+              "ff/novdd/-40C",
+              "ff/novdd/27C",
+              "ff/novdd/125C",
+              "ss/novdd/-40C",
+              "ss/novdd/27C",
+              "ss/novdd/125C",
+              "fs/novdd/-40C",
+              "fs/novdd/27C",
+              "fs/novdd/125C",
+              "sf/novdd/-40C",
+              "sf/novdd/27C",
+              "sf/novdd/125C"
+            ],
+            "errored": 2019,
+            "inconclusive": 0,
+            "errored_reported": 2019
+          }
+        },
+        {
+          "name": "rising_trip_v",
+          "negative_control": {
+            "source_corners": [
+              "tt/novdd/-40C",
+              "tt/novdd/27C",
+              "tt/novdd/125C",
+              "ff/novdd/-40C",
+              "ff/novdd/27C",
+              "ff/novdd/125C",
+              "ss/novdd/-40C",
+              "ss/novdd/27C",
+              "ss/novdd/125C",
+              "fs/novdd/-40C",
+              "fs/novdd/27C",
+              "fs/novdd/125C",
+              "sf/novdd/-40C",
+              "sf/novdd/27C",
+              "sf/novdd/125C"
+            ],
+            "errored": 10,
+            "inconclusive": 0,
+            "errored_reported": 10
+          }
+        },
+        {
+          "name": "hysteresis_v",
+          "negative_control": {
+            "source_corners": [
+              "tt/novdd/-40C",
+              "tt/novdd/27C",
+              "tt/novdd/125C",
+              "ff/novdd/-40C",
+              "ff/novdd/27C",
+              "ff/novdd/125C",
+              "ss/novdd/-40C",
+              "ss/novdd/27C",
+              "ss/novdd/125C",
+              "fs/novdd/-40C",
+              "fs/novdd/27C",
+              "fs/novdd/125C",
+              "sf/novdd/-40C",
+              "sf/novdd/27C",
+              "sf/novdd/125C"
+            ],
+            "errored": 2019,
+            "inconclusive": 0,
+            "errored_reported": 2019
+          }
+        }
+      ],
+      "sim_report_path": ".klt/yield-campaign/control/sample-set.json",
+      "request_path": ".klt/yield-campaign/control/sim-request.json",
+      "sample_set_path": ".klt/yield-campaign/derived-sample-set.json"
+    }
+  }
+}
