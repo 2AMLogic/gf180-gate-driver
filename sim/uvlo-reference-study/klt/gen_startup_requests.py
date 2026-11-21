@@ -251,6 +251,27 @@ def deadinit(rail_v, graded_output):
     return meas
 
 
+def settled_1ns(from_s, to_s):
+    """The 1 ns step: settled end state plus the reported startup time."""
+    return [
+        _meas(
+            "nvref_settled",
+            f".meas tran nvref_settled AVG v(nvref) FROM={from_s} TO={to_s}",
+            "V", {"min": NVREF_FLOOR_V}, "uvlo",
+        ),
+        _meas(
+            "lockout_settled",
+            f".meas tran lockout_settled AVG v(lockout) FROM={from_s} TO={to_s}",
+            "V", {"max": LOCKOUT_LEVEL_V}, "uvlo",
+        ),
+        _meas(
+            "t_alive",
+            f".meas tran t_alive WHEN v(nvref)={NVREF_FLOOR_V:g} RISE=1",
+            "s", None, None, "null",
+        ),
+    ]
+
+
 def main():
     tran = lambda args: {"kind": "tran", "args": args}  # noqa: E731
     reqs = {
@@ -275,8 +296,8 @@ def main():
             _settled("18u", "20u"),
         ),
         "request-startup-ramp-1ns.json": base(
-            "body-startup-ramp-1ns.spice", tran("0.05n 10u"),
-            _settled("8u", "10u"),
+            "body-startup-ramp-1ns.spice", tran("0.1n 40u"),
+            settled_1ns("30u", "40u"),
         ),
         # Stuck rails: the dynamic form of 0024's settled table.
         "request-startup-hold-2v0.json": base(

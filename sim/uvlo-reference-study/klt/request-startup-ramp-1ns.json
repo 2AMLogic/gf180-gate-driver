@@ -75,14 +75,14 @@
   },
   "analysis": {
     "kind": "tran",
-    "args": "0.05n 10u"
+    "args": "0.1n 40u"
   },
   "measurements": [
     {
       "name": "nvref_settled",
       "unit": "V",
       "spec_row": "uvlo",
-      "spice": ".meas tran nvref_settled AVG v(nvref) FROM=8u TO=10u",
+      "spice": ".meas tran nvref_settled AVG v(nvref) FROM=30u TO=40u",
       "limits": {
         "min": 1.1
       }
@@ -91,10 +91,16 @@
       "name": "lockout_settled",
       "unit": "V",
       "spec_row": "uvlo",
-      "spice": ".meas tran lockout_settled AVG v(lockout) FROM=8u TO=10u",
+      "spice": ".meas tran lockout_settled AVG v(lockout) FROM=30u TO=40u",
       "limits": {
         "max": 1.5
       }
+    },
+    {
+      "name": "t_alive",
+      "unit": "s",
+      "spice": ".meas tran t_alive WHEN v(nvref)=1.1 RISE=1",
+      "on_unreached": "null"
     }
   ],
   "options": {
