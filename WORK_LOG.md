@@ -8,6 +8,16 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-21
+
+- **PR #566**: feat: add post-layout drive fleet request generators
+- **Issue #560** (closed): Generate nominal and stretch fleet requests for both post-layout drive benches
+
+### 2026-11-20
+
+- **PR #563**: refactor(evidence): validate klt manifests with the CI schema rule
+- **Issue #562** (closed): Share manifest validation so the evidence writer rejects records CI would refuse
+
 ### 2026-11-19
 
 - **Issue #547** (closed): Merge queue: add the merge_group trigger to the required-check workflow(s)
