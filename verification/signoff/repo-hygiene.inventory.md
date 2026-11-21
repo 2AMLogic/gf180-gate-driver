@@ -39,7 +39,7 @@ re-audit of the links):
 | document | sha256 |
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
-| `sim/README.md` | `sha256:8659ba36577da6d9bfc6729cebeda93de188ceb1a5745204a739037820a9815c` |
+| `sim/README.md` | `sha256:bc5733f58db8c69bd71dbf4e54a6b9de15f414a7ec295c6a607c4f4f3c0fb8b5` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
 | `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
@@ -1648,3 +1648,16 @@ entry (`README.md`) both fail it. The new cases live in
 `verification/signoff/test_check_tier_report.py` (klt-gated, so they run in
 CI's signoff job where the pinned build is installed). No simulation,
 netlisting or layout flow was run for this re-audit.
+
+## Re-audit for issue #560 (2026-11-20)
+
+At PR #566 head `ee1efc7f`, the two post-layout drive rows in
+`sim/README.md` link to the batch instructions for the drive and drive-with-UVLO
+facets. I followed both links and checked the four request files in each
+directory against the documented nominal/stretch and no-RC/RC combinations.
+Each circuit body includes the corresponding extracted netlist.
+
+`python3 sim/test_gen_requests.py` passed all 12 tests, including byte-for-byte
+regeneration and comparison with each facet's `tb.json` limits across the
+45 nominal and 15 stretch corners. This verifies the committed inputs. The
+fleet runs and their result envelopes are tracked in issue #485.

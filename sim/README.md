@@ -406,9 +406,9 @@ actually followed by every facet, not just described in the abstract.
 |---|---|---|
 | `smoke-mv-inverter` | `python3 sim/run_corners.py smoke-mv-inverter` | none — harness self-test |
 | `gate-driver-core-drive` | `python3 sim/run_corners.py gate-driver-core-drive` | `spec/gate-driver.md` §3, §2.3 |
-| `gate-driver-core-drive-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §3, §2.3 |
+| `gate-driver-core-drive-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); batch-fleet route via [`klt/`](gate-driver-core-drive-postlayout/klt/README.md) (issue #560), see [below](#post-layout-drive-facets-on-the-batch-fleet-issue-560) | `spec/gate-driver.md` §3, §2.3 |
 | `gate-driver-core-drive-with-uvlo` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo` | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
-| `gate-driver-core-drive-with-uvlo-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); Challenge #5 rails via a temporary `tb.json` `rails`/`stretch`/`checks` override, see decision record 0019 | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
+| `gate-driver-core-drive-with-uvlo-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); Challenge #5 rails via a temporary `tb.json` `rails`/`stretch`/`checks` override, see decision record 0019; batch-fleet route via [`klt/`](gate-driver-core-drive-with-uvlo-postlayout/klt/README.md) (issue #560), see [below](#post-layout-drive-facets-on-the-batch-fleet-issue-560) | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
 | `output-stage-drive` | `python3 sim/run_corners.py output-stage-drive` | `spec/gate-driver.md` §3 |
 | `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
 | `level-shifter-oxide-safety-postlayout` | `python3 sim/run_corners.py level-shifter-oxide-safety-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §4, §2.3, §5 Exception 1 |
@@ -441,3 +441,78 @@ run time can differ record to record as `open_pdks` itself advances. CI
 never installs a PDK or mints a record (`.github/workflows/ci.yml`'s own
 top-of-file comment; `sim/` results are minted by a human or agent, not a
 CI robot, per `CLAUDE.md`'s append-only-evidence convention).
+
+## Post-layout drive facets on the batch fleet (issue #560)
+
+The two post-layout drive facets were originally runnable only through
+`sim/run_corners.py` (direct ngspice on the local host) — exactly what parked
+[#510](https://github.com/2AMLogic/gf180-gate-driver/issues/510) and
+[#485](https://github.com/2AMLogic/gf180-gate-driver/issues/485): their
+acceptance criteria need a full re-run of the 60-point matrix, too heavy for a
+dispatch worker and impossible to hand the Spot batch fleet without a request.
+The route (#560, the drive deliverable of
+[#558](https://github.com/2AMLogic/gf180-gate-driver/issues/558)) is the same
+`klt sim` request pattern the schematic facets already use: each of
+`sim/gate-driver-core-drive-postlayout/klt/` and
+`sim/gate-driver-core-drive-with-uvlo-postlayout/klt/` carries a deterministic
+`gen_requests.py`, four committed requests (nominal / 6 V stretch × no-RC /
+RC extracted DUT) and a README with the exact invocation.
+
+Conventions the two generators share with the schematic item-5 route —
+`verification/signoff/README.md` § "Item 5" records the same differences for
+that facet:
+
+- **Corner sharding is the tier mechanism.** `klt sim` limits are min/max only
+  and apply to every corner of a request, so the 15 6 V stretch rows — the
+  only points the stretch tier applies to (see "Two-tier checks" above) — are
+  their own request; the 45 nominal points keep the nominal bounds. The union
+  is the harness grid exactly, each point once, and no corner-scoped decision
+  record is imported: the post-layout `tb.json`s carry no DR-0016 / DR-0020
+  exception, so the stretch sink bound is 1 A even at ss/sf 125 °C and the
+  nominal source bound is 0.5 A even at ss / −40 °C / low line.
+- **Timing thresholds are rail-normalised, not swing-relative.** The harness
+  manifests time 10/50/90 % crossings against each run's own measured swing
+  (`let outlo = minimum(v(OUT)) + 0.1*outswing`); the request bodies monitor
+  rail-normalised copies (`vout_n = v(OUT)/v(VDD_DRV)`) so the `.meas` cards
+  carry literal 0.1/0.5/0.9 thresholds that are right at every rail point.
+  Wherever OUT actually switches the two give the same number; at a
+  UVLO-locked corner the difference is visible by design — a block that never
+  switches produces **no value** (a failing, honestly-recorded corner, as on
+  the schematic route; draft DR-0022 there) instead of the swing-relative
+  score the harness would take on a glitch. The UVLO facet's three 200 ns
+  `FIND` probes (`uvlo_lockout_at_in_high`, `uvlo_vout_at_in_high_v`,
+  `uvlo_vdrv_at_in_high_v`) are crossing-free and return a value at every
+  corner, locked included — that is how a locked corner is told apart from a
+  switching one in the envelope.
+- **The DUT is the actual extracted file, included flat.** `body.spice`
+  includes `layout/lvs/gate_driver_core.extracted.spice` and `body-rc.spice`
+  the `--parasitics` RC variant, both at deck level (no `.subckt` re-wrap):
+  that is what keeps the flat extracted probe names (`v(x2_n1)`..`v(x2_n5)`,
+  `v(x3_lockout)`) addressable, exactly as the harness deck includes the DUT
+  fragment ahead of the testbench. Each envelope's
+  `environment.netlist_closure` therefore pins the sha256 of the extraction
+  the run actually used.
+- **Stimulus, load and solver settings are the harness bench's.** Same IN
+  pulse shape (20 ns delay, 1 ns edges, 300 ns high, 700 ns period, built
+  from a unit pulse scaled by `v(VDD_LOGIC)` because `supply_v` alters DC
+  sources only), same 1 nF reference load behind the same-polarity `vimeas`
+  ammeter, same harness-default `reltol=1e-4` as a body-level `.options`
+  card (the batch runner drops `options.ngspice_options`).
+
+Every check of the two `tb.json` manifests (20 for the drive facet, 23 with
+UVLO) is carried as a request limit at its tier-appropriate bound, and
+`sim/test_gen_requests.py` asserts both that the requests still equal the
+manifests and that the generators still reproduce the committed request
+bytes. No measurement of these two facets had to stay on the harness: none is
+derived from another `.meas` result (the batch-backend gap
+[2AMLogic/klayout-tools#4902](https://github.com/2AMLogic/klayout-tools/issues/4902)),
+each is either a raw `.meas` card or a `vecmax`/`vecmin` expression over
+waveform vectors.
+
+**Envelope citation rule (#558).** A post-layout record that runs through this
+route commits each `klt sim` report append-only under the facet's
+`klt/envelopes/` and cites it by filename; the record's netlist-provenance
+line still states the GDS sha256 and the DUT sha256 it ran, the latter read
+from the envelope's `environment.netlist_closure`. The live campaigns and the
+records themselves are #485's to mint; this section defines the route and the
+citation rule they will use.
