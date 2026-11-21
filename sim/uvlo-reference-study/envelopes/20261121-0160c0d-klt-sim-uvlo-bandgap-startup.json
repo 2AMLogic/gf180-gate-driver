@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "status": "fail",
+  "request_count": 12,
+  "max_in_flight": 4,
+  "submitted": 12,
+  "refused": 0,
+  "refused_codes": [],
+  "requests": [
+    {
+      "index": 0,
+      "request": "request-startup-ramp-slow.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-2f082673ab85",
+      "job_ids": [
+        "klt-sim-2f082673ab85"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-ramp-slow/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-2f082673ab85",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "request": "request-startup-ramp-harness.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-ff6f3af85594",
+      "job_ids": [
+        "klt-sim-ff6f3af85594"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-ramp-harness/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-ff6f3af85594",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "request": "request-startup-ramp-fast.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-1bca3775a179",
+      "job_ids": [
+        "klt-sim-1bca3775a179"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-ramp-fast/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-1bca3775a179",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "request": "request-startup-ramp-vfast.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-7b956a3357de",
+      "job_ids": [
+        "klt-sim-7b956a3357de"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-ramp-vfast/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-7b956a3357de",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "request": "request-startup-ramp-1ns.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-8401612804ed",
+      "job_ids": [
+        "klt-sim-8401612804ed"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-ramp-1ns/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-8401612804ed",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "request": "request-startup-hold-2v0.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-21c937bbd37c",
+      "job_ids": [
+        "klt-sim-21c937bbd37c"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-hold-2v0/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-21c937bbd37c",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "request": "request-startup-hold-3v0.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-4d3aaf3f685f",
+      "job_ids": [
+        "klt-sim-4d3aaf3f685f"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-hold-3v0/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-4d3aaf3f685f",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "request": "request-startup-hold-5v0.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-c1edd2e49418",
+      "job_ids": [
+        "klt-sim-c1edd2e49418"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-hold-5v0/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-c1edd2e49418",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "request": "request-startup-brownout.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-640df855846c",
+      "job_ids": [
+        "klt-sim-640df855846c"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-brownout/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-640df855846c",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "request": "request-startup-deadinit-2v0.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-d1e49d02aca5",
+      "job_ids": [
+        "klt-sim-d1e49d02aca5"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-deadinit-2v0/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-d1e49d02aca5",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "request": "request-startup-deadinit-5v0.json",
+      "status": "pass",
+      "exit_code": 0,
+      "job_id": "klt-sim-f5d5ed913950",
+      "job_ids": [
+        "klt-sim-f5d5ed913950"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-deadinit-5v0/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-f5d5ed913950",
+          "last_state": "done",
+          "interrupted_observations": 0
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "request": "request-startup-deadinit-2v0-nokick.json",
+      "status": "fail",
+      "exit_code": 3,
+      "job_id": "klt-sim-7de9c8b60b67",
+      "job_ids": [
+        "klt-sim-7de9c8b60b67"
+      ],
+      "report": "../envelopes/20261121-0160c0d-uvlo-bandgap-startup/request-startup-deadinit-2v0-nokick/report.json",
+      "error": null,
+      "shards": [
+        {
+          "job_id": "klt-sim-7de9c8b60b67",
+          "last_state": "failed",
+          "interrupted_observations": 0
+        }
+      ]
+    }
+  ]
+}

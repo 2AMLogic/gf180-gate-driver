@@ -11,6 +11,7 @@ Two candidates have been measured, both against the DR-0018 baseline:
 |---|---|---|---|
 | 3-diode stack | #412 (record 0023) | 3 diode-connected `nfet_06v0` in series: `N x Vgs` | **negative** — 2 of 15 corners, spread unchanged |
 | `Vbe`/`dVbe` core | #457 (this study) | substrate PNPs `pnp_05p00x05p00`: junction `Vbe` + PTAT `dVbe` | **positive** — 15 of 15 corners, falling-trip spread 91 mV |
+| same, adoption gates 3 + 4 | #556 (this study) | — | **gate 3 satisfied** (startup grid 165/165 units pass, `MKICK`-deleted control detected as failing); **gate 4 costed** (the 50 MOhm `Rfb` dominates; high-sheet flavour proposal below) |
 
 Read the two sections below in that order; the second is the follow-up record
 0023's Consequences section asks for ("a reference with weaker
@@ -20,11 +21,15 @@ process/temperature dependence").
 |---|---|
 | `uvlo_stacked_ref.spice` | #412 candidate. Flat fragment like `design/netlist/uvlo.spice`. |
 | `uvlo_bandgap_ref.spice` | #457 candidate. Same shape; `Vbe`/`dVbe` reference. |
+| `uvlo_bandgap_ref_nokick.spice` | #556 gate-3 negative control: the #457 candidate with exactly `XMKICK` deleted. |
 | `klt/request-trip.json`, `klt/body-trip.spice` | #412 trip request/body. |
 | `klt/request-bandgap-trip.json`, `klt/body-bandgap-trip.spice` | #457 trip request/body. Copies of the #412 pair; only the `netlist` key and the DUT `.include` differ. |
+| `klt/gen_startup_requests.py` | #556 gate-3 generator: writes the twelve `request-startup-*.json` over `sim/harness/klt_request.py` (the issue #441 pattern — no third copy of the scaffolding). |
+| `klt/body-startup-*.spice`, `klt/request-startup-*.json` | #556 gate-3 startup grid: twelve stimulus request/body pairs (five ramp rates, three stuck rails, brown-out, two dead-init points, one negative control). |
 | `klt/design.ngspice` | DR-0018 PDK globals, shared unchanged by both. |
 | `envelopes/20261106-453297f-klt-sim-uvlo-stacked-ref-trip.json` | #412 committed `klt sim` report (batch backend, 3 shards). |
 | `envelopes/20261114-38154c7-klt-sim-uvlo-bandgap-ref-trip.json` | #457 committed `klt sim` report (batch backend, 3 shards). |
+| `envelopes/20261121-0160c0d-klt-sim-uvlo-bandgap-startup.json` (+ `20261121-0160c0d-uvlo-bandgap-startup/`) | #556 gate-3 committed `klt sim --batch-set` evidence: one aggregate envelope over twelve member reports (batch backend, 12 jobs, all done exit 0 — the negative-control member's job exit 3 is its graded FAIL, by design). |
 
 Both requests carry the same ramp (`tran 10n 40u`, a 0 -> 6 V -> 0 V triangle at
 20 us per edge), the same 5 process x 3 temperature points, and the same
@@ -449,3 +454,312 @@ Note that `klt` resolves `gf180mcuD` from `~/.ciel` while `sim/env.sh` /
 build); the envelope records the ambiguity in `provenance.pdk.ambiguous_sources`.
 The tt/27 C sizing probes were re-run against both installs and give identical
 trips to ten digits, so nothing here depends on which one is read.
+
+---
+
+# Gate 3: startup path (issue #556)
+
+Decision record 0024 gates adoption of the `Vbe`/`dVbe` candidate on, among
+other things, "a signoff plan for the startup path", because the core has a
+degenerate zero-current operating point whose failure direction is the unsafe
+one: measured at 27 C with the kicker deleted and the core initialised dead,
+`lockout` stays **low** — the UVLO releases `OUT` at 2 V and 3 V (the table in
+"Startup and the zero-current state" above). That measurement was six local
+ngspice rows at 27 C. This section is the committed plan and the committed
+fleet evidence for it; the result is recorded in decision record
+`spec/decision-records/0026-uvlo-vbe-reference-startup-and-layout-cost.md`.
+
+## The plan
+
+**Pass criterion, tied to the ratified windows of decision record 0001
+Decision 4** (falling trip 3.3-3.9 V, rising trip 3.6-4.2 V; neither window is
+moved): `lockout` must be asserted, and `OUT` unreleased, whenever `VDD_DRV`
+is below the falling-trip window's **3.3 V floor**, on every stimulus and at
+every one of the 15 process x temperature points. Operationally, graded by
+`klt sim` limits on three quantities:
+
+1. **Release level** — on every power-on ramp and re-ramp, the release
+   decision (the `lockout` node falling through the harness's fixed 1.5 V
+   absolute level, the same literal the trip requests use) must occur at
+   `VDD_DRV` >= 3.3 V. A UVLO that never asserts during a ramp releases only
+   at the rail the ramp parks at, so on the fast ramps (below) the same
+   safety property is graded on the settled end state instead.
+2. **Settled output state below the window** — on every stimulus that parks
+   below 3.3 V, settled `lockout` >= 1.5 V and `OUT` <= 0.5 V (the response
+   row's own low proxy, `OUT_LOW_V` in `sim/uvlo-trip-verification/klt/
+   gen_requests.py`).
+3. **Core alive** — settled `V(nvref)` >= 1.1 V against the measured 15-corner
+   settled range 1.216-1.241 V (> 100 mV margin); the dead core reads
+   0.117-0.373 V (record 0024), so the floor separates the two states by more
+   than a factor of three.
+
+**Stated, not graded:** the pre-assert power-up interval. From cold, `lockout`
+is a digital-chain output that cannot be driven high before the chain has
+supply; every UVLO has an interval at rail startup where `lockout` reads low
+trivially (the DR-0018 baseline included — its reference node also starts at
+0 V with its tail off). The plan bounds it per corner by reporting `assert_v`
+(the rail level at which `lockout` first rises through 1.5 V on the slow
+ramps) instead of grading it: measured 1.501-1.613 V, far below the 3.3 V
+floor, so the comparator decides "locked out" while the rail is still below
+the window on every corner. The hazard the criterion targets is a *persisting*
+wrongful release — the 0024 failure — and that is what items 1-3 grade.
+
+**Conditions that must be shown to start** (each a request/body pair under
+`klt/`, all 15 corners unless stated, `MKICK` present unless stated):
+
+| Stimulus | Body/request | What it shows |
+|---|---|---|
+| 0 -> 6 V ramp, 200 us per edge | `ramp-slow` | quasi-static startup; graded on release + assert crossings |
+| 0 -> 6 V ramp, 20 us per edge | `ramp-harness` | the trip envelopes' own ramp rate; same grades |
+| 0 -> 6 V ramp, 2 us per edge | `ramp-fast` | core settles while the rail crosses the window |
+| 0 -> 6 V ramp, 200 ns per edge | `ramp-vfast` | comparator cannot assert inside the ramp; settled grades |
+| 0 -> 6 V step, 1 ns edge | `ramp-1ns` | `body-response.spice`'s own edge rate from cold; settled grades + reported `t_alive` |
+| 0 -> 2.0 V ramp, hold | `hold-2v0` | stuck below the window at 0024's failure level |
+| 0 -> 3.0 V ramp, hold | `hold-3v0` | 0024's middle row |
+| 0 -> 5.0 V ramp, hold | `hold-5v0` | normal rail: released with core alive |
+| 6 V -> 1.5 V in 1 ns, hold, re-ramp | `brownout` | partial discharge below the core's regulation headroom, then recovery |
+| fixed 2.0 V, dead-init (`.ic nfb=2.0` + `uic`) | `deadinit-2v0` | 0024's adverse initial condition; restart + output grades |
+| fixed 5.0 V, dead-init (`.ic nfb=5.0` + `uic`) | `deadinit-5v0` | 0024's 5 V probe; restart grade |
+| same as `deadinit-2v0`, `XMKICK` deleted | `deadinit-2v0-nokick` | **negative control**, tt/27 C only: must FAIL the same checks |
+
+The dead-initialised runs are expressed natively through
+`options.initial_conditions` (`{match: {}, values: {nfb: <rail>}}`, rendered
+by `klt` as a file-scope `.ic` card plus `uic`, klayout-tools #3881) — the
+DUT netlists are not edited to force a start state. The `MKICK`-deleted
+control uses a separate DUT copy, `uvlo_bandgap_ref_nokick.spice`, whose only
+delta from the candidate is the deleted `XMKICK` instance; it carries the
+same measurements and limits as `deadinit-2v0`.
+
+**BJT-corner coverage, stated limit (inherited, not closed here):** the
+requests inherit the #412 corners block (AC2 of study 2), so `fs` and `sf`
+select `bjt_typical` — BJT process spread is exercised at 9 of the 15 points,
+MOS spread at all 15. For gate 3 this limits the `assert_v`/`t_alive`
+ absolutes (a spread BJT moves `Vbe`, hence the start level and time); it
+does not affect the direction of any graded check, all of which are bounded
+by margins (>= 0.44 V on the release level, >= 0.5 V on the settled states)
+far larger than the +11/-8 mV of `Vbe` the `bjt_ff`/`bjt_ss` sections carry.
+Carried as a limit of this gate's result rather than re-cornered.
+
+## Result
+
+All 165 units of the eleven `MKICK`-present members **pass** at every corner;
+the negative control **fails** its three graded checks. Committed evidence:
+`envelopes/20261121-0160c0d-klt-sim-uvlo-bandgap-startup.json` over the twelve
+member reports in `envelopes/20261121-0160c0d-uvlo-bandgap-startup/` (batch
+backend, 12 jobs, all `done`/exit 0 except the control member, whose exit 3
+*is* its graded FAIL).
+
+Release and assert levels on the slow ramps (release graded >= 3.3 V;
+`assert_v` reported), and the cold-start time constant from the 1 ns step:
+
+| Corner | 200 us: release | 200 us: assert | 20 us: release | 20 us: assert | 1 ns: `t_alive` |
+|---|---|---|---|---|---|
+| `tt/-40C` | 3.799 | 1.501 | 3.897 | 1.511 | 0.62 us |
+| `tt/27C` | 3.805 | 1.501 | 3.905 | 1.513 | 0.68 us |
+| `tt/125C` | 3.801 | 1.502 | 3.903 | 1.516 | 0.71 us |
+| `ff/-40C` | 3.758 | 1.501 | 3.848 | 1.507 | **13.34 us** |
+| `ff/27C` | 3.756 | 1.501 | 3.848 | 1.509 | 2.24 us |
+| `ff/125C` | 3.741 | 1.501 | 3.834 | 1.511 | 1.23 us |
+| `ss/-40C` | 3.849 | 1.502 | 3.956 | 1.548 | 0.64 us |
+| `ss/27C` | 3.866 | 1.502 | 3.975 | 1.534 | 0.65 us |
+| `ss/125C` | 3.877 | 1.502 | 3.988 | 1.526 | 0.70 us |
+| `fs/-40C` | 3.793 | 1.501 | 3.882 | 1.514 | 0.66 us |
+| `fs/27C` | 3.799 | 1.502 | 3.890 | 1.517 | 1.16 us |
+| `fs/125C` | 3.794 | 1.613 | 3.887 | 1.520 | 0.81 us |
+| `sf/-40C` | 3.806 | 1.501 | 3.914 | 1.509 | 0.62 us |
+| `sf/27C` | 3.814 | 1.501 | 3.924 | 1.511 | 0.64 us |
+| `sf/125C` | 3.811 | 1.501 | 3.923 | 1.513 | 0.69 us |
+
+- Release level (graded): 3.741-3.988 V — every corner >= 3.3 V with >=
+  0.44 V of margin. The 20 us values reproduce study 2's committed rising
+  trips exactly (e.g. `ff/-40C` 3.848 vs 3.848, `ss/125C` 3.988 vs 3.988) —
+  the release-on-startup *is* the rising trip, cross-validated.
+- Assert level (reported): 1.501-1.613 V — the UVLO asserts while the rail is
+  still below 1.7 V at every corner, bounding the pre-assert interval.
+- Fast ramps (2 us, 200 ns, 1 ns): settled `V(nvref)` 1.2156-1.2392 V and
+  settled `lockout` low (released — correct at the 6 V park) at all 45 units.
+  Cold-start time from the 1 ns step: 0.62-13.34 us, slowest at `ff/-40C`.
+- Stuck rails, below the window (2.0 V and 3.0 V): settled `lockout` holds
+  the rail exactly (min 2.000 V / 2.9996 V over the settled window; graded
+  >= 1.5 V), `OUT` <= 20.7 uV (graded <= 0.5 V), core alive 1.216-1.241 V —
+  the dynamic, 15-corner form of 0024's 2 V and 3 V rows.
+- Stuck 5.0 V rail: `lockout` never leaves low (max 3.1e-8 V) with the core
+  alive — released, which is correct above every corner's rising trip.
+- Brown-out (6 -> 1.5 V in 1 ns, hold 50 us, re-ramp): `OUT` <= 24.2 uV
+  through the hold (graded <= 0.5 V), re-ramp release 3.815-3.967 V (graded
+  >= 3.3 V), core alive again after the re-ramp. At the 1.5 V park
+  `lockout` sits at the rail (reported `hold_lockout_min` 1.4999...-1.5 V)
+  — exactly why the graded discriminator there is `OUT`, not `lockout`: at a
+  1.5 V rail the inverters' own high level leaves no margin over the 1.5 V
+  measurement level, while a wrongful release pulls `OUT` to the rail
+  (the control shows 2.0 V) and cannot miss the 0.5 V bound.
+- Dead-initialised core (`.ic nfb` = rail + `uic`): restarts in 0.35-1.01 us
+  at 2.0 V and 0.14-0.55 us at 5.0 V, then satisfies the same settled grades
+  as the power-on cases at all 15 corners — 0024's adverse initial condition
+  is cleared by `MKICK` everywhere, not just at 27 C.
+
+**Negative control (deterministic, from 0024):** the `MKICK`-deleted,
+dead-initialised 2.0 V case at tt/27 C — the exact condition 0024 measured by
+hand — run through the *same* measurements and limits as the passing
+`deadinit-2v0` member. It **fails all three graded checks**:
+`nvref_settled` = 0.198 V (< 1.1), `lockout_min` = 2.7e-6 V (< 1.5),
+`out_max` = 1.99983 V (> 0.5 — `OUT` pulled to the rail), with `t_alive`
+reported `not_reached`. The committed checks detect the known-bad circuit.
+
+**One disclosed re-run:** the 1 ns member was first submitted with a 10 us
+settle window and graded `ff/-40C` at `nvref` = 0.62 V — mid-startup, not a
+start failure (the 200 ns member shows the same corner settled at 1.216 V by
+18-20 us). The window was widened to 40 us and the whole twelve-member grid
+re-run; the committed envelope is the re-run, and the first run's envelope
+was discarded uncommitted. The widen is recorded in the body's own header.
+
+**No `klt` capability gap was hit.** The plan needed exactly the three things
+the issue anticipated might be missing, and all are native: dead-initialised
+`.ic`/`uic` (`options.initial_conditions`, klayout-tools #3881), an
+expected-fail negative control (ordinary limits on a known-bad DUT copy), and
+a ramp-rate sweep (one request per rate, fanned out with `--batch-set`). No
+local ngspice grid was run for the committed evidence, and no request JSON
+was hand-copied — all twelve are generator output pinned byte-for-byte by
+`sim/test_gen_requests.py`.
+
+## Reading
+
+With `MKICK` present, the core starts under every adverse condition the plan
+covers: all 15 corners, ramp rates from quasi-static to a 1 ns cold step, a
+1 ns deep brown-out to below the core's regulation headroom, and 0024's
+dead initial condition. The unsafe direction 0024 measured is real but
+entirely carried by `MKICK`: delete it and the same checks fail loudly on a
+dead core that releases `OUT` at 2 V. So gate 3's answer is: **the startup
+path is signable, on the condition that `MKICK` (a single minimum-size
+nfet, `W=2u L=2u`) is treated as a safety element** — a single open in its
+path silently disables the UVLO. A design change that adopts this reference
+should carry this grid (and the control) as a regression and should consider
+the fail-safe default 0024 suggests (hold `lockout` high until the core is
+confirmed alive) if `MKICK` reliability cannot be argued at layout time;
+that hardening is not required by the measured grid and is not proposed here.
+
+---
+
+# Gate 4: layout cost (issue #556)
+
+Drawn-area estimate for the candidate's additions over the present UVLO, per
+device class. Sources: PDK GDS `libs.ref/gf180mcu_fd_pr/gds/
+pnp_05p00x05p00.gds` (bbox 8.28 x 8.28 um, measured at dbu 1 nm); the
+candidate netlist's own `c_width`/`c_length`; `layout/gen_gate_driver_core.py`'s
+resistor constants (350 ohm/sq `ppolyf_u`, 0.42 um unit width, `res_array`
+fold: units <= 80 um, 8 per row, 0.5 um unit spacing); the added MOS cells
+drawn by `klt gen mos_array` at the same params shape the layout generator
+uses; and the committed `layout/gate_driver_core.provenance.json` /
+`klt stats layout/gate_driver_core.gds` for the present-day comparison.
+
+| Added class | Count | Unit size | Unit area | Total |
+|---|---|---|---|---|
+| `pnp_05p00x05p00` (Q1 m=1, Q2 m=8) | 9 | 8.28 x 8.28 um | 68.6 um2 | **617 um2** |
+| `cap_mim_2f0_m4m5_noshield` (`XCC`) | 1 | 40 x 40 um | 1600 um2 | **1600 um2** |
+| small-signal MOS (MP1-3, MNIB, MAMP1/2, MALP1/2, MATAIL, MSENSE, MKICK) | 11 | W2-10 um, L=2 um | 31.8-75.0 um2 | **595 um2** |
+
+The eleven MOS cells, drawn (`klt gen mos_array`, `gf180mcuD`): pfet W5 L2
+48.5 um2 x5, nfet W5 L2 48.0 um2 x2, nfet W10 L2 75.0 um2 x3, nfet W2 L2
+(MKICK) 31.8 um2. The candidate also *deletes* the baseline's `MREF`
+(-51.9 um2, from the committed provenance).
+
+Resistors, as base `ppolyf_u` (350 ohm/sq) at the layout generator's 0.42 um
+unit width — strip length = R * w / rho, strip area = length * w, and a
+folded-block estimate at the fold overhead the committed GDS itself realises
+(the 16 MOhm `Rfb` block draws 16057 um2 for 8064 um2 of poly, 1.99x; the
+800k `Rref` 2.04x — so ~2.0x throughout):
+
+| Resistor | Value | Poly length | Units (<= 80 um) | Strip area | Block est. (~2x) |
+|---|---|---|---|---|---|
+| `Rsa` | 275 k | 330 um | 5 x 66 um | 138.6 um2 | 277 um2 |
+| `Rsb` | 275 k | 330 um | 5 x 66 um | 138.6 um2 | 277 um2 |
+| `Rp` | 27 k | 32.4 um | 1 | 13.6 um2 | 27 um2 |
+| `R1` | 960 k | 1152 um | 16 x 72 um | 483.8 um2 | 968 um2 |
+| `R2` | 450 k | 540 um | 9 x 60 um | 226.8 um2 | 454 um2 |
+| `Rdet` | 20 M | 24000 um | 300 x 80 um | 10080 um2 | **20160 um2** |
+| `Rfb` | 50 M | 60000 um | 750 x 80 um | 25200 um2 | **50400 um2** |
+
+**Totals against the present UVLO and the block outline:**
+
+| | Area |
+|---|---|
+| candidate additions, resistors (blocks) | ~72.6k um2 |
+| candidate additions, PNP + MIM + MOS | ~2.8k um2 |
+| **candidate additions, total** | **~75.4k um2** |
+| present UVLO (sum of committed blocks: `MPD` 15315 + ten small devices 679 + four resistor blocks 17995) | ~34.0k um2 |
+| block outline (`klt stats layout/gate_driver_core.gds` bbox 1774.46 x 813.18 um) | 1442.6k um2 |
+
+So the candidate as measured would add **~2.2x the present UVLO's entire
+footprint** (~5.2 % of the block outline), and **the 50 MOhm `Rfb` alone
+(50.4k um2) is 67 % of that — larger than the whole present UVLO**. Together
+the two rail-spanning megaohm resistors (`Rfb` + `Rdet`) are ~94 %. Everything
+else — nine PNPs, the MIM cap, eleven MOS, five precision resistors — fits in
+~4.9k um2, less than a third of the present UVLO.
+
+## What limits the 50 MOhm, and the smaller-area proposal
+
+The value is set by the hysteresis sizing on the 1.23 V reference at the
+divider's ~3.5 uA operating point; the limit is the **sheet resistance
+available**: base `ppolyf_u` at 350 ohm/sq makes 50 MOhm 143k squares, i.e.
+60 mm of 0.42 um poly (the issue's own arithmetic). Lowering the value
+instead would need a proportionally larger divider current (more Iq) or less
+hysteresis — both change measured behaviour and are out of scope here.
+
+**Proposal (analysis only, no layout edit): draw `Rfb` and `Rdet` in the
+high-sheet flavour `ppolyf_u_2k_6p0`** (2000 ohm/sq typ, 1600/2400 ff/ss —
+the same +/-20 % family spread as base `ppolyf_u`; the high-Rs flavour
+qualified for the 6.0 V area, which matters because both resistors span the
+full `VDD_DRV` rail). At the same 0.42 um width that drops `Rfb` to 10.5 mm /
+4.4k um2 strip (~8.8k um2 block) and `Rdet` to 4.2 mm / 1.8k um2 strip
+(~3.5k um2 block): the candidate's additions fall to **~17.2k um2 — about
+half the present UVLO and 1.2 % of the block outline.** The trade, stated:
+
+- *Behaviour kept:* the ohms are solved by geometry, so the measured
+  hysteresis is unchanged by construction — and this is not hypothetical:
+  the sibling gate-2 re-measurement (PR #564, record 0025, open at the time
+  of writing) already runs the full 15-corner trip grid with `Rfb`/`Rdet`
+  drawn as `ppolyf_u_2k_6p0` and passes 15/15 with a 35 mV falling spread.
+  That measurement draws them at `r_width=1u` (24.0 mm for `Rfb`), chosen so
+  the *ratio*-critical resistors share one exact width; at 0.42 um the same
+  devices halve again, but the width tolerance of a non-ratio resistor is
+  the implementer's call, not this estimate's.
+- *Family spread:* +/-20 % on `Rfb` moves the `Rfb`-component of the
+  hysteresis by +/-20 %. Hysteresis carries a typical value only in DR-0001
+  Decision 4 (no ratified worst-case bound), and `Rfb` does not move either
+  trip window (the `R1`/`R2` divider does), so no ratified quantity shifts.
+- *Residual:* high-sheet poly generally matches and voltage-derates worse
+  than base poly. `Rfb`/`Rdet` set no precision quantity here (hysteresis
+  width and a kick-gate bias), which is why the trade is acceptable — but a
+  layout that takes this should re-measure hysteresis over the `res_*`
+  corners with the flavour live, exactly the way PR #564 did for the trips.
+
+The PNPs are a non-issue: nine 8.28 um cells (617 um2) is 0.8 % of the
+candidate's cost — "medium-voltage devices are the point" of this block, and
+the first `pnp_05p00x05p00` fleet evidence on the 5 V rail is study 2's, not
+a layout risk.
+
+## Reproduce (gates 3 and 4)
+
+```bash
+cd sim/uvlo-reference-study/klt
+python3 gen_startup_requests.py        # regenerates the twelve requests
+klt sim --backend batch --wait-for-capacity 600 --max-in-flight 4 \
+  --batch-set request-startup-ramp-slow.json request-startup-ramp-harness.json \
+  request-startup-ramp-fast.json request-startup-ramp-vfast.json \
+  request-startup-ramp-1ns.json request-startup-hold-2v0.json \
+  request-startup-hold-3v0.json request-startup-hold-5v0.json \
+  request-startup-brownout.json request-startup-deadinit-2v0.json \
+  request-startup-deadinit-5v0.json request-startup-deadinit-2v0-nokick.json \
+  --report-out ../envelopes/<date>-<sha>-klt-sim-uvlo-bandgap-startup.json \
+  -o ../envelopes/<date>-<sha>-uvlo-bandgap-startup/ --format json
+```
+
+The committed envelope was produced with klt `0.9.3.dev2575+g6bd18bbc8637`
+against runner `0.9.0` (`runner_compatibility: match`), ngspice `47`, PDK
+`gf180mcuD` / `open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7`
+(`models_lib_sha256 f6f4a96e…` — the same install and ambiguity the 0024
+trip envelope records), 12 batch jobs, all `state=done`. The aggregate
+envelope's `status: fail` is the negative-control member's graded FAIL — the
+designed outcome; every `MKICK`-present member reports `pass`. The gate-4
+tables re-derive from the PDK GDS, `klt gen mos_array`, and the committed
+layout provenance as cited inline.
