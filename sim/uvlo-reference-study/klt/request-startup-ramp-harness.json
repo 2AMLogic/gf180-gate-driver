@@ -1,0 +1,122 @@
+{
+  "netlist": "body-startup-ramp-harness.spice",
+  "engine": "ngspice",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "tt",
+        "sections": [
+          "typical",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "ff",
+        "sections": [
+          "ff",
+          "res_ff",
+          "bjt_ff",
+          "diode_ff",
+          "moscap_ff",
+          "mimcap_ff"
+        ]
+      },
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_ss",
+          "bjt_ss",
+          "diode_ss",
+          "moscap_ss",
+          "mimcap_ss"
+        ]
+      },
+      {
+        "name": "fs",
+        "sections": [
+          "fs",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "sf",
+        "sections": [
+          "sf",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      -40.0,
+      27.0,
+      125.0
+    ]
+  },
+  "batch": {
+    "runner_version_check": "warn",
+    "capacity_wait_s": 1800
+  },
+  "analysis": {
+    "kind": "tran",
+    "args": "10n 60u"
+  },
+  "measurements": [
+    {
+      "name": "release_v",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran release_v FIND v(VDD_DRV) WHEN v(lockout)=1.5 FALL=1",
+      "limits": {
+        "min": 3.3
+      }
+    },
+    {
+      "name": "assert_v",
+      "unit": "V",
+      "spice": ".meas tran assert_v FIND v(VDD_DRV) WHEN v(lockout)=1.5 RISE=1"
+    },
+    {
+      "name": "nvref_settled",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran nvref_settled AVG v(nvref) FROM=50u TO=60u",
+      "limits": {
+        "min": 1.1
+      }
+    },
+    {
+      "name": "lockout_settled",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran lockout_settled AVG v(lockout) FROM=50u TO=60u",
+      "limits": {
+        "max": 1.5
+      }
+    }
+  ],
+  "options": {
+    "timeout_s": 3000,
+    "keep_artifacts": false,
+    "ngspice_init": [
+      "set measureprec=10",
+      "set numdgt=10"
+    ]
+  }
+}

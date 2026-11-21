@@ -1,0 +1,122 @@
+{
+  "netlist": "body-startup-brownout.spice",
+  "engine": "ngspice",
+  "models": {
+    "pdk": "gf180mcuD",
+    "lib": "libs.tech/ngspice/sm141064.ngspice"
+  },
+  "corners": {
+    "process": [
+      {
+        "name": "tt",
+        "sections": [
+          "typical",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "ff",
+        "sections": [
+          "ff",
+          "res_ff",
+          "bjt_ff",
+          "diode_ff",
+          "moscap_ff",
+          "mimcap_ff"
+        ]
+      },
+      {
+        "name": "ss",
+        "sections": [
+          "ss",
+          "res_ss",
+          "bjt_ss",
+          "diode_ss",
+          "moscap_ss",
+          "mimcap_ss"
+        ]
+      },
+      {
+        "name": "fs",
+        "sections": [
+          "fs",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      },
+      {
+        "name": "sf",
+        "sections": [
+          "sf",
+          "res_typical",
+          "bjt_typical",
+          "diode_typical",
+          "moscap_typical",
+          "mimcap_typical"
+        ]
+      }
+    ],
+    "temperature_c": [
+      -40.0,
+      27.0,
+      125.0
+    ]
+  },
+  "batch": {
+    "runner_version_check": "warn",
+    "capacity_wait_s": 1800
+  },
+  "analysis": {
+    "kind": "tran",
+    "args": "5n 180u"
+  },
+  "measurements": [
+    {
+      "name": "hold_out_max",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran hold_out_max MAX v(OUT) FROM=70u TO=105u",
+      "limits": {
+        "max": 0.5
+      }
+    },
+    {
+      "name": "hold_lockout_min",
+      "unit": "V",
+      "spice": ".meas tran hold_lockout_min MIN v(lockout) FROM=70u TO=105u"
+    },
+    {
+      "name": "rerelease_v",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran rerelease_v FIND v(VDD_DRV) WHEN v(lockout)=1.5 FALL=1 TD=110u",
+      "limits": {
+        "min": 3.3
+      }
+    },
+    {
+      "name": "nvref_settled",
+      "unit": "V",
+      "spec_row": "uvlo",
+      "spice": ".meas tran nvref_settled AVG v(nvref) FROM=150u TO=180u",
+      "limits": {
+        "min": 1.1
+      }
+    }
+  ],
+  "options": {
+    "timeout_s": 3000,
+    "keep_artifacts": false,
+    "ngspice_init": [
+      "set measureprec=10",
+      "set numdgt=10"
+    ]
+  }
+}
