@@ -411,7 +411,7 @@ actually followed by every facet, not just described in the abstract.
 | `gate-driver-core-drive-with-uvlo-postlayout` | `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); Challenge #5 rails via a temporary `tb.json` `rails`/`stretch`/`checks` override, see decision record 0019; batch-fleet route via [`klt/`](gate-driver-core-drive-with-uvlo-postlayout/klt/README.md) (issue #560), see [below](#post-layout-drive-facets-on-the-batch-fleet-issue-560) | `spec/gate-driver.md` §3, §2.3, §5; decision record 0001 Decision 5 |
 | `output-stage-drive` | `python3 sim/run_corners.py output-stage-drive` | `spec/gate-driver.md` §3 |
 | `level-shifter-oxide-safety` | `python3 sim/run_corners.py level-shifter-oxide-safety` | `spec/gate-driver.md` §4, §2.3 |
-| `level-shifter-oxide-safety-postlayout` | `python3 sim/run_corners.py level-shifter-oxide-safety-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC) | `spec/gate-driver.md` §4, §2.3, §5 Exception 1 |
+| `level-shifter-oxide-safety-postlayout` | `python3 sim/run_corners.py level-shifter-oxide-safety-postlayout --dut layout/lvs/gate_driver_core.extracted.spice` (no-RC) or `--dut layout/lvs/gate_driver_core.extracted-rc.spice` (RC); batch-fleet route via [`klt/`](level-shifter-oxide-safety-postlayout/klt/README.md) (issue #559), see [below](#the-oxide-safety-facet-on-the-batch-fleet-and-envelope-backed-records-issue-559) | `spec/gate-driver.md` §4, §2.3, §5 Exception 1 |
 | `device-mv-fet` | `PDK_ROOT=... PDK=gf180mcuD sim/device-mv-fet/run_device_mv_fet.py` (dedicated script — see its own module docstring; `python3 sim/run_corners.py device-mv-fet` runs only a small representative subset for `--list`/`--check-env` discovery) | `spec/gate-driver.md` §2.5 |
 | `low-side-power-switch` | `PDK_ROOT=... PDK=gf180mcuD sim/low-side-power-switch/run_low_side_power_switch.py` (dedicated script, same convention as `device-mv-fet`; `python3 sim/run_corners.py low-side-power-switch` runs only a representative subset) | `spec/low-side-power-switch.md` §2.1 |
 | `gate-driver-indrv-mismatch` | `PDK_ROOT=... PDK=gf180mcuD sim/gate-driver-indrv-mismatch/run_indrv_mismatch.py` (dedicated script, same convention as `device-mv-fet`; a **Monte Carlo local-mismatch** campaign layered on the corner matrix, not a grid — it has no `tb.json` of its own and is not discoverable via `run_corners.py`, because it reuses `sim/gate-driver-core-drive/`'s testbench verbatim) | `spec/gate-driver.md` §5 Exception 3, §2.3 |
@@ -516,3 +516,39 @@ line still states the GDS sha256 and the DUT sha256 it ran, the latter read
 from the envelope's `environment.netlist_closure`. The live campaigns and the
 records themselves are #485's to mint; this section defines the route and the
 citation rule they will use.
+
+## The oxide-safety facet on the batch fleet, and envelope-backed records (issue #559)
+
+`sim/level-shifter-oxide-safety-postlayout/klt/` extends the #560 route to
+the oxide-safety bench — the first `klt sim` route whose graded figures
+include one `.meas` result divided by another (`vout_hi_ratio` /
+`vout_lo_ratio`: `v(IN_DRV)` sampled at 59 ns or 19 ns over `v(VDD_DRV)` at
+59 ns). That shape had no batch-portable expression while `klt sim` requests
+carried a single `analysis` (the gap
+[2AMLogic/klayout-tools#4902](https://github.com/2AMLogic/klayout-tools/issues/4902)
+tracks for that form); the requests instead declare one `wave` transient
+step (`tran 20p 200n`, the harness's own transient) whose step-scoped
+measurements carry the `FIND ... AT=` samples, the TRIG/TARG delay cards and
+the `vecmax`/`abs` waveform reductions, with the nine record columns as
+top-level **derived** expressions over `wave.*` results (`wave.hi /
+wave.drv` for the ratios). See that directory's README.md for the full
+method note. Every check of the facet's `tb.json` is tier-independent, so
+unlike the drive facets there is no nominal/stretch split: one request per
+DUT, 60 corners each, the harness grid exactly.
+
+**Envelope-backed records.** A harness-route record is backed by its frozen
+netlist snapshot and per-corner logs; a manifest-backed record (issue #333)
+by its artifact manifest; a record that runs through a `klt/envelopes/`
+route is backed by the committed envelope itself. `sim/harness/evidence_lint.py`
+therefore accepts a record that cites one or more committed
+`sim/<slug>/klt/envelopes/*.json` files (normally in **Links**): each cited
+envelope must exist, parse, carry a non-empty `corners[]` of corner-identified
+units, and its `environment.netlist_closure` must contain the (DUT path,
+sha256) pair the record's **Netlist provenance** states in full — a record
+claiming an extraction the envelope never ran fails the lint, not just the
+reader's attention. A record with at least one fully-validating envelope is
+exempt from the snapshot and per-corner-log requirements; a citation of
+another facet's envelope, a missing or unreadable envelope, an envelope with
+no corners, or a provenance that states no closure pair are each lint
+problems. `sim/test_evidence_store.py` (`EnvelopeBackedLint`) pins all of
+those cases.

@@ -61,7 +61,7 @@ CORE_KLT = SIM / "gate-driver-core-drive-with-uvlo" / "klt"
 UVLO_KLT = SIM / "uvlo-trip-verification" / "klt"
 UVLO_RECORDS = SIM / "uvlo-trip-verification" / "records"
 
-# Scripts copied into every sandbox, relative to sim/. All three are copied every
+# Scripts copied into every sandbox, relative to sim/. All are copied every
 # time: pex/gen_pex_requests.py imports the core generator from its parent
 # directory (``sys.path.insert(0, HERE.parent)``), and both top-level generators
 # import ``harness.klt_request`` from sim/ (``sys.path.insert(0, HERE.parents[1])``).
@@ -71,6 +71,17 @@ SCRIPTS = (
     "uvlo-trip-verification/klt/gen_requests.py",
     "gate-driver-core-drive-postlayout/klt/gen_requests.py",
     "gate-driver-core-drive-with-uvlo-postlayout/klt/gen_requests.py",
+    "level-shifter-oxide-safety-postlayout/klt/gen_requests.py",
+)
+
+# Non-script generator inputs mirrored into every sandbox, relative to sim/.
+# The oxide-safety generator reads its facet's tb.json at generate time (its
+# bounds and column names come from the manifest, never re-typed), so the
+# byte-pinning sandbox needs the manifest too -- a tb.json edit that moves a
+# request must fail here, not only on the machine that happens to re-run the
+# generator.
+SCRIPT_INPUTS = (
+    "level-shifter-oxide-safety-postlayout/testbench/tb.json",
 )
 
 # (generator relative to sim/, committed outputs it owns, also relative to sim/)
@@ -121,6 +132,13 @@ GENERATORS = (
             "gate-driver-core-drive-with-uvlo-postlayout/klt/request-stretch-rc.json",
         ),
     ),
+    (
+        "level-shifter-oxide-safety-postlayout/klt/gen_requests.py",
+        (
+            "level-shifter-oxide-safety-postlayout/klt/request-norcx.json",
+            "level-shifter-oxide-safety-postlayout/klt/request-rc.json",
+        ),
+    ),
 )
 
 # The two post-layout drive facets of issue #560: (slug, tb.json check count
@@ -162,6 +180,10 @@ class GeneratorsReproduceCommittedRequests(unittest.TestCase):
             ignore=shutil.ignore_patterns("__pycache__"),
         )
         for rel in SCRIPTS:
+            dest = tmp / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(SIM / rel, dest)
+        for rel in SCRIPT_INPUTS:
             dest = tmp / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SIM / rel, dest)
@@ -556,6 +578,211 @@ class PostlayoutDriveRequestsMatchTheirManifests(unittest.TestCase):
             [m["name"] for m in drive["measurements"] if m["name"].startswith("uvlo_")],
             "the drive facet's manifest carries no uvlo probes",
         )
+
+
+class OxideSafetyRequestsMatchManifestAndGrid(unittest.TestCase):
+    """The oxide-safety postlayout requests restate the harness bench (#559).
+
+    Both requests must carry the harness grid's full 60 points (one request
+    per DUT -- every tb.json check of this facet is tier-independent, so the
+    #560 nominal/stretch split does not apply), the effective limits must
+    equal the manifest's four ``checks`` exactly, the nine top-level columns
+    must be the manifest's ``measure`` names, and the step/derived structure
+    must preserve the harness's sampled-ratio and delay definitions (the
+    19 ns / 59 ns instants, the 1.65 V / 2.5 V literal levels, the
+    ``wave.hi / wave.drv`` ratio form).
+    """
+
+    SLUG = "level-shifter-oxide-safety-postlayout"
+    COLUMNS = (
+        "vgate_thinox_max", "vna_peak", "vnb_peak", "vccomp_dev_max",
+        "vccomp_stack_max", "t_plh_ns", "t_phl_ns",
+        "vout_hi_ratio", "vout_lo_ratio",
+    )
+
+    def setUp(self):
+        self.tb = json.loads(
+            (SIM / self.SLUG / "testbench" / "tb.json").read_text()
+        )
+
+    def _request(self, suffix):
+        return json.loads(
+            (SIM / self.SLUG / "klt" / f"request-{suffix}.json").read_text()
+        )
+
+    def test_limits_equal_the_tbjson_checks_and_columns_are_its_measure(self):
+        for suffix in ("norcx", "rc"):
+            with self.subTest(request=suffix):
+                req = self._request(suffix)
+                limits = {m["name"]: m.get("limits") for m in req["measurements"]}
+                self.assertEqual(list(limits), list(self.COLUMNS))
+                self.assertEqual(list(self.tb["measure"]), list(self.COLUMNS))
+                for key, check in self.tb["checks"].items():
+                    expected = {k: v for k, v in check.items()
+                                if k in ("min", "max")}
+                    self.assertEqual(limits[key], expected)
+                # every other column is unbounded, exactly as in the records
+                for name in limits:
+                    if name not in self.tb["checks"]:
+                        self.assertIsNone(
+                            limits[name], f"{name} carries a limit the "
+                            "manifest does not grade it against")
+
+    def test_one_request_per_dut_covers_the_60_point_grid_exactly_once(self):
+        for suffix, body in (("norcx", "body.spice"), ("rc", "body-rc.spice")):
+            with self.subTest(request=suffix):
+                req = self._request(suffix)
+                self.assertEqual(req["netlist"], body)
+                self.assertEqual(
+                    [p["name"] for p in req["corners"]["process"]],
+                    ["tt", "ff", "ss", "fs", "sf"],
+                )
+                self.assertEqual(
+                    req["corners"]["temperature_c"], [-40.0, 27.0, 125.0]
+                )
+                # the harness grid tied by index: the three ±10 % pairs plus
+                # the 3.3/6.0 vdrv stretch extra, never cross-producted
+                self.assertEqual(
+                    req["corners"]["supply_v"],
+                    {
+                        "vsup_logic": [2.97, 3.3, 3.63, 3.3],
+                        "vsup_drv": [4.5, 5.0, 5.5, 6.0],
+                    },
+                )
+                self.assertNotIn("analysis", req)
+                steps = req["analysis_steps"]
+                self.assertEqual(len(steps), 1)
+                self.assertEqual(steps[0]["name"], "wave")
+                self.assertEqual(
+                    steps[0]["analysis"], {"kind": "tran", "args": "20p 200n"}
+                )
+
+    def test_step_preserves_the_harness_measurement_definitions(self):
+        for suffix in ("norcx", "rc"):
+            with self.subTest(request=suffix):
+                req = self._request(suffix)
+                step = req["analysis_steps"][0]
+                spice = {
+                    m["name"]: m["spice"]
+                    for m in step["measurements"]
+                    if "spice" in m
+                }
+                # the sampled ratios: IN_DRV at 59 ns (hi) and 19 ns (lo)
+                # over the VDD_DRV denominator at 59 ns (drv) -- one solve,
+                # the harness's own instants
+                self.assertEqual(
+                    spice["hi"], ".meas tran hi FIND v(IN_DRV) AT=59n"
+                )
+                self.assertEqual(
+                    spice["lo"], ".meas tran lo FIND v(IN_DRV) AT=19n"
+                )
+                self.assertEqual(
+                    spice["drv"], ".meas tran drv FIND v(VDD_DRV) AT=59n"
+                )
+                # the delays: the harness fragment's literal levels, verbatim
+                self.assertEqual(
+                    spice["t_plh"],
+                    ".meas tran t_plh TRIG v(IN) VAL=1.65 RISE=1 "
+                    "TARG v(IN_DRV) VAL=2.5 RISE=1",
+                )
+                self.assertEqual(
+                    spice["t_phl"],
+                    ".meas tran t_phl TRIG v(IN) VAL=1.65 FALL=1 "
+                    "TARG v(IN_DRV) VAL=2.5 FALL=1",
+                )
+                derived = {m["name"]: m["expr"] for m in req["measurements"]}
+                self.assertEqual(derived["vout_hi_ratio"], "wave.hi / wave.drv")
+                self.assertEqual(derived["vout_lo_ratio"], "wave.lo / wave.drv")
+                self.assertEqual(derived["t_plh_ns"], "wave.t_plh * 1e9")
+                self.assertEqual(derived["t_phl_ns"], "wave.t_phl * 1e9")
+                # the six thin-oxide differences and four MiM legs are the
+                # manifest's own node pairs, as intermediate reductions
+                exprs = {
+                    m["name"]: m.get("expr")
+                    for m in step["measurements"]
+                    if "expr" in m
+                }
+                self.assertEqual(
+                    exprs["dq1"], "vecmax(abs(v(IN)-v(x1_inb)))"
+                )
+                self.assertEqual(
+                    exprs["dvc4"], "vecmax(abs(v(ANON295)-v(IN_DRV)))"
+                )
+
+
+class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
+    """The committed #559 envelopes cover each DUT's grid exactly once.
+
+    Each committed fleet report must hold the 60 unique corners of the
+    harness grid (process x temperature x the four tied rail pairs), report
+    all nine record columns at every corner, and pin the DUT it ran in
+    ``environment.netlist_closure``. The sha256-vs-live-file match is the
+    citing record's to state (bytes drift on a re-extraction; the envelope
+    keeps the hash it ran) -- this pins only what cannot drift.
+    """
+
+    SLUG = "level-shifter-oxide-safety-postlayout"
+    ENVELOPES = {
+        "norcx": ("oxide-norcx", "layout/lvs/gate_driver_core.extracted.spice"),
+        "rc": ("oxide-rc", "layout/lvs/gate_driver_core.extracted-rc.spice"),
+    }
+    COLUMNS = (
+        "vgate_thinox_max", "vna_peak", "vnb_peak", "vccomp_dev_max",
+        "vccomp_stack_max", "t_plh_ns", "t_phl_ns",
+        "vout_hi_ratio", "vout_lo_ratio",
+    )
+    GRID = {
+        (p, t, vl, vd)
+        for p in ("tt", "ff", "ss", "fs", "sf")
+        for t in (-40.0, 27.0, 125.0)
+        for vl, vd in ((2.97, 4.5), (3.3, 5.0), (3.63, 5.5), (3.3, 6.0))
+    }
+
+    def _envelope(self, stem):
+        matches = sorted((SIM / self.SLUG / "klt" / "envelopes").glob(
+            f"*-{stem}.json"))
+        self.assertEqual(
+            len(matches), 1,
+            f"expected exactly one committed envelope for {stem}, found "
+            f"{[m.name for m in matches]}",
+        )
+        return json.loads(matches[0].read_text())
+
+    def test_each_envelope_covers_the_grid_exactly_once(self):
+        for suffix, (stem, dut) in self.ENVELOPES.items():
+            with self.subTest(envelope=suffix):
+                env = self._envelope(stem)
+                seen = {
+                    (
+                        c["process"],
+                        float(c["temperature_c"]),
+                        float(c["supply_v"]["vsup_logic"]),
+                        float(c["supply_v"]["vsup_drv"]),
+                    )
+                    for c in env["corners"]
+                }
+                self.assertEqual(len(env["corners"]), 60)
+                self.assertEqual(seen, self.GRID)
+                values = {
+                    m["name"]: m.get("value")
+                    for c in env["corners"]
+                    for m in c["measurements"]
+                    # the top-level record columns only -- the step-scoped
+                    # `wave.*` results ride along in each corner entry
+                    if not m["name"].startswith("wave.")
+                }
+                self.assertEqual(set(values), set(self.COLUMNS))
+                for name, value in values.items():
+                    self.assertIsNotNone(
+                        value, f"{name} produced no value at some corner"
+                    )
+                closure = {
+                    e["path"]: e["sha256"]
+                    for e in env["environment"]["netlist_closure"]
+                }
+                self.assertIn(dut, closure)
+
+
 
 
 if __name__ == "__main__":

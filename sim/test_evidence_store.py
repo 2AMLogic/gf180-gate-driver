@@ -520,6 +520,107 @@ class ManifestBackedLint(unittest.TestCase):
         self.assertTrue(any("unreadable manifest" in str(p) for p in self.lint()))
 
 
+class EnvelopeBackedLint(unittest.TestCase):
+    """``evidence_lint`` validates a record through its cited klt envelope.
+
+    Issue #559's batch route: a record citing
+    ``sim/<slug>/klt/envelopes/*.json`` carries its machine-checkable
+    evidence in the committed envelope (corners, and the DUT (path, sha256)
+    its ``environment.netlist_closure`` ran), so the snapshot / per-corner-log
+    requirements do not apply -- but a missing envelope, an envelope without
+    corners, or a provenance that states no closure pair the envelope ran is
+    a problem, not a pass on prose.
+    """
+
+    RID = "20261121-000000-abc1234"
+    DUT = "layout/lvs/gate_driver_core.extracted.spice"
+    DUT_SHA = "21fe85db36867ddd40a254a3a960998e9d4830f707cd4079b7891bf33be7ffca"
+    FIELDS = ("Record ID", "Claim", "Netlist provenance", "Corner matrix run",
+              "Statistical convention", "Result", "Links", "Timestamp / author",
+              "Supersedes")
+
+    def setUp(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        self.root = Path(td.name).resolve()
+        self.records = self.root / "sim/b/records"
+        self.records.mkdir(parents=True)
+
+    def record(self, provenance=None, links_extra=""):
+        fields = {
+            "Record ID": self.RID,
+            "Netlist provenance": provenance
+            or f"extracted — DUT `{self.DUT}` (sha256 `{self.DUT_SHA}`)",
+            "Links": f"sim/b/klt/envelopes/env.json{links_extra}",
+            "Supersedes": "(none)",
+        }
+        lines = [f"- **{f}**: {fields.get(f, 'x')}" for f in self.FIELDS]
+        (self.records / f"{self.RID}.md").write_text("\n".join(lines) + "\n")
+
+    def envelope(self, corners=1, closure=None, raw=None):
+        env = self.root / "sim/b/klt/envelopes"
+        env.mkdir(parents=True, exist_ok=True)
+        if raw is not None:
+            (env / "env.json").write_text(raw)
+            return
+        doc = {
+            "corners": [
+                {"corner_id": f"tt/vsup_drv=5.000_vsup_logic=3.300V/{t}C"}
+                for t in range(corners)
+            ],
+            "environment": {
+                "netlist_closure": closure
+                if closure is not None
+                else [{"path": self.DUT, "sha256": self.DUT_SHA}],
+            },
+        }
+        (env / "env.json").write_text(json.dumps(doc))
+
+    def lint(self):
+        from harness import evidence_lint as el
+        paths, _ = el.list_evidence_paths(self.root)
+        return el.check_experiments(self.root, el.collect_experiments(paths))
+
+    def test_envelope_backed_record_lints_clean_without_snapshot_or_logs(self):
+        self.record()
+        self.envelope(corners=60)
+        self.assertEqual(self.lint(), [])
+
+    def test_missing_envelope_is_a_problem(self):
+        self.record()
+        self.assertTrue(any("missing envelope" in str(p) for p in self.lint()))
+
+    def test_unreadable_envelope_is_a_problem(self):
+        self.record()
+        self.envelope(raw="{")
+        self.assertTrue(any("unreadable" in str(p) for p in self.lint()))
+
+    def test_envelope_without_corners_is_a_problem(self):
+        self.record()
+        self.envelope(corners=0)
+        self.assertTrue(any("carries no corners" in str(p) for p in self.lint()))
+
+    def test_wrong_dut_hash_is_a_problem(self):
+        # The envelope ran the real extraction; the record claims another.
+        self.record(
+            provenance=f"extracted — DUT `{self.DUT}` (sha256 `{'f' * 64}`)"
+        )
+        self.envelope()
+        self.assertTrue(any("netlist_closure" in str(p) for p in self.lint()))
+        # So does a provenance naming a different DUT path entirely.
+        self.record(
+            provenance=f"extracted — DUT `layout/lvs/other.spice` (sha256 `{self.DUT_SHA}`)"
+        )
+        self.assertTrue(any("netlist_closure" in str(p) for p in self.lint()))
+
+    def test_envelope_of_another_facet_is_a_problem(self):
+        self.record(links_extra=" and sim/other/klt/envelopes/env.json")
+        env = self.root / "sim/other/klt/envelopes"
+        env.mkdir(parents=True)
+        (env / "env.json").write_text("{}")
+        self.assertTrue(any("its own experiment" in str(p) for p in self.lint()))
+
+
 class AppendOnlyManifests(unittest.TestCase):
     """``check_append_only`` covers ``manifests/artifacts/*.manifest.json``.
 

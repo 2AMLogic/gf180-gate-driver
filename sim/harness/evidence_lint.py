@@ -31,6 +31,14 @@ What is checked, per ``sim/<slug>/records/<record-id>.md``:
   corner-id grammar documented in ``sim/README.md`` (see ``parse_corner_id``);
 - a **Supersedes** value that is not a "(none)" form names a record that
   exists in the same experiment directory;
+- a record that cites one or more committed `klt sim` reports
+  (`sim/<slug>/klt/envelopes/*.json`, the issue #559 batch route) is
+  **envelope-backed**: each cited envelope must exist, parse, carry corners,
+  and its `environment.netlist_closure` must contain the (DUT path, sha256)
+  pair the record's **Netlist provenance** states -- and a record with at
+  least one fully-validating envelope is exempt from the snapshot and
+  per-corner-log requirements below (the envelope is its evidence; see
+  `sim/README.md` "Envelope-backed records");
 - a record that is the *current head* of its supersession chain (nothing
   else in the experiment names it in a **Supersedes** field) carries at
   least as many ``corners/<record-id>/*.log`` files as the predecessor its
@@ -103,6 +111,16 @@ FIELD_RE = re.compile(r"^- \*\*(?P<name>[^*]+?)\*\*:(?P<value>.*)$")
 
 #: Values that mean "this record supersedes nothing".
 _NO_SUPERSESSION_RE = re.compile(r"^\(?\s*(none|n/?a)\b", re.IGNORECASE)
+
+#: A committed `klt sim` report cited by an envelope-backed record (issue
+#: #559's batch route): ``sim/<slug>/klt/envelopes/<file>.json``. A record
+#: whose text cites at least one of these (normally in **Links**) is checked
+#: against the envelope instead of against a netlist snapshot and per-corner
+#: logs -- the envelope is its machine-checkable evidence, the citation
+#: contract `sim/README.md` "Envelope-backed records" defines.
+ENVELOPE_RE = re.compile(
+    r"sim/(?P<slug>[a-z0-9-]+)/klt/envelopes/(?P<name>[A-Za-z0-9._-]+\.json)"
+)
 
 # --- corner-id grammar (sim/README.md) --------------------------------------
 #
@@ -383,6 +401,93 @@ def _superseded_record_ids(root: Path, experiment: Experiment) -> set[str]:
     return superseded
 
 
+def _check_cited_envelopes(
+    root: Path,
+    experiment,
+    path: str,
+    text: str,
+    fields: dict,
+) -> tuple[list, bool]:
+    """Validate every envelope a record cites; return (problems, backed).
+
+    ``backed`` is True when at least one cited envelope fully validates: the
+    file exists under this experiment's ``klt/envelopes/``, parses, carries a
+    non-empty ``corners[]`` of corner-identified units, and its
+    ``environment.netlist_closure`` contains a ``(path, sha256)`` pair the
+    record's **Netlist provenance** field states in full -- the #558 citation
+    rule's DUT-hash leg, so a record claiming an extraction the envelope never
+    ran fails here rather than passing on prose. An envelope-backed record is
+    exempt from the snapshot / per-corner-log requirements (see
+    ``sim/README.md`` "Envelope-backed records").
+    """
+    problems: list = []
+    backed = False
+    provenance = fields.get("Netlist provenance")
+    provenance_text = provenance.value if provenance is not None else ""
+    for slug, name in sorted(set(ENVELOPE_RE.findall(text))):
+        if slug != experiment.slug:
+            problems.append(
+                Problem(
+                    path,
+                    f"cites the {slug} facet's envelope klt/envelopes/{name} -- "
+                    "an envelope-backed record cites its own experiment's "
+                    "envelopes only",
+                )
+            )
+            continue
+        epath = root / "sim" / slug / "klt" / "envelopes" / name
+        try:
+            doc = json.loads(epath.read_text(encoding="utf-8"))
+        except OSError:
+            problems.append(
+                Problem(path, f"cites a missing envelope: {epath} does not exist")
+            )
+            continue
+        except ValueError as exc:
+            problems.append(
+                Problem(path, f"cited envelope {epath} is unreadable: {exc}")
+            )
+            continue
+        corners = doc.get("corners")
+        if (
+            not isinstance(corners, list)
+            or not corners
+            or not all(isinstance(c, dict) and isinstance(c.get("corner_id"), str)
+                       for c in corners)
+        ):
+            problems.append(
+                Problem(
+                    path,
+                    f"cited envelope klt/envelopes/{name} carries no corners[] "
+                    "of corner-identified units",
+                )
+            )
+            continue
+        closure = doc.get("environment", {})
+        closure = closure.get("netlist_closure", []) if isinstance(closure, dict) else []
+        stated = any(
+            isinstance(entry, dict)
+            and isinstance(entry.get("path"), str)
+            and isinstance(entry.get("sha256"), str)
+            and entry["path"] in provenance_text
+            and entry["sha256"] in provenance_text
+            for entry in closure
+        )
+        if not stated:
+            problems.append(
+                Problem(
+                    path,
+                    f"cited envelope klt/envelopes/{name} ran, but the record's "
+                    "**Netlist provenance** states no (DUT path, sha256) pair "
+                    "from its environment.netlist_closure -- say the extraction "
+                    "the envelope actually used (the #558 citation rule)",
+                )
+            )
+            continue
+        backed = True
+    return problems, backed
+
+
 def check_record(
     root: Path,
     experiment: Experiment,
@@ -428,6 +533,19 @@ def check_record(
     supersedes = fields.get("Supersedes")
     if supersedes is not None and supersedes.value:
         problems += _check_supersedes(path, experiment, record_id, supersedes.value)
+
+    envelope_problems, envelope_backed = _check_cited_envelopes(
+        root, experiment, path, text, fields
+    )
+    problems += envelope_problems
+
+    if envelope_backed:
+        # An envelope-backed record's machine-checkable evidence is the
+        # committed `klt sim` report it cites (validated above): the frozen
+        # netlist snapshot and per-corner log requirements do not apply, and
+        # so the head-record log-count rule (which counts those logs) does
+        # not either.
+        return problems
 
     if record_id not in experiment.snapshots:
         problems.append(
