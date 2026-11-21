@@ -1,0 +1,837 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/uvlo-reference-study/klt/body-startup-hold-5v0.spice",
+    "scope": "repo"
+  },
+  "status": "pass",
+  "corner_count": 15,
+  "passed": 15,
+  "failed": 0,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {},
+    "by_severity": {},
+    "corners_with_diagnostics": 0
+  },
+  "metrics": {
+    "sim__corner__count": 15,
+    "sim__corner__passed_count": 15,
+    "sim__corner__failed_count": 0,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "47",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": null,
+      "probe": "ok",
+      "reason": null
+    },
+    "ngspice_init": {
+      "source": "runner",
+      "lines": null,
+      "sha256": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "ca5dd800f3c21ff039b998d419942ad7a1f450dae126f8ac5b8e7b106592b014",
+    "netlist_sha256_scope": "staged",
+    "corner_coverage": {
+      "pdk": "gf180mcuD",
+      "sections": [
+        {
+          "process": "ff",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "ss",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "fs",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        },
+        {
+          "process": "sf",
+          "unmoved_devices": [
+            "06v0",
+            "06v0_nvt",
+            "fets_mm",
+            "noise_corner"
+          ]
+        }
+      ]
+    },
+    "netlist_closure": [
+      {
+        "path": "sim/uvlo-reference-study/klt/body-startup-hold-5v0.spice",
+        "scope": "repo",
+        "sha256": "ca5dd800f3c21ff039b998d419942ad7a1f450dae126f8ac5b8e7b106592b014"
+      },
+      {
+        "path": "sim/uvlo-reference-study/klt/design.ngspice",
+        "scope": "repo",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "path": "sim/uvlo-reference-study/uvlo_bandgap_ref.spice",
+        "scope": "repo",
+        "sha256": "084426f0c90f15714c0cc39839c766a479df239a381d7c048b95c8256d94afa0"
+      }
+    ],
+    "netlist_identity": "sha256:70bff2a641e9802372f0aeb209fbf82034f70f51924bf26e01a6c0fb45f0fb47",
+    "remote": {
+      "provider": "aws-batch-fleet",
+      "job_id": "klt-sim-c1edd2e49418",
+      "region": "us-east-1",
+      "instance_id": "i-06365569830c3cb0b",
+      "instance_type": "m7i.4xlarge",
+      "availability_zone": "us-east-1a",
+      "ami_id": "ami-09c14f55df4958cbd",
+      "lifecycle": "spot",
+      "spot": true,
+      "state": "done",
+      "exit_code": "0",
+      "concurrency": "1",
+      "physical_cores": "8",
+      "elapsed_seconds": 11,
+      "client_submitted_at": "2026-11-21T00:21:22.265764Z",
+      "client_launched_at": "2026-11-21T00:22:08.078736Z",
+      "client_status_terminal_at": "2026-11-21T00:22:40.366132Z",
+      "client_collected_at": "2026-11-21T00:22:41.657522Z",
+      "runner_klt_version": "0.9.0",
+      "client_klt_version": "0.9.3.dev2575+g6bd18bbc8637",
+      "runner_compatibility": "match",
+      "runner_request_features": {
+        "required": [
+          "options.ngspice_init"
+        ],
+        "missing": [],
+        "status": "supported"
+      },
+      "worker_environment": {
+        "capture": "ok",
+        "simulator": {
+          "requested_binary": "ngspice",
+          "binary_source": "PATH",
+          "selected_path": "/usr/local/bin/ngspice",
+          "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+          "version_probe": "ok"
+        },
+        "pdk": {
+          "variant": "gf180mcuD",
+          "root": "/opt/pdk",
+          "stamp_scheme": "sources-sha256",
+          "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+          "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+          "models_staged": false,
+          "stamp_scope": "executed"
+        },
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+        "omp_num_threads": null,
+        "image_manifest": null,
+        "model_inputs": null,
+        "diagnostics": [],
+        "pdk_stamp_comparison": {
+          "status": "match"
+        },
+        "ngspice_init": null,
+        "threads_per_worker": 1,
+        "engine_build_comparison": {
+          "status": "match"
+        }
+      },
+      "runner_model_inputs": null,
+      "runner_models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "runner_osdi_preload": null,
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 15,
+        "per_unit_timeout_s": 3000,
+        "overhead_s": 120.0,
+        "job_bound_s": 45120.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": true,
+        "check": "warn",
+        "max_units_per_job": 1,
+        "recommended_hosts": 15,
+        "warning": "batch job bound 45120s (options.timeout_s 3000s x 15 units + 120s; a conservative fully-serial upper bound, not a runtime estimate) exceeds the fleet's whole-job ceiling of 3600s (max_job_seconds from fleet_config); a job still running at the ceiling is killed and every unit is reported batch_job_timeout. Set request.remote.hosts to at least 15 to run one job per shard of at most 1 units, each within the ceiling"
+      },
+      "models_lib_comparison": {
+        "status": "match"
+      }
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "client_engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": "39ca1adb826660324c3626f72bd946ec40704f0f3fc8e243c623f76e24b3eee2",
+      "probe": "ok",
+      "reason": null
+    },
+    "backend": {
+      "resolved": "batch",
+      "source": "flag",
+      "requested": "batch"
+    }
+  },
+  "coverage": {
+    "corners_simulated": 15,
+    "measurements_declared": 2,
+    "measurements_with_limits": 2,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"tt/novdd/-40C\",\"lockout_max\",\"max\"]",
+      "limit:[0,\"tt/novdd/-40C\",\"nvref_settled\",\"min\"]",
+      "limit:[1,\"tt/novdd/27C\",\"lockout_max\",\"max\"]",
+      "limit:[1,\"tt/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[10,\"fs/novdd/27C\",\"lockout_max\",\"max\"]",
+      "limit:[10,\"fs/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[11,\"fs/novdd/125C\",\"lockout_max\",\"max\"]",
+      "limit:[11,\"fs/novdd/125C\",\"nvref_settled\",\"min\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"lockout_max\",\"max\"]",
+      "limit:[12,\"sf/novdd/-40C\",\"nvref_settled\",\"min\"]",
+      "limit:[13,\"sf/novdd/27C\",\"lockout_max\",\"max\"]",
+      "limit:[13,\"sf/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[14,\"sf/novdd/125C\",\"lockout_max\",\"max\"]",
+      "limit:[14,\"sf/novdd/125C\",\"nvref_settled\",\"min\"]",
+      "limit:[2,\"tt/novdd/125C\",\"lockout_max\",\"max\"]",
+      "limit:[2,\"tt/novdd/125C\",\"nvref_settled\",\"min\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"lockout_max\",\"max\"]",
+      "limit:[3,\"ff/novdd/-40C\",\"nvref_settled\",\"min\"]",
+      "limit:[4,\"ff/novdd/27C\",\"lockout_max\",\"max\"]",
+      "limit:[4,\"ff/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[5,\"ff/novdd/125C\",\"lockout_max\",\"max\"]",
+      "limit:[5,\"ff/novdd/125C\",\"nvref_settled\",\"min\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"lockout_max\",\"max\"]",
+      "limit:[6,\"ss/novdd/-40C\",\"nvref_settled\",\"min\"]",
+      "limit:[7,\"ss/novdd/27C\",\"lockout_max\",\"max\"]",
+      "limit:[7,\"ss/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[8,\"ss/novdd/125C\",\"lockout_max\",\"max\"]",
+      "limit:[8,\"ss/novdd/125C\",\"nvref_settled\",\"min\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"lockout_max\",\"max\"]",
+      "limit:[9,\"fs/novdd/-40C\",\"nvref_settled\",\"min\"]"
+    ],
+    "skipped": [],
+    "inapplicable": [],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.9.3.dev2575+g6bd18bbc8637",
+    "klt_git_commit": "6bd18bbc8637f6d767b3c24e77bd5db7a39e4bbe",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@6bd18bbc8637f6d767b3c24e77bd5db7a39e4bbe",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "ambiguous_sources": [
+        "search root: ~/.volare"
+      ]
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:ca5dd800f3c21ff039b998d419942ad7a1f450dae126f8ac5b8e7b106592b014",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "lockout_max",
+      "unit": "V",
+      "limits": {
+        "max": 1.5
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ff/novdd/125C",
+        "value": 3.0987714808e-08,
+        "margin": 1.4999999690122852
+      },
+      "min": {
+        "corner_id": "fs/novdd/-40C",
+        "value": 2.0067320869e-09
+      },
+      "max": {
+        "corner_id": "ff/novdd/125C",
+        "value": 3.0987714808e-08
+      },
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "nvref_settled",
+      "unit": "V",
+      "limits": {
+        "min": 1.1
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ff/novdd/-40C",
+        "value": 1.2165538348,
+        "margin": 0.11655383479999992
+      },
+      "min": {
+        "corner_id": "ff/novdd/-40C",
+        "value": 1.2165538348
+      },
+      "max": {
+        "corner_id": "ss/novdd/125C",
+        "value": 1.2419734488
+      },
+      "spec_row": "uvlo"
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "tt/novdd/-40C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.872,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.4341199932e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.49999999756588
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2209082316,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12090823159999986
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/novdd/27C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.816,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 3.119832053e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.499999996880168
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2264305351,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.1264305350999999
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/novdd/125C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.86,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 6.9309316346e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999930690684
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2297384867,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.1297384867
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/-40C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.82,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.0719912056e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999979280088
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2165538348,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.11655383479999992
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/27C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.815,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.5690749504e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.499999997430925
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2204220722,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12042207220000001
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/novdd/125C",
+      "process": "ff",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.854,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 3.0987714808e-08,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999690122852
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2213407566,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12134075659999999
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/-40C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.798,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.5323702835e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999974676297
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2273344679,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12733446789999991
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/27C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.812,
+      "peak_rss_bytes": 49901568,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 3.1333877615e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999968666122
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2352150485,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.13521504849999988
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/novdd/125C",
+      "process": "ss",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.166,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 5.2050034296e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999947949965
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2419734488,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.14197344879999996
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/-40C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.152,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.0067320869e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999979932679
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2209709324,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.1209709323999999
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/27C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.171,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.6330385088e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999973669615
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2265286834,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.1265286833999999
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/novdd/125C",
+      "process": "fs",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.171,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 4.2946696793e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999957053303
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2299097229,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.1299097228999999
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/-40C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.123,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 2.3366352709e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.4999999976633647
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2208182133,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12081821329999998
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/27C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.164,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 3.4027830167e-09,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.499999996597217
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2262902061,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12629020609999997
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/novdd/125C",
+      "process": "sf",
+      "supply_v": {},
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.155,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "lockout_max",
+          "value": 1.9033000968e-08,
+          "unit": "V",
+          "status": "pass",
+          "margin": 1.499999980966999
+        },
+        {
+          "name": "nvref_settled",
+          "value": 1.2295043164,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.12950431639999982
+        }
+      ],
+      "diagnostics": [],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ]
+}

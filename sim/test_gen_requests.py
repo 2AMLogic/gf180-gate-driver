@@ -27,6 +27,9 @@ with nothing guarding it -- and all three now take their process axis and reques
 envelope from ``sim/harness/klt_request.py`` instead of each carrying a hand-typed
 copy, so this byte comparison is also what pins the shared module (and, through
 it, ``harness/corners.py``'s five MOS bundles) against the committed requests.
+Issue #556 added a fourth, ``sim/uvlo-reference-study/klt/gen_startup_requests.py``
+(the DR-0024 gate-3 startup grid), over the same shared scaffolding, so the same
+pinning covers its twelve committed request files.
 
 This file lives at ``sim/`` rather than inside one testbench's ``klt/`` directory
 because the generators it runs live under two different testbenches.
@@ -61,6 +64,7 @@ SCRIPTS = (
     "gate-driver-core-drive-with-uvlo/klt/gen_requests.py",
     "gate-driver-core-drive-with-uvlo/klt/pex/gen_pex_requests.py",
     "uvlo-trip-verification/klt/gen_requests.py",
+    "uvlo-reference-study/klt/gen_startup_requests.py",
 )
 
 # (generator relative to sim/, committed outputs it owns, also relative to sim/)
@@ -91,6 +95,26 @@ GENERATORS = (
             "uvlo-trip-verification/klt/request-response.json",
             "uvlo-trip-verification/klt/request-rail-nominal.json",
             "uvlo-trip-verification/klt/request-rail-stretch.json",
+        ),
+    ),
+    (
+        "uvlo-reference-study/klt/gen_startup_requests.py",
+        tuple(
+            f"uvlo-reference-study/klt/request-startup-{stem}.json"
+            for stem in (
+                "ramp-slow",
+                "ramp-harness",
+                "ramp-fast",
+                "ramp-vfast",
+                "ramp-1ns",
+                "hold-2v0",
+                "hold-3v0",
+                "hold-5v0",
+                "brownout",
+                "deadinit-2v0",
+                "deadinit-5v0",
+                "deadinit-2v0-nokick",
+            )
         ),
     ),
 )

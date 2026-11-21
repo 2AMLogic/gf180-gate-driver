@@ -1,0 +1,21 @@
+* startup grid, dead-initialised core at a fixed 2.0 V rail (.ic/uic).
+* issue #556, decision record 0024 adoption gate 3 -- one stimulus of the
+* startup-path grid (see ../README.md "Gate 3: startup path"). Copies of
+* body-bandgap-trip.spice's boundary condition: same DUT include (../uvlo_bandgap_ref.spice),
+* same 100k pull-up rpu + 6 fF on OUT, no models/.lib/.temp/.control/.end --
+* klt owns those. .options reltol=1e-4 is carried here, not in
+* options.ngspice_options: the batch fleet's runner drops that request field.
+*
+* Stimulus: vsup dc 2; the request's options.initial_conditions set the mirror gate
+* nfb = 2.0 V (pfets off = the zero-current state) and uic zeroes every
+* other node -- record 0024's adverse initial condition, at 15 corners.
+* The core must restart (nvref ~1.2 V) and lockout must stay HIGH.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../uvlo_bandgap_ref.spice"
+
+vsup VDD_DRV 0 dc 2
+vgnd GND_DRV 0 dc 0
+rpu VDD_DRV OUT 100k
+cload OUT GND_DRV 6f
