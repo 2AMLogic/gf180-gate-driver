@@ -1,0 +1,33 @@
+* level-shifter-oxide-safety-postlayout -- `klt sim` circuit BODY, RC DUT
+* (issue #559).
+*
+* Identical to body.spice (same stimulus, solver options, 1 nF reference
+* load and deck-level DUT inclusion -- see that file's header) except for
+* which extracted DUT it .include's: layout/lvs/gate_driver_core.extracted-rc.spice
+* (the --parasitics RC extraction, the same bytes the baseline record
+* 20261114-202350-bb5cab0 ran) in place of the no-RC --combine extraction.
+* The RC DUT's parasitic-leg __t<n> suffixes are stripped at the RC hub, so
+* the same flat probe names (x1_inb, x1_na, x1_nb, x1_ncb, ANON293..ANON295,
+* IN_DRV) resolve against both DUTs and the request's measurement cards are
+* shared verbatim. Each run's environment.netlist_closure pins the sha256 of
+* the extraction actually used.
+.options gmin=1e-9
+.options method=gear
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../layout/lvs/gate_driver_core.extracted-rc.spice"
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 0.5n 0.5n 40n 80n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load on the block's final output (spec Sec.3), present so
+* the level shifter drives its real post-layout environment, exactly as the
+* harness bench includes it -- even though this facet's measurements stop at
+* IN_DRV.
+cload OUT GND_DRV 1n
