@@ -10,6 +10,15 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-23
 
+- **PR #583**: docs: drop stale per-corner trip sigma figure from DR-0026 gate roll-up
+- **Issue #569** (closed): DR-0026 cites DR-0025's per-corner trip sigma as 0.48-0.57 V; the measured value is 0.471-0.570 V
+- **Issue #587** (closed): Suggestion: cross-record numeric-citation check in sim/check_records.py
+- **PR #586**: refactor(sim): deduplicate the post-layout drive request generators
+- **Issue #584** (closed): Deduplicate post-layout drive klt request generators: 95 of 106 code lines are identical
+- **PR #581**: lvs: render the klt file envelope as a path in DUT headers and re-anchor the oxide-safety records
+- **Issue #510** (closed): mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header
+- **PR #572**: docs: state klt yield figures are conditional on value-producing draws
+- **Issue #567** (closed): uvlo-reference-study: state that the quoted klt yield figures are conditional on value-producing draws
 - **PR #568**: sim: verify UVLO Vbe/dVbe startup path and estimate layout cost (DR-0026, 0024 gates 3-4)
 - **Issue #556** (closed): UVLO Vbe/dVbe reference: startup-path verification and layout cost estimate (decision record 0024 adoption gates 3 and 4)
 - **PR #579**: refactor(sim): share the PVT-point seed plan between the two campaign drivers
