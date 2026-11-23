@@ -77,13 +77,19 @@ def working_tree_dirty(repo_root: Path) -> bool:
     netlist-snapshots,corners}/`` and ``manifests/artifacts/*.manifest.json``
     -- count.
     """
-    res = _git(repo_root, "status", "--porcelain")
-    status = res.stdout.strip() if res else ""
-    for line in status.splitlines():
-        path = line[3:].strip().strip('"')
-        # Renames read "old -> new"; the destination is what matters here.
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
+    res = _git(repo_root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    fields = iter(res.stdout.split("\0") if res else [])
+    for field in fields:
+        if not field:
+            continue
+        # NUL-delimited entries read "XY <path>" verbatim -- no quoting and
+        # no display-only rename arrow to strip. A rename or copy entry is
+        # followed by one extra field, the source path; consume it so it is
+        # not mistaken for an entry of its own (the destination is what
+        # matters here).
+        if "R" in field[:2] or "C" in field[:2]:
+            next(fields, None)
+        path = field[3:]
         if path and not _EVIDENCE_PATH_RE.match(path):
             return True
     return False

@@ -467,6 +467,33 @@ class WorkingTreeDirtyTests(unittest.TestCase):
         self._git("mv", "sim/harness/moved.py", "manifests/artifacts/notes.md")
         self.assertTrue(report.working_tree_dirty(self.repo))
 
+    def test_unstaged_edit_to_tracked_record_is_not_dirty(self):
+        # An unstaged edit's status line starts with a space (" M"); that
+        # leading space must not be mistaken for padding and eat the first
+        # character of the path.
+        self._touch("sim/level-shifter-oxide-safety/records/prior-run.md")
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "prior run")
+        self._touch("sim/level-shifter-oxide-safety/records/prior-run.md", "edited\n")
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_first_untracked_record_in_new_bench_dir_is_not_dirty(self):
+        # A wholly-untracked bench directory must not collapse into a single
+        # "?? sim/<bench>/" entry that hides the records/ path inside it.
+        self._touch("sim/brand-new-bench/records/20261123-080000-962d2d1.md")
+        self.assertFalse(report.working_tree_dirty(self.repo))
+
+    def test_literal_rename_arrow_in_input_path_is_dirty(self):
+        # The " -> " inside this path is a literal directory name, not a
+        # rename arrow; the file is an input under docs/, and the text after
+        # the arrow merely looks like an evidence path.
+        rel = "docs/refs -> sim/bench/records/run.md"
+        self._touch(rel)
+        self._git("add", "-A")
+        self._git("commit", "-q", "-m", "fixture")
+        self._touch(rel, "edited\n")
+        self.assertTrue(report.working_tree_dirty(self.repo))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
