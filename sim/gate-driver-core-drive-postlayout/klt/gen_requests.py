@@ -41,6 +41,12 @@ here: both come from sim/harness/klt_request.py, shared with the other
 generators (issue #441). sim/test_gen_requests.py pins that this script still
 reproduces its committed request bytes and that the effective limits still
 equal the tb.json checks.
+
+The corner axes, base measurement table, request builder, and four-file
+writer are shared with the with-uvlo post-layout facet (issue #584): that
+generator loads this module by path and passes its three 200 ns UVLO FIND
+probes as ``extra_measurements``, so a change to the shared grid, method, or
+bounds lands here once instead of in two copies.
 """
 import json
 import sys
@@ -63,11 +69,14 @@ STRETCH_VLOGIC = [3.3]
 STRETCH_VDRV = [6.0]
 
 
-def measurements(stretch):
+def measurements(stretch, extra_measurements=()):
     """The tb.json checks as klt measurements, at this tier's bounds.
 
     The four §3 rows with a stretch override tighten with the tier; every
     other check keeps its (tier-independent) nominal bound in both requests.
+    ``extra_measurements`` appends facet-specific rows after the base set --
+    the with-uvlo facet's three 200 ns FIND probes, carried last exactly as
+    that facet's committed request-*.json files order them.
     """
     tpd_max = 25e-9 if stretch else 50e-9
     ipk_min = 1.0 if stretch else 0.5
@@ -106,10 +115,11 @@ def measurements(stretch):
     for i in range(1, 6):
         add(f"n{i}_max_v", "V", {"max": 6.6}, expr=f"vecmax(v(x2_n{i}))")
         add(f"n{i}_min_v", "V", {"min": -0.05}, expr=f"vecmin(v(x2_n{i}))")
+    meas.extend(extra_measurements)
     return meas
 
 
-def request(netlist, stretch):
+def request(netlist, stretch, extra_measurements=()):
     vlogic, vdrv = (
         (STRETCH_VLOGIC, STRETCH_VDRV) if stretch
         else (NOMINAL_VLOGIC, NOMINAL_VDRV)
@@ -122,17 +132,31 @@ def request(netlist, stretch):
             "supply_v": {"vsup_logic": vlogic, "vsup_drv": vdrv},
         },
         {"kind": "tran", "args": "0.1n 700n"},
-        measurements(stretch),
+        measurements(stretch, extra_measurements),
     )
 
 
-def main():
+def write_requests(out_dir, extra_measurements=()):
+    """Write the four request-{tier}{suffix}.json files into ``out_dir``.
+
+    The same nominal/stretch x no-RC/RC loop both post-layout drive facets
+    commit their requests with (issue #560); the with-uvlo facet reuses it
+    through ``extra_measurements`` so the file set stays in lockstep.
+    """
     for body, suffix in (("body.spice", ""), ("body-rc.spice", "-rc")):
         for tier in ("nominal", "stretch"):
             name = f"request-{tier}{suffix}.json"
-            (HERE / name).write_text(
-                json.dumps(request(body, tier == "stretch"), indent=2) + "\n"
+            (out_dir / name).write_text(
+                json.dumps(
+                    request(body, tier == "stretch", extra_measurements),
+                    indent=2,
+                )
+                + "\n"
             )
+
+
+def main():
+    write_requests(HERE)
 
 
 if __name__ == "__main__":
