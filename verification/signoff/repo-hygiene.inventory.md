@@ -41,7 +41,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:bc5733f58db8c69bd71dbf4e54a6b9de15f414a7ec295c6a607c4f4f3c0fb8b5` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
-| `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
+| `layout/README.md` | `sha256:dd0513c74306a41b5fc103d089722cd596bdbba1557446c65313006e585ec6dc` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
 
 ## Findings
@@ -1661,3 +1661,15 @@ Each circuit body includes the corresponding extracted netlist.
 regeneration and comparison with each facet's `tb.json` limits across the
 45 nominal and 15 stretch corners. This verifies the committed inputs. The
 fleet runs and their result envelopes are tracked in issue #485.
+
+## Re-audit for issue #487 (2026-11-23)
+
+At PR #575 head `af0773ed`, `layout/README.md` changed in two places: the
+Regenerating section now says `check_gate_driver_core.py` imports
+`parse_netlist_full` (the MOS-only `parse_netlist` wrapper was removed), and
+the provenance-pin paragraph records the GDS-neutral refresh for that removal.
+I read the diff. Neither edit changes a link target or a claim the README makes
+about what the block is. The `layout/README.md` row in the reproduction table
+above moves from `49bfde65…` to `dd0513c7…`, matching
+`sha256sum layout/README.md` at this head. The only `.github/workflows/ci.yml`
+edit is a comment outside `jobs.signoff`, which moves no canonical pin.
