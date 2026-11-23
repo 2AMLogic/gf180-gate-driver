@@ -74,14 +74,19 @@ Audit findings for table A:
   ran against `layout/lvs/gate_driver_core.extracted-rc.spice`, whose sha256
   then (`6f0c9b8e...db97e`) equaled the one the record states — **that
   equality is historical, not live**: issue #456 (2026-11-14) regenerated
-  both extracted netlists from the current GDS, so the live
-  `extracted-rc.spice` is `5e695d12...d50c` and the live
-  `extracted.spice` is `21fe85db...ffca`. The DUT hashes the 2026-08-26
+  both extracted netlists from the current GDS, and issue #510 (2026-11-23)
+  re-rendered the `* layout gds` header line (a comment-line-only change --
+  see the #510 records' bit-identical re-runs), so the live
+  `extracted-rc.spice` is `2c3cd778...e04b` and the live
+  `extracted.spice` is `e2999045...2aa1`. The DUT hashes the 2026-08-26
   drive records state describe the pre-#456 files; the current DUTs are
-  covered by the issue #456 oxide-safety records
-  (`20261114-194502-55af608` no-RC, `20261114-202350-bb5cab0` RC — each
-  stating the live hash it ran) and, for the drive suite, by item 7's
-  `klt pex` report over the current GDS. **Both 2026-08-26 drive records
+  covered by the issue #510 oxide-safety records
+  (`20261123-135100-266b013` no-RC, `20261123-135600-266b013` RC — each
+  stating the live hash it ran; superseding the issue #456 records
+  `20261114-194502-55af608` / `20261114-202350-bb5cab0` and the issue
+  #559 batch-route records `20261121-135300-7a91490` /
+  `20261121-135400-7a91490`, whose DUT pins are now historical) and, for
+  the drive suite, by item 7's `klt pex` report over the current GDS. **Both 2026-08-26 drive records
   additionally state they were taken against a dirty working tree and are
   "not citable as a clean-tree result"**; the #456 replacements were taken
   clean. This inventory attests that the testbenches and invocations
@@ -135,10 +140,12 @@ top of `origin/main` at `cbf0cd4`) and updated where they had gone stale:
   committed netlist headers state), so the 2026-08-26 drive records' DUT
   hashes are historical. Device and parasitic populations are unchanged
   (2044 devices, same per-model tally; 6128 R / 295 C), and the
-  level-shifter-oxide-safety-postlayout facet was re-run on the current
+  level-shifter-oxide-safety-postlayout facet was re-run on the then-current
   DUTs (records `20261114-194502-55af608` and `20261114-202350-bb5cab0`,
   clean tree, ngspice-47, corner-for-corner verdicts identical to the
-  superseded pair).
+  superseded pair; issue #510's comment-line regeneration later superseded
+  these with `20261123-135100-266b013` / `20261123-135600-266b013`,
+  bit-identical through the batch route).
 - `sim/level-shifter-oxide-safety-postlayout/testbench/tb.json` is
   byte-identical (its pin above still holds), as is every other hashed
   file in the tables; the extracted netlists are named by this inventory
