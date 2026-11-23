@@ -57,6 +57,23 @@ reading is a contention-current artifact of that lockout, not a weakened
 drive attempt). Every other spec §3 row/corner combination stays PASS by a
 wide margin; propagation delay and rise/fall verdicts are unaffected.
 
+**Re-run note (issue #485, 2026-11-23) — the figures in this report are NOT
+yet re-derived against the current extraction.** The complete-block and
+pre-UVLO post-layout facets were re-run through the batch fleet against the
+extraction regenerated from the current GDS (#456/#510), clean tree:
+[`20261123-222300-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md)
+(RC, supersedes the primary record cited above),
+[`20261123-222200-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md)
+(no-RC, supersedes the cross-check), and
+[`20261123-222100-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222100-23c67d0.md) /
+[`20261123-222000-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222000-23c67d0.md)
+(pre-UVLO RC / no-RC). Every table and TL;DR figure below still quotes the
+superseded 2026-08-26 / 2026-08-18 records, which describe the pre-#456
+extraction; the new records move several of them (two low-rail -40 °C
+corners no longer switch OUT, ss `n1_min_v` undershoots its bound, RC `tpdlh`
+/`tpdhl` are slower) — read those records' findings, not these tables, for
+the current extraction. Re-deriving this report is tracked as a follow-up.
+
 ## TL;DR
 
 - **Propagation delay** (spec §3: < 50 ns nominal / < 25 ns stretch): a

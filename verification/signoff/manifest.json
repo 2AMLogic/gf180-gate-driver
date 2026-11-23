@@ -20,11 +20,11 @@
     },
     "8": {
       "file": "verification/signoff/gate-driver-characterization.generic.json",
-      "content_hash": "sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9"
+      "content_hash": "sha256:3dfb00b7f98eefbd9a5c63bd7aec9219485a23303fad803cd00a699b7740dfe9"
     },
     "9": {
       "file": "verification/signoff/testbenches.generic.json",
-      "content_hash": "sha256:4f480adb77ecbb9bf1e1144353e176d8d3b7b034aa1a86a0ab311cd87f1de10a"
+      "content_hash": "sha256:de15876d4da39761471acfde2da72717f723d5d5f252c31249ff502616bf94ca"
     },
     "10": {
       "file": "verification/signoff/repo-hygiene.generic.json",
