@@ -43,114 +43,67 @@ schematic level). vin_max_v / vin_min_v are carried ungraded (informational
 columns of this facet's records; no tb.json check). See this directory's
 README.md.
 
-The process axis and the engine/models/batch/options envelope are not defined
-here: both come from sim/harness/klt_request.py, shared with the other
-generators (issue #441). sim/test_gen_requests.py pins that this script still
-reproduces its committed request bytes and that the effective limits still
-equal the tb.json checks.
+The 20 base checks, the corner axes, the request builder, and the four-file
+writer are not restated here (issue #584): this script loads the sibling
+drive generator -- sim/gate-driver-core-drive-postlayout/klt/gen_requests.py,
+whose ``gen_requests`` basename collides with this file's own, hence the
+by-path importlib load rather than ``import gen_requests`` -- and passes the
+three 200 ns probes below as ``extra_measurements``, appended after the base
+set exactly where the committed request-*.json files carry them. The process
+axis and the engine/models/batch/options envelope likewise come from
+sim/harness/klt_request.py, shared with the other generators (issue #441).
+sim/test_gen_requests.py pins that this script still reproduces its committed
+request bytes and that the effective limits still equal the tb.json checks.
 """
-import json
-import sys
+import importlib.util
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1]))  # sim/, for the harness package
-from harness import klt_request  # noqa: E402
+SIBLING = (
+    HERE.parents[1] / "gate-driver-core-drive-postlayout" / "klt" / "gen_requests.py"
+)
 
-# The full five-corner MOS axis and temperature grid of the harness records,
-# in the order the committed request-*.json files carry them.
-PROCESSES = ["tt", "ff", "ss", "fs", "sf"]
-TEMPS_C = [-40.0, 27.0, 125.0]
-
-# The harness's tied two-rail grid (corners.DEFAULT_RAILS): vlogic/vdrv swept
-# together at low/nominal/high, plus vdrv's opt-in 6 V stretch extra.
-NOMINAL_VLOGIC = [2.97, 3.3, 3.63]
-NOMINAL_VDRV = [4.5, 5.0, 5.5]
-STRETCH_VLOGIC = [3.3]
-STRETCH_VDRV = [6.0]
+_spec = importlib.util.spec_from_file_location("drive_postlayout_gen", SIBLING)
+drive_postlayout = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(drive_postlayout)
 
 
-def measurements(stretch):
-    """The tb.json checks as klt measurements, at this tier's bounds.
+def uvlo_probes():
+    """The three 200 ns probes this facet adds to the sibling's base 20.
 
-    The four §3 rows with a stretch override tighten with the tier; every
-    other check keeps its (tier-independent) nominal bound in both requests.
+    tb.json analyses: lockout_at_in_high / vout_at_in_high /
+    vdrv_at_in_high, mid-way through IN's first high pulse, decision record
+    0001 Decision 5 evidence: FIND-based, so they never go missing at a
+    UVLO-locked corner. Flat extracted name v(x3_lockout) in place of the
+    schematic's v(x3.lockout). Key order matches the sibling's ``add()``
+    (name, unit, form, limits) so the emitted bytes are unchanged.
     """
-    tpd_max = 25e-9 if stretch else 50e-9
-    ipk_min = 1.0 if stretch else 0.5
-    meas = []
-
-    def add(name, unit, limits, spec_row=None, **form):
-        entry = {"name": name, "unit": unit}
-        if spec_row is not None:
-            entry["spec_row"] = spec_row
-        entry.update(form)
-        if limits is not None:
-            entry["limits"] = limits
-        meas.append(entry)
-
-    rise = ".meas tran trise_s TRIG v(vout_n) VAL=0.1 RISE=1 TARG v(vout_n) VAL=0.9 RISE=1"
-    fall = ".meas tran tfall_s TRIG v(vout_n) VAL=0.9 FALL=1 TARG v(vout_n) VAL=0.1 FALL=1"
-    plh = ".meas tran tpdlh_s TRIG v(vin_n) VAL=0.5 RISE=1 TARG v(vout_n) VAL=0.5 RISE=1"
-    phl = ".meas tran tpdhl_s TRIG v(vin_n) VAL=0.5 FALL=1 TARG v(vout_n) VAL=0.5 FALL=1"
-    add("trise_s", "s", {"max": 50e-9}, spec_row="rise_fall_time", spice=rise)
-    add("tfall_s", "s", {"max": 50e-9}, spec_row="rise_fall_time", spice=fall)
-    add("tpdlh_s", "s", {"max": tpd_max}, spec_row="propagation_delay", spice=plh)
-    add("tpdhl_s", "s", {"max": tpd_max}, spec_row="propagation_delay", spice=phl)
-    add("ipeak_source_a", "A", {"min": ipk_min}, spec_row="peak_source_current",
-        expr="vecmax(i(vimeas))")
-    add("ipeak_sink_a", "A", {"min": ipk_min}, spec_row="peak_sink_current",
-        expr="-vecmin(i(vimeas))")
-    # tb.json sanity and spec Sec.2.3 gate-ceiling rows: every check carried
-    # at its own bound, probing the flat extracted node names.
-    add("vout_max_v", "V", {"max": 6.6}, expr="vecmax(v(OUT))")
-    add("vout_min_v", "V", {"min": -0.05}, expr="vecmin(v(OUT))")
-    # measured columns of this facet's records without a tb.json check
-    add("vin_max_v", "V", None, expr="vecmax(v(IN))")
-    add("vin_min_v", "V", None, expr="vecmin(v(IN))")
-    add("indrv_max_v", "V", {"max": 6.6}, expr="vecmax(v(IN_DRV))")
-    add("indrv_min_v", "V", {"min": -0.05}, expr="vecmin(v(IN_DRV))")
-    for i in range(1, 6):
-        add(f"n{i}_max_v", "V", {"max": 6.6}, expr=f"vecmax(v(x2_n{i}))")
-        add(f"n{i}_min_v", "V", {"min": -0.05}, expr=f"vecmin(v(x2_n{i}))")
-    # The three 200 ns probes (tb.json analyses: lockout_at_in_high /
-    # vout_at_in_high / vdrv_at_in_high, mid-way through IN's first high
-    # pulse, decision record 0001 Decision 5 evidence): FIND-based, so they
-    # never go missing at a UVLO-locked corner. Flat extracted name
-    # v(x3_lockout) in place of the schematic's v(x3.lockout).
-    add("uvlo_lockout_at_in_high", "V", {"min": -0.5, "max": 6.6},
-        spice=".meas tran uvlo_lockout_at_in_high FIND v(x3_lockout) AT=200n")
-    add("uvlo_vout_at_in_high_v", "V", {"min": -0.05, "max": 6.6},
-        spice=".meas tran uvlo_vout_at_in_high_v FIND v(OUT) AT=200n")
-    add("uvlo_vdrv_at_in_high_v", "V", {"min": -0.05, "max": 6.6},
-        spice=".meas tran uvlo_vdrv_at_in_high_v FIND v(VDD_DRV) AT=200n")
-    return meas
-
-
-def request(netlist, stretch):
-    vlogic, vdrv = (
-        (STRETCH_VLOGIC, STRETCH_VDRV) if stretch
-        else (NOMINAL_VLOGIC, NOMINAL_VDRV)
-    )
-    return klt_request.envelope(
-        netlist,
+    return [
         {
-            "process": klt_request.process_entries(PROCESSES),
-            "temperature_c": TEMPS_C,
-            "supply_v": {"vsup_logic": vlogic, "vsup_drv": vdrv},
+            "name": "uvlo_lockout_at_in_high",
+            "unit": "V",
+            "spice": (
+                ".meas tran uvlo_lockout_at_in_high FIND v(x3_lockout) AT=200n"
+            ),
+            "limits": {"min": -0.5, "max": 6.6},
         },
-        {"kind": "tran", "args": "0.1n 700n"},
-        measurements(stretch),
-    )
+        {
+            "name": "uvlo_vout_at_in_high_v",
+            "unit": "V",
+            "spice": ".meas tran uvlo_vout_at_in_high_v FIND v(OUT) AT=200n",
+            "limits": {"min": -0.05, "max": 6.6},
+        },
+        {
+            "name": "uvlo_vdrv_at_in_high_v",
+            "unit": "V",
+            "spice": ".meas tran uvlo_vdrv_at_in_high_v FIND v(VDD_DRV) AT=200n",
+            "limits": {"min": -0.05, "max": 6.6},
+        },
+    ]
 
 
 def main():
-    for body, suffix in (("body.spice", ""), ("body-rc.spice", "-rc")):
-        for tier in ("nominal", "stretch"):
-            name = f"request-{tier}{suffix}.json"
-            (HERE / name).write_text(
-                json.dumps(request(body, tier == "stretch"), indent=2) + "\n"
-            )
+    drive_postlayout.write_requests(HERE, uvlo_probes())
 
 
 if __name__ == "__main__":
