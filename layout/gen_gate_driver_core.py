@@ -583,21 +583,6 @@ class Resistor:
         }
 
 
-def parse_netlist(path: str) -> tuple[list[str], list[Device]]:
-    """Flatten ``gate_driver_core.spice`` into (top port list, MOS device list).
-
-    Thin wrapper over :func:`parse_netlist_full` that drops the passive and
-    resistor lists, kept because every downstream consumer of this parser
-    (``check_gate_driver_core.py``, ``lvs/make_reference.py``) is MOS-only by
-    construction: both audit the drawn transistors of the committed GDS.
-    Anything that *generates* layout should call :func:`parse_netlist_full`
-    instead, so an undrawn passive/resistor is visible rather than silently
-    absent.
-    """
-    top_ports, devices, _passives, _resistors = parse_netlist_full(path)
-    return top_ports, devices
-
-
 def parse_netlist_full(
     path: str,
 ) -> tuple[list[str], list[Device], list[Passive], list[Resistor]]:

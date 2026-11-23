@@ -517,8 +517,8 @@ own parser. The independent comparison is
 python3 layout/test_gen_gate_driver_core.py        # or: npm run test:layout
 ```
 
-`check_gate_driver_core.py` imports `parse_netlist` from the generator, so it
-derives its *expected* device list from the same interpretation the generator
+`check_gate_driver_core.py` imports `parse_netlist_full` from the generator, so
+it derives its *expected* device list from the same interpretation the generator
 drew from: a misreading of `W`/`nf`/`m` would be common-mode and the `devices`
 check would pass on a wrong layout (issue #129).
 [`test_gen_gate_driver_core.py`](test_gen_gate_driver_core.py) is the
@@ -671,7 +671,13 @@ bytes are unchanged since `c927dcc`, so #517's own GDS-neutrality
 comparison backs these pins too). The #528 measurement that motivated
 this: all six commits that ever touched the two helpers changed them
 without touching the GDS, two of them after the last regeneration — the
-silent-staleness class #463 built the check to catch. T1 item 2's live claim therefore rests on the ratified
+silent-staleness class #463 built the check to catch. Refreshed again for
+the #487 removal of the generator's MOS-only parser wrapper (2026-11-23):
+regenerated from main (`230002d`) and from the branch head under the same
+host `klt 0.9.3.dev3786+g820a4313ec16`, both into scratch directories —
+all 41 GDS outputs byte-identical — so the removal is GDS-neutral the same
+way and the pin moves to `5895fc03…` with the committed GDS bytes
+untouched. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
 in CI's PDK-free signoff job) re-hashes the recorded pins — `layout`,
