@@ -763,19 +763,21 @@ class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
                 }
                 self.assertEqual(len(env["corners"]), 60)
                 self.assertEqual(seen, self.GRID)
-                values = {
-                    m["name"]: m.get("value")
-                    for c in env["corners"]
-                    for m in c["measurements"]
+                for c in env["corners"]:
+                    # per corner, not accumulated: a union/overwrite across
+                    # corners would examine only the last one
                     # the top-level record columns only -- the step-scoped
                     # `wave.*` results ride along in each corner entry
-                    if not m["name"].startswith("wave.")
-                }
-                self.assertEqual(set(values), set(self.COLUMNS))
-                for name, value in values.items():
-                    self.assertIsNotNone(
-                        value, f"{name} produced no value at some corner"
-                    )
+                    vals = {
+                        m["name"]: m.get("value")
+                        for m in c["measurements"]
+                        if not m["name"].startswith("wave.")
+                    }
+                    self.assertEqual(set(vals), set(self.COLUMNS), c["corner_id"])
+                    for name, value in vals.items():
+                        self.assertIsNotNone(
+                            value, f"{name} has no value at {c['corner_id']}"
+                        )
                 closure = {
                     e["path"]: e["sha256"]
                     for e in env["environment"]["netlist_closure"]

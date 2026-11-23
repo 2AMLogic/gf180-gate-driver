@@ -469,6 +469,8 @@ def _check_cited_envelopes(
             isinstance(entry, dict)
             and isinstance(entry.get("path"), str)
             and isinstance(entry.get("sha256"), str)
+            and entry["path"] != ""
+            and len(entry["sha256"]) == 64
             and entry["path"] in provenance_text
             and entry["sha256"] in provenance_text
             for entry in closure
