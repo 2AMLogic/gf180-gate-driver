@@ -138,6 +138,34 @@ class PointOutcome:
         return max(candidates, key=lambda pair: pair[1].measurements[name])
 
 
+def _point_seed_plan(
+    base_seed: int, index: int, n_samples: int, control_seed_offset: int
+) -> tuple[list[mc_mod.MismatchSample], list[mc_mod.MismatchSample]]:
+    """The seeds one PVT point's campaign legs run at, as ``(controls, draws)``.
+
+    The seed policy both drivers below share (decision record 0017): the two
+    zero-sigma controls sit at ``sample_seed(base_seed, index,
+    CONTROL_SAMPLE)`` and that plus ``control_seed_offset`` -- different
+    seeds agreeing bit-for-bit is what shows the control is deterministic,
+    not merely repeatable -- and draw ``s`` (1..``n_samples``) sits at
+    ``sample_seed(base_seed, index, s)``. Deriving it in one place (issue
+    #578) is what lets a record reproduce any draw it cites without knowing
+    which execution layer ran the point.
+    """
+    control_seed = mc_mod.sample_seed(base_seed, index, mc_mod.CONTROL_SAMPLE)
+    controls = [
+        mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=control_seed),
+        mc_mod.MismatchSample(
+            sample=mc_mod.CONTROL_SAMPLE, seed=control_seed + control_seed_offset
+        ),
+    ]
+    draws = [
+        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(base_seed, index, s))
+        for s in range(1, n_samples + 1)
+    ]
+    return controls, draws
+
+
 def run_point_campaign(
     tb: Testbench,
     pdk: Pdk,
@@ -168,17 +196,9 @@ def run_point_campaign(
     )
     progress(baseline)
 
-    control_seed = mc_mod.sample_seed(base_seed, index, mc_mod.CONTROL_SAMPLE)
-    controls = [
-        mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=control_seed),
-        mc_mod.MismatchSample(
-            sample=mc_mod.CONTROL_SAMPLE, seed=control_seed + control_seed_offset
-        ),
-    ]
-    draws = [
-        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(base_seed, index, s))
-        for s in range(1, n_samples + 1)
-    ]
+    controls, draws = _point_seed_plan(
+        base_seed, index, n_samples, control_seed_offset
+    )
 
     control_results = []
     for control in controls:
@@ -237,17 +257,9 @@ def run_device_point_campaign(
     baseline = run_sample(None)
     progress(baseline)
 
-    control_seed = mc_mod.sample_seed(base_seed, index, mc_mod.CONTROL_SAMPLE)
-    controls = [
-        mc_mod.MismatchSample(sample=mc_mod.CONTROL_SAMPLE, seed=control_seed),
-        mc_mod.MismatchSample(
-            sample=mc_mod.CONTROL_SAMPLE, seed=control_seed + control_seed_offset
-        ),
-    ]
-    draws = [
-        mc_mod.MismatchSample(sample=s, seed=mc_mod.sample_seed(base_seed, index, s))
-        for s in range(1, n_samples + 1)
-    ]
+    controls, draws = _point_seed_plan(
+        base_seed, index, n_samples, control_seed_offset
+    )
 
     control_results = []
     for control in controls:
