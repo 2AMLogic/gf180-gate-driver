@@ -39,7 +39,7 @@ re-audit of the links):
 | document | sha256 |
 |---|---|
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
-| `sim/README.md` | `sha256:bc5733f58db8c69bd71dbf4e54a6b9de15f414a7ec295c6a607c4f4f3c0fb8b5` |
+| `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
 | `layout/README.md` | `sha256:49bfde65ce558ec7a9bfc3372a5dd90f68e0d50acdc4c8b0e12eff7365186a9f` |
 | `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
@@ -1661,3 +1661,25 @@ Each circuit body includes the corresponding extracted netlist.
 regeneration and comparison with each facet's `tb.json` limits across the
 45 nominal and 15 stretch corners. This verifies the committed inputs. The
 fleet runs and their result envelopes are tracked in issue #485.
+
+## Re-audit for issue #559 (2026-11-23)
+
+At PR #573 head `745a4527`, `sim/README.md` updates the
+`level-shifter-oxide-safety-postlayout` row in the experiment table to link to
+[`sim/level-shifter-oxide-safety-postlayout/klt/README.md`](../../sim/level-shifter-oxide-safety-postlayout/klt/README.md)
+and adds the section `#the-oxide-safety-facet-on-the-batch-fleet-and-envelope-backed-records-issue-559`
+documenting the `analysis_steps[]` batch-fleet route (`request-norcx.json`,
+`request-rc.json`, 60 corners per DUT over `body.spice` and `body-rc.spice`
+including `layout/lvs/gate_driver_core.extracted.spice` and
+`layout/lvs/gate_driver_core.extracted-rc.spice`) and the envelope-backed
+record rule enforced by `sim/harness/evidence_lint.py`.
+
+Read the updated `sim/README.md` diff, `sim/level-shifter-oxide-safety-postlayout/klt/README.md`,
+and `body.spice`/`body-rc.spice` headers, and verified on disk that the linked
+directory, anchor, request files, and committed envelopes under `envelopes/`
+exist. Executed `python3 sim/test_gen_requests.py` (16 tests OK),
+`python3 sim/test_evidence_store.py` (51 tests OK, including
+`EnvelopeBackedLint`), `python3 sim/check_records.py` (44 records clean,
+append-only clean), `python3 sim/run_corners.py --list`, and
+`bash .github/scripts/lint.sh --require-shellcheck --require-append-only`
+(PDK-free; no simulation, netlisting or layout flow was run for this re-audit).
