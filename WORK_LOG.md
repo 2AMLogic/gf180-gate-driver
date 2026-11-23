@@ -10,6 +10,8 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-23
 
+- **PR #568**: sim: verify UVLO Vbe/dVbe startup path and estimate layout cost (DR-0026, 0024 gates 3-4)
+- **Issue #556** (closed): UVLO Vbe/dVbe reference: startup-path verification and layout cost estimate (decision record 0024 adoption gates 3 and 4)
 - **PR #579**: refactor(sim): share the PVT-point seed plan between the two campaign drivers
 - **PR #576**: fix: parse NUL-delimited git status for the provenance dirty flag
 - **PR #575**: layout: remove the MOS-only parse_netlist wrapper
