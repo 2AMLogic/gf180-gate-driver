@@ -1,0 +1,21 @@
+* startup grid, power-on ramp 0 -> 6 V at 2 us per edge (fast).
+* issue #556, decision record 0024 adoption gate 3 -- one stimulus of the
+* startup-path grid (see ../README.md "Gate 3: startup path"). Copies of
+* body-bandgap-trip.spice's boundary condition: same DUT include (../uvlo_bandgap_ref.spice),
+* same 100k pull-up rpu + 6 fF on OUT, no models/.lib/.temp/.control/.end --
+* klt owns those. .options reltol=1e-4 is carried here, not in
+* options.ngspice_options: the batch fleet's runner drops that request field.
+*
+* Stimulus: pwl 0 -> 6 V over 2 us, then hold to 60 us. Fast enough that the core
+* (XCC 3.2 pF, ~2 us startup) is still settling while VDD crosses the trip
+* window; graded on the settled end state, crossings reported where they
+* exist.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../uvlo_bandgap_ref.spice"
+
+vsup VDD_DRV 0 pwl(0 0 2u 6 60u 6)
+vgnd GND_DRV 0 dc 0
+rpu VDD_DRV OUT 100k
+cload OUT GND_DRV 6f

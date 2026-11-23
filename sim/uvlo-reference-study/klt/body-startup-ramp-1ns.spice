@@ -1,0 +1,26 @@
+* startup grid, power-on step 0 -> 6 V with the 1 ns edge of
+* ../../uvlo-trip-verification/klt/body-response.spice.
+* issue #556, decision record 0024 adoption gate 3 -- one stimulus of the
+* startup-path grid (see ../README.md "Gate 3: startup path"). Copies of
+* body-bandgap-trip.spice's boundary condition: same DUT include (../uvlo_bandgap_ref.spice),
+* same 100k pull-up rpu + 6 fF on OUT, no models/.lib/.temp/.control/.end --
+* klt owns those. .options reltol=1e-4 is carried here, not in
+* options.ngspice_options: the batch fleet's runner drops that request field.
+*
+* Stimulus: pwl 0 V until 500 ns, 0 -> 6 V in 1 ns (body-response.spice's own edge
+* rate), then hold to 40 us. Graded on the settled end state only -- VDD
+* spends 1 ns below the trip window from cold, which bounds any design.
+* The 40 us hold (not 10 us) leaves the coldest corner time to finish
+* starting: a first fleet run with a 10 us window graded ff/-40C at
+* nvref = 0.62 V, still mid-startup, while the 200 ns-edge member shows the
+* same corner settled at 1.216 V by 18-20 us -- a window artifact, not a
+* start failure, and the reason this request also carries t_alive.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../uvlo_bandgap_ref.spice"
+
+vsup VDD_DRV 0 pwl(0 0 500n 0 501n 6 40u 6)
+vgnd GND_DRV 0 dc 0
+rpu VDD_DRV OUT 100k
+cload OUT GND_DRV 6f

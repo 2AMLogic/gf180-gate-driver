@@ -1,0 +1,376 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/uvlo-reference-study/klt/body-startup-deadinit-2v0-nokick.spice",
+    "scope": "repo"
+  },
+  "status": "fail",
+  "corner_count": 1,
+  "passed": 0,
+  "failed": 1,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {
+      "measurement_not_reached": 1
+    },
+    "by_severity": {
+      "info": 1
+    },
+    "corners_with_diagnostics": 1
+  },
+  "metrics": {
+    "sim__corner__count": 1,
+    "sim__corner__passed_count": 0,
+    "sim__corner__failed_count": 1,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "47",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": null,
+      "probe": "ok",
+      "reason": null
+    },
+    "ngspice_init": {
+      "source": "runner",
+      "lines": null,
+      "sha256": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "276efd8c14060ff4a9b5c064bd7870c15a49e58eb43503454b3ab78701521bca",
+    "netlist_sha256_scope": "staged",
+    "netlist_closure": [
+      {
+        "path": "sim/uvlo-reference-study/klt/body-startup-deadinit-2v0-nokick.spice",
+        "scope": "repo",
+        "sha256": "276efd8c14060ff4a9b5c064bd7870c15a49e58eb43503454b3ab78701521bca"
+      },
+      {
+        "path": "sim/uvlo-reference-study/klt/design.ngspice",
+        "scope": "repo",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "path": "sim/uvlo-reference-study/uvlo_bandgap_ref_nokick.spice",
+        "scope": "repo",
+        "sha256": "412c783468da1bfac5fdaee819cda5a449b0ab501fbb128e7e2b11f51dd3a20e"
+      }
+    ],
+    "netlist_identity": "sha256:acc7f724e379cbc450151207ebf9fe41ea33ae5ec4970260d3d0897354b1f0b7",
+    "remote": {
+      "provider": "aws-batch-fleet",
+      "job_id": "klt-sim-7de9c8b60b67",
+      "region": "us-east-1",
+      "instance_id": "i-06310dc412b4f930e",
+      "instance_type": "c7i.4xlarge",
+      "availability_zone": "us-east-1f",
+      "ami_id": "ami-09c14f55df4958cbd",
+      "lifecycle": "spot",
+      "spot": true,
+      "state": "failed",
+      "exit_code": "3",
+      "concurrency": "1",
+      "physical_cores": "8",
+      "elapsed_seconds": 22,
+      "client_submitted_at": "2026-11-21T00:23:13.615635Z",
+      "client_launched_at": "2026-11-21T00:25:01.797930Z",
+      "client_status_terminal_at": "2026-11-21T00:26:05.396991Z",
+      "client_collected_at": "2026-11-21T00:26:06.460964Z",
+      "runner_klt_version": "0.9.0",
+      "client_klt_version": "0.9.3.dev2575+g6bd18bbc8637",
+      "runner_compatibility": "match",
+      "runner_request_features": {
+        "required": [
+          "options.ngspice_init",
+          "options.initial_conditions"
+        ],
+        "missing": [],
+        "status": "supported"
+      },
+      "worker_environment": {
+        "capture": "ok",
+        "simulator": {
+          "requested_binary": "ngspice",
+          "binary_source": "PATH",
+          "selected_path": "/usr/local/bin/ngspice",
+          "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+          "version_probe": "ok"
+        },
+        "pdk": {
+          "variant": "gf180mcuD",
+          "root": "/opt/pdk",
+          "stamp_scheme": "sources-sha256",
+          "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+          "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+          "models_staged": false,
+          "stamp_scope": "executed"
+        },
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+        "omp_num_threads": null,
+        "image_manifest": null,
+        "model_inputs": null,
+        "diagnostics": [],
+        "pdk_stamp_comparison": {
+          "status": "match"
+        },
+        "ngspice_init": null,
+        "threads_per_worker": null,
+        "engine_build_comparison": {
+          "status": "match"
+        }
+      },
+      "runner_model_inputs": null,
+      "exit_reason": {
+        "exit_code": 3,
+        "report_status": "fail",
+        "nothing_checked": false,
+        "nothing_checked_reasons": [],
+        "message": "klt sim exited 3 (a corner or measurement failed): aggregate status 'fail'; the job state is failed because of this verdict exit code, not a runner crash and not the whole-job ceiling (a ceiling kill reports state timeout, exit 124)",
+        "units": {
+          "total": 1,
+          "by_status": {
+            "fail": 1
+          },
+          "first_not_passed": [
+            {
+              "corner_id": "tt/novdd/27C",
+              "status": "fail",
+              "code": "measurement_not_reached",
+              "message": "measurement 't_alive' target not reached: the analysis completed but ngspice's .meas never satisfied its condition (.meas tran t_alive WHEN v(nvref)=1.1 RISE=1)"
+            }
+          ]
+        }
+      },
+      "runner_models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "runner_osdi_preload": null,
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 1,
+        "per_unit_timeout_s": 3000,
+        "overhead_s": 120.0,
+        "job_bound_s": 3120.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": false,
+        "check": "warn",
+        "max_units_per_job": 1,
+        "recommended_hosts": 1
+      },
+      "models_lib_comparison": {
+        "status": "match"
+      }
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "client_engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": "39ca1adb826660324c3626f72bd946ec40704f0f3fc8e243c623f76e24b3eee2",
+      "probe": "ok",
+      "reason": null
+    },
+    "backend": {
+      "resolved": "batch",
+      "source": "flag",
+      "requested": "batch"
+    }
+  },
+  "coverage": {
+    "corners_simulated": 1,
+    "measurements_declared": 4,
+    "measurements_with_limits": 3,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"tt/novdd/27C\",\"lockout_min\",\"min\"]",
+      "limit:[0,\"tt/novdd/27C\",\"nvref_settled\",\"min\"]",
+      "limit:[0,\"tt/novdd/27C\",\"out_max\",\"max\"]",
+      "measurement:[0,\"tt/novdd/27C\",\"t_alive\"]/observation"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "measurement:[0,\"tt/novdd/27C\",\"t_alive\"]/limits",
+        "reason": "characterization_without_limits"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.9.3.dev2575+g6bd18bbc8637",
+    "klt_git_commit": "6bd18bbc8637f6d767b3c24e77bd5db7a39e4bbe",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@6bd18bbc8637f6d767b3c24e77bd5db7a39e4bbe",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+      "ambiguous_sources": [
+        "search root: ~/.volare"
+      ]
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:276efd8c14060ff4a9b5c064bd7870c15a49e58eb43503454b3ab78701521bca",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "nvref_settled",
+      "unit": "V",
+      "limits": {
+        "min": 1.1
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "tt/novdd/27C",
+        "value": 0.19822749229,
+        "margin": -0.9017725077100001
+      },
+      "min": {
+        "corner_id": "tt/novdd/27C",
+        "value": 0.19822749229
+      },
+      "max": {
+        "corner_id": "tt/novdd/27C",
+        "value": 0.19822749229
+      },
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "t_alive",
+      "unit": "s",
+      "limits": null,
+      "status": "not_reached",
+      "worst_case": {
+        "corner_id": "tt/novdd/27C",
+        "value": null,
+        "margin": null
+      },
+      "min": null,
+      "max": null
+    },
+    {
+      "name": "lockout_min",
+      "unit": "V",
+      "limits": {
+        "min": 1.5
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "tt/novdd/27C",
+        "value": 2.694105236e-06,
+        "margin": -1.499997305894764
+      },
+      "min": {
+        "corner_id": "tt/novdd/27C",
+        "value": 2.694105236e-06
+      },
+      "max": {
+        "corner_id": "tt/novdd/27C",
+        "value": 2.694105236e-06
+      },
+      "spec_row": "uvlo"
+    },
+    {
+      "name": "out_max",
+      "unit": "V",
+      "limits": {
+        "max": 0.5
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "tt/novdd/27C",
+        "value": 1.9998309719,
+        "margin": -1.4998309719
+      },
+      "min": {
+        "corner_id": "tt/novdd/27C",
+        "value": 1.9998309719
+      },
+      "max": {
+        "corner_id": "tt/novdd/27C",
+        "value": 1.9998309719
+      },
+      "spec_row": "uvlo"
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "tt/novdd/27C",
+      "process": "tt",
+      "supply_v": {},
+      "temperature_c": 27.0,
+      "initial_conditions": {
+        "nfb": 2.0
+      },
+      "status": "fail",
+      "runtime_s": 0.919,
+      "peak_rss_bytes": 49885184,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "nvref_settled",
+          "value": 0.19822749229,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.9017725077100001
+        },
+        {
+          "name": "t_alive",
+          "value": null,
+          "unit": "s",
+          "status": "not_reached",
+          "margin": null
+        },
+        {
+          "name": "lockout_min",
+          "value": 2.694105236e-06,
+          "unit": "V",
+          "status": "fail",
+          "margin": -1.499997305894764
+        },
+        {
+          "name": "out_max",
+          "value": 1.9998309719,
+          "unit": "V",
+          "status": "fail",
+          "margin": -1.4998309719
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "info",
+          "code": "measurement_not_reached",
+          "message": "measurement 't_alive' target not reached: the analysis completed but ngspice's .meas never satisfied its condition (.meas tran t_alive WHEN v(nvref)=1.1 RISE=1)"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ],
+  "not_reached": 1
+}
