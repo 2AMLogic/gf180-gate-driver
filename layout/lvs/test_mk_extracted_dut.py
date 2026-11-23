@@ -470,5 +470,45 @@ class ResistorDeviceTest(unittest.TestCase):
             mk.emit(extract)
 
 
+class ReportFilePathRenderingTest(unittest.TestCase):
+    """The `* layout gds` header must read the same across klt schema shapes.
+
+    klt's extract-report ``file`` field moved from a bare string (report
+    schema <= 2) to the committable ``{path, scope}`` envelope
+    (schema_version 4, klayout-tools#2659), and the pinned fixtures carry
+    both shapes live: the ``dc66e49`` pair is schema 2 with ``file`` a
+    ``str``, the ``cbf0cd4`` pair is schema 4 with ``file`` a ``dict``
+    (issue #510). The header is a provenance line in generated signoff
+    evidence, so no Python ``dict``/``None`` repr may reach it under any
+    shape -- including ``{"path": null, "scope": "external"}``, which no
+    report in this tree exercises.
+    """
+
+    def test_legacy_string(self) -> None:
+        self.assertEqual(mk._render_report_path("layout/g.gds"), "layout/g.gds")
+
+    def test_repo_scoped_object(self) -> None:
+        obj = {"path": "layout/g.gds", "scope": "repo"}
+        self.assertEqual(mk._render_report_path(obj), "layout/g.gds")
+
+    def test_external_object_has_no_none_repr(self) -> None:
+        out = mk._render_report_path({"path": None, "scope": "external"})
+        self.assertEqual(out, "<external>")
+        self.assertNotIn("None", out)
+
+    def test_unknown_shape_fails_loudly(self) -> None:
+        with self.assertRaises(SystemExit):
+            mk._render_report_path(["layout/g.gds"])
+
+    def test_legacy_and_v4_reports_render_the_same_header_text(self) -> None:
+        legacy = json.loads(FLAT_REPORT.read_text())["file"]
+        v4 = json.loads(
+            (REPORTS / "20261114-194101-cbf0cd4.extract.json").read_text()
+        )["file"]
+        self.assertIsInstance(legacy, str)
+        self.assertIsInstance(v4, dict)
+        self.assertEqual(mk._render_report_path(legacy), mk._render_report_path(v4))
+
+
 if __name__ == "__main__":
     unittest.main()

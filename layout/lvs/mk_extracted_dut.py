@@ -671,7 +671,7 @@ def main() -> int:
         "* Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.",
         "*",
         f"* extract report : {args.extract.relative_to(REPO_ROOT)}",
-        f"* layout gds     : {extract['file']}",
+        f"* layout gds     : {_render_report_path(extract['file'])}",
         f"* extraction deck: {extract['deck']} "
         f"({extract['provenance']['deck']['content_hash']})"
         f"  (klt extract{' --parasitics' if extract.get('parasitics') else ''})",
@@ -734,6 +734,32 @@ def main() -> int:
     if extract.get("parasitics"):
         print(f"  parasitics: {info['parasitics']['r']} R / {info['parasitics']['c']} C")
     return 0
+
+
+def _render_report_path(value: object) -> str:
+    """Display string for a `klt extract` report's ``file`` field.
+
+    klt report schema <= 2 emits a bare string; schema_version 4 emits the
+    committable ``{"path": <str>|null, "scope": "repo"|"external"}`` envelope
+    (klayout-tools#2659) -- ``scope: "repo"`` with a repo-relative ``path``
+    when the layout sits inside the invocation's repo, ``{"path": null,
+    "scope": "external"}`` when it does not, and never the producing host's
+    absolute path. Both shapes render the same text for the same GDS so the
+    ``* layout gds`` header line is stable across the schema change (issue
+    #510). ``path: null`` renders an explicit marker, never a ``None``/``dict``
+    repr. Filesystem-free on purpose: CI re-derives the DUT on a PDK-free
+    runner from committed JSON only, and the dual-shape contract is the one
+    `verification/signoff/check_tier_report.py`'s `resolve_declared_input`
+    already established for klt envelope paths -- without importing it, since
+    that helper resolves and validates a filesystem `Path`.
+    """
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict) and isinstance(value.get("path"), str):
+        return value["path"]
+    if isinstance(value, dict) and value.get("path") is None:
+        return f"<{value.get('scope', 'external')}>"
+    raise SystemExit(f"error: unrecognised extract report 'file' field: {value!r}")
 
 
 def _wrap(text: str, width: int) -> list[str]:
