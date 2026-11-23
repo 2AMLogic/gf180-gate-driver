@@ -31,16 +31,17 @@ Why this file exists (issue #129)
 ---------------------------------
 
 ``check_gate_driver_core.py`` audits the committed GDS independently for
-geometry, placement, connectivity and shorts -- but it imports ``parse_netlist``
-and ``_spice_number`` from the generator, so it derives its *expected* device
-list from the very interpretation the generator drew from. A misreading of
-``W``/``nf``/``m`` is therefore common-mode: expected and extracted would agree
-and the ``devices`` check would pass on a wrong layout.
+geometry, placement, connectivity and shorts -- but it imports
+``parse_netlist_full`` and ``_spice_number`` from the generator, so it derives
+its *expected* device list from the very interpretation the generator drew
+from. A misreading of ``W``/``nf``/``m`` is therefore common-mode: expected
+and extracted would agree and the ``devices`` check would pass on a wrong
+layout.
 
 This suite closes that blind spot by asserting the **hand-computed** result of
 that interpretation. Every expected number below is written out literally; none
-of them is produced by calling ``_spice_number`` or ``parse_netlist`` on the
-same input, because those are the helpers under test.
+of them is produced by calling ``_spice_number`` or ``parse_netlist_full`` on
+the same input, because those are the helpers under test.
 
 The interpretation being pinned (both halves confirmed, not assumed):
 
@@ -99,7 +100,6 @@ from gen_gate_driver_core import (  # noqa: E402  (path set above)
     _device_from_tokens,
     _generator_dep_modules,
     _resistor_from_tokens,
-    parse_netlist,
     parse_netlist_full,
     resistor_array_params,
     resistor_ohms,
@@ -226,9 +226,9 @@ class CommittedNetlistTest(unittest.TestCase):
     """
 
     def test_every_committed_device_line_is_nf1(self):
-        # Read as raw text rather than through parse_netlist -- this assertion
-        # is what licenses the "no behavior change [to nf]" claim, so it must
-        # not go through the parser under test.
+        # Read as raw text rather than through parse_netlist_full -- this
+        # assertion is what licenses the "no behavior change [to nf]" claim,
+        # so it must not go through the parser under test.
         with open(NETLIST_PATH, encoding="utf-8") as handle:
             text = handle.read()
         nf_values = re.findall(r"\bnf=(\S+)", text)
@@ -236,7 +236,7 @@ class CommittedNetlistTest(unittest.TestCase):
         self.assertEqual(set(nf_values), {"1"})
 
     def test_committed_netlist_device_and_transistor_counts(self):
-        _ports, devices = parse_netlist(NETLIST_PATH)
+        _ports, devices, _passives, _resistors = parse_netlist_full(NETLIST_PATH)
         self.assertEqual(len(devices), 35)
         self.assertEqual(sum(d.fingers for d in devices), 1769)
 
@@ -336,12 +336,6 @@ class PassiveDeviceTest(unittest.TestCase):
             "cap_mim_1f0_m4m5_noshield",
             {d.model for d in devices} | {p.model for p in passives},
         )
-
-    def test_passive_is_reported_in_full_but_hidden_from_the_mos_parser(self):
-        ports_a, devices_a = parse_netlist(NETLIST_PATH)
-        ports_b, devices_b, _passives, _resistors = parse_netlist_full(NETLIST_PATH)
-        self.assertEqual(ports_a, ports_b)
-        self.assertEqual([d.name for d in devices_a], [d.name for d in devices_b])
 
 
 class ResistorDeviceTest(unittest.TestCase):
@@ -616,7 +610,7 @@ class GroundRailIsolationVerdictTest(unittest.TestCase):
 
     def test_routed_nets_matches_the_generators_own_rail_set(self):
         """The expected-net list is the same {d, g, s} set the generator rails."""
-        _ports, devices = parse_netlist(NETLIST_PATH)
+        _ports, devices, _passives, _resistors = parse_netlist_full(NETLIST_PATH)
         nets = routed_nets(devices)
         self.assertEqual(nets, sorted(set(nets)))
         for ground in ("GND_LOGIC", "GND_DRV"):
