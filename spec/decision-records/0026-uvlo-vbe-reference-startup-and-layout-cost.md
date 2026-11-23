@@ -94,7 +94,7 @@ quantity.
 So of 0024's four gates: 3 **satisfied** (this record), 4 **satisfied as an
 estimate** with the high-sheet-flavour implementation path named, 2
 satisfied (#555, record 0025), and 1 **not satisfied** — the mismatch gate,
-per record 0025 (per-corner trip sigma 0.48-0.57 V). **Adoption remains
+per record 0025. **Adoption remains
 blocked by gate 1**, and the fix it points to (offset cancellation or a
 lower `Rsa/Rp` in the loop amplifier) is unchanged by this record.
 
