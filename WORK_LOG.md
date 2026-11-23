@@ -8,8 +8,22 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-23
+
+- **PR #579**: refactor(sim): share the PVT-point seed plan between the two campaign drivers
+- **PR #576**: fix: parse NUL-delimited git status for the provenance dirty flag
+- **PR #575**: layout: remove the MOS-only parse_netlist wrapper
+- **PR #573**: sim: qualify the oxide-safety batch-fleet run against both extracted DUT baselines
+- **Issue #578** (closed): Share Monte Carlo seed selection across the two campaign drivers
+- **Issue #574** (closed): Read NUL-delimited Git status for simulation provenance
+- **Issue #559** (closed): Qualify the oxide-safety fleet run against both extracted DUT baselines
+- **Issue #558** (closed): Add klt sim request generators for the three post-layout facets so they can run on the batch fleet (unblocks #510 and #485)
+- **Issue #487** (closed): Remove parse_netlist(): its MOS-only rationale no longer has a consumer
+
 ### 2026-11-21
 
+- **PR #564**: sim: record UVLO Vbe/dVbe PDK-resistor pass and local-mismatch fail (DR-0025)
+- **Issue #555** (closed): UVLO Vbe/dVbe reference: PDK-resistor re-measurement and local-mismatch Monte Carlo over the 15 corners (DR-0024 adoption gates 2 and 1)
 - **PR #566**: feat: add post-layout drive fleet request generators
 - **Issue #560** (closed): Generate nominal and stretch fleet requests for both post-layout drive benches
 
