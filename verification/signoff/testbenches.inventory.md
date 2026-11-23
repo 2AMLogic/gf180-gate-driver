@@ -77,7 +77,7 @@ Audit findings for table A:
   both extracted netlists from the current GDS, and issue #510 (2026-11-23)
   re-rendered the `* layout gds` header line (a comment-line-only change --
   see the #510 records' bit-identical re-runs), so the live
-  `extracted-rc.spice` is `2c3cd778...e04b` and the live
+  `extracted-rc.spice` is `2c3cd778...204b` and the live
   `extracted.spice` is `e2999045...2aa1`. The DUT hashes the 2026-08-26
   drive records state describe the pre-#456 files; the current DUTs are
   covered by the issue #510 oxide-safety records

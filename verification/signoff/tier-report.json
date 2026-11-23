@@ -705,7 +705,7 @@
         "command": null,
         "kind": "generic",
         "check_status": "pass",
-        "content_hash": "sha256:96cc7b62b6b67b78f754d1b6ab39b60016867f521cd36e8fbaa98734e94f4a66",
+        "content_hash": "sha256:4f480adb77ecbb9bf1e1144353e176d8d3b7b034aa1a86a0ab311cd87f1de10a",
         "input_verified": true,
         "exit_status": 0,
         "artifact_binding": {
@@ -714,7 +714,7 @@
             "path": "verification/signoff/testbenches.inventory.md",
             "scope": "repo"
           },
-          "content_hash": "sha256:96cc7b62b6b67b78f754d1b6ab39b60016867f521cd36e8fbaa98734e94f4a66",
+          "content_hash": "sha256:4f480adb77ecbb9bf1e1144353e176d8d3b7b034aa1a86a0ab311cd87f1de10a",
           "input_verified": true,
           "summary": "T1 item 9 (testbenches shipped): inventory of every sim/ experiment with its testbench manifest and cold-start invocation, scoped as stated in the inventory; PDK variant pinned in sim/pdk.json, PDK revision recorded per record (open_pdks c6d73a35) not machine-pinned. One invocation was executed (primary post-layout testbench, tt/27C, 4 of 4 points PASS, --no-write); the rest were checked by file existence and harness --list only. The cited post-layout records state they were taken on a dirty tree. The grader hashes the inventory only and runs nothing.",
           "source": "verification/signoff/testbenches.inventory.md"
