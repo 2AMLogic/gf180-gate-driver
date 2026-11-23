@@ -301,7 +301,7 @@ jobs:
         # well-tie geometry -- one shared NMOS substrate net, generic
         # nfet/pfet device classes) that make_reference.py's deck-compatible
         # reference build depends on -- issue #105. Pure stdlib arithmetic on
-        # top of gen_gate_driver_core.parse_netlist, no klt/PDK/GDS, so it
+        # top of gen_gate_driver_core.parse_netlist_full, no klt/PDK/GDS, so it
         # belongs on this same PDK-free runner; the actual `klt drc`/`klt lvs`
         # run (layout/drc/run_drc.py, layout/lvs/run_lvs.py) needs klt + the
         # PDK and is run and committed as evidence by a developer/agent box,

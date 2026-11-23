@@ -9,8 +9,8 @@ differ from what the schematic states -- mirroring
 "Harness bootstrap: copy the sim-harness pattern from 2AMLogic/gf180-bandgap
 rather than reinventing it"), this script mechanically derives the reference
 from the committed schematic netlist via
-:func:`layout.gen_gate_driver_core.parse_netlist` -- the *same* parser the
-generator itself draws from, so the drawn geometry and the LVS reference
+:func:`layout.gen_gate_driver_core.parse_netlist_full` -- the *same* parser
+the generator itself draws from, so the drawn geometry and the LVS reference
 cannot disagree about device count/W/L/connectivity -- applying exactly the
 transformations the extraction deck's own capabilities and this layout's own
 drawn decomposition imply. No hand editing, no per-device fudging.

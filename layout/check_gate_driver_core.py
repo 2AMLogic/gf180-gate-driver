@@ -17,8 +17,9 @@ the stream, not a replay of how it was built:
     (that is issue #105's scope).
 
     Note what this check can and cannot see: it re-derives the expected list
-    through the generator's own ``parse_netlist``, so it audits the *stream*
-    against that interpretation but cannot audit the interpretation itself.
+    through the generator's own ``parse_netlist_full``, so it audits the
+    *stream* against that interpretation but cannot audit the interpretation
+    itself.
     ``layout/test_gen_gate_driver_core.py`` is the independent half of that
     (issue #129).
 
