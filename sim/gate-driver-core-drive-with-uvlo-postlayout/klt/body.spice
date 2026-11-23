@@ -1,0 +1,52 @@
+* gate-driver-core-drive-with-uvlo-postlayout -- `klt sim` circuit BODY,
+* no-RC DUT (issue #560).
+*
+* Same stimulus, 1 nF reference load and ammeter polarity as
+* ../testbench/gate_driver_core_uvlo_tb.spice (the harness bench behind this
+* facet's records), restated as a `klt sim` circuit body: no models/.lib/
+* .temp/.control/.end -- klt owns those. The DUT is the ACTUAL extracted
+* netlist layout/lvs/gate_driver_core.extracted.spice (the no-RC, --combine
+* device-level extraction tb.json's "dut" names -- the extraction carries the
+* uvlo block, x3, like every other block of layout/gate_driver_core.gds),
+* .include'd here at DECK LEVEL -- not re-wrapped in a .subckt -- because the
+* extracted DUT is flat (its own .SUBCKT wrapper is dropped,
+* layout/lvs/mk_extracted_dut.py T1): deck-level inclusion is what keeps the
+* flat extracted probe names (v(x2_n1)..v(x2_n5), v(x3_lockout)) addressable,
+* exactly as the harness deck .include's the DUT fragment ahead of the
+* testbench fragment. Each run's environment.netlist_closure pins the sha256
+* of the extraction actually used.
+*
+* The two rails are the voltage sources vsup_logic / vsup_drv, swept TIED by
+* index through the request's corners.supply_v (the harness's tied two-rail
+* grid, sim/README.md). Because supply_v only alters DC sources, the IN pulse
+* is built as a unit pulse scaled by v(VDD_LOGIC), and the 10/50/90 %
+* crossings are taken on rail-normalised copies of IN and OUT (vin_n, vout_n)
+* so the file-scope .meas cards carry literal thresholds that are right at
+* every rail point -- the method signoff Item 5 records for the schematic
+* facet (verification/signoff/README.md); see this directory's README.md.
+*
+* Harness-wide transient tolerance (sim/harness/runner.py
+* DEFAULT_TRAN_RELTOL). Carried here, not in options.ngspice_options: the
+* batch fleet's runner drops that request field and klt then fails the
+* finished job.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../layout/lvs/gate_driver_core.extracted.spice"
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 1n 1n 300n 700n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load (spec Sec.3), measured through the 0V ammeter with the
+* harness bench's polarity (source = positive, sink = negative i(vimeas))
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* rail-normalised monitors (measurement only; nothing in the DUT reads them)
+bvin_n vin_n 0 V='v(IN)/v(VDD_LOGIC)'
+bvout_n vout_n 0 V='v(OUT)/v(VDD_DRV)'

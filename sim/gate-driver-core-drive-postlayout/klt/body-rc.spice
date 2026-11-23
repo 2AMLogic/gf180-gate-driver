@@ -1,0 +1,37 @@
+* gate-driver-core-drive-postlayout -- `klt sim` circuit BODY, RC DUT
+* (issue #560).
+*
+* Byte-identical bench to body.spice above (same stimulus, 1 nF reference
+* load, ammeter polarity, rail-normalised monitors, reltol); the ONLY
+* difference is which extracted DUT the single DUT .include names:
+* layout/lvs/gate_driver_core.extracted-rc.spice, the klt extract
+* --parasitics variant (discrete fingers + XCCOMP* caps + per-net ground-star
+* R/C, no net-to-net coupling -- see this facet's tb.json description). Run
+* as its own body file so the request's "netlist" field names the DUT variant
+* it grades; each run's environment.netlist_closure pins the RC extraction's
+* sha256.
+*
+* Deck-level DUT inclusion (no .subckt re-wrap) for the same reason as
+* body.spice: the extracted DUT is flat, and flat inclusion is what keeps
+* v(x2_n1)..v(x2_n5) addressable. See body.spice for the full bench notes.
+.options reltol=1e-4
+
+.include "design.ngspice"
+.include "../../../layout/lvs/gate_driver_core.extracted-rc.spice"
+
+vsup_logic VDD_LOGIC 0        dc 3.3
+vsup_drv   VDD_DRV   0        dc 5.0
+vgnd_logic GND_LOGIC 0        dc 0
+rgndtie    GND_LOGIC GND_DRV  1m
+
+vpls pls 0 pulse(0 1 20n 1n 1n 300n 700n)
+bin IN GND_LOGIC V='v(VDD_LOGIC)*v(pls)'
+
+* 1 nF reference load (spec Sec.3), measured through the 0V ammeter with the
+* harness bench's polarity (source = positive, sink = negative i(vimeas))
+vimeas OUT outcap
+cload outcap GND_DRV 1n
+
+* rail-normalised monitors (measurement only; nothing in the DUT reads them)
+bvin_n vin_n 0 V='v(IN)/v(VDD_LOGIC)'
+bvout_n vout_n 0 V='v(OUT)/v(VDD_DRV)'
