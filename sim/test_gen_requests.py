@@ -735,14 +735,17 @@ class OxideSafetyRequestsMatchManifestAndGrid(unittest.TestCase):
 
 
 class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
-    """The committed #559 envelopes cover each DUT's grid exactly once.
+    """Every committed oxide-safety envelope covers each DUT's grid exactly once.
 
     Each committed fleet report must hold the 60 unique corners of the
     harness grid (process x temperature x the four tied rail pairs), report
     all nine record columns at every corner, and pin the DUT it ran in
     ``environment.netlist_closure``. The sha256-vs-live-file match is the
     citing record's to state (bytes drift on a re-extraction; the envelope
-    keeps the hash it ran) -- this pins only what cannot drift.
+    keeps the hash it ran) -- this pins only what cannot drift. More than
+    one envelope per stem accumulates by design: #559 qualified the batch
+    route on the pre-#510 DUTs, #510 re-ran it over the header-fixed DUTs,
+    and every append-only envelope keeps pinning the bytes it ran.
     """
 
     SLUG = "level-shifter-oxide-safety-postlayout"
@@ -762,51 +765,51 @@ class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
         for vl, vd in ((2.97, 4.5), (3.3, 5.0), (3.63, 5.5), (3.3, 6.0))
     }
 
-    def _envelope(self, stem):
+    def _envelopes(self, stem):
         matches = sorted((SIM / self.SLUG / "klt" / "envelopes").glob(
             f"*-{stem}.json"))
-        self.assertEqual(
+        self.assertGreaterEqual(
             len(matches), 1,
-            f"expected exactly one committed envelope for {stem}, found "
+            f"expected at least one committed envelope for {stem}, found "
             f"{[m.name for m in matches]}",
         )
-        return json.loads(matches[0].read_text())
+        return [(m.name, json.loads(m.read_text())) for m in matches]
 
     def test_each_envelope_covers_the_grid_exactly_once(self):
         for suffix, (stem, dut) in self.ENVELOPES.items():
-            with self.subTest(envelope=suffix):
-                env = self._envelope(stem)
-                seen = {
-                    (
-                        c["process"],
-                        float(c["temperature_c"]),
-                        float(c["supply_v"]["vsup_logic"]),
-                        float(c["supply_v"]["vsup_drv"]),
-                    )
-                    for c in env["corners"]
-                }
-                self.assertEqual(len(env["corners"]), 60)
-                self.assertEqual(seen, self.GRID)
-                for c in env["corners"]:
-                    # per corner, not accumulated: a union/overwrite across
-                    # corners would examine only the last one
-                    # the top-level record columns only -- the step-scoped
-                    # `wave.*` results ride along in each corner entry
-                    vals = {
-                        m["name"]: m.get("value")
-                        for m in c["measurements"]
-                        if not m["name"].startswith("wave.")
-                    }
-                    self.assertEqual(set(vals), set(self.COLUMNS), c["corner_id"])
-                    for name, value in vals.items():
-                        self.assertIsNotNone(
-                            value, f"{name} has no value at {c['corner_id']}"
+            for name, env in self._envelopes(stem):
+                with self.subTest(envelope=name):
+                    seen = {
+                        (
+                            c["process"],
+                            float(c["temperature_c"]),
+                            float(c["supply_v"]["vsup_logic"]),
+                            float(c["supply_v"]["vsup_drv"]),
                         )
-                closure = {
-                    e["path"]: e["sha256"]
-                    for e in env["environment"]["netlist_closure"]
-                }
-                self.assertIn(dut, closure)
+                        for c in env["corners"]
+                    }
+                    self.assertEqual(len(env["corners"]), 60)
+                    self.assertEqual(seen, self.GRID)
+                    for c in env["corners"]:
+                        # per corner, not accumulated: a union/overwrite across
+                        # corners would examine only the last one
+                        # the top-level record columns only -- the step-scoped
+                        # `wave.*` results ride along in each corner entry
+                        vals = {
+                            m["name"]: m.get("value")
+                            for m in c["measurements"]
+                            if not m["name"].startswith("wave.")
+                        }
+                        self.assertEqual(set(vals), set(self.COLUMNS), c["corner_id"])
+                        for name, value in vals.items():
+                            self.assertIsNotNone(
+                                value, f"{name} has no value at {c['corner_id']}"
+                            )
+                    closure = {
+                        e["path"]: e["sha256"]
+                        for e in env["environment"]["netlist_closure"]
+                    }
+                    self.assertIn(dut, closure)
 
 
 

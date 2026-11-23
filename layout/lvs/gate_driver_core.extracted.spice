@@ -1,7 +1,7 @@
 * Post-layout EXTRACTED DUT netlist -- GENERATED, do not edit by hand.
 *
 * extract report : layout/lvs/reports/gate_driver_core/20261114-194101-cbf0cd4.extract.json
-* layout gds     : {'path': 'layout/gate_driver_core.gds', 'scope': 'repo'}
+* layout gds     : layout/gate_driver_core.gds
 * extraction deck: gf180mcu (sha256:c3f2cce49000857a3a71cb65203aabf0eb27cd0ee6b1c60e29792355c455c4b1)  (klt extract)
 * klt/klayout    : 0.9.2.dev1029+g76f47afa48f1 / 0.30.13
 * devices        : 2044 {'cap_mim_2f0_m4m5_noshield': 4, 'nfet': 1105, 'pfet': 664, 'ppolyf_u': 271} -> {'nfet_03v3': 3, 'nfet_06v0': 1102, 'pfet_03v3': 1, 'pfet_06v0': 663, 'cap_mim_2f0_m4m5_noshield': 4, 'ppolyf_u': 271}
@@ -154,7 +154,7 @@
 *       (design/netlist/uvlo.spice) never modeled a guard-tap terminal
 *       either, so nothing measurable at the schematic level is lost)
 *
-* sha256 (this file, sans this line): 34fc06b2ef8eeab06e76ee3ce6200cf5
+* sha256 (this file, sans this line): 3d9de2f3c8616885b1a94c99834b6576
 * Everything else -- device existence, drawn W/L/AS/AD/PS/PD,
 * drain/gate/source connectivity, and (when present) the per-net
 * ground-referenced RC parasitics -- is measured, not asserted.
