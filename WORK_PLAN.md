@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-23T14:45:00Z (snapshot; compare against live labels)_
+_Generated: 2026-11-23T16:45:00Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -36,16 +36,13 @@ Human-approved issues (`loom:issue`) ready for implementation — excluding held
 
 Issues currently being built (`loom:building`).
 
-- **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header
-- **#567**: uvlo-reference-study: state that the quoted klt yield figures are conditional on value-producing draws
-- **#569**: DR-0026 cites DR-0025's per-corner trip sigma as 0.48-0.57 V; the measured value is 0.471-0.570 V
+- **#485**: Re-run the two drive post-layout facets against the current extraction
 
 ## PRs Awaiting Review
 
 PRs waiting on Judge (`loom:review-requested`).
 
-- **#572**: uvlo-reference-study: state that the quoted klt yield figures are conditional on value-producing draws
-- **#583**: DR-0026 cites DR-0025's per-corner trip sigma as 0.48-0.57 V; the measured value is 0.471-0.570 V
+_None._
 
 ## Approved (Awaiting Merge)
 
@@ -57,9 +54,7 @@ _None._
 
 Issues carrying `loom:curated`.
 
-- **#510**: mk_extracted_dut.py renders the extract report's `file` field as a dict repr in the generated netlist header *(curated)*
-- **#567**: uvlo-reference-study: state that the quoted klt yield figures are conditional on value-producing draws *(curated)*
-- **#569**: DR-0026 cites DR-0025's per-corner trip sigma as 0.48-0.57 V; the measured value is 0.471-0.570 V *(curated)*
+_None._
 
 ## Proposed (Architect / Hermit)
 
@@ -77,10 +72,10 @@ _None._
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 3 |
-| PRs awaiting review | 2 |
+| In Progress (`loom:building`) | 1 |
+| PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
-| Curated | 3 |
+| Curated | 0 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
