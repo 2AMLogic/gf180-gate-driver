@@ -317,6 +317,52 @@ class RunDevicePointCampaignTests(unittest.TestCase):
         )
 
 
+class SharedSeedPolicyTests(unittest.TestCase):
+    """Both drivers derive one PVT point's seeds from a single shared plan
+    (issue #578): whichever execution layer ran the point, a record must be
+    able to reproduce any draw it cites from the same `base_seed`, `index`
+    and `control_seed_offset`. A nondefault offset is the sharpest thing to
+    pin -- it exercises the one argument the module default hides."""
+
+    OFFSET = 123_456  # deliberately not campaign.CONTROL_SEED_OFFSET
+
+    def setUp(self):
+        self.stub = StubRunner()
+        self._saved = (harness_runner.run_point, harness_runner.run_samples)
+        harness_runner.run_point = self.stub.run_point
+        harness_runner.run_samples = self.stub.run_samples
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        harness_runner.run_point, harness_runner.run_samples = self._saved
+
+    def test_both_drivers_seed_a_point_identically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tb_outcome = campaign.run_point_campaign(
+                _TB, _PDK, _POINT, 2, 2, Path(tmp), 1, lambda _r: None,
+                base_seed=_BASE_SEED, control_seed_offset=self.OFFSET,
+            )
+        dev_outcome = campaign.run_device_point_campaign(
+            _POINT, 2, 2, 1, lambda _r: None,
+            RunDevicePointCampaignTests._stub_run_sample,
+            base_seed=_BASE_SEED, control_seed_offset=self.OFFSET,
+        )
+        expected_control = sample_seed(_BASE_SEED, 2, CONTROL_SAMPLE)
+        for outcome in (tb_outcome, dev_outcome):
+            self.assertEqual(
+                [mc.seed for mc, _r in outcome.controls],
+                [expected_control, expected_control + self.OFFSET],
+            )
+            self.assertEqual(
+                [mc.seed for mc, _r in outcome.samples],
+                [sample_seed(_BASE_SEED, 2, s) for s in (1, 2)],
+            )
+        self.assertEqual(
+            [mc.seed for mc, _r in tb_outcome.samples],
+            [mc.seed for mc, _r in dev_outcome.samples],
+        )
+
+
 class PointOutcomeTests(unittest.TestCase):
     def test_non_converged_draws_are_excluded_from_ok(self):
         outcome = _outcome([5.1, 5.2, 5.3], statuses=["ok", "failed", "ok"])
