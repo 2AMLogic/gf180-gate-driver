@@ -91,6 +91,16 @@ Audit findings for table A:
   "not citable as a clean-tree result"**; the #456 replacements were taken
   clean. This inventory attests that the testbenches and invocations
   exist and run, not that any record is a clean-tree result.
+- Issue #485 (2026-11-23) re-ran both drive post-layout facets against the
+  live extractions (no-RC `e2999045...2aa1`, RC `2c3cd778...204b`) on the
+  batch fleet, clean tree: `20261123-222000-23c67d0` / `20261123-222100-23c67d0`
+  (`gate-driver-core-drive-postlayout`, no-RC / RC) and
+  `20261123-222200-23c67d0` / `20261123-222300-23c67d0`
+  (`gate-driver-core-drive-with-uvlo-postlayout`, no-RC / RC, superseding
+  `20260826-063405-a7dcce1` / `20260826-072640-a7dcce1`). Each states the
+  DUT hash it ran, matching the live file. The 45-point Challenge #5 records
+  `20260826-074206-a7dcce1` / `20260826-074240-a7dcce1` (vdrv 3.30/4.15/5.00 V)
+  were not re-run and remain on the pre-#456 extraction.
 - Executed in this audit (single corner, nothing recorded, `--no-write`):
   `python3 sim/run_corners.py gate-driver-core-drive-with-uvlo-postlayout
   --dut layout/lvs/gate_driver_core.extracted-rc.spice --corner-set tt

@@ -1,0 +1,4007 @@
+{
+  "schema_version": 3,
+  "netlist": {
+    "path": "sim/gate-driver-core-drive-postlayout/klt/body.spice",
+    "scope": "repo"
+  },
+  "status": "fail",
+  "corner_count": 15,
+  "passed": 11,
+  "failed": 4,
+  "errored": 0,
+  "inconclusive": 0,
+  "diagnostic_counts": {
+    "by_code": {
+      "singular_matrix": 15,
+      "nonconvergence": 15
+    },
+    "by_severity": {
+      "warning": 30
+    },
+    "corners_with_diagnostics": 15
+  },
+  "metrics": {
+    "sim__corner__count": 15,
+    "sim__corner__passed_count": 11,
+    "sim__corner__failed_count": 4,
+    "sim__corner__errored_count": 0,
+    "sim__corner__inconclusive_count": 0
+  },
+  "environment": {
+    "engine": "ngspice",
+    "engine_version": "47",
+    "ngspice_binary": "/usr/local/bin/ngspice",
+    "engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": null,
+      "probe": "ok",
+      "reason": null
+    },
+    "ngspice_init": {
+      "source": "runner",
+      "lines": null,
+      "sha256": null
+    },
+    "models_lib": {
+      "path": null,
+      "scope": "external"
+    },
+    "models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+    "models_lib_sha256_scope": "client",
+    "netlist_sha256": "e8ccff90696a5a8e16bc8685eab561e4a2256428ab18139502a098534b9b363e",
+    "netlist_sha256_scope": "staged",
+    "netlist_closure": [
+      {
+        "path": "sim/gate-driver-core-drive-postlayout/klt/body.spice",
+        "scope": "repo",
+        "sha256": "e8ccff90696a5a8e16bc8685eab561e4a2256428ab18139502a098534b9b363e"
+      },
+      {
+        "path": "sim/gate-driver-core-drive-postlayout/klt/design.ngspice",
+        "scope": "repo",
+        "sha256": "7e222f050318388f37543a64fbd0be55cc15e4b93f57501a09f7c159c4c9e561"
+      },
+      {
+        "path": "layout/lvs/gate_driver_core.extracted.spice",
+        "scope": "repo",
+        "sha256": "e2999045ff156d5d44a17b5a911cead6391c0ebd054a82266bec189bd1d82aa1"
+      }
+    ],
+    "netlist_identity": "sha256:89a7a28a06a2c993e183c363ed9d858b28c8a0982653210e43a3136e100738d8",
+    "remote": {
+      "provider": "aws-batch-fleet",
+      "job_id": "klt-sim-dbcbecc51d93",
+      "region": "us-east-1",
+      "instance_id": "i-0090b9cfd064469a6",
+      "instance_type": "m7i.4xlarge",
+      "availability_zone": "us-east-1b",
+      "ami_id": "ami-09c14f55df4958cbd",
+      "lifecycle": "spot",
+      "spot": true,
+      "state": "failed",
+      "exit_code": "3",
+      "concurrency": "1",
+      "physical_cores": "8",
+      "elapsed_seconds": 9,
+      "client_submitted_at": "2026-11-23T21:36:07.592629Z",
+      "client_launched_at": "2026-11-23T21:36:30.213032Z",
+      "client_status_terminal_at": "2026-11-23T21:37:02.188114Z",
+      "client_collected_at": "2026-11-23T21:37:03.068177Z",
+      "runner_klt_version": "0.9.0",
+      "client_klt_version": "0.9.3.dev4263+g473bcdb00d05",
+      "runner_compatibility": "match",
+      "runner_request_features": {
+        "required": [
+          "measurements[].expr",
+          "options.ngspice_init"
+        ],
+        "missing": [],
+        "status": "supported"
+      },
+      "worker_environment": {
+        "capture": "ok",
+        "simulator": {
+          "requested_binary": "ngspice",
+          "binary_source": "PATH",
+          "selected_path": "/usr/local/bin/ngspice",
+          "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******\n",
+          "version_probe": "ok"
+        },
+        "pdk": {
+          "variant": "gf180mcuD",
+          "root": "/opt/pdk",
+          "stamp_scheme": "sources-sha256",
+          "stamp_sha256": "4ca10280ae9f293aa1ff69f0060a52e0026929111bda881503717469b429ce67",
+          "stamp_text": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7",
+          "models_staged": false,
+          "stamp_scope": "executed"
+        },
+        "cpu_model": "Intel(R) Xeon(R) Platinum 8488C",
+        "omp_num_threads": null,
+        "image_manifest": null,
+        "model_inputs": null,
+        "diagnostics": [],
+        "pdk_stamp_comparison": {
+          "status": "match"
+        },
+        "ngspice_init": null,
+        "threads_per_worker": 1,
+        "engine_build_comparison": {
+          "status": "match"
+        }
+      },
+      "runner_model_inputs": null,
+      "exit_reason": {
+        "exit_code": 3,
+        "report_status": "fail",
+        "nothing_checked": false,
+        "nothing_checked_reasons": [],
+        "message": "klt sim exited 3 (a corner or measurement failed): aggregate status 'fail'; the job state is failed because of this verdict exit code, not a runner crash and not the whole-job ceiling (a ceiling kill reports state timeout, exit 124)",
+        "units": {
+          "total": 15,
+          "by_status": {
+            "pass": 11,
+            "fail": 4
+          },
+          "first_not_passed": [
+            {
+              "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+              "status": "fail",
+              "code": "singular_matrix",
+              "message": "Warning: singular matrix:  check node anon295"
+            },
+            {
+              "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+              "status": "fail",
+              "code": "singular_matrix",
+              "message": "Warning: singular matrix:  check node anon295"
+            },
+            {
+              "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+              "status": "fail",
+              "code": "singular_matrix",
+              "message": "Warning: singular matrix:  check node anon295"
+            },
+            {
+              "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/125C",
+              "status": "fail",
+              "code": "singular_matrix",
+              "message": "Warning: singular matrix:  check node anon295"
+            }
+          ]
+        }
+      },
+      "runner_models_lib_sha256": "f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "runner_corner_section_libs": null,
+      "runner_osdi_preload": null,
+      "job_ceiling": {
+        "basis": "conservative_serial_bound",
+        "unit_count": 15,
+        "per_unit_timeout_s": 3000,
+        "overhead_s": 120.0,
+        "job_bound_s": 45120.0,
+        "max_job_seconds": 3600.0,
+        "max_job_seconds_source": "fleet_config",
+        "exceeds_ceiling": true,
+        "check": "warn",
+        "max_units_per_job": 1,
+        "recommended_hosts": 15,
+        "warning": "batch job bound 45120s (options.timeout_s 3000s x 15 units + 120s; a conservative fully-serial upper bound, not a runtime estimate) exceeds the fleet's whole-job ceiling of 3600s (max_job_seconds from fleet_config); a job still running at the ceiling is killed and every unit is reported batch_job_timeout. Set request.remote.hosts to at least 15 to run one job per shard of at most 1 units, each within the ceiling"
+      },
+      "models_lib_comparison": {
+        "status": "match"
+      }
+    },
+    "engine_host": "worker",
+    "client_ngspice_binary": "/home/ubuntu/.local/bin/ngspice",
+    "client_engine_build": {
+      "version_banner": "******\n** ngspice-47 : Circuit level simulation program\n** Compiled with KLU Direct Linear Solver\n** The U. C. Berkeley CAD Group\n** Copyright 1985-1994, Regents of the University of California.\n** Copyright 2001-2026, The ngspice team.\n** Please get your ngspice manual from https://ngspice.sourceforge.io/docs.html\n** Please file your bug-reports at http://ngspice.sourceforge.net/bugrep.html\n** Creation Date: Fri Nov 13 23:19:32 UTC 2026\n******",
+      "binary_sha256": "39ca1adb826660324c3626f72bd946ec40704f0f3fc8e243c623f76e24b3eee2",
+      "probe": "ok",
+      "reason": null
+    },
+    "backend": {
+      "resolved": "batch",
+      "source": "env",
+      "requested": "batch"
+    }
+  },
+  "coverage": {
+    "corners_simulated": 15,
+    "measurements_declared": 22,
+    "measurements_with_limits": 20,
+    "unrecognized_limit_keys": [],
+    "schema_version": 1,
+    "known": true,
+    "checked": [
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_min_v\",\"min\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_max_v\",\"max\"]",
+      "limit:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_min_v\",\"min\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_max_v\",\"max\"]",
+      "limit:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_min_v\",\"min\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_max_v\",\"max\"]",
+      "limit:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_min_v\",\"min\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tfall_s\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdhl_s\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdlh_s\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"trise_s\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_max_v\",\"max\"]",
+      "limit:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_min_v\",\"min\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_max_v\",\"max\"]",
+      "limit:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_min_v\",\"min\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_max_v\",\"max\"]",
+      "limit:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_min_v\",\"min\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tfall_s\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdhl_s\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdlh_s\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"trise_s\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_max_v\",\"max\"]",
+      "limit:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_min_v\",\"min\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tfall_s\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdhl_s\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdlh_s\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"trise_s\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_max_v\",\"max\"]",
+      "limit:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_min_v\",\"min\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_max_v\",\"max\"]",
+      "limit:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_min_v\",\"min\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_max_v\",\"max\"]",
+      "limit:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_min_v\",\"min\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tfall_s\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdhl_s\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdlh_s\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"trise_s\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_max_v\",\"max\"]",
+      "limit:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_min_v\",\"min\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_max_v\",\"max\"]",
+      "limit:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"indrv_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n1_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n2_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n3_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n4_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"n5_min_v\",\"min\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tfall_s\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdhl_s\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"tpdlh_s\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"trise_s\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_max_v\",\"max\"]",
+      "limit:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vout_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"indrv_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n1_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n2_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n3_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n4_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"n5_min_v\",\"min\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tfall_s\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdhl_s\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"tpdlh_s\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"trise_s\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_max_v\",\"max\"]",
+      "limit:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vout_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"indrv_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_sink_a\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"ipeak_source_a\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n1_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n2_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n3_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n4_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"n5_min_v\",\"min\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tfall_s\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdhl_s\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"tpdlh_s\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"trise_s\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_max_v\",\"max\"]",
+      "limit:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vout_min_v\",\"min\"]",
+      "measurement:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/observation",
+      "measurement:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/observation",
+      "measurement:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/observation",
+      "measurement:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/observation",
+      "measurement:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/observation",
+      "measurement:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/observation",
+      "measurement:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/observation",
+      "measurement:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/observation",
+      "measurement:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/observation",
+      "measurement:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/observation",
+      "measurement:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/observation",
+      "measurement:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/observation",
+      "measurement:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/observation",
+      "measurement:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/observation",
+      "measurement:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/observation",
+      "measurement:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/observation",
+      "measurement:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/observation",
+      "measurement:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/observation",
+      "measurement:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/observation",
+      "measurement:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/observation",
+      "measurement:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/observation",
+      "measurement:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/observation",
+      "measurement:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/observation",
+      "measurement:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/observation",
+      "measurement:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/observation",
+      "measurement:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/observation",
+      "measurement:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/observation",
+      "measurement:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/observation",
+      "measurement:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/observation",
+      "measurement:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/observation"
+    ],
+    "skipped": [],
+    "inapplicable": [
+      {
+        "id": "measurement:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[0,\"tt/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[1,\"tt/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[10,\"fs/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[11,\"fs/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[12,\"sf/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[13,\"sf/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[14,\"sf/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[2,\"tt/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[3,\"ff/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[4,\"ff/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[5,\"ff/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[6,\"ss/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[7,\"ss/vsup_drv=6.000_vsup_logic=3.300V/27C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[8,\"ss/vsup_drv=6.000_vsup_logic=3.300V/125C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_max_v\"]/limits",
+        "reason": "characterization_without_limits"
+      },
+      {
+        "id": "measurement:[9,\"fs/vsup_drv=6.000_vsup_logic=3.300V/-40C\",\"vin_min_v\"]/limits",
+        "reason": "characterization_without_limits"
+      }
+    ],
+    "unknown": [],
+    "nothing_checked": false,
+    "nothing_checked_reasons": []
+  },
+  "provenance": {
+    "klt_version": "0.9.3.dev4263+g473bcdb00d05",
+    "klt_git_commit": "473bcdb00d05aaa072e11bf287c1b09228ceb476",
+    "klt_reinstall_spec": "klayout-tools @ git+https://github.com/2AMLogic/klayout-tools@473bcdb00d05aaa072e11bf287c1b09228ceb476",
+    "klayout_version": "0.30.12",
+    "pdk": {
+      "name": "gf180mcuD",
+      "source": "search root: ~/.ciel",
+      "version": "open_pdks f6eeac7dad085ffcc829ccfd721f7b4ce39edcf7"
+    },
+    "deck": {
+      "name": "sm141064.ngspice",
+      "content_hash": "sha256:f6f4a96e18fc5ad11270ad3451aaecc7ac37fc81eb61e15b0d7d94c7bc594a24",
+      "released": false
+    },
+    "input": {
+      "content_hash": "sha256:e8ccff90696a5a8e16bc8685eab561e4a2256428ab18139502a098534b9b363e",
+      "role": "netlist"
+    }
+  },
+  "measurements": [
+    {
+      "name": "trise_s",
+      "unit": "s",
+      "limits": {
+        "max": 5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.5462081807e-09,
+        "margin": 4.34537918193e-08
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 3.271423765e-09
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.5462081807e-09
+      },
+      "spec_row": "rise_fall_time"
+    },
+    {
+      "name": "tfall_s",
+      "unit": "s",
+      "limits": {
+        "max": 5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.5478086959e-09,
+        "margin": 4.34521913041e-08
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 3.3085779236e-09
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.5478086959e-09
+      },
+      "spec_row": "rise_fall_time"
+    },
+    {
+      "name": "tpdlh_s",
+      "unit": "s",
+      "limits": {
+        "max": 2.5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 5.5207577698e-09,
+        "margin": 1.94792422302e-08
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 2.7952519828e-09
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 5.5207577698e-09
+      },
+      "spec_row": "propagation_delay"
+    },
+    {
+      "name": "tpdhl_s",
+      "unit": "s",
+      "limits": {
+        "max": 2.5e-08
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 5.4801623023e-09,
+        "margin": 1.95198376977e-08
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 2.8351217244e-09
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 5.4801623023e-09
+      },
+      "spec_row": "propagation_delay"
+    },
+    {
+      "name": "ipeak_source_a",
+      "unit": "A",
+      "limits": {
+        "min": 1.0
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 1.0075678474,
+        "margin": 0.0075678474000000495
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 1.0075678474
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 1.8767313717
+      },
+      "spec_row": "peak_source_current"
+    },
+    {
+      "name": "ipeak_sink_a",
+      "unit": "A",
+      "limits": {
+        "min": 1.0
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 0.87889051657,
+        "margin": -0.12110948343000005
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 0.87889051657
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 1.6397195585
+      },
+      "spec_row": "peak_sink_current"
+    },
+    {
+      "name": "vout_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.0060463463,
+        "margin": 0.5939536536999999
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0033995317
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.0060463463
+      }
+    },
+    {
+      "name": "vout_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -0.003689854986,
+        "margin": 0.046310145014
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -0.003689854986
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.002017315438
+      }
+    },
+    {
+      "name": "vin_max_v",
+      "unit": "V",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 3.3,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 3.3
+      },
+      "max": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 3.3
+      }
+    },
+    {
+      "name": "vin_min_v",
+      "unit": "V",
+      "limits": null,
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 0.0,
+        "margin": null
+      },
+      "min": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 0.0
+      },
+      "max": {
+        "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 0.0
+      }
+    },
+    {
+      "name": "indrv_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0019214317,
+        "margin": 0.5980785683000001
+      },
+      "min": {
+        "corner_id": "fs/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0000761798
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0019214317
+      }
+    },
+    {
+      "name": "indrv_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -0.008438360364,
+        "margin": 0.041561639636
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -0.008438360364
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": -0.0002397774069
+      }
+    },
+    {
+      "name": "n1_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.1100615344,
+        "margin": 0.4899384655999999
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0627420555
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.1100615344
+      }
+    },
+    {
+      "name": "n1_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "fail",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.05176387621,
+        "margin": -0.0017638762099999941
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.05176387621
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.02943474331
+      }
+    },
+    {
+      "name": "n2_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0810680707,
+        "margin": 0.5189319292999999
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0631604962
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0810680707
+      }
+    },
+    {
+      "name": "n2_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.04409227513,
+        "margin": 0.005907724870000006
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.04409227513
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.03540986548
+      }
+    },
+    {
+      "name": "n3_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0607348717,
+        "margin": 0.5392651282999994
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0392494601
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0607348717
+      }
+    },
+    {
+      "name": "n3_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.03267058002,
+        "margin": 0.017329419980000003
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.03267058002
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.02386363407
+      }
+    },
+    {
+      "name": "n4_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.05878288,
+        "margin": 0.5412171199999998
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.03558133
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+        "value": 6.05878288
+      }
+    },
+    {
+      "name": "n4_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.03221135457,
+        "margin": 0.01778864543
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.03221135457
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.02254059585
+      }
+    },
+    {
+      "name": "n5_max_v",
+      "unit": "V",
+      "limits": {
+        "max": 6.6
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0597811305,
+        "margin": 0.5402188694999994
+      },
+      "min": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": 6.0358197884
+      },
+      "max": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": 6.0597811305
+      }
+    },
+    {
+      "name": "n5_min_v",
+      "unit": "V",
+      "limits": {
+        "min": -0.05
+      },
+      "status": "pass",
+      "worst_case": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.03265672756,
+        "margin": 0.01734327244
+      },
+      "min": {
+        "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+        "value": -0.03265672756
+      },
+      "max": {
+        "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+        "value": -0.02161327008
+      }
+    }
+  ],
+  "corners": [
+    {
+      "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "tt",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.271,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 3.7744976422e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.62255023578e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 3.8552970351e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6144702964899995e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.2813044307e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.17186955693e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.3674566986e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1632543301399997e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.6177637458,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.6177637458
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.3833710579,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.38337105790000003
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.005011898,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5949881019999994
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003042664554,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046957335446000004
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0000971127,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5999028872999999
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.001264366908,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.048735633092000005
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0983950789,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5016049210999993
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04377119279,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.006228807209999999
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.073268297,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5267317029999994
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04044138709,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.00955861291
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.052701083,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.547298917
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02890535194,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021094648060000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0507021334,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5492978665999999
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02878323269,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021216767310000002
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0512636699,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5487363300999997
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02891453804,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021085461960000003
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "tt",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.182,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.4961671074e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.55038328926e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.4853564252e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5514643574799995e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.7812967748e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.12187032252e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.8080555143e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.11919444857e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.4241110997,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.42411109969999994
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.2299409183,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.22994091830000007
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0046858814,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5953141185999993
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002893798536,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047106201464000005
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0001842041,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5998157958999997
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0003545785139,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0496454214861
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0913707081,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5086292918999993
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04276349698,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.00723650302
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0734731843,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5265268156999996
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04075939635,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.009240603650000005
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.052335416,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5476645839999996
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02892526863,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021074731370000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0494720889,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5505279110999997
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.0286483517,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0213516483
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0507790538,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5492209461999993
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02867490502,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021325094980000004
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "tt/vsup_drv=6.000_vsup_logic=3.300V/125C",
+      "process": "tt",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.141,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 5.4144970821e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.45855029179e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.5710581118e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.44289418882e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.4460239873e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.05539760127e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.5128808604e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0487119139599998e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.2370941116,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.23709411160000005
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.038262706,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.038262706000000035
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0042584059,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5957415940999997
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002620740727,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047379259273000005
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0004356124,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5995643876000001
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0004910253141,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0495089746859
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0834884325,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5165115674999994
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.03970356177,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.010296438230000003
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0715877181,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5284122818999997
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03946717105,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.010532828950000003
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.048822807,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.551177193
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02860242089,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021397579110000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0454415258,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5545584741999994
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02756227926,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.022437720740000004
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0466555667,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5533444332999995
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02722701099,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.02277298901
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "ff",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.176,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 3.271423765e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6728576235e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 3.3085779236e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6691422076399996e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 2.7952519828e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.2204748017199998e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 2.8351217244e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.2164878275599998e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.8767313717,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.8767313717
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.6397195585,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.6397195585
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0041895512,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5958104488
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002481855064,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047518144936000005
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0000996489,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5999003510999996
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0002397774069,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0497602225931
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0833497159,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5166502840999998
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.0352631372,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0147368628
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0655537543,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5344462456999999
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03798897063,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.012011029370000002
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0449042112,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5550957887999992
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02577524385,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.024224756150000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0422724334,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5577275665999997
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02506895533,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.024931044670000003
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0420599099,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5579400900999998
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02511606283,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.024883937170000002
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "ff",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.184,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 3.8815935618e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6118406438199995e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 3.8890070234e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.6110992976599996e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.1984132253e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.18015867747e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.2232635954e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.17767364046e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.6631652312,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.6631652312
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.4350627989,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.4350627989
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0039129785,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5960870214999998
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002325934154,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047674065846
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0000835458,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5999164541999997
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0002912106599,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0497087893401
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0751825414,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5248174585999994
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.03379199132,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.016208008680000004
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0651004511,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5348995488999995
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03716923221,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.012830767790000003
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0432561942,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5567438058
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02532225917,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.024677740830000003
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0407826356,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5592173643999994
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02448513045,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.025514869550000003
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0405852196,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5594147804
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02392789637,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.026072103630000003
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ff/vsup_drv=6.000_vsup_logic=3.300V/125C",
+      "process": "ff",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.135,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.6610744479e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.53389255521e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.8806825844e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.51193174156e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.7257287294e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.12742712706e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.843788754e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1156211246e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.4717535143,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.4717535143
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.2108080939,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.2108080939000001
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0033995317,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5966004682999992
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002017315438,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047982684562
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0001458086,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5998541913999995
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0003702036607,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0496297963393
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0627420555,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5372579444999994
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.02943474331,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.020565256690000002
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0631604962,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5368395037999996
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03540986548,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.014590134520000006
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0392494601,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5607505398999999
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02386363407,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.026136365930000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.03558133,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5644186699999993
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02254059585,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.027459404150000002
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0358197884,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5641802115999992
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02161327008,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.028386729920000003
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "ss",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "fail",
+      "runtime_s": 1.239,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.4812908454e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.55187091546e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.6870990498e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5312900950199997e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.0045292255e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.09954707745e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.1824816595e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.08175183405e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.360097989,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.360097989
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.1235942078,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.12359420780000008
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0060463463,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5939536536999999
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003689854986,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046310145014
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0006482186,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5993517813999993
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.008438360364,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.041561639636
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.1100615344,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.4899384655999999
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.05135262698,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.0013526269800000004
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0806650379,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5193349620999994
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04195103774,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.00804896226
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0589270254,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5410729745999996
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.03137098061,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01862901939
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.05878288,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5412171199999998
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.03134089688,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01865910312
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0593480566,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5406519433999994
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.03207108388,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.017928916120000006
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "ss",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "fail",
+      "runtime_s": 1.188,
+      "peak_rss_bytes": 50118656,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 5.3871643273e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.4612835672699995e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.3563378176e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.46436621824e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.6478036403e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0352196359699998e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.6774184028e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.03225815972e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.1740483755,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.17404837549999996
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.0208981366,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.02089813660000006
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0057483899,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5942516100999997
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003554892234,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046445107766000006
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0010348206,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5989651793999995
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.006763449724,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.043236550276
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.1060079005,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.4939920994999998
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.05176387621,
+          "unit": "V",
+          "status": "fail",
+          "margin": -0.0017638762099999941
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0810680707,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5189319292999999
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04343923763,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.006560762370000001
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0607348717,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5392651282999994
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.03248935849,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01751064151
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0582160116,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5417839883999997
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.03221135457,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01778864543
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0597811305,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5402188694999994
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.03265672756,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01734327244
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "ss/vsup_drv=6.000_vsup_logic=3.300V/125C",
+      "process": "ss",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 125.0,
+      "status": "fail",
+      "runtime_s": 1.029,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 6.5462081807e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.34537918193e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 6.5478086959e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.34521913041e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 5.5207577698e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 1.94792422302e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 5.4801623023e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 1.95198376977e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.0075678474,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.0075678474000000495
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 0.87889051657,
+          "unit": "A",
+          "status": "fail",
+          "margin": -0.12110948343000005
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.005156068,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5948439319999999
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003270671066,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046729328934
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0019214317,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5980785683000001
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.002442708048,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047557291952
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.1002168277,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.4997831722999999
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04992742889,
+          "unit": "V",
+          "status": "pass",
+          "margin": 7.25711100000026e-05
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0788980937,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5211019062999993
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04409227513,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.005907724870000006
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0575996081,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5424003918999993
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.03267058002,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.017329419980000003
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0560454376,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5439545623999997
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.03216950249,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01783049751
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0570787828,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5429212172
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.03225063536,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01774936464
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "fs",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.12,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.2051538304e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5794846169599996e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 3.4615888487e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.65384111513e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.4901939928e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1509806007199998e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.1675635859e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1832436414099998e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.4479225755,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.44792257550000003
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.5490082506,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.5490082506
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.004502564,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5954974359999996
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003345051237,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046654948763000005
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.000091964,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5999080359999995
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.002181938327,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047818061673000005
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0853208359,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5146791640999995
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04432087157,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0056791284299999995
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0667324015,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5332675984999993
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.0425332457,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.007466754300000003
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0508458269,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5491541730999998
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02891858441,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021081415590000003
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0487178419,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5512821580999994
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02872446326,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021275536740000003
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0491648527,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5508351472999999
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02907539006,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.02092460994
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "fs",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.091,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 5.0420417927e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.4957958207299996e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.0583258414e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5941674158599995e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.0545231492e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.09454768508e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.6031223964e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.13968776036e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.2671409208,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.26714092079999996
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.3802674981,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.38026749810000005
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0042018526,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5957981474
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.003203476214,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.046796523786
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0000761798,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5999238201999999
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0003351732753,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.049664826724700004
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0815100163,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5184899836999994
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04413285147,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.005867148530000005
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0655755127,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5344244872999999
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04305386678,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0069461332200000045
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0500030306,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5499969693999995
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.0290072228,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.020992777200000003
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0471353355,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5528646644999995
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02875172813,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.02124827187
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0477172569,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5522827430999993
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02881348665,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021186513350000002
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "fs/vsup_drv=6.000_vsup_logic=3.300V/125C",
+      "process": "fs",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 125.0,
+      "status": "pass",
+      "runtime_s": 1.017,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 6.1439555694e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.38560444306e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.0770186327e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.49229813673e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.8090233145e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.01909766855e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.2941775004e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.07058224996e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.0859593159,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.08595931590000006
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.15228087,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.15228087
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0036872628,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5963127371999999
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.00294574613,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.04705425387
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0004302145,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5995697855
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0004539034093,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.0495460965907
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.0729318668,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5270681331999993
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04109004623,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.00890995377
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0632718189,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5367281811
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.04254672408,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.007453275920000002
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0454437955,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5545562044999999
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02860215701,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021397842990000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0418279285,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5581720714999996
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02804305774,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021956942260000004
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0428141375,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5571858624999999
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.0280367344,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021963265600000004
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/-40C",
+      "process": "sf",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": -40.0,
+      "status": "pass",
+      "runtime_s": 1.094,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 3.4256565574e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.65743434426e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 4.4109382461e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.5589061753899996e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.1621506579e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.18378493421e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 3.7054396661e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.12945603339e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.7873405758,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.7873405758
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.1985067974,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.1985067974000001
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0055600254,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5944399745999993
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002777246773,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047222753227
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0005255463,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5994744537000001
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0002670395501,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.049732960449900006
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.1003553269,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.4996446730999997
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04228581202,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.007714187980000002
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0792238093,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5207761906999995
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03813976615,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.011860233850000006
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0524098256,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5475901743999998
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02881963777,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021180362230000003
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0507752757,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5492247242999992
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02836724804,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021632751960000002
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0518602765,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5481397234999994
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02847137024,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021528629760000004
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/27C",
+      "process": "sf",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 27.0,
+      "status": "pass",
+      "runtime_s": 1.04,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.0590438379e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.59409561621e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 5.0731537323e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.49268462677e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 3.6133065825e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.1386693417499998e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.1492188314e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0850781168599998e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.5771072164,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.5771072164
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 1.0805109227,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.08051092270000004
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0053536551,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5946463448999992
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002607177622,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047392822378
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0002459503,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5997540496999996
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.000360910408,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.049639089592
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.099246809,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5007531909999994
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.04045816637,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.009541833630000003
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0803031791,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5196968208999992
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03843383831,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01156616169
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0534695392,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5465304607999997
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02872890267,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021271097330000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0514461401,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5485538598999993
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02816147372,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021838526280000003
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0521352996,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5478647003999999
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02783100699,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.022168993010000002
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    },
+    {
+      "corner_id": "sf/vsup_drv=6.000_vsup_logic=3.300V/125C",
+      "process": "sf",
+      "supply_v": {
+        "vsup_logic": 3.3,
+        "vsup_drv": 6.0
+      },
+      "temperature_c": 125.0,
+      "status": "fail",
+      "runtime_s": 1.026,
+      "engine_exit_code": 0,
+      "engine_killed_by_signal": null,
+      "measurements": [
+        {
+          "name": "trise_s",
+          "value": 4.8356376247e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.51643623753e-08
+        },
+        {
+          "name": "tfall_s",
+          "value": 6.2356491134e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 4.37643508866e-08
+        },
+        {
+          "name": "tpdlh_s",
+          "value": 4.2133152986e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.07866847014e-08
+        },
+        {
+          "name": "tpdhl_s",
+          "value": 4.871018997e-09,
+          "unit": "s",
+          "status": "pass",
+          "margin": 2.0128981002999997e-08
+        },
+        {
+          "name": "ipeak_source_a",
+          "value": 1.3882136879,
+          "unit": "A",
+          "status": "pass",
+          "margin": 0.3882136879
+        },
+        {
+          "name": "ipeak_sink_a",
+          "value": 0.92141583967,
+          "unit": "A",
+          "status": "fail",
+          "margin": -0.07858416033000004
+        },
+        {
+          "name": "vout_max_v",
+          "value": 6.0049177054,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5950822946000001
+        },
+        {
+          "name": "vout_min_v",
+          "value": -0.002319309147,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.047680690853
+        },
+        {
+          "name": "vin_max_v",
+          "value": 3.3,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "vin_min_v",
+          "value": 0.0,
+          "unit": "V",
+          "status": "pass",
+          "margin": null
+        },
+        {
+          "name": "indrv_max_v",
+          "value": 6.0006741146,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5993258853999999
+        },
+        {
+          "name": "indrv_min_v",
+          "value": -0.0005358481527,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.049464151847300006
+        },
+        {
+          "name": "n1_max_v",
+          "value": 6.093886864,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5061131359999997
+        },
+        {
+          "name": "n1_min_v",
+          "value": -0.03703687847,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.012963121530000003
+        },
+        {
+          "name": "n2_max_v",
+          "value": 6.0796950845,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5203049154999997
+        },
+        {
+          "name": "n2_min_v",
+          "value": -0.03745951698,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.01254048302
+        },
+        {
+          "name": "n3_max_v",
+          "value": 6.0499390448,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5500609551999993
+        },
+        {
+          "name": "n3_min_v",
+          "value": -0.02821191798,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.021788082020000002
+        },
+        {
+          "name": "n4_max_v",
+          "value": 6.0484827564,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5515172435999993
+        },
+        {
+          "name": "n4_min_v",
+          "value": -0.02675761178,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.023242388220000004
+        },
+        {
+          "name": "n5_max_v",
+          "value": 6.0488054116,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.5511945883999996
+        },
+        {
+          "name": "n5_min_v",
+          "value": -0.02645684133,
+          "unit": "V",
+          "status": "pass",
+          "margin": 0.02354315867
+        }
+      ],
+      "diagnostics": [
+        {
+          "severity": "warning",
+          "code": "singular_matrix",
+          "message": "Warning: singular matrix:  check node anon295"
+        },
+        {
+          "severity": "warning",
+          "code": "nonconvergence",
+          "message": "Warning: Dynamic gmin stepping failed"
+        }
+      ],
+      "artifacts": {
+        "log": null,
+        "raw": null,
+        "waveform": null,
+        "deck": null
+      },
+      "monte_carlo": null
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "batch_ngspice_init_unverified",
+      "severity": "warning",
+      "feature": "options.ngspice_init",
+      "simulator_application": "unverified",
+      "jobs": [
+        {
+          "job_id": "klt-sim-dbcbecc51d93",
+          "fleet_index": null,
+          "request_identity": "unverified"
+        }
+      ],
+      "message": "Worker reports do not confirm that ngspice applied options.ngspice_init. Jobs marked digest_reported reported the requested init contents. For jobs marked unverified, the request identity is also unknown."
+    }
+  ]
+}

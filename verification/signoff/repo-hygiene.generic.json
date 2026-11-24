@@ -49,14 +49,14 @@
         "role": "hygiene",
         "path": "design/gate-driver-characterization.md",
         "passed": true,
-        "content_hash": "sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9"
+        "content_hash": "sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d"
       },
       {
         "check": "present",
         "role": "hygiene",
         "path": "layout/README.md",
         "passed": true,
-        "content_hash": "sha256:dd0513c74306a41b5fc103d089722cd596bdbba1557446c65313006e585ec6dc"
+        "content_hash": "sha256:dbb608e016935bd07b7dad8cf5d894970bb291ce65aee89b36a1bbc7555d00a9"
       },
       {
         "check": "present",
@@ -84,7 +84,7 @@
         "role": "hygiene",
         "path": "verification/signoff/repo-hygiene.inventory.md",
         "passed": true,
-        "content_hash": "sha256:36e0feb94d386b91cae97625dd3346dca4a89721dad474b26b118e54e9c5f69d"
+        "content_hash": "sha256:0039c3dceca7770a7aec5e2bf41423ee4434cfc60788f9b4ac74c49cc06cdf42"
       },
       {
         "check": "command",
