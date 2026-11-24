@@ -780,10 +780,14 @@ def check_append_only(root: Path, base_ref: str) -> tuple[list, str | None]:
 
     # --no-renames so a rename surfaces as delete+add and trips the D filter;
     # git's rename detection would otherwise hide it behind an R status.
+    # -z so paths come NUL-delimited and verbatim: git's display format
+    # C-quotes any non-ASCII or control-character path, and the quoted form
+    # fails the anchored regexes below (issue #577).
     diff = _git(
         root,
         "diff",
         "--name-status",
+        "-z",
         "--no-renames",
         "--diff-filter=MD",
         base_sha,
@@ -813,9 +817,14 @@ def check_append_only(root: Path, base_ref: str) -> tuple[list, str | None]:
         ),
     )
     problems = []
-    for line in diff.stdout.splitlines():
-        status, _, path = line.partition("\t")
-        path = path.strip()
+    # -z records are strictly <status>\0<path>\0 pairs: --no-renames and
+    # --diff-filter=MD rule out the R/C statuses that would add a second
+    # path field. Paths are used verbatim -- never .strip()ed or unquoted.
+    fields = iter(diff.stdout.split("\0"))
+    for status in fields:
+        if not status:
+            continue
+        path = next(fields, "")
         if not path:
             continue
         for pattern, remedy in remedies:
