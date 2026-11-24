@@ -41,7 +41,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
-| `layout/README.md` | `sha256:21fabcf5a485c3383e20c17904aac8ec8422586f0c956365553c8ed2816a33e6` |
+| `layout/README.md` | `sha256:bdd049a1f2f46b581ae4a2a47a59784a32667b06e009e21fef559231a54c3608` |
 | `design/gate-driver-characterization.md` | `sha256:3d5ccb90bde34c342eab94e6c068c5a583f0b533404cfb4af863a55eabd4a5ee` |
 
 ## Findings
@@ -1770,3 +1770,17 @@ row in the reproduction table above moves from `cbc64b05...` to
 `3d5ccb90...`, matching `sha256sum` at this head; the envelope's member
 rows were re-attested with the CI-pinned klt (`33df0b12`). No
 `.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
+
+## Re-audit for issue #605 (2026-11-24)
+
+At the issue-#605 branch head, `layout/README.md` gained one narrative entry
+in the layout-provenance paragraph recording the pin refresh for the removal
+of the generator's stale in-file walkthrough (the generator pin moves to
+`0e2565e1...`, GDS bytes untouched, all 41 outputs byte-identical on both
+sides). I read the diff. No link target moved and no claim the README makes
+about what the block is changed; no simulation, netlisting or layout flow
+was run for this re-audit. The `layout/README.md` row in the reproduction
+table above moves from `21fabcf5...` to `bdd049a1...`, matching `sha256sum
+layout/README.md` at this head; the envelope's member rows were re-attested
+with the CI-pinned klt (`33df0b12`). No `.github/workflows/ci.yml` edit is
+in this PR, so no canonical pin moved.
