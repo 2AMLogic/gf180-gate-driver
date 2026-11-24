@@ -10,6 +10,10 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-24
 
+- **PR #601**: refactor(layout): parse the extracted netlist once, with one MOS predicate
+- **PR #599**: docs: re-derive characterization from #485 records and diagnose UVLO-locked ERROR corners
+- **Issue #600** (closed): Share MOS recognition between the device and MiM layout checks
+- **Issue #590** (closed): Diagnose drive post-layout failures on the regenerated extraction (ss/sf -40C low-rail ERROR corners; re-derive characterization tables)
 - **PR #597**: docs: layout Status row states #485 FAIL verdict, all-four dirty-tree
 - **PR #594**: docs: state current post-layout evidence in layout/README and re-attest item 10
 - **PR #591**: sim: re-run both drive post-layout facets against the regenerated extraction (batch fleet)
