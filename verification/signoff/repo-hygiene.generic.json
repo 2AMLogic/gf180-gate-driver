@@ -84,7 +84,7 @@
         "role": "hygiene",
         "path": "verification/signoff/repo-hygiene.inventory.md",
         "passed": true,
-        "content_hash": "sha256:be79c5d720d88200e1c8ff5c3fbc4649db8ddc43fceaa0dd04864d1b9ffd2343"
+        "content_hash": "sha256:3349abccaf26c1e0341755b04a3de80a7c4226548ce7b174010d16683b0dcce9"
       },
       {
         "check": "command",

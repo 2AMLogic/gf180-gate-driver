@@ -1767,6 +1767,6 @@ moved, no `tb.json` bound or spec text changed, and decision record 0022 is
 cited as proposed, not ratified. No simulation, netlisting or layout flow
 was run for this re-audit. The `design/gate-driver-characterization.md`
 row in the reproduction table above moves from `cbc64b05...` to
-`df335d2f...`, matching `sha256sum` at this head; the envelope's member
+`3d5ccb90...`, matching `sha256sum` at this head; the envelope's member
 rows were re-attested with the CI-pinned klt (`33df0b12`). No
 `.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
