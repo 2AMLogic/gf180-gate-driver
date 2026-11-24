@@ -43,7 +43,8 @@ step, the harness's own `tran 20p 200n`):
 
 Every bound is read from ../testbench/tb.json's `checks` at generate time
 (not re-typed), so the request and the harness manifest cannot disagree; the
-nine column names are cross-checked against its `measure` map. The process
+nine column names and their `measure` expressions are cross-checked against
+its `measure` map. The process
 axis and the engine/models/batch/options envelope come from
 sim/harness/klt_request.py (`steps_envelope`, shared with the other
 generators per issue #441). sim/test_gen_requests.py pins that this script
@@ -68,43 +69,33 @@ VLOGIC = [2.97, 3.3, 3.63, 3.3]
 VDRV = [4.5, 5.0, 5.5, 6.0]
 
 # The nine record columns, in the tb.json `measure` order the harness
-# records carry, with the unit each is reported in (the delay columns are
-# converted to ns at the top level, as the harness's t_plh_ns does).
+# records carry: the unit each is reported in (the delay columns are
+# converted to ns at the top level, as the harness's t_plh_ns does), the
+# tb.json `measure` expression each column restates (the pre-conversion
+# names -- the harness multiplies t_plh/t_phl by 1e9 itself), and the
+# derived request expression over `wave.*` results that reproduces it.
 COLUMNS = (
-    ("vgate_thinox_max", "V"),
-    ("vna_peak", "V"),
-    ("vnb_peak", "V"),
-    ("vccomp_dev_max", "V"),
-    ("vccomp_stack_max", "V"),
-    ("t_plh_ns", "ns"),
-    ("t_phl_ns", "ns"),
-    ("vout_hi_ratio", "V/V"),
-    ("vout_lo_ratio", "V/V"),
+    ("vgate_thinox_max", "V", "thinox_worst", "wave.vgate_thinox_max"),
+    ("vna_peak", "V", "na_peak", "wave.vna_peak"),
+    ("vnb_peak", "V", "nb_peak", "wave.vnb_peak"),
+    ("vccomp_dev_max", "V", "vccomp_dev", "wave.vccomp_dev_max"),
+    ("vccomp_stack_max", "V", "vccomp_stack", "wave.vccomp_stack_max"),
+    ("t_plh_ns", "ns", "t_plh*1e9", "wave.t_plh * 1e9"),
+    ("t_phl_ns", "ns", "t_phl*1e9", "wave.t_phl * 1e9"),
+    ("vout_hi_ratio", "V/V", "outhi_ratio", "wave.hi / wave.drv"),
+    ("vout_lo_ratio", "V/V", "outlo_ratio", "wave.lo / wave.drv"),
 )
-
-# tb.json `measure` expressions this generator's request must reproduce (the
-# pre-conversion names -- the harness multiplies t_plh/t_phl by 1e9 itself).
-MEASURE_SOURCE = {
-    "vgate_thinox_max": "thinox_worst",
-    "vna_peak": "na_peak",
-    "vnb_peak": "nb_peak",
-    "vccomp_dev_max": "vccomp_dev",
-    "vccomp_stack_max": "vccomp_stack",
-    "t_plh_ns": "t_plh*1e9",
-    "t_phl_ns": "t_phl*1e9",
-    "vout_hi_ratio": "outhi_ratio",
-    "vout_lo_ratio": "outlo_ratio",
-}
 
 
 def manifest():
     """The harness manifest this request restates, loaded and sanity-checked."""
     tb = json.loads((HERE / ".." / "testbench" / "tb.json").read_text())
-    if list(tb["measure"]) != [name for name, _ in COLUMNS]:
+    if list(tb["measure"].items()) != [(n, s) for n, _, s, _ in COLUMNS]:
         raise SystemExit(
-            "tb.json `measure` keys drifted from the generator's COLUMNS: "
-            f"{list(tb['measure'])} vs {[n for n, _ in COLUMNS]} -- update "
-            "COLUMNS/MEASURE_SOURCE together with the request bodies."
+            "tb.json `measure` map drifted from the generator's COLUMNS: "
+            f"{list(tb['measure'].items())} vs "
+            f"{[(n, s) for n, _, s, _ in COLUMNS]} -- update COLUMNS "
+            "together with the request bodies."
         )
     return tb
 
@@ -167,20 +158,9 @@ def step_measurements():
 
 def measurements(tb):
     """The nine record columns as derived expressions over `wave.*` results."""
-    exprs = {
-        "vgate_thinox_max": "wave.vgate_thinox_max",
-        "vna_peak": "wave.vna_peak",
-        "vnb_peak": "wave.vnb_peak",
-        "vccomp_dev_max": "wave.vccomp_dev_max",
-        "vccomp_stack_max": "wave.vccomp_stack_max",
-        "t_plh_ns": "wave.t_plh * 1e9",
-        "t_phl_ns": "wave.t_phl * 1e9",
-        "vout_hi_ratio": "wave.hi / wave.drv",
-        "vout_lo_ratio": "wave.lo / wave.drv",
-    }
     out = []
-    for name, unit in COLUMNS:
-        entry = {"name": name, "unit": unit, "expr": exprs[name]}
+    for name, unit, _, request_expr in COLUMNS:
+        entry = {"name": name, "unit": unit, "expr": request_expr}
         # The checked bounds come from the manifest itself, never re-typed:
         # vgate_thinox_max / vccomp_dev_max / vout_hi_ratio / vout_lo_ratio
         # are exactly tb.json's four `checks`.
@@ -195,7 +175,7 @@ def measurements(tb):
                 raise SystemExit(f"tb.json check {name} carries no min/max")
             entry["limits"] = limits
         out.append(entry)
-    unexpected = set(tb["checks"]) - {name for name, _ in COLUMNS}
+    unexpected = set(tb["checks"]) - {name for name, *_ in COLUMNS}
     if unexpected:
         raise SystemExit(f"tb.json checks drifted: unexpected {sorted(unexpected)}")
     return out
