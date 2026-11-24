@@ -41,7 +41,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
-| `layout/README.md` | `sha256:dbb608e016935bd07b7dad8cf5d894970bb291ce65aee89b36a1bbc7555d00a9` |
+| `layout/README.md` | `sha256:b3ede8703ce4ffb208e2ae4c597a54d488660e1d6d293071d9433ea437500a37` |
 | `design/gate-driver-characterization.md` | `sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d` |
 
 ## Findings
@@ -1712,3 +1712,24 @@ is. The two rows in the reproduction table above move to `dbb608e0…` and
 were re-attested to the same values (`klt signoff --attest 10`, staged
 tree). No `.github/workflows/ci.yml` edit is in this PR, so no canonical
 pin moved.
+
+## Re-audit for issue #592 (2026-11-24)
+
+At the issue-#592 branch head, `layout/README.md` changed in the two places
+issue #592 tracks. The Post-layout-simulation Status row's opening summary
+now states the current state — extraction regenerated from the current GDS
+(#456, #510), both drive facets re-run on a clean tree by #485, open
+FAIL/ERROR corners and the characterization-table re-derivation tracked in
+#590 — instead of asserting the evidence was taken against a pre-#362
+extraction and not re-verified against this GDS. The `### Post-layout
+simulation` note drops the "older than the current GDS (#362)", "owned by
+#456", and "nothing below re-verified" claims in favor of the same
+current-extraction / #485 / #590 references, and keeps the
+characterization tables below explicitly pre-regeneration pending #590. I
+read the diff. Neither edit changes a link target or a claim the README
+makes about what the block is; no simulation, netlisting or layout flow
+was run for this re-audit. The `layout/README.md` row in the reproduction
+table above moves from `dbb608e0…` to `b3ede870…`, matching `sha256sum
+layout/README.md` at this head; the envelope's member rows were
+re-attested with the CI-pinned klt (`33df0b12`). No
+`.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.

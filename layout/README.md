@@ -55,7 +55,7 @@ reference, including its bias-resistor network) — not just the first two.
 | DRC | **clean under the current deck (#362).** `status: clean`, 0 violations, klt `0.7.1.dev2599+geaf26f00df36`, deck hash `sha256:0eb6df1b…` (34 layers), report [`20261024-090822-de97a29`](drc/reports/gate_driver_core/20261024-090822-de97a29.drc.json). This is the curated deck's verdict only: the `_MV` rule columns (`DF.6_MV`, `DV.*`, `NW.*_MV`, …) are `unmodeled_rules`, so it is **not** a medium-voltage signoff ([triage](drc/triage_sab_implant.md), [DRC](#drc-klt-drc)) |
 | LVS-clean | yes — `status: match`, 2044/2044 devices, 295/295 nets, 25/25 pins, **1 warning-only finding below (unrelated to body ties)** |
 | Bulk/body terminals tied | **yes, both flavors (#132)** — every one of the 1769 drawn transistors has a real, drawn, contacted body tie to the schematic's own net (`VDD_LOGIC`/`VDD_DRV` for the 664 PMOS, the deck's global substrate identity for the 1105 NMOS). `klt lvs`'s `device.body_unverified` finding is **gone entirely**, not just reduced (see [Known gaps](#known-gaps) for how the two grounds now compare — revised by issue #221) |
-| Post-layout simulation | committed complete-block PVT-grid evidence, **taken against a pre-#362 extraction — not re-verified against this GDS**. Four records under [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/) ran against the committed [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) (no-RC) and [`.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) (RC, the primary record) extractions — whose committed bytes have since been regenerated (#456, #510; the RC hash those records state, `sha256:6f0c9b8e…db97e`, no longer matches the live file) — and they pre-date the current `gate_driver_core.gds` (`sha256:15fa5b64…bf4a`) that #362 regenerated under the current klt, whose `klt gen` cells differ in size and carry their own implants and body taps. The primary record was taken on a **dirty working tree** and is not citable as a clean-tree result. The extraction was regenerated from this GDS (#456) and both drive facets re-run against it on a clean tree by #485 — records `20261123-222000-23c67d0`…`20261123-222300-23c67d0` under [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/) and [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/); they report new FAIL/ERROR corners (see the records). (The older [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/) grid was extracted from the pre-#221, pre-uvlo GDS.) [Below](#post-layout-simulation) describes the evidence the committed records cover as what it is |
+| Post-layout simulation | committed complete-block PVT-grid evidence against the **current extraction**: the committed [`lvs/gate_driver_core.extracted.spice`](lvs/gate_driver_core.extracted.spice) (no-RC) and [`.extracted-rc.spice`](lvs/gate_driver_core.extracted-rc.spice) (RC) extractions were regenerated from the current `gate_driver_core.gds` (#456, #510), and both drive facets were re-run against them on a clean tree by #485 — records `20261123-222000-23c67d0`…`20261123-222300-23c67d0` under [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/) and [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/), no-RC and RC DUT for each facet. Those re-runs report open FAIL/ERROR corners (see the records); their diagnosis and the characterization-table re-derivation are tracked in #590. The earlier records remain committed as history: four under [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/) ran against the previous extraction bytes (the RC hash they state, `sha256:6f0c9b8e…db97e`, no longer matches the live file) and pre-date the current `gate_driver_core.gds` (`sha256:15fa5b64…bf4a`) that #362 regenerated under the current klt, whose `klt gen` cells differ in size and carry their own implants and body taps; the primary one of them was taken on a **dirty working tree** and is not citable as a clean-tree result. (The older [`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/) grid was extracted from the pre-#221, pre-uvlo GDS.) [Below](#post-layout-simulation) describes the evidence the committed records cover as what it is |
 
 The LVS verdict is real (it has a committed negative control, below), and the
 old DRC verdict was real *for the rules that deck shipped*, but neither is a
@@ -979,17 +979,25 @@ is actually installed, per the pinning section above — a PATH-installed
 
 ### Post-layout simulation
 
-**This section describes evidence recorded against the pre-#221 GDS**
-(`level_shifter` + `output_stage` only, no `uvlo`). Re-running it against the
-issue #221-extended, uvlo-and-resistor-bearing extraction — which is still
-the committed `lvs/gate_driver_core.extracted*.spice`, itself older than the
-current `gate_driver_core.gds` (#362) — is what the committed complete-block
-records under
+**The campaign narrative and tables in this section were recorded against
+the pre-#221 GDS** (`level_shifter` + `output_stage` only, no `uvlo`),
+re-run against the post-#166 extraction; the complete-block records under
 [`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/)
-did; regenerating the extraction from the current GDS and re-running is
-owned by [issue #456](https://github.com/2AMLogic/gf180-gate-driver/issues/456).
-Nothing below this note has been re-verified against the current
-`gate_driver_core.gds`.
+later extended the same facet to the #221-extended extraction. The
+committed extractions have since been regenerated from the current
+`gate_driver_core.gds` by [issue #456](https://github.com/2AMLogic/gf180-gate-driver/issues/456)
+(superseding the bytes the older records state), and both drive facets have
+been re-run against the regenerated extraction on a clean tree by
+[issue #485](https://github.com/2AMLogic/gf180-gate-driver/issues/485)
+(records `20261123-222000-23c67d0`…`20261123-222300-23c67d0`, no-RC and RC
+DUT for each facet, under
+[`sim/gate-driver-core-drive-postlayout/`](../sim/gate-driver-core-drive-postlayout/)
+and
+[`sim/gate-driver-core-drive-with-uvlo-postlayout/`](../sim/gate-driver-core-drive-with-uvlo-postlayout/)).
+Those re-runs report open FAIL/ERROR corners; their diagnosis and the
+re-derivation of the characterization tables below — which still reflect
+the pre-regeneration evidence — are tracked in
+[issue #590](https://github.com/2AMLogic/gf180-gate-driver/issues/590).
 
 The LVS-extracted netlist is turned into a simulatable DUT by
 [`lvs/mk_extracted_dut.py`](lvs/mk_extracted_dut.py), whose module docstring
