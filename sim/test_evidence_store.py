@@ -630,6 +630,11 @@ class AppendOnlyManifests(unittest.TestCase):
     """
 
     MANIFEST = "manifests/artifacts/b-20261022-000000-abc1234.manifest.json"
+    NON_ASCII_MANIFEST = (
+        "manifests/artifacts/bénch-20261022-000000-abc1234.manifest.json"
+    )
+    NON_ASCII_RECORD = "sim/bénch/records/20261022-000000-abc1234.md"
+    TAB_RECORD = "sim/tab\tbench/records/20261022-000000-abc1234.md"
 
     def setUp(self):
         td = tempfile.TemporaryDirectory()
@@ -641,8 +646,13 @@ class AppendOnlyManifests(unittest.TestCase):
         self.write(self.MANIFEST, json.dumps(
             {"schema_version": 1, "entries": [{"name": "sim/b/corners/x/tt.log",
                                                "sha256": "a" * 64}]}) + "\n")
+        self.write(self.NON_ASCII_MANIFEST, json.dumps(
+            {"schema_version": 1, "entries": [{"name": "sim/b/corners/x/tt.log",
+                                               "sha256": "a" * 64}]}) + "\n")
         self.write("manifests/artifacts/README.md", "prose\n")
         self.write("sim/b/records/20261022-000000-abc1234.md", "- **Record ID**: x\n")
+        self.write(self.NON_ASCII_RECORD, "- **Record ID**: x\n")
+        self.write(self.TAB_RECORD, "- **Record ID**: x\n")
         self.git("add", "-A")
         self.git("commit", "-qm", "base")
         # The check diffs the merge base with base_ref against the WORKING
@@ -710,6 +720,41 @@ class AppendOnlyManifests(unittest.TestCase):
         problems, skip = el.check_append_only(self.root, "0" * 40)
         self.assertEqual(problems, [])
         self.assertIsNotNone(skip)
+
+    def test_non_ascii_sim_record_edit_is_reported(self):
+        # Issue #577: git C-quotes non-ASCII paths in display-format diff
+        # output, so the quoted path failed EVIDENCE_PATH_RE's ^sim/ anchor
+        # and the edit silently passed. Mixed with an ASCII edit in the same
+        # diff to prove both shapes surface together.
+        self.write(self.NON_ASCII_RECORD, "- **Record ID**: y\n")
+        self.write("sim/b/records/20261022-000000-abc1234.md",
+                   "- **Record ID**: y\n")
+        problems = self.check()
+        self.assertEqual(
+            sorted(p.path for p in problems),
+            sorted([self.NON_ASCII_RECORD,
+                    "sim/b/records/20261022-000000-abc1234.md"]),
+        )
+        for p in problems:
+            self.assertIn("**Supersedes**", p.message)
+
+    def test_tab_in_sim_record_path_is_reported(self):
+        # Issue #577: a literal tab additionally breaks the display format's
+        # status<TAB>path split; the NUL-delimited stream reads it verbatim.
+        self.write(self.TAB_RECORD, "- **Record ID**: y\n")
+        problems = self.check()
+        self.assertEqual([p.path for p in problems], [self.TAB_RECORD])
+        self.assertIn("modified", problems[0].message)
+        self.assertIn("**Supersedes**", problems[0].message)
+
+    def test_non_ascii_manifest_deletion_is_reported(self):
+        # Issue #577: a quoted manifest path escaped MANIFEST_PATH_RE the
+        # same way; deleting stored evidence must stay a Problem.
+        (self.root / self.NON_ASCII_MANIFEST).unlink()
+        problems = self.check()
+        self.assertEqual([p.path for p in problems], [self.NON_ASCII_MANIFEST])
+        self.assertIn("deleted", problems[0].message)
+        self.assertIn("append-only", problems[0].message)
 
 
 class MergeGroupBase(unittest.TestCase):
