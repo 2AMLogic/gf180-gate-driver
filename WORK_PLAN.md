@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-24T12:28:00Z (snapshot; compare against live labels)_
+_Generated: 2026-11-24T20:24:50Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -36,7 +36,7 @@ Human-approved issues (`loom:issue`) ready for implementation — excluding held
 
 Issues currently being built (`loom:building`).
 
-_None._
+- **#577**: Append-only evidence lint parses display-formatted git diff output, so a C-quoted path escapes the check
 
 ## PRs Awaiting Review
 
@@ -48,13 +48,13 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-_None._
+- **#603**: fix: parse NUL-delimited git diff output in check_append_only so quoted paths can't escape
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-_None._
+- **#577**: Append-only evidence lint parses display-formatted git diff output, so a C-quoted path escapes the check *(curated)*
 
 ## Proposed (Architect / Hermit)
 
@@ -72,10 +72,10 @@ _None._
 | Very important | 0 |
 | Important | 2 |
 | Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 0 |
+| In Progress (`loom:building`) | 1 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 0 |
-| Curated | 0 |
+| Approved PRs awaiting merge | 1 |
+| Curated | 1 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
