@@ -57,60 +57,76 @@ reading is a contention-current artifact of that lockout, not a weakened
 drive attempt). Every other spec §3 row/corner combination stays PASS by a
 wide margin; propagation delay and rise/fall verdicts are unaffected.
 
-**Re-run note (issue #485, 2026-11-23) — the figures in this report are NOT
-yet re-derived against the current extraction.** The complete-block and
-pre-UVLO post-layout facets were re-run through the batch fleet against the
-extraction regenerated from the current GDS (#456/#510), clean tree:
+**Refresh note (issue #590, 2026-11-24):** the TL;DR and Results tables
+below are re-derived against issue #485's clean-tree re-run of both
+post-layout drive facets on the #510-regenerated extraction:
 [`20261123-222300-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md)
-(RC, supersedes the primary record cited above),
+(with-UVLO, RC — now this report's primary source),
 [`20261123-222200-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md)
-(no-RC, supersedes the cross-check), and
-[`20261123-222100-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222100-23c67d0.md) /
+(with-UVLO, no-RC — now the cross-check), and the pre-UVLO pair
+[`20261123-222100-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222100-23c67d0.md)
+/
 [`20261123-222000-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222000-23c67d0.md)
-(pre-UVLO RC / no-RC). Every table and TL;DR figure below still quotes the
-superseded 2026-08-26 / 2026-08-18 records, which describe the pre-#456
-extraction; the new records move several of them (the two low-rail -40 °C
-corners now report OUT-not-switching as ERROR — newly stuck on the pre-UVLO
-facet, pre-existing but previously misread by the harness's measured-swing
-method on the with-UVLO facet; ss `n1_min_v` undershoots its bound on the
-no-RC DUT; RC `tpdlh`/`tpdhl` are slower) — read those records' findings,
-not these tables, for the current extraction. Diagnosing the new failures
-and re-deriving this report against the current extraction are tracked in
-#590.
+(retained for the historical comparison in the "Diagnosis" section). This
+retires #485's own re-run note (the tables no longer defer to the records)
+and supersedes the 2026-08-26 / 2026-08-18 figures this report previously
+quoted as current; those records remain cited below as superseded prior
+columns and as the diagnosis controls. What moved with the re-derivation:
+RC `tpdlh`/`tpdhl` are ~9–15 % slower than the superseded August RC record;
+the two low-rail −40 °C corners (`ss`/`sf` at 2.97/4.50 V) now report
+OUT-never-switching as **ERROR** on *both* facets — on the with-UVLO facet
+a re-classification of stuck behaviour the 2026-08-26 records already
+contained, on the drive facet genuinely new to that facet because its DUT
+now contains `uvlo`. Root cause, the regression-window verdict, and the
+carried `n1_min_v` / 6 V hot-sink findings are stated in the "Diagnosis"
+section below; no `tb.json` bound changed.
 
 ## TL;DR
 
 - **Propagation delay** (spec §3: < 50 ns nominal / < 25 ns stretch): a
   single measured end-to-end number (level shifter + output stage + `uvlo`,
-  one chain) — worst-case nominal `tpdlh` 19.11 ns, `tpdhl` 14.53 ns;
-  worst-case stretch `tpdlh` 15.40 ns, `tpdhl` 12.59 ns; all four **PASS**
-  with wide margin against the 50 ns/25 ns budget, though materially slower
-  than the pre-UVLO/no-RC figures this report previously cited — RC
+  one chain) — worst-case *measured* nominal `tpdlh` 21.14 ns, `tpdhl`
+  16.01 ns; worst-case stretch `tpdlh` 17.14 ns, `tpdhl` 13.99 ns; all four
+  **PASS** with wide margin against the 50 ns/25 ns budget (worst nominal
+  clears its budget by more than 2.3×, worst stretch by ~1.46×), though
+  materially slower than every figure this report previously cited — RC
   interconnect parasitics measurably shift propagation delay (decision
-  record 0019 Finding 3) — see "Results" below
-  (`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`).
+  record 0019 Finding 3), and the #510-regenerated extraction adds a
+  further +9–15 % on `tpdlh`/`tpdhl` over the superseded August RC record.
+  **Timing-coverage caveat**: 2 of the 45 nominal corners — `ss_-40c` and
+  `sf_-40c` at 2.97/4.50 V — produce **no** timing value at all (UVLO
+  false lockout, OUT never switches; see "Diagnosis" below), so the
+  nominal extrema above are over the 43 measured corners; the no-value
+  rows are bounded only by *proposed* decision record 0022, not yet
+  ratified (`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md`).
 - **Drive strength** (spec §3: ≥ 0.5 A peak source/sink, stretch 1 A): met
   at every nominal-tolerance point **except one** — worst-case nominal peak
-  source **0.4754 A — FAIL** at `ss_-40c_vlogic2p97v-vdrv4p50v`, a
-  ratified, bounded exception (decision record 0020, **≥ 0.45 A**; the
-  corner is fully UVLO-locked, not a weakened drive attempt); worst-case
-  nominal peak sink 0.5550 A, same corner, **PASS**. At the 6 V stretch
-  rail, peak source clears the 1 A stretch target (worst 1.0040 A) but peak
-  sink does **not** (worst 0.8764 A, ~124 mA short), the same pre-existing
-  shortfall this report has tracked since before `uvlo` existed, a ratified,
-  bounded exception (decision record 0016, **≥ 0.85 A**) — see "Results"
-  below.
+  source **0.4655 A — FAIL** at `ss_-40c_vlogic2p97v-vdrv4p50v`, inside the
+  ratified, bounded exception (decision record 0020, **≥ 0.45 A**, ~3.4 %
+  headroom — the tightest reading yet, but per that record only a landing
+  below 0.45 A would be a new finding; the corner is fully UVLO-locked,
+  not a weakened drive attempt); worst-case nominal peak sink 0.5455 A,
+  same corner, **PASS**. At the 6 V stretch rail, peak source clears the
+  1 A stretch target by 0.13 % (worst 1.0013 A) but peak sink does
+  **not** (worst 0.8626 A, the two hot/slow corners), the same
+  pre-existing shortfall this report has tracked since before `uvlo`
+  existed, a ratified, bounded exception (decision record 0016,
+  **≥ 0.85 A**) — see "Results" below.
 - **Rise/fall into the 1 nF reference load** (spec §3: < 50 ns, 10–90 %):
   met at all measured corners with wide margin — worst-case nominal rise
-  8.42 ns, worst-case nominal fall 7.59 ns; worst-case stretch rise 6.57 ns,
-  fall 6.59 ns — essentially unchanged from the pre-UVLO figures this report
-  previously cited (see "Results").
+  8.40 ns, worst-case nominal fall 7.66 ns; worst-case stretch rise 6.57 ns,
+  fall 6.65 ns — essentially unchanged from the pre-UVLO and August
+  with-UVLO figures this report previously cited (within ~0.1 ns; see
+  "Results"). The same two UVLO-locked nominal corners carry no rise/fall
+  value (caveat above).
 - The primary cited record spans the full CLAUDE.md PVT matrix (process
   corners `tt`/`ff`/`ss`/`fs`/`sf` × −40/27/125 °C × tied two-rail supply
-  point, 60 points) against the extracted, LVS-matched, RC-parasitic
-  complete-block layout (`layout/gate_driver_core.gds`, including `uvlo`);
-  see "Methodology" for the one genuine grid-convention difference that
-  remains against the two older per-cell records still cross-checked below.
+  point, 60 points — 58 with timing values, the two locked corners above
+  excepted) against the #510-regenerated extraction of the LVS-matched,
+  RC-parasitic complete-block layout (`layout/gate_driver_core.gds`,
+  including `uvlo`); see "Methodology" for the one genuine
+  grid-convention difference that remains against the two older per-cell
+  records still cross-checked below.
 
 ## Spec §3 rows covered here
 
@@ -272,79 +288,103 @@ temperature) across grids of different shape, not identical grids.
 
 ### Drive strength: peak source/sink current (spec §3: ≥ 0.5 A, stretch 1 A)
 
-Source (primary): [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md)
+Source (primary): [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md)
 (`ipeak_source_a` / `ipeak_sink_a` columns), the RC-parasitic-extracted,
-post-layout, complete-block-with-`uvlo` record ([decision record
-0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md)),
-full 60-point grid, worst nominal (45-point, ≤ 5.5 V rail) and worst stretch
-(15-point, 6.0 V rail) values read directly from that record's own
-corner-by-corner result table; no-RC cross-check:
-[`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md).
+post-layout, complete-block-with-`uvlo` record (#485's clean-tree re-run on
+the #510-regenerated extraction), full 60-point grid, worst nominal
+(45-point, ≤ 5.5 V rail) and worst stretch (15-point, 6.0 V rail) values
+read directly from that record's own corner-by-corner result table; no-RC
+cross-check:
+[`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md).
 
 | Measurement | Nominal target | Worst-case nominal | Nominal binding corner | Stretch target | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|---|---|
-| Peak source current | ≥ 0.5 A (**≥ 0.45 A** at `ss_-40c_vlogic2p97v-vdrv4p50v`, [decision record 0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md)) | **0.4754 A — FAIL, bounded** (decision record 0020) | `ss_-40c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | 1.0040 A — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
-| Peak sink current | ≥ 0.5 A | 0.5550 A — **PASS** | `ss_-40c_vlogic2p97v-vdrv4p50v` | ≥ 1 A (**≥ 0.85 A**, [decision record 0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)) | **0.8764 A — FAIL, bounded** (decision record 0016) | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Peak source current | ≥ 0.5 A (**≥ 0.45 A** at `ss_-40c_vlogic2p97v-vdrv4p50v`, [decision record 0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md)) | **0.4655 A — FAIL, bounded** (decision record 0020) | `ss_-40c_vlogic2p97v-vdrv4p50v` | ≥ 1 A | 1.0013 A — **PASS** (0.13 % margin) | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Peak sink current | ≥ 0.5 A | 0.5455 A — **PASS** | `ss_-40c_vlogic2p97v-vdrv4p50v` | ≥ 1 A (**≥ 0.85 A**, [decision record 0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)) | **0.8626 A — FAIL, bounded** (decision record 0016) | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
-Grid means (60-point grid): peak source 1.1293 A, peak sink 1.0084 A.
+Grid means (60-point grid): peak source 1.1266 A, peak sink 0.9964 A. The
+nominal binding corner for both rows is one of the two UVLO-locked ERROR
+corners (see "Diagnosis"): its current readings are the locked-state
+contention transient decision record 0020 characterizes, retained here as
+recorded measurements, not drive results — the worst *released* nominal
+corners are `ss_125c_vlogic2p97v-vdrv4p50v` (source 0.5803 A, sink
+0.5638 A), both **PASS**.
 
-**Decision record 0020 (peak source, nominal, new in this refresh)**: at
-exactly one nominal ±10 % corner, `ss_-40c_vlogic2p97v-vdrv4p50v`, `uvlo`'s
-comparator is already fully locked out throughout `IN`'s high pulse
-(`uvlo_lockout_at_in_high` ≈ `VDD_DRV`, `vout_max_v` = 0.2445 V — `OUT` never
-rises above a quarter of a volt) — the measured 0.4754 A is a sub-nanosecond
-contention-current transient between the output driver and the already-
-engaged UVLO pulldown, not a sustained charge-delivery attempt. Decision
-record 0020 bounds this specific corner at **≥ 0.45 A** (0.4754 A sits inside
-that bound with ~5.6 % headroom); no other nominal ±10 % corner misses the
-≥ 0.5 A target. This finding is inherited unchanged from issue #220's
-schematic-level UVLO measurement (`sim/gate-driver-core-drive-with-uvlo/records/20260826-013137-6299c36.md`,
-0.499165 A at the same corner) — layout and extraction narrow it slightly
-(0.499696 A no-RC, 0.475414 A RC) rather than introduce it.
+**Decision record 0020 (peak source, nominal)**: at exactly one nominal
+±10 % corner, `ss_-40c_vlogic2p97v-vdrv4p50v`, `uvlo`'s comparator is
+already fully locked out throughout `IN`'s high pulse
+(`uvlo_lockout_at_in_high` = 4.5 V ≈ `VDD_DRV`, `vout_max_v` = 0.2512 V RC /
+0.2412 V no-RC — `OUT` never rises above a quarter of a volt) — the
+measured current is a sub-nanosecond contention-current transient between
+the output driver and the already-engaged UVLO pulldown, not a sustained
+charge-delivery attempt. Decision record 0020 bounds this specific corner
+at **≥ 0.45 A**; the November facets read 0.465489 A (RC) and 0.498025 A
+(no-RC) there — the RC value is the tightest reading yet, below the
+August facets' 0.475414–0.499696 A range but still inside the bound with
+~3.4 % headroom, so per that record's own rule (only a landing below
+0.45 A is a new finding) the exception holds unchanged. No other nominal
+±10 % corner misses the ≥ 0.5 A target. This finding is inherited from
+issue #220's schematic-level UVLO measurement
+(`sim/gate-driver-core-drive-with-uvlo/records/20260826-013137-6299c36.md`,
+0.499165 A at the same corner) and is unchanged in kind across every
+facet since.
 
 **Decision record 0016 (peak sink, 6 V stretch, carried forward)**: the
 stretch-rail sink-current shortfall this report has tracked since before
 `uvlo` existed is unchanged in mechanism — decision record 0016 bounds the
 two hot/slow corners (`ss_125c`/`sf_125c` at `vdrv6p00v`) at **≥ 0.85 A**;
-this record measures 0.8764 A / 0.9242 A there, both inside the bound. Peak
-source at the 6 V stretch rail continues to clear its own ≥ 1 A target
-(worst 1.0040 A, same binding corner as the sink shortfall).
+the November RC record measures 0.862625 A / 0.908398 A there (no-RC:
+0.878891 A / 0.921416 A), all inside the bound. Peak source at the 6 V
+stretch rail continues to clear its own ≥ 1 A target (worst 1.0013 A RC,
+1.0076 A no-RC, same binding corner as the sink shortfall — the RC margin
+has narrowed from the August record's 1.0040 A to 0.13 %, worth watching
+on any future re-run, but still a PASS).
 
-**Cross-check against the schematic-with-UVLO and no-RC post-layout
-facets**: decision record 0019's own evidence table shows all three facets
-(schematic `6299c36`, post-layout no-RC `063405`, post-layout RC `072640`)
-agree on both bounded exceptions' corners and stay within a few percent of
-each other at every other point (decision record 0019 Findings 1 and 3);
-neither exception is an extraction artifact. Resolving either shortfall is a
-design change, not a verification task (decision records 0016 and 0020).
+**Cross-check against the schematic-with-UVLO, no-RC and drive facets**:
+the schematic-level item-5 envelopes
+(`sim/gate-driver-core-drive-with-uvlo/klt/envelopes/20261028-d7a2b69-*`,
+see `verification/signoff/README.md` § "Item 5") encode the same two
+ratified exceptions at the same corners, and the November no-RC and
+pre-UVLO-drive records agree with the RC record at every non-locked corner
+within the few-percent deltas their own comparison tables record. The
+drive facet's November values are identical to the with-UVLO facet's on
+every shared column — both facets run the same extracted DUT and stimulus,
+so the drive facet is now a same-DUT replication, not an independent
+no-UVLO control (the "Diagnosis" section uses the 2026-08-18 records for
+that role). Resolving either shortfall is a design change, not a
+verification task (decision records 0016 and 0020).
 
 ### Rise/fall into the 1 nF reference load (spec §3: < 50 ns, 10–90 %)
 
 Source (primary): same complete-block-with-`uvlo` post-layout RC record
-(`20260826-072640-a7dcce1`), `trise_s` / `tfall_s` columns, full 60-point
+(`20261123-222300-23c67d0`), `trise_s` / `tfall_s` columns, full 60-point
 grid, worst nominal/stretch values read the same way as the drive strength
 table above (rise/fall have no separate stretch target in §3, so only one
-column applies at each rail); no-RC cross-check: `20260826-063405-a7dcce1`.
+column applies at each rail); no-RC cross-check: `20261123-222200-23c67d0`.
 
 | Measurement | Worst-case nominal | Nominal binding corner | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|
-| 10–90 % rise time | 8.42 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.57 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
-| 10–90 % fall time | 7.59 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.59 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| 10–90 % rise time | 8.40 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.57 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| 10–90 % fall time | 7.66 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | 6.65 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
-Grid means (60-point grid): rise 5.02 ns, fall 4.88 ns.
+Grid means (60-point grid): rise 5.16 ns, fall 5.09 ns (timing means over
+the 58 corners that produce timing values). The two UVLO-locked nominal
+corners (`ss`/`sf` −40 °C, 2.97/4.50 V) produce no rise/fall value — see
+"Diagnosis".
 
-**Cross-check against the pre-UVLO schematic/post-layout facets**: this
-report previously cited a pre-UVLO end-to-end schematic worst-case of rise
-8.37 ns / fall 7.53 ns
-(`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`) and a
+**Cross-check against the pre-UVLO schematic/post-layout and August
+with-UVLO facets**: this report previously cited a pre-UVLO end-to-end
+schematic worst-case of rise 8.37 ns / fall 7.53 ns
+(`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`), a
 pre-UVLO post-layout RC worst-case in the same range
-(`sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md`).
-The complete-block-with-`uvlo` numbers above are essentially unchanged
-(within a few tens of picoseconds) — `uvlo`'s comparator and bias network
-sit off the `IN`→`OUT` signal path and do not materially load the output
-stage's own, load-dominated rise/fall into 1 nF, consistent with decision
-record 0019 Finding 3's own observation that RC parasitics move
-`trise_s`/`tfall_s` by only 8–36 ps.
+(`sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md`),
+and an August with-UVLO RC worst-case of 8.42 ns / 7.59 ns
+(`20260826-072640-a7dcce1`). The November with-UVLO numbers above (8.40 /
+7.66 ns) are unchanged within ~0.1 ns — `uvlo`'s comparator and bias
+network sit off the `IN`→`OUT` signal path and the extraction regeneration
+does not materially load the output stage's own, load-dominated rise/fall
+into 1 nF, consistent with decision record 0019 Finding 3's own observation
+that RC parasitics move `trise_s`/`tfall_s` by only tens of picoseconds.
 
 ### Propagation delay (spec §3: < 50 ns nominal, < 25 ns stretch)
 
@@ -352,32 +392,41 @@ This row is a single measured end-to-end number — the level shifter, output
 stage, and `uvlo` composed into one chain, `IN` → `OUT`, against the
 extracted, LVS-matched, RC-parasitic complete-block layout. Source
 (primary): same complete-block-with-`uvlo` post-layout RC record
-(`20260826-072640-a7dcce1`), `tpdlh_s` / `tpdhl_s` columns, full 60-point
+(`20261123-222300-23c67d0`), `tpdlh_s` / `tpdhl_s` columns, full 60-point
 grid, worst nominal/stretch values read the same way as the drive strength
-table above; no-RC cross-check: `20260826-063405-a7dcce1`.
+table above; no-RC cross-check: `20261123-222200-23c67d0`.
 
 | Measurement | Nominal target | Worst-case nominal | Nominal binding corner | Stretch target | Worst-case stretch | Stretch binding corner |
 |---|---|---|---|---|---|---|
-| Low→high propagation delay (`tpdlh`) | < 50 ns | 19.11 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 15.40 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
-| High→low propagation delay (`tpdhl`) | < 50 ns | 14.53 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 12.59 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| Low→high propagation delay (`tpdlh`) | < 50 ns | 21.14 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 17.14 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
+| High→low propagation delay (`tpdhl`) | < 50 ns | 16.01 ns — **PASS** | `ss_125c_vlogic2p97v-vdrv4p50v` | < 25 ns | 13.99 ns — **PASS** | `ss_125c_vlogic3p30v-vdrv6p00v` |
 
-Grid means (60-point grid): `tpdlh` 12.11 ns, `tpdhl` 9.71 ns.
+Grid means (60-point grid): `tpdlh` 13.60 ns, `tpdhl` 10.94 ns.
 
-**RC parasitics materially shift this row relative to the pre-UVLO/no-RC
-figures this report previously cited** (nominal `tpdlh`/`tpdhl` of
-6.95/6.38 ns from the pre-UVLO schematic end-to-end record,
-`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`) — per
-decision record 0019 Finding 3, `tpdlh_s` shifts +5.4 to +12.1 ns and
-`tpdhl_s` shifts +4.1 to +8.1 ns once interconnect RC parasitics and `uvlo`
-are both in the loop, comparing the no-RC (`20260826-063405-a7dcce1`) and RC
-(`20260826-072640-a7dcce1`) complete-block-with-`uvlo` facets directly. Every
-corner still clears its target with wide margin — the worst-case nominal
-figures above clear the 50 ns budget by more than 2.6×, and the worst-case
-stretch figures clear the 25 ns budget by more than 1.6×. `design/output-stage-sizing.md`
-§5's design allocation (≤ 20 ns / ≤ 10 ns of the propagation-delay budget to
-the output-stage segment alone) is not disturbed by this — the shift is
-attributable to layout interconnect and `uvlo`'s own loading, not the output
-stage's own sizing.
+**Timing coverage**: the worst-case nominal figures above are over the **43
+of 45** nominal corners that produce a timing value; `ss_-40c` and `sf_-40c`
+at 2.97/4.50 V produce none (UVLO false lockout — see "Diagnosis"; bounded
+only by proposed decision record 0022, not yet ratified, so this report
+does not score them as anything other than open ERROR rows). All 15 stretch
+corners are measured.
+
+**RC parasitics materially shift this row**, and the #510 regeneration
+added a step further: per decision record 0019 Finding 3, `tpdlh_s` shifts
++5.4 to +12.1 ns and `tpdhl_s` +4.1 to +8.1 ns once interconnect RC
+parasitics and `uvlo` are both in the loop (comparing the August no-RC and
+RC complete-block-with-`uvlo` facets directly); the November RC record then
+adds another +1.07 to +2.03 ns on `tpdlh_s` and +0.93 to +1.48 ns on
+`tpdhl_s` (mean +11.9 % on both) against the superseded August RC record
+across the 58 comparable corners, and its no-RC facet is within ~0.6 % of
+the August no-RC record — so the further shift is an RC-extraction
+difference, not a circuit change. Every measured corner still clears its
+target with wide margin — the worst-case nominal figures above clear the
+50 ns budget by more than 2.3×, and the worst-case stretch figures clear
+the 25 ns budget by ~1.46×. `design/output-stage-sizing.md` §5's design
+allocation (≤ 20 ns / ≤ 10 ns of the propagation-delay budget to the
+output-stage segment alone) is not disturbed by this — the shift is
+attributable to layout interconnect and `uvlo`'s own loading, not the
+output stage's own sizing.
 
 **Note on scope**: the end-to-end record also re-measures spec §2.3
 thick-oxide gate-ceiling findings on the inter-cell node `IN_DRV` and the
@@ -391,6 +440,157 @@ This report does not restate them; they are formally scoped as
 (issue #136), with Exception 3's measured figure since re-stated by
 [decision record 0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md)
 (issue #192) to match this citation's current record.
+
+## Diagnosis: the ss/sf −40 °C low-rail ERROR corners (issue #590)
+
+Issue #485's re-run of both drive post-layout facets against the
+#510-regenerated extraction left two corners at the low-line operating
+point `vlogic2p97v-vdrv4p50v`, −40 °C, with **no value** for
+`trise_s`/`tfall_s`/`tpdlh_s`/`tpdhl_s` on every one of the four records
+(RC and no-RC, drive and with-UVLO): `ss_-40c_vlogic2p97v-vdrv4p50v` and
+`sf_-40c_vlogic2p97v-vdrv4p50v`, `vout_max_v` pinned at 0.2512/0.3485 V
+(RC) and 0.2412/0.3342 V (no-RC) — OUT never switches. #485 reported them
+without diagnosing them; this section is the diagnosis. It cites only
+committed measurements — the #485 records' own per-corner lockout probes
+and single-corner harness probes, and the standalone trip-verification
+evidence decision record 0018 ratifies — so it adds no unrecorded claim.
+
+### Root cause: the UVLO comparator, not the drive path
+
+The with-UVLO facet records a three-probe lockout snapshot at every
+corner. At exactly the two ERROR corners the comparator is fully asserted
+throughout `IN`'s high pulse, while the `tt` control at identical rails
+and temperature is released and switches normally
+([`20261123-222300-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md),
+RC — the no-RC record
+[`20261123-222200-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md)
+reads the same to the digit):
+
+| Process (−40 °C, 2.97/4.50 V) | Lockout while IN high | Peak OUT | Four timing measurements |
+|---|---:|---:|---|
+| ss | 4.50 V (locked) | 0.2512 V | no value |
+| sf | 4.50 V (locked) | 0.3485 V | no value |
+| tt | ≈ 0 V (−2.1 × 10⁻⁷, released) | 4.5043 V | all present |
+
+`uvlo_vout_at_in_high_v` (0.2504/0.3478 V) equals the stuck `vout_max_v`:
+OUT's "peak" is the sub-nanosecond contention blip of the output stage's
+driver against the already-engaged UVLO pulldown (`MPD`, `nfet_06v0`
+W = 10 µm m = 800, sized in `design/uvlo-comparator-sizing.md`
+specifically to dominate the output stage's own strongest device) — the
+same signature decision record 0020 ratified for this corner's
+`ipeak_source_a` artifact. The drive path itself is not implicated: in the
+same rows, `indrv_max_v` and every taper node `n1`…`n5` swing to full rail
+(e.g. ss row: `indrv_max_v` 4.50002 V, `n1_max_v` 4.50538 V).
+
+**Device-level cause — decision record 0018 Finding 2's open false-trip
+finding.** The standalone trip facet measured the comparator's thresholds
+directly (decision record 0018, ratified): at `ss`/−40 °C the
+falling/rising thresholds are 4.737/5.115 V and at `sf`/−40 °C they are
+4.526/4.876 V — every one above the 4.50 V rail these corners are biased
+at, so the comparator never releases and holds lockout for the entire
+transient. The mechanism is decision record 0018 Finding 1's: the ~5×
+divider gain amplifies the diode-connected `Vt` reference's process *and*
+temperature spread into a ~2.9 V peak-to-peak falling-threshold spread
+(2.231–4.737 V across the 15-point PVT grid), so at the slow/cold corners
+the trip point sits above the spec's own −10 % low-line floor (4.50 V) —
+precisely the false-trip failure mode decision record 0001 Decision 4's
+margin rationale ("the worst-case-high rising threshold… sits 300 mV below
+the 4.50 V low-line floor") was written against. Decision record 0018
+keeps this open as an unresolved safety finding rather than a bounded
+exception, and its full-block schematic corroboration already named these
+exact two corners as "the only two of 60 points" that lock at `vdrv4p50v`.
+
+**Route- and extraction-independence (the probe criterion).** Each #485
+record carries a single-corner local harness probe reproducing its batch
+envelope on the shared DUT to the printed digits (RC: `vout_max_v`
+0.251249 V, `n1_min_v` −0.00274481 V, `ipeak_source_a` 0.465489 A; no-RC:
+0.241168 V / −0.0528776 V / 0.498025 A) — the DUT, not the batch route.
+The stuck levels also reproduce across the no-RC and RC DUTs within
+7–10 mV of each other, so interconnect parasitics are not the cause
+either. The committed lockout measurements above are the probe record
+this issue's acceptance criteria ask for; no additional targeted probe
+was needed to close the causal attribution.
+
+### Regression-window verdict: the corner never worked post-UVLO
+
+On `gate-driver-core-drive-postlayout` the same two corners **are** a
+verdict regression — the facet's superseded 2026-08-18 records
+([`20260818-111748-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-111748-af13899.md)
+no-RC,
+[`20260818-112446-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md)
+RC) show both corners switching normally (`vout_max_v` 4.50571/4.50552 V
+no-RC; 4.50538/4.50496 V RC — PASS, with measured timing and clean
+`n1_min_v`). The evidence places the regression in **the 2026-08-26 UVLO
+instantiation in the layout, not the 2026-11 extraction regeneration**:
+
+- **DUT contents, 2026-08-18 (`af13899` era)**: the pre-UVLO extraction —
+  959 transistor fingers plus the four `XCCOMP*` MiM caps, no comparator,
+  no OUT pulldown, no bias-resistor network. UVLO lockout is not merely
+  inactive at these corners in that DUT; it is *impossible* — there is no
+  `uvlo` in it. Those corners passed because nothing could trip.
+- **DUT contents, 2026-08-26 on (`a7dcce1` → current)**: issue #221
+  (commit `a7dcce1a`) extended `gate_driver_core.gds` with the `uvlo`
+  sub-cell, and commit `ebbb9e6c` (PR #227) re-extracted the DUT from it
+  — 1769 transistor fingers (1105 `nfet` + 664 `pfet`), the 4 MiM caps,
+  and 271 `ppolyf_u` bias resistors = 2044 devices, the LVS-matched
+  census the current extraction still carries. The with-UVLO records
+  taken on that extraction
+  ([`20260826-063405-a7dcce1`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md)
+  no-RC,
+  [`20260826-072640-a7dcce1`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md)
+  RC) **already show both corners stuck at the same levels** the November
+  records reproduce (0.241182/0.334204 V no-RC; 0.244517/0.338903 V RC).
+  From the first extraction containing `uvlo`, the corner never switched.
+- **What changed in November is the classification, not the behaviour.**
+  The harness's measured-swing monitors read degenerate sub-nanosecond
+  "timing" values off the ~0.24–0.39 V blip (the August RC record's
+  values there: `trise_s` 8.16 × 10⁻¹⁰ s at the ss corner, 8.54 × 10⁻¹⁰ s
+  at sf), so the 2026-08-26 records verdicted those corners FAIL/PASS.
+  The #485 batch route's rail-normalised 10/50/90 % crossings — the
+  pre-registered `klt/README.md` method, the same one behind the item-5
+  envelopes — report *no value* for a block that never reaches 90 % of
+  the rail, i.e. ERROR. On the with-UVLO facet that re-classified
+  existing stuck behaviour; on the drive facet both behaviour and verdict
+  are new to the facet, because the facet's DUT content caught up with
+  the block: both November facets share one extracted DUT per RC setting,
+  and their per-corner values are identical on every shared column.
+- **The #510 regeneration is not the cause.** The regenerated extraction
+  (report
+  `layout/lvs/reports/gate_driver_core/20261114-194121-cbf0cd4.pex-extract.json`,
+  from the unchanged `15fa5b64` GDS) carries an identical device/parasitic
+  census to the 2026-08-26 one (2044 devices, 6128 R legs / 295 C) apart
+  from tool version, and it moved the stuck levels only mV-scale
+  (no-RC by ≤ 15 µV; RC by 6.7/9.6 mV). A regeneration cannot produce a
+  behaviour the very first post-UVLO extraction already exhibited.
+
+**Verdict:** the with-UVLO 2026-08-26 layout change (the UVLO
+instantiation, issue #221) is responsible for the drive-facet regression
+in the strict sense that no extraction containing `uvlo` has ever switched
+at `ss`/`sf` −40 °C 2.97/4.50 V — the corner never worked post-UVLO; the
+#456/#510 regeneration merely re-exposed and re-classified it. Closing it
+means closing decision record 0018 Finding 2 — the deferred
+reference-topology redesign decision records 0018 and 0020 already scope
+as multi-PR work with its own re-verification pass — not touching the
+drive path, the harness, or the extraction.
+
+### Carried-over secondary findings (reported here, not diagnosed)
+
+- **`n1_min_v` undershoot, no-RC DUT only.** 8 ss-family corners miss the
+  inherited −50 mV sanity band on the output stage's `x2.n1` taper node,
+  worst −0.0529 V at `ss_-40c_vlogic3p30v-vdrv5p00v` (full list in the
+  no-RC records' Finding 2) — the same 8 corners the superseded
+  `20260818-111748-af13899` and `20260826-063405-a7dcce1` records failed
+  (−0.0502…−0.0537 V), so this is carried over, not a verdict change. The
+  RC DUT is clean (worst −0.0035 V): the extracted net capacitance damps
+  the ringing. This is a non-spec sanity band, not a §3 row; no bound is
+  changed, and circuit changes are outside this report.
+- **6 V stretch hot sink-current misses.** `ss_125c_vlogic3p30v-vdrv6p00v`
+  0.8626 A and `sf_125c_vlogic3p30v-vdrv6p00v` 0.9084 A (RC; no-RC
+  0.8789/0.9214 A) miss the ≥ 1 A stretch target — decision record 0016's
+  ratified bounded exception (≥ 0.85 A), carried forward from every
+  superseded record (see "Results"). #557 owns the separate ss/27 °C
+  layout-attribution work on the `klt pex` extracted leg (T1 item 7's
+  0.9996 A miss); that miss belongs to item 7's report, not these records.
 
 ## Post-layout coverage: what extraction models, what it does not, and what it does not re-verify (issue #22 item 7)
 
@@ -411,12 +611,17 @@ that extraction does and does not model, and whether its coverage matches
 the full spec suite.
 
 **What it models** (current-latest, freshness-checked record:
-[`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md),
-[decision record
-0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md),
-DUT `layout/lvs/gate_driver_core.extracted-rc.spice`, sha256 matches the
-committed file as of `ebbb9e6` (PR #227); supersedes this section's prior
-citation of the pre-UVLO
+[`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md),
+issue #485's clean-tree re-run; DUT `layout/lvs/gate_driver_core.extracted-rc.spice`,
+sha256 `2c3cd778…`, the #510-regenerated extraction of the unchanged
+`15fa5b64` GDS, report
+`layout/lvs/reports/gate_driver_core/20261114-194121-cbf0cd4.pex-extract.json`;
+supersedes this section's prior citation of the 2026-08-26
+[`20260826-072640-a7dcce1`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md)
+(decision record
+[0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md)'s
+record), which itself superseded the
+pre-UVLO
 [`sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md)):
 
 - The same active-device SPICE models and the same `tt`/`ff`/`ss`/`fs`/`sf`
@@ -429,7 +634,7 @@ citation of the pre-UVLO
   capacitors, and 271 `ppolyf_u` bias-resistor devices from `uvlo`'s
   `Rref`/`R1`/`R2`/`Rfb` network (new device class, T9, decision record
   0019) — 2044 devices total, matching the LVS-clean signoff
-  (`layout/lvs/reports/gate_driver_core/20260826-062806-a7dcce1.lvs.json`,
+  (`layout/lvs/reports/gate_driver_core/20261024-090826-de97a29.lvs.json`,
   2044/2044, 295/295 nets) — plus real, drawn body-tie geometry for both
   device flavors (T4, issue #132).
 - Per-net **interconnect parasitics** from `klt extract --parasitics`: a
@@ -445,8 +650,8 @@ citation of the pre-UVLO
 **What it does not model**:
 
 - **Net-to-net coupling capacitance.** `klt extract --parasitics` *did*
-  compute it for this layout (304 coupling-capacitor pairs, 42.10 fF total,
-  vs. 11072.95 fF total net-to-ground capacitance, in the extraction JSON's
+  compute it for this layout (304 coupling-capacitor pairs, 41.90 fF total,
+  vs. 16053.57 fF total net-to-ground capacitance, in the extraction JSON's
   `parasitics` block) — but `mk_extracted_dut.py`'s T5 transform
   deliberately does not emit `parasitics.nets[].coupled` into the simulated
   netlist. This is stated as a scope reduction in both
@@ -474,23 +679,27 @@ citation of the pre-UVLO
 **Whether postlayout coverage matches the full spec suite: no.** The
 postlayout campaign covers exactly this report's three spec §3 rows (peak
 source/sink current, `tpdlh`/`tpdhl`, rise/fall) end-to-end, on the combined
-top-level DUT including `uvlo` — and confirms the same verdict pattern as
-the schematic-with-UVLO campaign at every metric it can directly compare
-([decision record
-0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md)
-Findings 1–2, 4): no schematic-passing corner regresses to a post-layout
-failure. This includes both of this report's ratified, bounded exceptions —
-[decision record
+top-level DUT including `uvlo`. Against the schematic-level evidence
+(decision record 0019 Findings 1–2, 4 for the 2026-08-26 generation; the
+item-5 envelopes and the #485 records for the current one), no
+schematic-switching corner regresses to a post-layout failure: the November
+records' only verdict changes against their August predecessors are the
+two UVLO-locked low-line corners (see "Diagnosis"), and the schematic-level
+item-5 envelopes error the same four timing rows at the same two corners
+(`verification/signoff/README.md` § "Item 5") — the lockout is a circuit
+property, not an extraction artifact. This includes both of this report's
+ratified, bounded exceptions — [decision record
 0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md)'s
 6 V stretch-rail peak-sink shortfall at the same two corners (`ss_125c`
-0.8764 A, `sf_125c` 0.9242 A in the RC record above, inside the ≥ 0.85 A
+0.8626 A, `sf_125c` 0.9084 A in the RC record above, inside the ≥ 0.85 A
 bound) and [decision record
 0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md)'s
-nominal peak-source miss at `ss_-40c_vlogic2p97v-vdrv4p50v` (0.4754 A here,
-inside the ≥ 0.45 A bound) — and the improvement in the inherited −50 mV
-undershoot band that `layout/README.md` attributes to the extracted net
-capacitance damping the ringing (0/60 points fail under RC vs. 12/60
-parasitic-free). What it does **not** re-verify post-layout:
+nominal peak-source miss at `ss_-40c_vlogic2p97v-vdrv4p50v` (0.4655 A
+here, inside the ≥ 0.45 A bound — the tightest reading yet) — and the
+improvement in the inherited −50 mV undershoot band that `layout/README.md`
+attributes to the extracted net capacitance damping the ringing (0/60
+points fail under RC vs. 8/60 parasitic-free, all ss-family; see
+"Diagnosis"). What it does **not** re-verify post-layout:
 
 - ~~**`spec/gate-driver.md` §5 Exception 1** — the level shifter's own
   internal thin-oxide overshoot on `inb` (decision records 0003/0015). No
@@ -596,9 +805,18 @@ spec-decision follow-ups, not documentation gaps):
 - The nominal ±10 % peak-source-current miss at
   `ss_-40c_vlogic2p97v-vdrv4p50v`, present only once `uvlo` is instantiated
   and confirmed unchanged across schematic, post-layout no-RC, and
-  post-layout RC facets (decision record 0020). Closing this is coupled to
-  closing decision record 0018's own open UVLO false-trip finding, not
-  independently addressable — see decision record 0020's "Consequences."
+  post-layout RC facets (decision record 0020; the November RC facet reads
+  0.4655 A, the tightest yet, still inside the ≥ 0.45 A bound). Closing
+  this is coupled to closing decision record 0018's own open UVLO
+  false-trip finding, not independently addressable — see decision record
+  0020's "Consequences."
+- The two UVLO-locked low-line corners (`ss`/`sf` −40 °C, 2.97/4.50 V)
+  produce no timing, rise/fall value on either post-layout facet — the
+  ERROR rows the "Diagnosis" section attributes to decision record 0018
+  Finding 2's false trip. They have **no ratified exception**: draft
+  decision record 0022 (proposed, awaiting operator ratification) is the
+  pending per-row bound. They stay open ERROR rows until 0018 Finding 2
+  closes.
 - ~~The new, unratified spec §2.3 thick-oxide ceiling exceedance on
   `IN_DRV`~~ — **resolved by
   [decision record 0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md)**
@@ -613,18 +831,24 @@ spec-decision follow-ups, not documentation gaps):
   end of "Results"). Decision record 0006 also leaves one item open: a
   deck-fidelity question about whether the harness's default transient
   tolerances resolve narrow coupling transients.
-- 16 of 60 points on the inherited, non-spec −50 mV undershoot sanity band
-  on the output stage's `x2.n1` taper node, documented in the end-to-end
-  record and not restated here for the same reason.
+- The inherited, non-spec −50 mV undershoot sanity band on the output
+  stage's `x2.n1` taper node: 16 of 60 points on the pre-UVLO schematic
+  end-to-end record (`20260818-060517-673fcf0`), and — carried over
+  unchanged from every superseded extraction — 8 ss-family corners on the
+  post-layout **no-RC** DUT (worst −0.0529 V; the RC DUT fails none). See
+  "Diagnosis" for the no-RC-only attribution.
 
 ## Links
 
-- Gate-driver-core-drive-with-uvlo-postlayout (primary, RC-extracted) record: [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md)
-- Gate-driver-core-drive-with-uvlo-postlayout (no-RC cross-check) record: [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md)
+- Gate-driver-core-drive-with-uvlo-postlayout (primary, RC-extracted, #485 re-run on the #510-regenerated extraction) record: [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md)
+- Gate-driver-core-drive-with-uvlo-postlayout (no-RC cross-check, #485 re-run) record: [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md)
+- Gate-driver-core-drive-postlayout (pre-UVLO facet, #485 re-run — historical comparison for the "Diagnosis" section) records: [`20261123-222100-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222100-23c67d0.md) (RC), [`20261123-222000-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222000-23c67d0.md) (no-RC)
+- Gate-driver-core-drive-with-uvlo-postlayout (RC, superseded 2026-08-26): [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-072640-a7dcce1.md)
+- Gate-driver-core-drive-with-uvlo-postlayout (no-RC, superseded 2026-08-26): [`sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20260826-063405-a7dcce1.md)
 - Gate-driver-core-drive-with-uvlo-postlayout testbench: [`sim/gate-driver-core-drive-with-uvlo-postlayout/testbench/gate_driver_core_uvlo_tb.spice`](../sim/gate-driver-core-drive-with-uvlo-postlayout/testbench/gate_driver_core_uvlo_tb.spice)
 - Gate-driver-core-drive-with-uvlo (schematic-level) record: [`sim/gate-driver-core-drive-with-uvlo/records/20260826-013137-6299c36.md`](../sim/gate-driver-core-drive-with-uvlo/records/20260826-013137-6299c36.md)
 - Gate-driver-core-drive (pre-UVLO, schematic, superseded as primary source): [`sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md`](../sim/gate-driver-core-drive/records/20260818-060517-673fcf0.md)
-- Gate-driver-core-drive-postlayout (pre-UVLO, extracted, superseded as primary source): [`sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md)
+- Gate-driver-core-drive-postlayout (pre-UVLO, extracted, superseded 2026-08-18 controls for the "Diagnosis" section): [`20260818-112446-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md) (RC), [`20260818-111748-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-111748-af13899.md) (no-RC)
 - Extracted DUT netlists: [`layout/lvs/gate_driver_core.extracted-rc.spice`](../layout/lvs/gate_driver_core.extracted-rc.spice), [`layout/lvs/gate_driver_core.extracted.spice`](../layout/lvs/gate_driver_core.extracted.spice); extractor tooling: [`layout/lvs/mk_extracted_dut.py`](../layout/lvs/mk_extracted_dut.py)
 - Combined top-level netlist: [`design/netlist/gate_driver_core.spice`](netlist/gate_driver_core.spice) (from issue #98)
 - Output-stage-drive record (current): [`sim/output-stage-drive/records/20260817-110340-54fdbf8.md`](../sim/output-stage-drive/records/20260817-110340-54fdbf8.md)
@@ -638,5 +862,5 @@ spec-decision follow-ups, not documentation gaps):
 - Level-shifter-oxide-safety-postlayout record (RC): [`sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md`](../sim/level-shifter-oxide-safety-postlayout/records/20260910-021137-b6ec657.md)
 - Level-shifter-oxide-safety-postlayout testbench: [`sim/level-shifter-oxide-safety-postlayout/testbench/gate_driver_core_level_shifter_oxide_tb.spice`](../sim/level-shifter-oxide-safety-postlayout/testbench/gate_driver_core_level_shifter_oxide_tb.spice)
 - Spec: [`spec/gate-driver.md`](../spec/gate-driver.md) §3 (targets), §5 (protection scope / documented exceptions)
-- Decision records: [0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md), [0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md), [0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md), [0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md), [0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md), [0018](../spec/decision-records/0018-uvlo-comparator-pvt-measurement.md), [0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md), [0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md)
-- Re-read table: issue #62 (item 8); epic tracking: issue #22; end-to-end campaign: issue #100 (closed, PR #135); this rollup: issue #107; UVLO schematic PVT: issue #220; layout UVLO extension: issue #221 (PR #225); post-layout re-verification with UVLO: issue #222 (PR #227, decision record 0019); this refresh: issue #233; Exception 1 post-layout re-verification: issue #235
+- Decision records: [0003](../spec/decision-records/0003-predriver-inverter-oxide-margin-exception.md), [0005](../spec/decision-records/0005-output-stage-gate-ceiling-exception.md), [0006](../spec/decision-records/0006-indrv-inter-cell-gate-ceiling-exception.md), [0014](../spec/decision-records/0014-xccomp-mim-density-and-series-stack.md), [0016](../spec/decision-records/0016-output-stage-stretch-sink-current-shortfall.md), [0018](../spec/decision-records/0018-uvlo-comparator-pvt-measurement.md), [0019](../spec/decision-records/0019-postlayout-pvt-reverification-complete-block.md), [0020](../spec/decision-records/0020-uvlo-locked-corner-ipeak-source-artifact.md), [0022](../spec/decision-records/0022-uvlo-low-line-lockout-no-value-timing-rows.md) (proposed, unratified)
+- Re-read table: issue #62 (item 8); epic tracking: issue #22; end-to-end campaign: issue #100 (closed, PR #135); this rollup: issue #107; UVLO schematic PVT: issue #220; layout UVLO extension: issue #221 (PR #225); post-layout re-verification with UVLO: issue #222 (PR #227, decision record 0019); this refresh: issue #233; Exception 1 post-layout re-verification: issue #235; the #485 re-run: issue #485 (PR #591); this re-derivation and the ERROR-corner diagnosis: issue #590
