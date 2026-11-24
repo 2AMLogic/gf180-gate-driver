@@ -8,6 +8,11 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-24
+
+- **PR #591**: sim: re-run both drive post-layout facets against the regenerated extraction (batch fleet)
+- **Issue #485** (closed): Re-run the two drive post-layout facets against the current extraction
+
 ### 2026-11-23
 
 - **PR #583**: docs: drop stale per-corner trip sigma figure from DR-0026 gate roll-up
