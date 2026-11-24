@@ -20,7 +20,7 @@
     },
     "8": {
       "file": "verification/signoff/gate-driver-characterization.generic.json",
-      "content_hash": "sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d"
+      "content_hash": "sha256:3d5ccb90bde34c342eab94e6c068c5a583f0b533404cfb4af863a55eabd4a5ee"
     },
     "9": {
       "file": "verification/signoff/testbenches.generic.json",

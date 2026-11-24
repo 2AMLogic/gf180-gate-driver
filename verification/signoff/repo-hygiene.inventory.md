@@ -42,7 +42,7 @@ re-audit of the links):
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
 | `layout/README.md` | `sha256:21fabcf5a485c3383e20c17904aac8ec8422586f0c956365553c8ed2816a33e6` |
-| `design/gate-driver-characterization.md` | `sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d` |
+| `design/gate-driver-characterization.md` | `sha256:3d5ccb90bde34c342eab94e6c068c5a583f0b533404cfb4af863a55eabd4a5ee` |
 
 ## Findings
 
@@ -1751,5 +1751,22 @@ or a claim the README makes about what the block is; no simulation,
 netlisting or layout flow was run for this re-audit. The `layout/README.md`
 row in the reproduction table above moves from `b3ede870…` to `21fabcf5…`,
 matching `sha256sum layout/README.md` at this head; the envelope's member
+rows were re-attested with the CI-pinned klt (`33df0b12`). No
+`.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
+
+## Re-audit for issue #590 (2026-11-24)
+
+At the issue-#590 branch head, `design/gate-driver-characterization.md`
+was re-derived against issue #485's four clean-tree records (primary: the
+with-UVLO RC record `20261123-222300-23c67d0`; cross-check: its no-RC
+sibling; historical comparison: the pre-UVLO drive pair) and gained a
+"Diagnosis" section covering the ss/sf -40 C 2.97/4.50 V ERROR corners, the
+regression-window verdict, and the carried-over `n1_min_v` and 6 V hot
+sink-current findings. I read the diff. No link target the README relies on
+moved, no `tb.json` bound or spec text changed, and decision record 0022 is
+cited as proposed, not ratified. No simulation, netlisting or layout flow
+was run for this re-audit. The `design/gate-driver-characterization.md`
+row in the reproduction table above moves from `cbc64b05...` to
+`3d5ccb90...`, matching `sha256sum` at this head; the envelope's member
 rows were re-attested with the CI-pinned klt (`33df0b12`). No
 `.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
