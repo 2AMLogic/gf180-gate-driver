@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-24T11:12:00Z (snapshot; compare against live labels)_
+_Generated: 2026-11-24T12:28:00Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -24,6 +24,7 @@ _None._
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
+- **#590**: Diagnose drive post-layout failures on the regenerated extraction (ss/sf -40C low-rail ERROR corners; re-derive characterization tables)
 - **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
 
 ## Ready
@@ -31,12 +32,13 @@ _None._
 Human-approved issues (`loom:issue`) ready for implementation — excluding held (`loom:blocked`/`loom:operator`/`loom:frozen`), `loom:building`, and issues closed by an open `loom:pr` PR (listed under Approved).
 
 - **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
+- **#590**: Diagnose drive post-layout failures on the regenerated extraction (ss/sf -40C low-rail ERROR corners; re-derive characterization tables)
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#485**: Re-run the two drive post-layout facets against the current extraction
+_None._
 
 ## PRs Awaiting Review
 
@@ -48,7 +50,7 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#591**: sim: re-run both drive post-layout facets against the regenerated extraction (batch fleet)
+_None._
 
 ## Proposed
 
@@ -70,11 +72,11 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
-| Important | 2 |
-| Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 1 |
+| Important | 3 |
+| Ready (`loom:issue`, net of holds/building/merge-pending) | 2 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
+| Approved PRs awaiting merge | 0 |
 | Curated | 0 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
