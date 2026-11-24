@@ -41,7 +41,7 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
-| `layout/README.md` | `sha256:b3ede8703ce4ffb208e2ae4c597a54d488660e1d6d293071d9433ea437500a37` |
+| `layout/README.md` | `sha256:21fabcf5a485c3383e20c17904aac8ec8422586f0c956365553c8ed2816a33e6` |
 | `design/gate-driver-characterization.md` | `sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d` |
 
 ## Findings
@@ -1732,4 +1732,24 @@ was run for this re-audit. The `layout/README.md` row in the reproduction
 table above moves from `dbb608e0…` to `b3ede870…`, matching `sha256sum
 layout/README.md` at this head; the envelope's member rows were
 re-attested with the CI-pinned klt (`33df0b12`). No
+`.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
+
+## Re-audit for issue #596 (2026-11-24)
+
+At the issue-#596 branch head, `layout/README.md` changed in the two places
+issue #596 tracks, both inside the Post-layout-simulation Status row. The
+re-run sentence now states the #485 verdict explicitly — **FAIL on the
+current extraction**, every one of the four #485 records carrying
+`Overall: FAIL` (48 PASS / 10 FAIL / 2 ERROR of 60 corners no-RC, 56
+PASS / 2 FAIL / 2 ERROR RC) — instead of "report open FAIL/ERROR corners
+(see the records)", keeping the #590 diagnosis pointer. The earlier-records
+sentence now says all four pre-#485 with-uvlo records were taken against a
+dirty working tree (each record's own `Netlist provenance` line says so,
+re-verified by grep, count 1 per record) instead of singling out "the
+primary one of them". I read the diff. Neither edit changes a link target
+or a claim the README makes about what the block is; no simulation,
+netlisting or layout flow was run for this re-audit. The `layout/README.md`
+row in the reproduction table above moves from `b3ede870…` to `21fabcf5…`,
+matching `sha256sum layout/README.md` at this head; the envelope's member
+rows were re-attested with the CI-pinned klt (`33df0b12`). No
 `.github/workflows/ci.yml` edit is in this PR, so no canonical pin moved.
