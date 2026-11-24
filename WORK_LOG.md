@@ -8,6 +8,15 @@ Maintained automatically by the Guide role's document maintenance phase.
 - [2026-09](work_log/WORK_LOG_2026-09.md)
 - [2026-08](work_log/WORK_LOG_2026-08.md)
 
+### 2026-11-24
+
+- **PR #597**: docs: layout Status row states #485 FAIL verdict, all-four dirty-tree
+- **PR #594**: docs: state current post-layout evidence in layout/README and re-attest item 10
+- **PR #591**: sim: re-run both drive post-layout facets against the regenerated extraction (batch fleet)
+- **Issue #596** (closed): layout/README.md Post-layout row: all four pre-#485 records are dirty-tree, and the #485 FAIL verdict is unstated
+- **Issue #592** (closed): Reconcile layout/README.md Post-layout simulation status row and section after #485
+- **Issue #485** (closed): Re-run the two drive post-layout facets against the current extraction
+
 ### 2026-11-23
 
 - **PR #583**: docs: drop stale per-corner trip sigma figure from DR-0026 gate roll-up
