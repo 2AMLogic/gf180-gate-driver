@@ -314,7 +314,8 @@ corners are `ss_125c_vlogic2p97v-vdrv4p50v` (source 0.5803 A, sink
 ±10 % corner, `ss_-40c_vlogic2p97v-vdrv4p50v`, `uvlo`'s comparator is
 already fully locked out throughout `IN`'s high pulse
 (`uvlo_lockout_at_in_high` = 4.5 V ≈ `VDD_DRV`, `vout_max_v` = 0.2512 V RC /
-0.2412 V no-RC — `OUT` never rises above a quarter of a volt) — the
+0.2412 V no-RC — `OUT` stays at about a quarter of a volt, the RC peak
+just above 0.25 V) — the
 measured current is a sub-nanosecond contention-current transient between
 the output driver and the already-engaged UVLO pulldown, not a sustained
 charge-delivery attempt. Decision record 0020 bounds this specific corner
@@ -464,21 +465,25 @@ and temperature is released and switches normally
 ([`20261123-222300-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222300-23c67d0.md),
 RC — the no-RC record
 [`20261123-222200-23c67d0`](../sim/gate-driver-core-drive-with-uvlo-postlayout/records/20261123-222200-23c67d0.md)
-reads the same to the digit):
+shows the same lockout at slightly lower levels, 0.241168/0.334197 V at
+ss/sf):
 
-| Process (−40 °C, 2.97/4.50 V) | Lockout while IN high | Peak OUT | Four timing measurements |
+| Process (−40 °C, 2.97/4.50 V) | Lockout while IN high | Peak OUT (RC / no-RC) | Four timing measurements |
 |---|---:|---:|---|
-| ss | 4.50 V (locked) | 0.2512 V | no value |
-| sf | 4.50 V (locked) | 0.3485 V | no value |
-| tt | ≈ 0 V (−2.1 × 10⁻⁷, released) | 4.5043 V | all present |
+| ss | 4.50 V (locked) | 0.251249 / 0.241168 V | no value |
+| sf | 4.50 V (locked) | 0.348534 / 0.334197 V | no value |
+| tt | ≈ 0 V (−2.1 × 10⁻⁷, released) | 4.5043 V (RC) | all present |
 
-`uvlo_vout_at_in_high_v` (0.2504/0.3478 V) equals the stuck `vout_max_v`:
-OUT's "peak" is the sub-nanosecond contention blip of the output stage's
-driver against the already-engaged UVLO pulldown (`MPD`, `nfet_06v0`
+In the RC record, `uvlo_vout_at_in_high_v` — OUT sampled at 200 ns, after
+`IN` rises at 20 ns — reads 0.250417/0.347807 V at ss/sf, within 1 mV of
+the respective `vout_max_v` maxima. OUT therefore sits at a low, stuck
+level for the whole pulse: this is the output level measured during
+lockout, the output driver held down by the already-engaged UVLO pulldown
+(`MPD`, `nfet_06v0`
 W = 10 µm m = 800, sized in `design/uvlo-comparator-sizing.md`
-specifically to dominate the output stage's own strongest device) — the
-same signature decision record 0020 ratified for this corner's
-`ipeak_source_a` artifact. The drive path itself is not implicated: in the
+specifically to dominate the output stage's own strongest device). The
+transient interpretation of decision record 0020 applies to the *peak
+current* (`ipeak_source_a`) at this corner, not to the OUT level. The drive path itself is not implicated: in the
 same rows, `indrv_max_v` and every taper node `n1`…`n5` swing to full rail
 (e.g. ss row: `indrv_max_v` 4.50002 V, `n1_max_v` 4.50538 V).
 
@@ -490,8 +495,8 @@ falling/rising thresholds are 4.737/5.115 V and at `sf`/−40 °C they are
 at, so the comparator never releases and holds lockout for the entire
 transient. The mechanism is decision record 0018 Finding 1's: the ~5×
 divider gain amplifies the diode-connected `Vt` reference's process *and*
-temperature spread into a ~2.9 V peak-to-peak falling-threshold spread
-(2.231–4.737 V across the 15-point PVT grid), so at the slow/cold corners
+temperature spread into a ~2.5 V peak-to-peak falling-threshold spread
+(2.231–4.737 V, a 2.506 V span across the 15-point PVT grid), so at the slow/cold corners
 the trip point sits above the spec's own −10 % low-line floor (4.50 V) —
 precisely the false-trip failure mode decision record 0001 Decision 4's
 margin rationale ("the worst-case-high rising threshold… sits 300 mV below
@@ -505,8 +510,8 @@ record carries a single-corner local harness probe reproducing its batch
 envelope on the shared DUT to the printed digits (RC: `vout_max_v`
 0.251249 V, `n1_min_v` −0.00274481 V, `ipeak_source_a` 0.465489 A; no-RC:
 0.241168 V / −0.0528776 V / 0.498025 A) — the DUT, not the batch route.
-The stuck levels also reproduce across the no-RC and RC DUTs within
-7–10 mV of each other, so interconnect parasitics are not the cause
+The stuck levels also agree across the no-RC and RC DUTs to within
+10.081 mV (ss) and 14.337 mV (sf) of each other, so interconnect parasitics are not the cause
 either. The committed lockout measurements above are the probe record
 this issue's acceptance criteria ask for; no additional targeted probe
 was needed to close the causal attribution.
@@ -519,8 +524,9 @@ verdict regression — the facet's superseded 2026-08-18 records
 no-RC,
 [`20260818-112446-af13899`](../sim/gate-driver-core-drive-postlayout/records/20260818-112446-af13899.md)
 RC) show both corners switching normally (`vout_max_v` 4.50571/4.50552 V
-no-RC; 4.50538/4.50496 V RC — PASS, with measured timing and clean
-`n1_min_v`). The evidence places the regression in **the 2026-08-26 UVLO
+no-RC; 4.50538/4.50496 V RC, with measured timing; RC PASS with clean
+`n1_min_v`; no-RC `ss` an overall FAIL on its −0.0531022 V undershoot
+alone, `sf` PASS). The evidence places the regression in **the 2026-08-26 UVLO
 instantiation in the layout, not the 2026-11 extraction regeneration**:
 
 - **DUT contents, 2026-08-18 (`af13899` era)**: the pre-UVLO extraction —
@@ -543,9 +549,10 @@ instantiation in the layout, not the 2026-11 extraction regeneration**:
   From the first extraction containing `uvlo`, the corner never switched.
 - **What changed in November is the classification, not the behaviour.**
   The harness's measured-swing monitors read degenerate sub-nanosecond
-  "timing" values off the ~0.24–0.39 V blip (the August RC record's
-  values there: `trise_s` 8.16 × 10⁻¹⁰ s at the ss corner, 8.54 × 10⁻¹⁰ s
-  at sf), so the 2026-08-26 records verdicted those corners FAIL/PASS.
+  "timing" values off the ~0.24–0.39 V stuck level (the August RC record's
+  rise times there were sub-ns, `trise_s` 8.16 × 10⁻¹⁰ s at the ss corner,
+  8.54 × 10⁻¹⁰ s at sf, while its low-to-high propagation readings were
+  11.47/9.45 ns), so the 2026-08-26 records verdicted those corners FAIL/PASS.
   The #485 batch route's rail-normalised 10/50/90 % crossings — the
   pre-registered `klt/README.md` method, the same one behind the item-5
   envelopes — report *no value* for a block that never reaches 90 % of
@@ -575,12 +582,23 @@ drive path, the harness, or the extraction.
 
 ### Carried-over secondary findings (reported here, not diagnosed)
 
-- **`n1_min_v` undershoot, no-RC DUT only.** 8 ss-family corners miss the
-  inherited −50 mV sanity band on the output stage's `x2.n1` taper node,
-  worst −0.0529 V at `ss_-40c_vlogic3p30v-vdrv5p00v` (full list in the
-  no-RC records' Finding 2) — the same 8 corners the superseded
-  `20260818-111748-af13899` and `20260826-063405-a7dcce1` records failed
-  (−0.0502…−0.0537 V), so this is carried over, not a verdict change. The
+- **`n1_min_v` undershoot, no-RC DUT only.** 9 of 60 no-RC measurements
+  (each November no-RC record) are below the inherited −50 mV sanity band
+  on the output stage's `x2.n1` taper node, worst −0.0529 V at
+  `ss_-40c_vlogic3p30v-vdrv5p00v`. Eight are the corners listed in the
+  records' Finding 2 (which fails them); the ninth,
+  `ss_-40c_vlogic2p97v-vdrv4p50v` (−0.0528776 V), is classified ERROR
+  because its timing is missing, so Finding 2 does not list it. The count
+  is reproducible per record with
+  `awk -F'|' '$2 ~ /vlogic/ && $16 != "" && $16+0 < -0.05 {n++} END {print n+0}' "$record"`.
+  The superseded no-RC records (`20260818-111748-af13899`,
+  `20260826-063405-a7dcce1`) have 12/60 below the band (−0.0500…−0.0537 V),
+  a superset of the nine; the three that moved inside the band are
+  `ss_125c` at 2.97/4.50 V, 3.30/5.00 V and 3.30/6.00 V. The August 18
+  control at `ss_-40c_vlogic2p97v-vdrv4p50v` switched to 4.50571 V with
+  valid timing, but its −0.0531022 V undershoot gave it an overall FAIL;
+  that verdict became ERROR in November (timing missing). The measurement
+  is carried over; the verdict changes are listed in "Diagnosis". The
   RC DUT is clean (worst −0.0035 V): the extracted net capacitance damps
   the ringing. This is a non-spec sanity band, not a §3 row; no bound is
   changed, and circuit changes are outside this report.
@@ -683,8 +701,10 @@ top-level DUT including `uvlo`. Against the schematic-level evidence
 (decision record 0019 Findings 1–2, 4 for the 2026-08-26 generation; the
 item-5 envelopes and the #485 records for the current one), no
 schematic-switching corner regresses to a post-layout failure: the November
-records' only verdict changes against their August predecessors are the
-two UVLO-locked low-line corners (see "Diagnosis"), and the schematic-level
+records' verdict changes against their August predecessors are the
+two UVLO-locked low-line corners (both RC records; the no-RC records also
+record FAIL → PASS at `ss_125c` on the 4.50 V and 5.00 V rails, where the
+no-RC undershoot moved inside the −50 mV band — see "Diagnosis"), and the schematic-level
 item-5 envelopes error the same four timing rows at the same two corners
 (`verification/signoff/README.md` § "Item 5") — the lockout is a circuit
 property, not an extraction artifact. This includes both of this report's
@@ -698,7 +718,7 @@ nominal peak-source miss at `ss_-40c_vlogic2p97v-vdrv4p50v` (0.4655 A
 here, inside the ≥ 0.45 A bound — the tightest reading yet) — and the
 improvement in the inherited −50 mV undershoot band that `layout/README.md`
 attributes to the extracted net capacitance damping the ringing (0/60
-points fail under RC vs. 8/60 parasitic-free, all ss-family; see
+points below the band under RC vs. 9/60 parasitic-free, all ss-family; see
 "Diagnosis"). What it does **not** re-verify post-layout:
 
 - ~~**`spec/gate-driver.md` §5 Exception 1** — the level shifter's own
@@ -834,8 +854,9 @@ spec-decision follow-ups, not documentation gaps):
 - The inherited, non-spec −50 mV undershoot sanity band on the output
   stage's `x2.n1` taper node: 16 of 60 points on the pre-UVLO schematic
   end-to-end record (`20260818-060517-673fcf0`), and — carried over
-  unchanged from every superseded extraction — 8 ss-family corners on the
-  post-layout **no-RC** DUT (worst −0.0529 V; the RC DUT fails none). See
+  carried over from the superseded extractions (12/60 there) — 9 ss-family
+  corners on the post-layout **no-RC** DUT (worst −0.0529 V; eight fail the
+  band, the ninth is ERROR on missing timing; the RC DUT has none). See
   "Diagnosis" for the no-RC-only attribution.
 
 ## Links

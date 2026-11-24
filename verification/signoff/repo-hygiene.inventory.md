@@ -42,7 +42,7 @@ re-audit of the links):
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
 | `layout/README.md` | `sha256:21fabcf5a485c3383e20c17904aac8ec8422586f0c956365553c8ed2816a33e6` |
-| `design/gate-driver-characterization.md` | `sha256:df335d2f83511f2062a75b3ada477fa473b76a38cd5fface610e130628256fda` |
+| `design/gate-driver-characterization.md` | `sha256:3d5ccb90bde34c342eab94e6c068c5a583f0b533404cfb4af863a55eabd4a5ee` |
 
 ## Findings
 
