@@ -8,7 +8,7 @@ everything under test here is pure arithmetic over a netlist or over an already
 captured `klt` response, so this suite runs on a bare runner (the `test` job in
 ``.github/workflows/ci.yml``) with nothing but ``python3``.
 
-Three things are pinned here, for three different reasons:
+Four things are pinned here, for four different reasons:
 
 * the **netlist interpretation** in ``gen_gate_driver_core.py`` (issue #129) --
   see below;
@@ -25,7 +25,14 @@ Three things are pinned here, for three different reasons:
   are in *series* rather than merely present.  Same argument as above: every
   one of its failing directions is unreachable from the committed GDS, so they
   are exercised from synthetic extraction facts, and the function is pure so
-  they can be.
+  they can be;
+* the **extracted-netlist reader** in ``check_gate_driver_core.py`` (issue
+  #600) -- ``parse_extraction()`` reads one `klt extract` netlist once and
+  derives the device multiset and the MOS terminal set from the *same*
+  recognized transistors, so the ``devices`` and ``mim_stack`` verdicts cannot
+  disagree about which instances are transistors.  Only a real `klt` run can
+  produce that netlist, so the properties the one reader has to preserve are
+  pinned here against short synthetic extractions shaped like klt's output.
 
 Why this file exists (issue #129)
 ---------------------------------
@@ -69,14 +76,17 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import check_gate_driver_core  # noqa: E402  (path set above)
 from check_gate_driver_core import (  # noqa: E402  (path set above)
+    devices_verdict,
     expected_devices,
-    extracted_devices,
     ground_rail_isolation_verdict,
     mim_stack_verdict,
+    parse_extraction,
     routed_nets,
 )
 from gen_gate_driver_core import (  # noqa: E402  (path set above)
@@ -113,6 +123,19 @@ from make_reference import mim_capacitance_f  # noqa: E402  (path set above)
 def _device_line(params: str) -> list[str]:
     """One ``X<name> d g s b model <params>`` device line, as split tokens."""
     return f"XMTEST d g s b nfet_06v0 {params}".split()
+
+
+def _extracted(text: str):
+    """``parse_extraction()`` over ``text``, standing in for a `klt extract` file."""
+    handle = tempfile.NamedTemporaryFile(
+        "w", suffix=".spice", delete=False, encoding="utf-8"
+    )
+    try:
+        handle.write(text)
+        handle.close()
+        return parse_extraction(handle.name)
+    finally:
+        os.unlink(handle.name)
 
 
 class MultiFingerInterpretationTest(unittest.TestCase):
@@ -455,9 +478,9 @@ class DeviceKeyGroundDomainTest(unittest.TestCase):
     is correct), so it is pinned here against synthetic input, on the
     schematic/extraction shape several real devices in this netlist have: an
     NMOS whose *source* sits directly on one of the two ground rails.  Both
-    halves of ``check_devices``'s comparison are exercised as they run in the
-    real check -- ``expected_devices`` over the schematic side,
-    ``extracted_devices`` over a one-line extracted netlist.
+    halves of the ``devices`` verdict are exercised as they run in the real
+    check -- ``expected_devices`` over the schematic side, ``parse_extraction``
+    over a one-line extracted netlist.
     """
 
     @staticmethod
@@ -487,15 +510,7 @@ class DeviceKeyGroundDomainTest(unittest.TestCase):
         return f"XMTEST x1_inb IN {ground} {bulk} nfet_03v3 W=10u L=0.6u\n"
 
     def _found(self, text: str):
-        handle = tempfile.NamedTemporaryFile(
-            "w", suffix=".spice", delete=False, encoding="utf-8"
-        )
-        try:
-            handle.write(text)
-            handle.close()
-            return extracted_devices(handle.name)
-        finally:
-            os.unlink(handle.name)
+        return _extracted(text).devices
 
     def test_correctly_wired_device_matches_on_either_rail(self):
         """The check still passes a correct device on either ground domain."""
@@ -515,6 +530,161 @@ class DeviceKeyGroundDomainTest(unittest.TestCase):
         # missing from the layout, one unexpected device found in it.
         self.assertEqual(sum((expected - found).values()), 1)
         self.assertEqual(sum((found - expected).values()), 1)
+
+    def test_devices_verdict_reports_the_miswire_as_missing_and_unexpected(self):
+        """The record the checker commits, read off the same two halves."""
+        extraction = _extracted(self._extracted_line("GND_DRV"))
+        verdict = devices_verdict([self._device("GND_LOGIC")], extraction, {})
+        self.assertFalse(verdict["passed"])
+        self.assertEqual(
+            verdict["missing"],
+            [{"device": "nfet W=10.0u L=0.6u g=IN d/s={GND_LOGIC, x1_inb}", "count": 1}],
+        )
+        self.assertEqual(
+            verdict["unexpected"],
+            [{"device": "nfet W=10.0u L=0.6u g=IN d/s={GND_DRV, x1_inb}", "count": 1}],
+        )
+        self.assertEqual(verdict["netlist_devices"], 1)
+        self.assertEqual(verdict["expected_transistors"], 1)
+        self.assertEqual(verdict["extracted_transistors"], 1)
+        self.assertEqual(verdict["extracted_netlist"], extraction.path)
+        for ground in ("GND_LOGIC", "GND_DRV"):
+            with self.subTest(ground=ground):
+                correct = devices_verdict(
+                    [self._device(ground)], _extracted(self._extracted_line(ground)), {}
+                )
+                self.assertTrue(correct["passed"])
+                self.assertEqual((correct["missing"], correct["unexpected"]), ([], []))
+
+
+class ParseExtractionTest(unittest.TestCase):
+    """``check_gate_driver_core.parse_extraction`` reads one extraction (issue #600).
+
+    The ``devices`` and ``mim_stack`` checks used to open the same extracted
+    netlist four times, and each decided for itself which ``X`` instances are
+    transistors -- two copies of the MOS predicate, which a change to klt's
+    syntax had to reach together for the two verdicts to agree about which
+    transistors touch a net.  Both now read the facts ``parse_extraction()``
+    derives in a single pass.  This pins what that consolidation had to carry
+    over unchanged; like the verdicts next door, it needs neither `klt` nor
+    the PDK.
+
+    Lines naming an ``X$…`` instance are copied verbatim from the committed
+    GDS's real extraction (klt 0.9.3.dev5358); the rest are shaped like them.
+    """
+
+    #: A MOS whose parameters wrap onto a ``+`` line; a MiM capacitor, whose
+    #: model sits one token earlier than a MOS's; and a poly resistor, seven
+    #: tokens with ``r_length=80U`` where a MOS has its model.
+    MOS = (
+        "X$1 x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 "
+        "L=0.28U W=5U AS=2.5P AD=2.5P PS=11U\n"
+        "+ PD=11U\n"
+    )
+    CAP = "X$1770 x1_ncb \\$293 cap_mim_2f0_m4m5_noshield c_length=5U c_width=5U\n"
+    RES = "X$1774 VDD_DRV \\$21 GND_LOGIC ppolyf_u r_length=80U r_width=0.42U\n"
+
+    def test_source_and_drain_order_does_not_change_the_device_key(self):
+        """A folded device alternates drain and source finger to finger."""
+        a = _extracted("XM x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 W=10u L=0.6u")
+        b = _extracted("XM GND_LOGIC IN x1_inb GND_LOGIC nfet_03v3 W=10u L=0.6u")
+        self.assertEqual(a.devices, b.devices)
+        self.assertEqual(sum(a.devices.values()), 1)
+        self.assertEqual(a.mos_nets, b.mos_nets)
+
+    def test_every_terminal_lands_in_the_mos_net_set_bulk_included(self):
+        """The bulk terminal is how ``mim_stack`` sees a body tie on a node."""
+        extraction = _extracted("XM x1_inb IN GND_LOGIC VSS nfet_03v3 W=10u L=0.6u")
+        self.assertEqual(extraction.mos_nets, {"x1_inb", "IN", "GND_LOGIC", "VSS"})
+        # The key keeps only the gate and the source/drain pair: a body on the
+        # deck's substrate global is not a wiring difference (issue #221).
+        self.assertEqual(
+            extraction.devices,
+            _extracted("XM x1_inb IN GND_LOGIC GND_LOGIC nfet_03v3 W=10u L=0.6u").devices,
+        )
+
+    def test_escaped_generated_net_names_are_unescaped_in_every_fact(self):
+        """klt escapes an unlabeled net's generated name: ``\\$18`` is ``$18``."""
+        extraction = _extracted(
+            "X$1 \\$18 IN GND_LOGIC GND_LOGIC nfet_03v3 W=10u L=0.6u\n"
+            "X$2 \\$18 \\$19 cap_mim_2f0_m4m5_noshield c_length=5U c_width=5U\n"
+            ".SUBCKT gate_driver_core IN \\$19\n"
+        )
+        self.assertEqual(extraction.mos_nets, {"IN", "$18", "GND_LOGIC"})
+        gate, ds = next(iter(extraction.devices))[3:]
+        self.assertEqual((gate, ds), ("IN", frozenset({"$18", "GND_LOGIC"})))
+        capacitor = extraction.capacitors[0]
+        self.assertEqual((capacitor["a"], capacitor["b"]), ("$18", "$19"))
+        self.assertEqual(extraction.pins, ["IN", "$19"])
+
+    def test_the_netlist_is_read_once_however_many_facts_are_derived(self):
+        text = self.MOS + self.CAP + self.RES + ".SUBCKT gate_driver_core x1_ncb\n"
+        with mock.patch.object(
+            check_gate_driver_core,
+            "_extracted_lines",
+            wraps=check_gate_driver_core._extracted_lines,
+        ) as reader:
+            _extracted(text)
+        self.assertEqual(reader.call_count, 1)
+
+    def test_only_transistors_feed_the_device_multiset_and_mos_net_set(self):
+        """Capacitors and resistors are ``X`` instances too, and are not MOS."""
+        extraction = _extracted(self.MOS + self.CAP + self.RES)
+        self.assertEqual(
+            dict(extraction.devices),
+            {("nfet", 5.0, 0.28, "IN", frozenset({"x1_inb", "GND_LOGIC"})): 1},
+        )
+        self.assertEqual(extraction.mos_nets, {"x1_inb", "IN", "GND_LOGIC"})
+        capacitor = extraction.capacitors[0]
+        self.assertEqual(
+            (capacitor["name"], capacitor["a"], capacitor["b"], capacitor["params"]),
+            ("X$1770", "x1_ncb", "$293", {"c_length": "5U", "c_width": "5U"}),
+        )
+        self.assertEqual(extraction.pins, [])
+
+    def test_first_subcircuit_pins_keep_the_file_order(self):
+        extraction = _extracted(
+            "* extracted by klt extract --deck gf180mcu\n"
+            ".SUBCKT gate_driver_core VDD_LOGIC x3_uvlo_ok\n"
+            "+ x1_inb IN\n"
+            ".SUBCKT nested B A\n"
+            "XM A G B VSS nfet_03v3 W=1u L=0.28u\n"
+            ".ENDS nested\n"
+            ".ENDS gate_driver_core\n"
+        )
+        self.assertEqual(extraction.pins, ["VDD_LOGIC", "x3_uvlo_ok", "x1_inb", "IN"])
+
+    def test_a_transistor_on_an_interior_node_fails_the_stack_from_the_same_read(self):
+        """The transistor ``devices`` counts is the one ``mim_stack`` sees."""
+        nodes = [("x1_ncb", "$293"), ("$293", "IN_DRV")]
+        passives = [
+            Passive(
+                name=f"x1_XCCOMP{index + 1}",
+                model="cap_mim_2f0_m4m5_noshield",
+                w_um=5.0,
+                l_um=5.0,
+                multiplicity=1,
+                plus=nodes[index][0],
+                minus=nodes[index][1],
+            )
+            for index in range(2)
+        ]
+        stack = self.CAP + "X$1771 \\$293 IN_DRV cap_mim_2f0_m4m5_noshield c_length=5U c_width=5U\n"
+        clean = _extracted(stack)
+        verdict = mim_stack_verdict(clean.capacitors, clean.mos_nets, clean.pins, passives)
+        self.assertTrue(verdict["passed"], verdict["failures"])
+
+        strapped = _extracted(stack + "X$9 \\$293 IN VSS VSS nfet_06v0 L=0.5U W=2U\n")
+        self.assertIn("$293", strapped.mos_nets)
+        self.assertNotIn("$293", clean.mos_nets)
+        verdict = mim_stack_verdict(
+            strapped.capacitors, strapped.mos_nets, strapped.pins, passives
+        )
+        self.assertFalse(verdict["passed"])
+        self.assertIn(
+            "interior series node $293 also lands on a transistor terminal",
+            " ".join(verdict["failures"]),
+        )
 
 
 class GroundRailIsolationVerdictTest(unittest.TestCase):
