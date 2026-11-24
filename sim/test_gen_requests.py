@@ -173,6 +173,30 @@ POSTLAYOUT_DRIVE_FACETS = (
 )
 
 
+def _mirror_generators(tmp: pathlib.Path) -> None:
+    """Mirror the parts of ``sim/`` the generators need into ``tmp``.
+
+    The whole harness package, so a generator that starts importing another
+    harness module fails on its own merits rather than on a short copy list;
+    every generator script at its real relative path (pex/gen_pex_requests.py
+    imports the core generator from its parent directory); and the non-script
+    generator inputs (the oxide-safety facet's tb.json).
+    """
+    shutil.copytree(
+        SIM / "harness",
+        tmp / "harness",
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    for rel in SCRIPTS:
+        dest = tmp / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SIM / rel, dest)
+    for rel in SCRIPT_INPUTS:
+        dest = tmp / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SIM / rel, dest)
+
+
 def _load_run_uvlo_trip():
     """Import ``sim/uvlo-trip-verification/run_uvlo_trip.py`` by path.
 
@@ -196,21 +220,7 @@ class GeneratorsReproduceCommittedRequests(unittest.TestCase):
         tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(tmpdir.cleanup)
         tmp = pathlib.Path(tmpdir.name)
-        # The whole harness package, so a generator that starts importing another
-        # harness module fails on its own merits rather than on a short copy list.
-        shutil.copytree(
-            SIM / "harness",
-            tmp / "harness",
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
-        for rel in SCRIPTS:
-            dest = tmp / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(SIM / rel, dest)
-        for rel in SCRIPT_INPUTS:
-            dest = tmp / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(SIM / rel, dest)
+        _mirror_generators(tmp)
 
         proc = subprocess.run(
             [sys.executable, str(tmp / script_rel)],
@@ -733,6 +743,39 @@ class OxideSafetyRequestsMatchManifestAndGrid(unittest.TestCase):
                     exprs["dvc4"], "vecmax(abs(v(ANON295)-v(IN_DRV)))"
                 )
 
+    def test_generator_refuses_a_drifted_measure_expression(self):
+        """A mutated tb.json ``measure`` expression must fail generation (#606).
+
+        The committed requests restate the harness bench's nine ``measure``
+        expressions, but ``manifest()`` used to compare only the column
+        *names* (``list(tb["measure"])``), so mutating an expression (issue
+        #606's ``t_plh*1e9`` -> ``t_plh*1e6`` scratch check) left the
+        generator exiting 0 with byte-identical requests -- silent drift.
+        ``manifest()`` now compares the full ``measure`` map, and this pins
+        that the check actually fires.
+        """
+        tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(tmpdir.cleanup)
+        tmp = pathlib.Path(tmpdir.name)
+        _mirror_generators(tmp)
+        tb_path = tmp / self.SLUG / "testbench" / "tb.json"
+        tb = json.loads(tb_path.read_text())
+        tb["measure"]["t_plh_ns"] = "t_plh*1e6"
+        tb_path.write_text(json.dumps(tb, indent=2) + "\n")
+        proc = subprocess.run(
+            [sys.executable, str(tmp / self.SLUG / "klt" / "gen_requests.py")],
+            capture_output=True,
+            text=True,
+            # same isolation stance as _run_in_sandbox
+            cwd=tmp,
+        )
+        self.assertNotEqual(
+            proc.returncode,
+            0,
+            "a drifted tb.json `measure` expression must fail generation, "
+            f"but gen_requests.py exited 0:\n{proc.stdout}\n{proc.stderr}",
+        )
+
 
 class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
     """Every committed oxide-safety envelope covers each DUT's grid exactly once.
@@ -753,11 +796,9 @@ class OxideBatchEnvelopesCoverTheGrid(unittest.TestCase):
         "norcx": ("oxide-norcx", "layout/lvs/gate_driver_core.extracted.spice"),
         "rc": ("oxide-rc", "layout/lvs/gate_driver_core.extracted-rc.spice"),
     }
-    COLUMNS = (
-        "vgate_thinox_max", "vna_peak", "vnb_peak", "vccomp_dev_max",
-        "vccomp_stack_max", "t_plh_ns", "t_phl_ns",
-        "vout_hi_ratio", "vout_lo_ratio",
-    )
+    # The same nine record columns OxideSafetyRequestsMatchManifestAndGrid
+    # pins the requests against -- one shared tuple, not a second copy (#606).
+    COLUMNS = OxideSafetyRequestsMatchManifestAndGrid.COLUMNS
     GRID = {
         (p, t, vl, vd)
         for p in ("tt", "ff", "ss", "fs", "sf")
