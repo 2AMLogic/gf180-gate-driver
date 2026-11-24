@@ -8,75 +8,14 @@ script against ``design/netlist/gate_driver_core.spice`` and the gf180mcu PDK.
     python3 layout/gen_gate_driver_core.py            # writes layout/gate_driver_core.gds
     python3 layout/gen_gate_driver_core.py --out-dir /tmp/x   # scratch run
 
-Flow (all geometry is produced by `klt`, per the repo's stated tooling -- this
-script never links klayout itself and needs nothing but the standard library):
+All geometry is produced by `klt`, per the repo's stated tooling -- this
+script never links klayout itself and needs nothing but the standard library.
 
-1.  Parse ``design/netlist/gate_driver_core.spice`` and flatten the three
-    sub-cells (``level_shifter`` x1, ``output_stage`` x2, ``uvlo`` x3, issue
-    #221) into one MOS device list, one MiM-capacitor list and one bare-``R``
-    resistor list, all with top-level net names.
-2.  ``klt gen mos_array`` once per netlist device. A netlist device with
-    ``W=W nf=N m=M`` is drawn as a single ``1x1`` unit device folded into
-    ``N*M`` parallel gate fingers of ``W/N`` each (``finger_topology:
-    "parallel"``), which is exactly what those parameters mean in SPICE: ``M``
-    parallel copies of one ``W``-wide transistor whose width is itself split
-    across ``N`` fingers, all sharing one source/drain/gate strap. The total
-    drawn width is ``W*M`` whatever ``N`` is, and that is what ``klt extract``
-    reads back. Every device in the committed netlist has ``nf=1``, where this
-    is ``M`` fingers of width ``W``.
-3.  ``klt draw`` once for the interconnect/marker cell: the Metal2 net rails,
-    the Metal1 device stubs and gate routes, the Via1 stack between them, the
-    net-name labels, the two voltage-domain marker regions
-    (``DNWELL``/``LVPWELL`` over the 5V/6V group, ``Dualgate`` over the same),
-    and the ``XCCOMP*`` MiM capacitor stack -- Metal4 bottom plates, FuseTop
-    top plates with their ``CAP_MK``/``MIM_L_MK`` recognition markers, the
-    Metal5 straps over their Via4s, and the Via3/Metal3/Via2 escape down to
-    the two Metal2 rails the series chain terminates on
-    (:meth:`Interconnect.mim_caps`).
-4.  ``klt gen-compose`` (``placement.strategy: "explicit"``) merges every
-    device cell, every resistor cell and the interconnect cell into one
-    ``gate_driver_core`` top cell at the origins this script computed.
-5.  ``klt gen res_array`` once per netlist ``R`` element -- ``uvlo``'s
-    ``Rref``/``R1``/``R2``/``Rfb`` (issue #221), folded into ``num`` series
-    unit resistors and chained by :meth:`Interconnect.resistors`. See
-    :func:`resistor_array_params`.
-
-Floorplan
----------
-
-Every device is a left-aligned horizontal strip; strips stack upward in
-netlist order, thin-oxide (3.3V logic) group first, then a domain gap, then
-the thick-oxide (5V/6V drive) group.  ``klt gen``'s ``mos_array`` reports the
-source pad on a strip's left edge (facing 180), the drain pad on its right
-edge (facing 0) and the gate pad on its top edge (facing 90), so:
-
-* net rails run vertically on **Metal2**, in a channel to the left of the
-  strips (sources + gates) and a channel to their right (drains);
-* a **Metal1** stub runs horizontally out of each pad to its rail and drops a
-  **Via1** there; a gate route goes up out of the strip, then horizontally
-  through the empty channel above it to the left rail;
-* each net's left and right rail are tied together by one horizontal Metal1
-  jumper in a cross-over band above the whole stack.
-
-Metal1 stubs therefore cross *under* unrelated Metal2 rails with no via, which
-is what keeps a purely orthogonal, no-router wiring scheme short-free.
-
-The ``XCCOMP*`` MiM series stack sits in its own single row of four plates,
-placed north of every drawn shape in the block (above the guard ring's own
-north stroke, over bare substrate), so nothing at all -- least of all anything
-matching-sensitive, per DRM 10.4.2 -- sits underneath it.  It reaches the two
-Metal2 rails its chain terminates on through Metal3, on a layer stack that
-crosses over the whole interconnect without a single via into it.  See
-:meth:`Interconnect.mim_caps`.
-
-Known limitations of this first-cut layout (deliberately not fixed here -- see
-``layout/README.md`` and issue #105, which owns DRC/LVS closure):
-
-* No well/substrate taps, no guard ring around ``DNWELL_DRV``.  A closed tap
-  ring around the drive domain has to be cut for every signal crossing the
-  domain boundary, which is a routing plan, not a marker rectangle.
-* Device aspect ratios are whatever ``m`` folds into a single row.
-* Not DRC-clean and not LVS-clean; ``klt drc`` has never been run on it.
+The build sequence, the floorplan and routing rationale, and the current
+verification status (body taps, guard ring, DRC/LVS coverage and its limits)
+are documented in ``layout/README.md`` -- see its "How it is built",
+"Floorplan" and status sections ("Status", "DRC", "LVS") -- which this
+docstring deliberately does not duplicate.
 """
 
 from __future__ import annotations

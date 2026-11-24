@@ -677,7 +677,13 @@ regenerated from main (`230002d`) and from the branch head under the same
 host `klt 0.9.3.dev3786+g820a4313ec16`, both into scratch directories —
 all 41 GDS outputs byte-identical — so the removal is GDS-neutral the same
 way and the pin moves to `5895fc03…` with the committed GDS bytes
-untouched. T1 item 2's live claim therefore rests on the ratified
+untouched. Refreshed again for the #605 removal of the generator's stale
+in-file build/floorplan/limitations walkthrough (2026-11-24): regenerated
+from main (`9a73bd6`) and from the branch head under the same host
+`klt 0.9.3.dev5517+g9fff520e45e2`, both into scratch directories — all 41
+GDS outputs byte-identical, the top cell hashing `82962b0f…` on both sides
+— so the docstring trim is GDS-neutral the same way and the pin moves to
+`0e2565e1…` with the committed GDS bytes untouched. T1 item 2's live claim therefore rests on the ratified
 criterion's documented-provenance arm, and
 [`check_layout_provenance.py`](check_layout_provenance.py) (stdlib-only, run
 in CI's PDK-free signoff job) re-hashes the recorded pins — `layout`,
