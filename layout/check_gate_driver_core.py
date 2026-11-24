@@ -32,6 +32,10 @@ the stream, not a replay of how it was built:
     genuinely **floating**: each one must touch exactly two capacitor
     terminals, no transistor terminal, and no top-level pin.
 
+    It shares one read of the extraction with ``devices``
+    (:func:`parse_extraction`): the transistors it rules against are exactly
+    the ones ``devices`` counts (issue #600).
+
     That last ruling is the one this check exists for.  A stray strap, tie or
     shield on ``nccomp1``/``nccomp2``/``nccomp3`` changes the effective series
     capacitance, and neither verdict next door would necessarily catch it:
@@ -127,6 +131,7 @@ import json
 import os
 import re
 import sys
+from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "common"))
@@ -191,7 +196,7 @@ def _device_key(flavor: str, w_um: float, l_um: float, gate: str, ds: frozenset)
     extracts as its own separate net everywhere else.  The canonicalization
     was therefore removed rather than narrowed, because there is no body
     terminal left in this key to narrow it *to*: klt writes a 4-terminal MOS
-    as ``X<id> <t1> <gate> <t3> <bulk> <model>`` and :func:`extracted_devices`
+    as ``X<id> <t1> <gate> <t3> <bulk> <model>`` and :func:`parse_extraction`
     passes only ``<gate>`` and the ``{<t1>, <t3>}`` pair in here -- all of
     them ordinary terminals.  ``lvs/make_reference.py``'s ``_body_net()``
     holds the surviving, body-only form of the same transform, for `klt lvs`,
@@ -236,41 +241,6 @@ def _extracted_lines(spice_path: str) -> list[str]:
     return lines
 
 
-def extracted_devices(spice_path: str) -> collections.Counter:
-    """Multiset of transistors ``klt extract`` found in the layout.
-
-    KLayout writes a 4-terminal MOS as ``X<id> <t1> <gate> <t3> <bulk>
-    <model>``; ``t1``/``t3`` are the drain/source pair, whose order is not
-    meaningful for a symmetric MOS (a folded device alternates them finger to
-    finger), so they are compared as an unordered pair.
-    """
-    lines = _extracted_lines(spice_path)
-
-    found: collections.Counter = collections.Counter()
-    for line in lines:
-        if not line.upper().startswith("X"):
-            continue
-        tokens = line.split()
-        if len(tokens) < 6:
-            continue
-        nets = [token.replace("\\", "") for token in tokens[1:5]]
-        model = tokens[5]
-        if not (model.startswith("nfet") or model.startswith("pfet")):
-            continue
-        params = dict(_PARAM_RE.findall(" ".join(tokens[6:])))
-        flavor = "pfet" if model.startswith("pfet") else "nfet"
-        found[
-            _device_key(
-                flavor,
-                _spice_number(params["W"]) * 1e6,
-                _spice_number(params["L"]) * 1e6,
-                nets[1],
-                frozenset({nets[0], nets[2]}),
-            )
-        ] += 1
-    return found
-
-
 def _describe(key: tuple) -> str:
     flavor, w_um, l_um, gate, ds = key
     return f"{flavor} W={w_um}u L={l_um}u g={gate} d/s={{{', '.join(sorted(ds))}}}"
@@ -289,7 +259,51 @@ def _clean_net(token: str) -> str:
     return token.replace("\\", "")
 
 
-def extracted_capacitors(spice_path: str) -> list[dict]:
+class _Mos(NamedTuple):
+    """One transistor ``klt extract`` recognized, with its four terminals.
+
+    KLayout writes a 4-terminal MOS as ``X<id> <t1> <gate> <t3> <bulk>
+    <model>``.  ``terminals`` keeps that order, each name through
+    :func:`_clean_net`.  ``t1``/``t3`` are the drain/source pair, whose order
+    is not meaningful for a symmetric MOS (a folded device alternates them
+    finger to finger), so the device key compares them as an unordered pair --
+    while all four terminals, ``bulk`` included, land in the MOS net set.
+    """
+
+    flavor: str
+    w_um: float
+    l_um: float
+    terminals: tuple[str, str, str, str]
+
+
+def _recognized_mos(lines: list[str]):
+    """Yield every line in ``lines`` that is a transistor, parsed.
+
+    The one place the extraction's MOS syntax is decided: a line starting
+    with ``X``, at least six tokens long, whose sixth names an ``nfet*`` or
+    ``pfet*`` model.  klt writes capacitors and resistors as ``X`` instances
+    too, and they are excluded here -- once, for every reader (issue #600).
+    """
+    for line in lines:
+        if not line.upper().startswith("X"):
+            continue
+        tokens = line.split()
+        if len(tokens) < 6:
+            continue
+        model = tokens[5]
+        if not (model.startswith("nfet") or model.startswith("pfet")):
+            continue
+        params = dict(_PARAM_RE.findall(" ".join(tokens[6:])))
+        t1, gate, t3, bulk = (_clean_net(token) for token in tokens[1:5])
+        yield _Mos(
+            "pfet" if model.startswith("pfet") else "nfet",
+            _spice_number(params["W"]) * 1e6,
+            _spice_number(params["L"]) * 1e6,
+            (t1, gate, t3, bulk),
+        )
+
+
+def _extracted_capacitors(lines: list[str]) -> list[dict]:
     """Every extracted capacitor: ``{name, model, a, b, params}``, in file order.
 
     ``klt extract --pdk`` writes a two-terminal PDK device as
@@ -297,9 +311,13 @@ def extracted_capacitors(spice_path: str) -> list[dict]:
     back carrying the *same* ``c_width``/``c_length`` parameter names the
     schematic states it with -- which is what makes a per-device geometry
     comparison possible here rather than only a count.
+
+    A rule of its own, not a case of :func:`_recognized_mos`: the model is the
+    token *before* the first parameter, which for a capacitor is one token
+    earlier than a MOS's.
     """
     found: list[dict] = []
-    for line in _extracted_lines(spice_path):
+    for line in lines:
         if not line.upper().startswith("X"):
             continue
         tokens = line.split()
@@ -326,28 +344,55 @@ def extracted_capacitors(spice_path: str) -> list[dict]:
     return found
 
 
-def extracted_mos_nets(spice_path: str) -> set[str]:
-    """Every net any extracted *transistor* terminal lands on."""
-    nets: set[str] = set()
-    for line in _extracted_lines(spice_path):
-        if not line.upper().startswith("X"):
-            continue
-        tokens = line.split()
-        if len(tokens) < 6:
-            continue
-        model = tokens[5]
-        if not (model.startswith("nfet") or model.startswith("pfet")):
-            continue
-        nets.update(_clean_net(token) for token in tokens[1:5])
-    return nets
+def _extracted_pins(lines: list[str]) -> list[str]:
+    """The extracted top cell's own pin list, off its ``.SUBCKT`` header.
 
-
-def extracted_pins(spice_path: str) -> list[str]:
-    """The extracted top cell's own pin list, off its ``.SUBCKT`` header."""
-    for line in _extracted_lines(spice_path):
+    The first ``.subckt`` line in the file, in its own token order.
+    """
+    for line in lines:
         if line.lower().startswith(".subckt "):
             return [_clean_net(token) for token in line.split()[2:]]
     return []
+
+
+class ExtractedNetlist(NamedTuple):
+    """What one ``klt extract`` netlist states, read once (issue #600).
+
+    ``devices`` -- a multiset of :func:`_device_key` tuples -- and
+    ``mos_nets`` are both derived from the same recognized transistors, so the
+    ``devices`` and ``mim_stack`` verdicts cannot disagree about which
+    instances are transistors.  ``capacitors`` and ``pins`` keep rules of
+    their own.  ``path`` is where klt wrote the netlist; the ``devices``
+    record reports it.
+    """
+
+    path: str
+    devices: collections.Counter
+    mos_nets: set[str]
+    capacitors: list[dict]
+    pins: list[str]
+
+
+def parse_extraction(spice_path: str) -> ExtractedNetlist:
+    """Read one ``klt extract`` netlist into every fact the checks need.
+
+    The file is opened and its ``+`` continuations joined exactly once,
+    however many verdicts consume it.  ``mos_nets`` is every net a transistor
+    terminal lands on, bulk included -- which is what lets ``mim_stack`` rule
+    that a stack's interior node touches no transistor at all.
+    """
+    lines = _extracted_lines(spice_path)
+    devices: collections.Counter = collections.Counter()
+    mos_nets: set[str] = set()
+    for mos in _recognized_mos(lines):
+        t1, gate, t3, _bulk = mos.terminals
+        devices[
+            _device_key(mos.flavor, mos.w_um, mos.l_um, gate, frozenset({t1, t3}))
+        ] += 1
+        mos_nets.update(mos.terminals)
+    return ExtractedNetlist(
+        spice_path, devices, mos_nets, _extracted_capacitors(lines), _extracted_pins(lines)
+    )
 
 
 def mim_stack_verdict(
@@ -492,9 +537,13 @@ def mim_stack_verdict(
 # --------------------------------------------------------------------------- #
 
 
-def check_devices(gds: str, pdk: str, devices: list[Device], work_dir: str) -> dict:
-    spice_path = os.path.join(work_dir, f"{TOP_CELL}.extracted.spice")
-    report = klt_report.run_klt_json(
+def extract_layout(gds: str, pdk: str, spice_path: str) -> dict:
+    """``klt extract`` the layout with the gf180mcu deck into ``spice_path``.
+
+    Returns the run's JSON report.  The netlist it describes is read with
+    :func:`parse_extraction`.
+    """
+    return klt_report.run_klt_json(
         [
             "extract",
             gds,
@@ -508,16 +557,27 @@ def check_devices(gds: str, pdk: str, devices: list[Device], work_dir: str) -> d
             spice_path,
         ]
     )
+
+
+def devices_verdict(devices: list[Device], extraction: ExtractedNetlist, report: dict) -> dict:
+    """Rule on the extracted transistors: exactly the schematic's multiset.
+
+    Pure like :func:`mim_stack_verdict` -- the schematic's devices, the
+    parsed extraction and the `klt extract` report in, the check record out
+    -- so the comparison is pinned PDK-free in
+    ``layout/test_gen_gate_driver_core.py`` even though only a real `klt`
+    run can produce its passing input.
+    """
     expected = expected_devices(devices)
-    found = extracted_devices(spice_path)
-    missing = expected - found
-    extra = found - expected
+    missing = expected - extraction.devices
+    extra = extraction.devices - expected
+    spice_path = extraction.path
     return {
         "name": "devices",
         "passed": not missing and not extra,
         "netlist_devices": len(devices),
         "expected_transistors": sum(expected.values()),
-        "extracted_transistors": sum(found.values()),
+        "extracted_transistors": sum(extraction.devices.values()),
         "extracted_device_counts": report.get("device_counts"),
         "extracted_net_count": report.get("net_count"),
         "extracted_netlist": os.path.relpath(spice_path, REPO_ROOT)
@@ -525,21 +585,7 @@ def check_devices(gds: str, pdk: str, devices: list[Device], work_dir: str) -> d
         else spice_path,
         "missing": [{"device": _describe(k), "count": v} for k, v in missing.items()],
         "unexpected": [{"device": _describe(k), "count": v} for k, v in extra.items()],
-        "extract_report": report,
-        # Popped by run() before the record is written: the two keys above are
-        # this run's shared extraction, not part of the `devices` verdict.
-        "extracted_path": spice_path,
     }
-
-
-def check_mim_stack(spice_path: str, passives: list[Passive]) -> dict:
-    """Rule on the MiM compensation stack in the same extraction (issue #166)."""
-    return mim_stack_verdict(
-        extracted_capacitors(spice_path),
-        extracted_mos_nets(spice_path),
-        extracted_pins(spice_path),
-        passives,
-    )
 
 
 def check_dnwell_partition(gds: str, devices: list[Device]) -> dict:
@@ -820,12 +866,14 @@ def run(gds: str, pdk: str, work_dir: str) -> dict:
     # checks -- none of the checks below (devices/mim_stack/dnwell_partition/
     # ground_rail_isolation/voltage_domain) need the resistor list.
     _, devices, passives, _resistors = parse_netlist_full(NETLIST_PATH)
-    device_check = check_devices(gds, pdk, devices, work_dir)
-    extract_report = device_check.pop("extract_report")
-    extracted_path = device_check.pop("extracted_path")
+    spice_path = os.path.join(work_dir, f"{TOP_CELL}.extracted.spice")
+    extract_report = extract_layout(gds, pdk, spice_path)
+    extraction = parse_extraction(spice_path)
     checks = [
-        device_check,
-        check_mim_stack(extracted_path, passives),
+        devices_verdict(devices, extraction, extract_report),
+        mim_stack_verdict(
+            extraction.capacitors, extraction.mos_nets, extraction.pins, passives
+        ),
         check_dnwell_partition(gds, devices),
         check_ground_rail_isolation(gds, devices),
         check_voltage_domain(gds, extract_report),
