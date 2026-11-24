@@ -24,7 +24,6 @@ _None._
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
-- **#590**: Diagnose drive post-layout failures on the regenerated extraction (ss/sf -40C low-rail ERROR corners; re-derive characterization tables)
 - **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
 
 ## Ready
@@ -32,7 +31,6 @@ _None._
 Human-approved issues (`loom:issue`) ready for implementation — excluding held (`loom:blocked`/`loom:operator`/`loom:frozen`), `loom:building`, and issues closed by an open `loom:pr` PR (listed under Approved).
 
 - **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
-- **#590**: Diagnose drive post-layout failures on the regenerated extraction (ss/sf -40C low-rail ERROR corners; re-derive characterization tables)
 
 ## In Progress
 
@@ -72,8 +70,8 @@ _None._
 |------|-------|
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
-| Important | 3 |
-| Ready (`loom:issue`, net of holds/building/merge-pending) | 2 |
+| Important | 2 |
+| Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
 | In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
