@@ -2,11 +2,11 @@
   "schema_version": 1,
   "kind": "generic",
   "status": "pass",
-  "summary": "T1 item 8 (characterization report): design/gate-driver-characterization.md is the one aggregated, current artifact for spec §3's block-level performance rows, with each verdict citing its sim/ append-only evidence record; refreshed against the complete-block (uvlo) 2026-08-26 post-layout records in #233/#234 and #235/#236.",
+  "summary": "T1 item 8 (characterization report): design/gate-driver-characterization.md is the one aggregated, current artifact for spec §3's block-level performance rows, with each verdict citing its sim/ append-only evidence record; re-derived (issue #590) against the complete-block (uvlo) post-layout records from issue #485 (20261123-222300-23c67d0 RC primary, 20261123-222200-23c67d0 no-RC cross-check) on the #510-regenerated extraction, with a diagnosis of the two UVLO-locked ERROR corners.",
   "source": "design/gate-driver-characterization.md",
   "provenance": {
     "input": {
-      "content_hash": "sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d"
+      "content_hash": "sha256:df335d2f83511f2062a75b3ada477fa473b76a38cd5fface610e130628256fda"
     }
   }
 }
