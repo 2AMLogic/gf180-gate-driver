@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-23T16:45:00Z (snapshot; compare against live labels)_
+_Generated: 2026-11-24T01:10:00Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -30,13 +30,14 @@ _None._
 
 Human-approved issues (`loom:issue`) ready for implementation — excluding held (`loom:blocked`/`loom:operator`/`loom:frozen`), `loom:building`, and issues closed by an open `loom:pr` PR (listed under Approved).
 
+- **#485**: Re-run the two drive post-layout facets against the current extraction
 - **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
 
 ## In Progress
 
 Issues currently being built (`loom:building`).
 
-- **#485**: Re-run the two drive post-layout facets against the current extraction
+_None._
 
 ## PRs Awaiting Review
 
@@ -71,8 +72,8 @@ _None._
 | Operator merge-risk holds | 0 |
 | Very important | 0 |
 | Important | 2 |
-| Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 1 |
+| Ready (`loom:issue`, net of holds/building/merge-pending) | 2 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
 | Approved PRs awaiting merge | 0 |
 | Curated | 0 |
