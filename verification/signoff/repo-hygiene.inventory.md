@@ -41,8 +41,8 @@ re-audit of the links):
 | `design/README.md` | `sha256:57077ce9d683d9780c07559db7d28ffcc150d326c338942ad06160ddfc402b54` |
 | `sim/README.md` | `sha256:997d380b75e1ccc0b23b4702e21bfa3236be9f6a4be4b4e471e75b9295d614d2` |
 | `sim/harness/README.md` | `sha256:60e0ae0e5418973f1ab32db12d6e4dcf594b4f5b5f35445cd856d73111aac868` |
-| `layout/README.md` | `sha256:dd0513c74306a41b5fc103d089722cd596bdbba1557446c65313006e585ec6dc` |
-| `design/gate-driver-characterization.md` | `sha256:200edaf4b47b2b63214b08ed77f574a4ebbf089a2029e4f345bddbf5c81361f9` |
+| `layout/README.md` | `sha256:dbb608e016935bd07b7dad8cf5d894970bb291ce65aee89b36a1bbc7555d00a9` |
+| `design/gate-driver-characterization.md` | `sha256:cbc64b05310008d6e08920d9bb4fac872f7be11d493b5d355c97f07f237ef89d` |
 
 ## Findings
 
@@ -1695,3 +1695,20 @@ about what the block is. The `layout/README.md` row in the reproduction table
 above moves from `49bfde65…` to `dd0513c7…`, matching
 `sha256sum layout/README.md` at this head. The only `.github/workflows/ci.yml`
 edit is a comment outside `jobs.signoff`, which moves no canonical pin.
+
+## Re-audit for issue #485 (2026-11-24)
+
+At the issue-#485 branch head, two raw-byte entries changed. In
+`design/gate-driver-characterization.md`, a dated re-run note now points at
+the four #485 drive post-layout records (`20261123-222000-23c67d0` …
+`20261123-222300-23c67d0`) and defers the tables to their findings pending
+#590; no verdict row or TL;DR figure was edited. In `layout/README.md`, the
+Post-layout-simulation Status row now names the #456/#510 regeneration and
+the #485 re-run records instead of asserting the retired
+`sha256:6f0c9b8e…db97e` anchor and pointing at the then-open #456. I read
+both diffs: neither changes a link target or a claim about what the block
+is. The two rows in the reproduction table above move to `dbb608e0…` and
+`cbc64b05…`, matching `sha256sum` at this head; the envelope's member rows
+were re-attested to the same values (`klt signoff --attest 10`, staged
+tree). No `.github/workflows/ci.yml` edit is in this PR, so no canonical
+pin moved.

@@ -69,10 +69,14 @@ extraction regenerated from the current GDS (#456/#510), clean tree:
 [`20261123-222000-23c67d0`](../sim/gate-driver-core-drive-postlayout/records/20261123-222000-23c67d0.md)
 (pre-UVLO RC / no-RC). Every table and TL;DR figure below still quotes the
 superseded 2026-08-26 / 2026-08-18 records, which describe the pre-#456
-extraction; the new records move several of them (two low-rail -40 °C
-corners no longer switch OUT, ss `n1_min_v` undershoots its bound, RC `tpdlh`
-/`tpdhl` are slower) — read those records' findings, not these tables, for
-the current extraction. Re-deriving this report is tracked as a follow-up.
+extraction; the new records move several of them (the two low-rail -40 °C
+corners now report OUT-not-switching as ERROR — newly stuck on the pre-UVLO
+facet, pre-existing but previously misread by the harness's measured-swing
+method on the with-UVLO facet; ss `n1_min_v` undershoots its bound on the
+no-RC DUT; RC `tpdlh`/`tpdhl` are slower) — read those records' findings,
+not these tables, for the current extraction. Diagnosing the new failures
+and re-deriving this report against the current extraction are tracked in
+#590.
 
 ## TL;DR
 
