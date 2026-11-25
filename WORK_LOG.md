@@ -10,6 +10,12 @@ Maintained automatically by the Guide role's document maintenance phase.
 
 ### 2026-11-24
 
+- **PR #608**: docs: replace generator's stale walkthrough with README pointer; refresh provenance pin
+- **PR #607**: fix: enforce tb.json measure-expression parity in oxide-safety generator
+- **PR #603**: fix: parse NUL-delimited git diff output in check_append_only so quoted paths can't escape
+- **Issue #606** (closed): Collapse oxide-safety request generator's three column tables and wire up its dead MEASURE_SOURCE check
+- **Issue #605** (closed): Remove the layout generator’s stale floorplan and signoff walkthrough
+- **Issue #577** (closed): Append-only evidence lint parses display-formatted git diff output, so a C-quoted path escapes the check
 - **PR #601**: refactor(layout): parse the extracted netlist once, with one MOS predicate
 - **PR #599**: docs: re-derive characterization from #485 records and diagnose UVLO-locked ERROR corners
 - **Issue #600** (closed): Share MOS recognition between the device and MiM layout checks
