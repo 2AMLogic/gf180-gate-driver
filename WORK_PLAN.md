@@ -6,7 +6,7 @@ between the markers below is machine-generated and overwritten wholesale on
 each update; do not hand-edit that region.
 
 <!-- guide:plan-body:start -->
-_Generated: 2026-11-24T20:24:50Z (snapshot; compare against live labels)_
+_Generated: 2026-11-25T20:15:33Z (snapshot; compare against live labels)_
 ## Operator Attention: Merge-Risk-Hold Pileup
 
 Judge-approved PRs under a hold (`loom:blocked` or `loom:operator`) — only a human merge decision is missing.
@@ -17,14 +17,13 @@ _None._
 
 `loom:very-important` (one counts per workspace); every stage takes these first.
 
-_None._
+- **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
 
 ## Important
 
 `loom:important`; taken before unlabelled work.
 
 - **#370**: Track the gap to T1 sim-validated / bronze (graded: 8 of 11, items 5-7 open)
-- **#557**: T1 item 7: re-run klt pex on a current klt and attribute the layout-induced stretch sink-current miss (ss / 27 C, 0.9996 A vs >= 1 A)
 
 ## Ready
 
@@ -36,7 +35,7 @@ Human-approved issues (`loom:issue`) ready for implementation — excluding held
 
 Issues currently being built (`loom:building`).
 
-- **#577**: Append-only evidence lint parses display-formatted git diff output, so a C-quoted path escapes the check
+_None._
 
 ## PRs Awaiting Review
 
@@ -48,13 +47,13 @@ _None._
 
 PRs that passed review and are queued for Champion auto-merge (`loom:pr`).
 
-- **#603**: fix: parse NUL-delimited git diff output in check_append_only so quoted paths can't escape
+_None._
 
 ## Proposed
 
 Issues carrying `loom:curated`.
 
-- **#577**: Append-only evidence lint parses display-formatted git diff output, so a C-quoted path escapes the check *(curated)*
+_None._
 
 ## Proposed (Architect / Hermit)
 
@@ -69,13 +68,13 @@ _None._
 | Bucket | Count |
 |------|-------|
 | Operator merge-risk holds | 0 |
-| Very important | 0 |
-| Important | 2 |
+| Very important | 1 |
+| Important | 1 |
 | Ready (`loom:issue`, net of holds/building/merge-pending) | 1 |
-| In Progress (`loom:building`) | 1 |
+| In Progress (`loom:building`) | 0 |
 | PRs awaiting review | 0 |
-| Approved PRs awaiting merge | 1 |
-| Curated | 1 |
+| Approved PRs awaiting merge | 0 |
+| Curated | 0 |
 | Architect / Hermit proposals | 1 |
 | Active epics | 0 |
 <!-- guide:plan-body:end -->
